@@ -11,6 +11,8 @@
 /// See `dev/design/plans/PLAYER_DOCK_STYLES_PLAN.md` §3.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -678,10 +680,87 @@ class StyledDock extends StatelessWidget {
   }
 
   Widget _wide(BuildContext context, List<_Tool> tools) {
-    return Column(
+    // The tool cluster is icon-only chips, whose width is exact: a chip is
+    // its icon plus padY each side plus its 1px border, never under the
+    // touch target. Sizing the cluster to that — rather than giving it a
+    // Flexible share of the bar — is what keeps it flush right: a loose
+    // Flexible keeps whatever share it does not use as an empty strip at
+    // the end of the row, and cuts its content at the left when the share
+    // is too small.
+    final chipW = math.max(metrics.target, metrics.icon + metrics.padY * 2 + 2);
+    final gapW = metrics.gap * 0.75;
+    final chips = <Widget>[
+      for (final tool in tools)
+        DockChip(
+          icon: tool.icon,
+          label: tool.value == null
+              ? tool.label
+              : '${tool.label} · ${tool.value}',
+          showLabel: false,
+          active: tool.active,
+          tint: tool.tint,
+          onPressed: tool.onPressed,
+          metrics: metrics,
+          palette: palette,
+        ),
+      if (showFullscreen && onFullscreen != null)
+        DockChip(
+          icon: Icons.fullscreen_rounded,
+          label: 'Fullscreen',
+          showLabel: false,
+          onPressed: onFullscreen!,
+          metrics: metrics,
+          palette: palette,
+        ),
+    ];
+    // Spacers only BETWEEN chips — a trailing one was the gap at the right.
+    final cluster = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
+        for (var i = 0; i < chips.length; i++) ...[
+          if (i > 0) SizedBox(width: gapW),
+          chips[i],
+        ],
+      ],
+    );
+    final need = chips.isEmpty
+        ? 0.0
+        : chips.length * chipW + (chips.length - 1) * gapW;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The title keeps at least half the bar; the tools get the rest.
+        final cap = constraints.maxWidth.isFinite
+            ? constraints.maxWidth * 0.5
+            : need;
+        final Widget toolsZone;
+        if (chips.isEmpty) {
+          toolsZone = const SizedBox.shrink();
+        } else if (need <= cap) {
+          toolsZone = cluster;
+        } else {
+          // Genuinely too many: a fixed-width strip that keeps the LAST
+          // tools visible and fades out at its left edge, so the cut reads
+          // as "there is more" rather than a rendering fault.
+          toolsZone = SizedBox(
+            width: cap,
+            child: ShaderMask(
+              shaderCallback: (rect) => const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [Color(0x00000000), Color(0xFF000000)],
+                stops: [0.0, 0.08],
+              ).createShader(rect),
+              blendMode: BlendMode.dstIn,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                reverse: true,
+                child: cluster,
+              ),
+            ),
+          );
+        }
+        return Row(
           children: [
             ..._transport(),
             if (onVolumeChanged != null) ...[
@@ -692,56 +771,11 @@ class StyledDock extends StatelessWidget {
             _timeReadout(),
             SizedBox(width: metrics.gap * 1.5),
             Expanded(child: _nowPlaying()),
-            SizedBox(width: metrics.gap * 1.5),
-            Flexible(
-              // reverse: true keeps the last tools visible, so anything that
-              // does not fit is cut at the LEFT. Without a fade that reads as
-              // a rendering fault rather than "there is more".
-              child: ShaderMask(
-                shaderCallback: (rect) => const LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [Color(0x00000000), Color(0xFF000000)],
-                  stops: [0.0, 0.05],
-                ).createShader(rect),
-                blendMode: BlendMode.dstIn,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  child: Row(
-                    children: [
-                      for (final tool in tools) ...[
-                        DockChip(
-                          icon: tool.icon,
-                          label: tool.value == null
-                              ? tool.label
-                              : '${tool.label} · ${tool.value}',
-                          showLabel: false,
-                          active: tool.active,
-                          tint: tool.tint,
-                          onPressed: tool.onPressed,
-                          metrics: metrics,
-                          palette: palette,
-                        ),
-                        SizedBox(width: metrics.gap * 0.75),
-                      ],
-                      if (showFullscreen && onFullscreen != null)
-                        DockChip(
-                          icon: Icons.fullscreen_rounded,
-                          label: 'Fullscreen',
-                          showLabel: false,
-                          onPressed: onFullscreen!,
-                          metrics: metrics,
-                          palette: palette,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            if (chips.isNotEmpty) SizedBox(width: metrics.gap * 1.5),
+            toolsZone,
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
