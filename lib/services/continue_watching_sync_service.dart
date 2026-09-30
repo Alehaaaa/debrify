@@ -28,13 +28,37 @@ class ContinueWatchingSyncService {
     ]);
   }
 
-  /// First run after the toggle is switched on: reads Continue Watching from
-  /// Debrify, Trakt and Simkl and copies each title to every owner that is
-  /// missing it, so all lists start out matched. Remote copies are written as
-  /// paused sessions at the known resume percent; titles without a resume
-  /// position (e.g. Simkl "up next") are only mirrored into Debrify. A tracker
-  /// whose list cannot be read is skipped rather than treated as empty, so a
-  /// transient failure never floods it with duplicates.
+  static Future<ContinueWatchingMatchResult>? _autoMatchInFlight;
+  static DateTime? _lastAutoMatch;
+
+  /// Background match while sync is on (app start, Home reloads). Throttled so
+  /// row reloads it triggers don't loop. Returns null when it didn't run.
+  static Future<ContinueWatchingMatchResult?> autoMatch({
+    Duration minInterval = const Duration(minutes: 10),
+  }) async {
+    if (!await enabled()) return null;
+    final inFlight = _autoMatchInFlight;
+    if (inFlight != null) return inFlight;
+    final last = _lastAutoMatch;
+    if (last != null && DateTime.now().difference(last) < minInterval) {
+      return null;
+    }
+    _lastAutoMatch = DateTime.now();
+    final run = matchAll();
+    _autoMatchInFlight = run;
+    try {
+      return await run;
+    } finally {
+      _autoMatchInFlight = null;
+    }
+  }
+
+  /// Reads Continue Watching from Debrify, Trakt and Simkl, picks the furthest
+  /// point for every title (later episode wins; same episode → higher percent)
+  /// and brings every owner that is missing the title or behind up to it.
+  /// Remote owners get a paused session at that point; Debrify gets the title
+  /// plus a resume position when the runtime is known. A tracker whose list
+  /// can't be read is skipped rather than treated as empty.
   static Future<ContinueWatchingMatchResult> matchAll() async {
     final traktAuthed = await TraktService.instance.isAuthenticated();
     final simklAuthed = await SimklService.instance.isAuthenticated();
@@ -56,20 +80,26 @@ class ContinueWatchingSyncService {
               List<SimklContinueWatchingItem> movies,
               List<SimklContinueWatchingItem> shows,
             })?;
-    final traktReadable = traktAuthed && traktMovies != null && traktShows != null;
+    final traktReadable =
+        traktAuthed && traktMovies != null && traktShows != null;
     final simklReadable = simklAuthed && simkl != null;
 
-    final entries = <String, _MatchEntry>{};
-    final inLocal = <String>{};
-    final inTrakt = <String>{};
-    final inSimkl = <String>{};
+    final best = <String, _MatchEntry>{};
+    final atLocal = <String, _MatchEntry>{};
+    final atTrakt = <String, _MatchEntry>{};
+    final atSimkl = <String, _MatchEntry>{};
 
-    void merge(_MatchEntry entry, Set<String> owner) {
-      final key = entry.imdbId.trim().toLowerCase();
+    void merge(_MatchEntry entry, Map<String, _MatchEntry> owner) {
+      final key = entry.key;
       if (key.isEmpty) return;
-      owner.add(key);
-      final existing = entries[key];
-      entries[key] = existing == null ? entry : existing.fillFrom(entry);
+      final had = owner[key];
+      owner[key] = had == null || entry.isAheadOf(had) ? entry : had;
+      final current = best[key];
+      best[key] = current == null
+          ? entry
+          : entry.isAheadOf(current)
+          ? entry.fillFrom(current)
+          : current.fillFrom(entry);
     }
 
     for (final item in local) {
@@ -82,8 +112,8 @@ class ContinueWatchingSyncService {
           title: item['title'] as String? ?? id,
           posterUrl: item['posterUrl'] as String?,
           year: item['year'] as String?,
-        ).withProgress(await _localProgress(id, type)),
-        inLocal,
+        ).withLocalState(await _localState(id, type)),
+        atLocal,
       );
     }
     if (traktReadable) {
@@ -98,8 +128,9 @@ class ContinueWatchingSyncService {
             progress: item.progress,
             season: item.season,
             episode: item.episode,
+            runtimeMinutes: item.isSeries ? null : item.runtime,
           ),
-          inTrakt,
+          atTrakt,
         );
       }
     }
@@ -116,52 +147,63 @@ class ContinueWatchingSyncService {
             season: item.season,
             episode: item.episode,
           ),
-          inSimkl,
+          atSimkl,
         );
       }
     }
 
     var toLocal = 0, toTrakt = 0, toSimkl = 0;
-    for (final MapEntry(key: key, value: entry) in entries.entries) {
-      if (!inLocal.contains(key)) {
+    for (final MapEntry(key: key, value: target) in best.entries) {
+      final localEntry = atLocal[key];
+      if (localEntry == null) {
         await StorageService.saveContinueWatchingItem(
-          imdbId: entry.imdbId,
-          title: entry.title,
-          contentType: entry.contentType,
-          posterUrl: entry.posterUrl,
-          year: entry.year,
+          imdbId: target.imdbId,
+          title: target.title,
+          contentType: target.contentType,
+          posterUrl: target.posterUrl,
+          year: target.year,
         );
         toLocal++;
       }
-      if (!entry.resumable) continue;
-      final progress = entry.progress!;
-      if (traktReadable && !inTrakt.contains(key)) {
+      if (!target.resumable) continue;
+      if ((localEntry == null || target.isAheadOf(localEntry)) &&
+          await _writeLocalPosition(
+            target,
+            fallbackRuntimeMinutes: localEntry?.runtimeMinutes,
+          )) {
+        if (localEntry != null) toLocal++;
+      }
+      final traktEntry = atTrakt[key];
+      if (traktReadable &&
+          (traktEntry == null || target.isAheadOf(traktEntry))) {
         try {
           if (await TraktService.instance.scrobblePause(
-            entry.imdbId,
-            progress,
-            season: entry.season,
-            episode: entry.episode,
-            contentType: entry.contentType,
+            target.imdbId,
+            target.progress!,
+            season: target.season,
+            episode: target.episode,
+            contentType: target.contentType,
           )) {
             toTrakt++;
           }
         } catch (e) {
-          debugPrint('ContinueWatchingSync: Trakt copy failed $key: $e');
+          debugPrint('ContinueWatchingSync: Trakt update failed $key: $e');
         }
       }
-      if (simklReadable && !inSimkl.contains(key)) {
+      final simklEntry = atSimkl[key];
+      if (simklReadable &&
+          (simklEntry == null || target.isAheadOf(simklEntry))) {
         try {
           if (await SimklService.instance.scrobblePause(
-            entry.imdbId,
-            progress,
-            season: entry.season,
-            episode: entry.episode,
+            target.imdbId,
+            target.progress!,
+            season: target.season,
+            episode: target.episode,
           )) {
             toSimkl++;
           }
         } catch (e) {
-          debugPrint('ContinueWatchingSync: Simkl copy failed $key: $e');
+          debugPrint('ContinueWatchingSync: Simkl update failed $key: $e');
         }
       }
     }
@@ -175,27 +217,77 @@ class ContinueWatchingSyncService {
     );
   }
 
-  /// Local resume percent + episode for a Debrify Continue Watching title.
-  static Future<({double? progress, int? season, int? episode})> _localProgress(
-    String imdbId,
-    String contentType,
-  ) async {
+  /// Writes a Debrify resume position for [target] when a runtime is known
+  /// (Trakt movies carry one, a series can borrow its last local episode's). Without it a guessed duration would make the
+  /// player seek to the wrong time, so the title is only listed.
+  static Future<bool> _writeLocalPosition(
+    _MatchEntry target, {
+    int? fallbackRuntimeMinutes,
+  }) async {
+    // A series falls back to the runtime of the last locally played episode
+    // of the same show, which is a close estimate for its next episodes.
+    final minutes = target.runtimeMinutes ?? fallbackRuntimeMinutes;
+    if (minutes == null || minutes <= 0) return false;
+    final durationMs = minutes * 60000;
+    final positionMs = (durationMs * target.progress! / 100).round();
+    try {
+      if (target.contentType == 'series') {
+        await StorageService.saveSeriesPlaybackState(
+          seriesTitle: target.title,
+          season: target.season!,
+          episode: target.episode!,
+          positionMs: positionMs,
+          durationMs: durationMs,
+          imdbId: target.imdbId,
+        );
+      } else {
+        await StorageService.saveVideoPlaybackState(
+          videoTitle: target.title,
+          videoUrl: '',
+          positionMs: positionMs,
+          durationMs: durationMs,
+          imdbId: target.imdbId,
+        );
+      }
+      return true;
+    } catch (e) {
+      debugPrint('ContinueWatchingSync: local position failed: $e');
+      return false;
+    }
+  }
+
+  /// Local resume point for a Debrify Continue Watching title. A finished
+  /// episode counts as 100% of that episode.
+  static Future<
+    ({double? progress, int? season, int? episode, int? runtimeMinutes})
+  >
+  _localState(String imdbId, String contentType) async {
+    const none = (
+      progress: null,
+      season: null,
+      episode: null,
+      runtimeMinutes: null,
+    );
     try {
       final state = contentType == 'series'
           ? await StorageService.getLastPlayedEpisodeByImdbId(imdbId)
           : await StorageService.getVideoPlaybackStateByImdbId(imdbId);
-      if (state == null || state['finished'] == true) {
-        return (progress: null, season: null, episode: null);
-      }
+      if (state == null) return none;
       final position = (state['positionMs'] as num?)?.toDouble() ?? 0;
       final duration = (state['durationMs'] as num?)?.toDouble() ?? 0;
+      final progress = state['finished'] == true
+          ? 100.0
+          : duration > 0
+          ? (position / duration * 100).clamp(0.0, 100.0)
+          : null;
       return (
-        progress: duration > 0 ? position / duration * 100 : null,
+        progress: progress,
         season: state['season'] as int?,
         episode: state['episode'] as int?,
+        runtimeMinutes: duration > 60000 ? (duration / 60000).round() : null,
       );
     } catch (_) {
-      return (progress: null, season: null, episode: null);
+      return none;
     }
   }
 
@@ -210,21 +302,24 @@ class ContinueWatchingSyncService {
       final item = [...?lists[0], ...?lists[1]]
           .cast<TraktContinueWatchingItem?>()
           .firstWhere((item) => item?.id == imdbId, orElse: () => null);
-      if (item != null) {
-        await service.removeItem(item);
-      } else {
-        await TraktService.instance.removeFromHistory(imdbId, contentType);
-      }
+      // Only the paused session goes; watched history stays untouched.
+      if (item != null) await service.removeItem(item);
     } catch (_) {}
   }
 
   static Future<void> _removeSimkl(String imdbId, String type) async {
     if (!await SimklService.instance.isAuthenticated()) return;
+    // Same as Simkl's own "Remove from Continue Watching": a series is parked
+    // On Hold (keeps its watched episodes), a movie just loses its session.
+    // Never removeFromList — that wipes the title's Simkl history.
     try {
-      await Future.wait([
-        SimklService.instance.deletePlaybackForImdb(imdbId, contentType: type),
-        SimklService.instance.removeFromList(imdbId, type),
-      ]);
+      if (type == 'series') {
+        await SimklService.instance.addToList(imdbId, type, 'hold');
+      }
+      await SimklService.instance.deletePlaybackForImdb(
+        imdbId,
+        contentType: type,
+      );
     } catch (_) {}
   }
 }
@@ -248,9 +343,9 @@ class ContinueWatchingMatchResult {
 
   String get summary {
     final parts = [
-      if (addedToDebrify > 0) '$addedToDebrify to Debrify',
-      if (addedToTrakt > 0) '$addedToTrakt to Trakt',
-      if (addedToSimkl > 0) '$addedToSimkl to Simkl',
+      if (addedToDebrify > 0) '$addedToDebrify in Debrify',
+      if (addedToTrakt > 0) '$addedToTrakt on Trakt',
+      if (addedToSimkl > 0) '$addedToSimkl on Simkl',
     ];
     final skipped = [
       if (traktSkipped) 'Trakt',
@@ -258,7 +353,7 @@ class ContinueWatchingMatchResult {
     ];
     final base = parts.isEmpty
         ? 'Continue Watching already matched'
-        : 'Continue Watching matched: added ${parts.join(', ')}';
+        : 'Continue Watching synced: updated ${parts.join(', ')}';
     return skipped.isEmpty
         ? base
         : '$base (${skipped.join(' and ')} unreachable, skipped)';
@@ -271,9 +366,12 @@ class _MatchEntry {
   final String title;
   final String? posterUrl;
   final String? year;
+
+  /// 0–100. Null for an "up next" row that hasn't been started.
   final double? progress;
   final int? season;
   final int? episode;
+  final int? runtimeMinutes;
 
   const _MatchEntry({
     required this.imdbId,
@@ -284,18 +382,33 @@ class _MatchEntry {
     this.progress,
     this.season,
     this.episode,
+    this.runtimeMinutes,
   });
 
-  /// A paused session other trackers can accept: started, not finished, and
-  /// for series pinned to a concrete episode.
+  String get key => imdbId.trim().toLowerCase();
+
+  /// A paused session trackers accept: started, not finished (both Trakt and
+  /// Simkl turn ≥80% into a watch), and for series pinned to an episode.
   bool get resumable =>
       progress != null &&
-      progress! > 0 &&
+      progress! >= 1 &&
       progress! < 80 &&
       (contentType != 'series' || (season != null && episode != null));
 
-  _MatchEntry withProgress(
-    ({double? progress, int? season, int? episode}) value,
+  /// Later episode wins; the same episode (or a movie) compares by percent,
+  /// ignoring sub-2% drift so owners that already agree aren't rewritten.
+  bool isAheadOf(_MatchEntry other) {
+    if (contentType == 'series') {
+      final s = season ?? 0, o = other.season ?? 0;
+      if (s != o) return s > o;
+      final e = episode ?? 0, oe = other.episode ?? 0;
+      if (e != oe) return e > oe;
+    }
+    return (progress ?? 0) - (other.progress ?? 0) > 2;
+  }
+
+  _MatchEntry withLocalState(
+    ({double? progress, int? season, int? episode, int? runtimeMinutes}) value,
   ) => _MatchEntry(
     imdbId: imdbId,
     contentType: contentType,
@@ -305,21 +418,22 @@ class _MatchEntry {
     progress: value.progress,
     season: value.season,
     episode: value.episode,
+    runtimeMinutes: value.runtimeMinutes,
   );
 
-  /// Keeps this entry's data and fills gaps (poster, year, resume point) from
-  /// another owner's copy of the same title.
-  _MatchEntry fillFrom(_MatchEntry other) {
-    final useOther = !resumable && other.resumable;
-    return _MatchEntry(
-      imdbId: imdbId,
-      contentType: contentType,
-      title: title.isEmpty || title == imdbId ? other.title : title,
-      posterUrl: posterUrl ?? other.posterUrl,
-      year: year ?? other.year,
-      progress: useOther ? other.progress : progress,
-      season: useOther ? other.season : season,
-      episode: useOther ? other.episode : episode,
-    );
-  }
+  /// Keeps this entry's position and fills metadata gaps from [other]. The
+  /// runtime is only borrowed for movies (a series runtime is per episode).
+  _MatchEntry fillFrom(_MatchEntry other) => _MatchEntry(
+    imdbId: imdbId,
+    contentType: contentType,
+    title: title.isEmpty || title == imdbId ? other.title : title,
+    posterUrl: posterUrl ?? other.posterUrl,
+    year: year ?? other.year,
+    progress: progress,
+    season: season,
+    episode: episode,
+    runtimeMinutes:
+        runtimeMinutes ??
+        (contentType == 'series' ? null : other.runtimeMinutes),
+  );
 }

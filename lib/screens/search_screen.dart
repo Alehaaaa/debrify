@@ -3734,6 +3734,20 @@ class _SearchScreenState extends State<SearchScreen>
       ),
     );
     _maybeAutoFocusBoard();
+    unawaited(_autoMatchContinueWatching());
+  }
+
+  /// With "Sync Continue Watching everywhere" on, bring Debrify, Trakt and
+  /// Simkl to each title's furthest point in the background (throttled inside
+  /// the service), then refresh the rows if anything changed.
+  Future<void> _autoMatchContinueWatching() async {
+    if (widget.searchMode || widget.discoverMode) return;
+    final result = await ContinueWatchingSyncService.autoMatch();
+    if (result == null || result.total == 0 || !mounted) return;
+    await _loadContinueWatching();
+    if (!mounted) return;
+    unawaited(_loadTraktContinueWatching(refreshBound: false));
+    unawaited(_loadSimklContinueWatching(refreshBound: false));
   }
 
   void _onLocalCompletionChanged() {
