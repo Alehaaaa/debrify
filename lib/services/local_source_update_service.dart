@@ -53,6 +53,7 @@ set -eu
 cd $quotedSource
 /usr/bin/git fetch upstream main:refs/remotes/upstream/main
 /usr/bin/git merge --no-edit upstream/main
+/usr/bin/git push origin HEAD:nextup
 PATH=$quotedPods:\$PATH $quotedFlutter build macos --release --build-name 0.10.0-nextup --build-number 1 --dart-define=DEBRIFY_LOCAL_VALIDATION=false || exit 1
 app=build/macos/Build/Products/Release/debrify.app
 /usr/bin/xattr -cr "\$app"
