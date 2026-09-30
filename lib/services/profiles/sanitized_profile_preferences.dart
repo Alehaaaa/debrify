@@ -136,6 +136,8 @@ abstract final class SanitizedProfilePreferences {
         return value is String && _playerDockStyles.contains(value);
       case 'player_dock_palette':
         return value is String && _playerDockPalettes.contains(value);
+      case 'player_dock_custom_swatch':
+        return value is String && value.length <= 64;
       case 'player_dock_size':
         return value is String &&
             const <String>{'auto', 'small', 'medium', 'large'}.contains(value);
@@ -291,6 +293,8 @@ abstract final class SanitizedProfilePreferences {
     'crimson',
     'aurum',
     'ice',
+    'app',
+    'custom',
   };
 
   static const Set<String> _launchAnimations = <String>{

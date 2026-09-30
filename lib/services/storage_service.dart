@@ -1576,22 +1576,46 @@ class StorageService {
 
   static const String _playerDockPaletteKey = 'player_dock_palette';
   static const Set<String> _playerDockPalettes = {
+    'app',
+    'custom',
     'ultraviolet',
     'crimson',
     'aurum',
     'ice',
   };
 
+  /// `app` (the default) follows the app's colour palette; `custom` uses
+  /// [getPlayerDockCustomSwatch]; the rest are the fixed dock palettes.
   static Future<String> getPlayerDockPalette() async {
     final prefs = await ProfilePreferences.instance();
     final raw = prefs.getString(_playerDockPaletteKey);
-    return _playerDockPalettes.contains(raw) ? raw! : 'ultraviolet';
+    return _playerDockPalettes.contains(raw) ? raw! : 'app';
+  }
+
+  /// The app's current accent (ARGB), mirrored by the theme controller on
+  /// every theme change. The player is a theme-excluded surface and must not
+  /// read the theme itself; it reads this once at launch, like its other
+  /// preferences. Null until the first theme resolve.
+  static int? appAccentArgb;
+
+  static const String _playerDockCustomSwatchKey = 'player_dock_custom_swatch';
+
+  /// The manual dock colour, as a `ThemePalette` swatch id (never a hex, for
+  /// the same reasons the theme overrides store ids).
+  static Future<String?> getPlayerDockCustomSwatch() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_playerDockCustomSwatchKey);
+  }
+
+  static Future<void> setPlayerDockCustomSwatch(String id) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_playerDockCustomSwatchKey, id);
   }
 
   static Future<void> setPlayerDockPalette(String palette) async {
     final normalized = _playerDockPalettes.contains(palette)
         ? palette
-        : 'ultraviolet';
+        : 'app';
     final prefs = await ProfilePreferences.instance();
     await prefs.setString(_playerDockPaletteKey, normalized);
   }

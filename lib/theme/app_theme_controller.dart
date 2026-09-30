@@ -273,6 +273,7 @@ class AppThemeController extends ChangeNotifier {
       // Via the per-preset cache, NOT a fresh build — under legacy the root
       // theme and every boundary's frozen theme are the same object.
       _themeData = legacyThemeData;
+      StorageService.appAccentArgb = _theme.settings.accent.toARGB32();
       return;
     }
     // Preset first, then derivation: subprofile tones (settings.dim etc.) are
@@ -324,5 +325,6 @@ class AppThemeController extends ChangeNotifier {
     }
     _theme = _theme.withForm(structure);
     _themeData = AppThemeAdapter.themed(_theme, preset);
+    StorageService.appAccentArgb = _theme.settings.accent.toARGB32();
   }
 }

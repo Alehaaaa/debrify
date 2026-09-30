@@ -84,6 +84,10 @@ class Controls extends StatelessWidget {
   /// the styled branch is a different widget entirely and cannot touch it.
   final PlayerDockStyle dockStyle;
   final PlayerDockPalette dockPalette;
+
+  /// When set, the dock is built from this one colour (App colour or a
+  /// manual pick) instead of [dockPalette].
+  final Color? dockAccent;
   final PlayerDockSize dockSize;
 
   /// Measured info-panel height, or [DockLayoutInput.kInfoPanelBound] before
@@ -172,6 +176,7 @@ class Controls extends StatelessWidget {
     this.infoPanel,
     this.dockStyle = PlayerDockStyle.classic,
     this.dockPalette = PlayerDockPalette.ultraviolet,
+    this.dockAccent,
     this.dockSize = PlayerDockSize.auto,
     this.infoPanelHeight = DockLayoutInput.kInfoPanelBound,
     this.showRotate = true,
@@ -243,7 +248,9 @@ class Controls extends StatelessWidget {
 
     final dock = StyledDock(
       metrics: metrics,
-      palette: DockPalettes.of(dockPalette),
+      palette: dockAccent != null
+          ? DockPalettes.fromAccent(dockAccent!)
+          : DockPalettes.of(dockPalette),
       arrangement: arrangement,
       title: title,
       subtitle: subtitle,

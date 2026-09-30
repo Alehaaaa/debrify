@@ -5,7 +5,12 @@
 /// Read once at player launch (alongside `iptv_player_guide_style`), so a
 /// change applies to the next playback session.
 ///
-/// Deliberately NOT wired to the app theme. The player is a theme-EXCLUDED
+/// The "App colour" palette follows the app's accent, but NOT through the
+/// theme: the theme controller mirrors the accent into
+/// `StorageService.appAccentArgb`, and the player reads it at launch like any
+/// other preference ([DockPalettes.fromAccent] turns it into a dock).
+///
+/// Otherwise deliberately NOT wired to the app theme. The player is a theme-EXCLUDED
 /// surface — `pushExcluded` / `FrozenLegacyPageRoute` / `LegacyThemeBoundary`,
 /// with `kStillFrozenPaths` in `test/theme/source_guard_test.dart` covering
 /// `lib/screens/video_player/` — so nothing here may read `AppThemeScope`.
@@ -333,6 +338,40 @@ abstract final class DockPalettes {
     inactiveTrack: _inactiveTrack,
     scrim: _scrim,
   );
+
+  /// A full dock palette from one colour — the app's accent ("App colour")
+  /// or a manual swatch. Same recipe as the fixed palettes: a hotter,
+  /// lighter top stop falling into a deeper one, the accent itself for glow
+  /// and active states, and the primary's ink picked for contrast.
+  static DockPalette fromAccent(Color c) {
+    final hsl = HSLColor.fromColor(c.withValues(alpha: 1));
+    Color light(double d) =>
+        hsl.withLightness((hsl.lightness + d).clamp(0.0, 0.92)).toColor();
+    final hot = light(0.10);
+    final deep = hsl
+        .withLightness((hsl.lightness * 0.62).clamp(0.14, 0.9))
+        .withSaturation(math.min(1.0, hsl.saturation * 1.05))
+        .toColor();
+    final mid = Color.lerp(hot, deep, 0.5)!;
+    final darkInk = mid.computeLuminance() > 0.42;
+    final base = c.withValues(alpha: 1);
+    return DockPalette(
+      hot: hot,
+      deep: deep,
+      specular: const Color(0x80FFFFFF),
+      glow: base.withValues(alpha: 0.62),
+      tick: light(0.28),
+      activeFill: base.withValues(alpha: 0.22),
+      activeEdge: base.withValues(alpha: 0.55),
+      onPrimary: darkInk ? const Color(0xFF14110A) : _ink,
+      chipFill: _chipFill,
+      chipEdge: _chipEdge,
+      ink: _ink,
+      inkDim: _inkDim,
+      inactiveTrack: _inactiveTrack,
+      scrim: _scrim,
+    );
+  }
 
   static DockPalette of(PlayerDockPalette palette) => switch (palette) {
     PlayerDockPalette.ultraviolet => ultraviolet,

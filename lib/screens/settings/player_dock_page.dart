@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/theme_palette.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -39,6 +40,8 @@ const List<PlayerDockChoice> kPlayerDockStyleChoices = [
 ];
 
 const List<PlayerDockChoice> kPlayerDockPaletteChoices = [
+  PlayerDockChoice('app', 'App colour', 'Follows your colour palette'),
+  PlayerDockChoice('custom', 'Manual colour', 'Detached from the app — pick one below'),
   PlayerDockChoice(
     'ultraviolet',
     'Ultraviolet',
@@ -138,10 +141,12 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     final style = await StorageService.getPlayerDockStyle();
     final palette = await StorageService.getPlayerDockPalette();
     final size = await StorageService.getPlayerDockSize();
+    final swatch = await StorageService.getPlayerDockCustomSwatch();
     if (!mounted) return;
     setState(() {
       _style = style;
       _palette = palette;
+      _customSwatch = swatch;
       _size = size;
       _loading = false;
     });
@@ -165,6 +170,67 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     if (value == _palette) return;
     setState(() => _palette = value);
     await StorageService.setPlayerDockPalette(value);
+  }
+
+  String? _customSwatch;
+
+  Future<void> _selectSwatch(String id) async {
+    setState(() {
+      _customSwatch = id;
+      _palette = 'custom';
+    });
+    await StorageService.setPlayerDockCustomSwatch(id);
+    await StorageService.setPlayerDockPalette('custom');
+  }
+
+  /// The colour a palette row stands for, for its trailing dot.
+  Color? _dotFor(String value) => switch (value) {
+    'app' => StorageService.appAccentArgb == null
+        ? null
+        : Color(StorageService.appAccentArgb!),
+    'custom' => ThemePalette.colorOf(_customSwatch),
+    'ultraviolet' => const Color(0xFFB03CFF),
+    'crimson' => const Color(0xFFE0243A),
+    'aurum' => const Color(0xFFE0B04A),
+    'ice' => const Color(0xFF3AA8FF),
+    _ => null,
+  };
+
+  Widget _swatchGrid() {
+    final t = AppThemeScope.of(context).settings;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          for (final sw in ThemePalette.all)
+            Tooltip(
+              message: sw.label,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: _styled ? () => _selectSwatch(sw.id) : null,
+                child: Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: sw.color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _customSwatch == sw.id && _palette == 'custom'
+                          ? t.accent2
+                          : const Color(0x33FFFFFF),
+                      width: _customSwatch == sw.id && _palette == 'custom'
+                          ? 3
+                          : 1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _selectSize(String value) async {
@@ -227,16 +293,28 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
                 const SizedBox(height: 20),
                 SettingsSection(
                   title: 'Colour',
+                  blurb: 'App colour follows your colour palette. Manual '
+                      'colour detaches the player so it keeps its own.',
                   children: [
                     for (final choice in kPlayerDockPaletteChoices)
                       _optionRow(
                         choice,
                         selected: _palette,
-                        onSelect: _selectPalette,
+                        onSelect: (v) async {
+                          if (v == 'custom' && _customSwatch == null) {
+                            // No manual colour picked yet: start from the
+                            // first swatch, then the grid below takes over.
+                            await _selectSwatch(ThemePalette.all.first.id);
+                            return;
+                          }
+                          await _selectPalette(v);
+                        },
                         enabled: _styled,
+                        dot: _dotFor(choice.value),
                       ),
                   ],
                 ),
+                if (_palette == 'custom') _swatchGrid(),
                 const SizedBox(height: 20),
                 SettingsSection(
                   title: 'Size',
@@ -273,6 +351,7 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     required String selected,
     required Future<void> Function(String) onSelect,
     bool enabled = true,
+    Color? dot,
   }) {
     final t = AppThemeScope.of(context).settings;
     final bool active = selected == choice.value;
@@ -284,9 +363,25 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
             : Icons.radio_button_unchecked_rounded,
         title: choice.label,
         subtitle: choice.subtitle,
-        trailing: active
-            ? Icon(Icons.check_rounded, size: 20, color: t.accent2)
-            : const SizedBox.shrink(),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (dot != null)
+              Container(
+                width: 14,
+                height: 14,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: dot,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0x33FFFFFF)),
+                ),
+              ),
+            active
+                ? Icon(Icons.check_rounded, size: 20, color: t.accent2)
+                : const SizedBox(width: 20),
+          ],
+        ),
         // A disabled row stays focusable and tappable but does nothing:
         // SettingsTile's onTap is non-nullable, and swallowing the tap keeps
         // the DPAD traversal order identical between enabled and disabled

@@ -31,6 +31,7 @@ abstract final class ProfileAppearancePreferences {
     'iptv_player_guide_style',
     'play_loader_style',
     'player_dock_palette',
+    'player_dock_custom_swatch',
     'player_dock_size',
     'discover_layout',
     'discover_show_type_tags',

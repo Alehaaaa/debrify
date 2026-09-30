@@ -22,6 +22,7 @@ import '../services/player_display_controls.dart';
 import 'package:synchronized/synchronized.dart';
 
 // Removed volume_controller; using media_kit player volume instead
+import '../theme/theme_palette.dart';
 import '../services/storage_service.dart';
 import '../services/local_playback_resume_resolver.dart';
 import '../services/startup_stream_policy.dart';
@@ -960,6 +961,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   // Player dock prefs, read once at launch alongside the guide style.
   PlayerDockStyle _dockStyle = PlayerDockStyle.classic;
   PlayerDockPalette _dockPalette = PlayerDockPalette.ultraviolet;
+  Color? _dockAccent;
   PlayerDockSize _dockSize = PlayerDockSize.auto;
 
   /// The styled dock's measured height. Six host behaviours below assume a
@@ -6405,10 +6407,26 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     final style = await StorageService.getPlayerDockStyle();
     final palette = await StorageService.getPlayerDockPalette();
     final size = await StorageService.getPlayerDockSize();
+    // App colour follows the app's palette through the controller's mirror;
+    // a manual colour is a swatch id. Either falls back to the app colour,
+    // then to Ultraviolet.
+    final appAccent = StorageService.appAccentArgb == null
+        ? null
+        : Color(StorageService.appAccentArgb!);
+    Color? accent;
+    if (palette == 'app') {
+      accent = appAccent;
+    } else if (palette == 'custom') {
+      accent = ThemePalette.colorOf(
+            await StorageService.getPlayerDockCustomSwatch(),
+          ) ??
+          appAccent;
+    }
     if (!mounted) return;
     setState(() {
       _dockStyle = PlayerDockStyle.fromPref(style);
       _dockPalette = PlayerDockPalette.fromPref(palette);
+      _dockAccent = accent;
       _dockSize = PlayerDockSize.fromPref(size);
       // Style/size are part of the geometry signature but arrive here, not
       // through an inherited dependency.
@@ -15424,6 +15442,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                   },
                                   dockStyle: _dockStyle,
                                   dockPalette: _dockPalette,
+                                  dockAccent: _dockAccent,
                                   dockSize: _dockSize,
                                   // Rotation only means something in the hand.
                                   showRotate: PlatformUtil.isPhone,
