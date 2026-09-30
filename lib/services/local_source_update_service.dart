@@ -19,7 +19,7 @@ class LocalSourceUpdateService {
       sourceDirectory.path,
       'fetch',
       'upstream',
-      'main:refs/remotes/upstream/main',
+      '+main:refs/remotes/upstream/main',
     ]);
     final base = await _output('/usr/bin/git', [
       '-C',
@@ -51,9 +51,14 @@ class LocalSourceUpdateService {
     await script.writeAsString('''#!/bin/zsh
 set -eu
 cd $quotedSource
-/usr/bin/git fetch upstream main:refs/remotes/upstream/main
-/usr/bin/git merge --no-edit upstream/main
-/usr/bin/git push origin HEAD:nextup
+/usr/bin/git fetch upstream +main:refs/remotes/upstream/main
+if ! /usr/bin/git merge --no-edit --autostash upstream/main; then
+  /usr/bin/git merge --abort || true
+  /usr/bin/osascript -e 'display notification "Upstream conflicts with your fork. Merge it by hand." with title "Debrify update"' || true
+  /bin/rm -f "\$0"
+  exit 1
+fi
+/usr/bin/git push origin HEAD:nextup || true
 PATH=$quotedPods:\$PATH $quotedFlutter build macos --release --build-name 0.10.0-nextup --build-number 1 --dart-define=DEBRIFY_LOCAL_VALIDATION=false || exit 1
 app=build/macos/Build/Products/Release/debrify.app
 /usr/bin/xattr -cr "\$app"

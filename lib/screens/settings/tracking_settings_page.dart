@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/tracking_source.dart';
 import '../../services/analytics_service.dart';
+import '../../services/continue_watching_sync_service.dart';
 import '../../services/hide_watched_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
@@ -124,6 +125,16 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     setState(() => _syncAllContinueWatching = enabled);
     await StorageService.setSyncAllContinueWatching(enabled);
     MainPageBridge.notifyIntegrationChanged();
+    if (!enabled || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Matching Continue Watching across trackers…')),
+    );
+    final result = await ContinueWatchingSyncService.matchAll();
+    MainPageBridge.notifyIntegrationChanged();
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(result.summary)));
   }
 
   Future<void> _setProgress(WatchProgressSource? source) async {

@@ -685,9 +685,7 @@ class TraktService {
       // after scrobbling is disabled. Explicit history/rating actions use
       // this helper too, but remain independent of automatic scrobbling.
       if (requireScrobbleEnabled &&
-          !(await StorageService.getTrackingScrobbleTargets()).contains(
-            TrackingSource.trakt,
-          )) {
+          !await StorageService.scrobblesTo(TrackingSource.trakt)) {
         return null;
       }
       var response = await http
@@ -708,9 +706,7 @@ class TraktService {
 
         // The preference may have changed while the refresh was in flight.
         if (requireScrobbleEnabled &&
-            !(await StorageService.getTrackingScrobbleTargets()).contains(
-              TrackingSource.trakt,
-            )) {
+            !await StorageService.scrobblesTo(TrackingSource.trakt)) {
           return null;
         }
         response = await http
@@ -807,9 +803,7 @@ class TraktService {
   }) async {
     final scope = ProfileRuntime.scope.value;
     if (MediaIdentity.isNative(imdbId) &&
-        (!(await StorageService.getTrackingScrobbleTargets()).contains(
-              TrackingSource.trakt,
-            ) ||
+        (!await StorageService.scrobblesTo(TrackingSource.trakt) ||
             !await isAuthenticated())) {
       return false;
     }

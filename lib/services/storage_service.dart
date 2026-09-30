@@ -6799,6 +6799,12 @@ class StorageService {
     return prefs.getBool(_syncAllContinueWatchingKey) ?? false;
   }
 
+  /// Whether writes may be sent to [source]: either it is ticked as a scrobble
+  /// target, or "Sync Continue Watching everywhere" mirrors to every tracker.
+  static Future<bool> scrobblesTo(TrackingSource source) async =>
+      (await getTrackingScrobbleTargets()).contains(source) ||
+      await getSyncAllContinueWatching();
+
   static Future<void> setSyncAllContinueWatching(bool value) async {
     final prefs = await ProfilePreferences.instance();
     await prefs.setBool(_syncAllContinueWatchingKey, value);
