@@ -1367,6 +1367,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenTvHeroArtworkQuality: _openTvHeroArtworkQuality,
       tvSidebarStyleLabel: tvSidebarStyleLabel(_tvSidebarStyle),
       onOpenTvSidebarStyle: _openTvSidebarStyle,
+      onOpenSidebarCustomization: _openSidebarCustomization,
       discoverLayoutLabel: discoverLayoutLabel(_discoverLayout),
       onOpenDiscoverLayout: _openDiscoverLayout,
       onOpenCollectionListStyle: _openCollectionListStyle,
@@ -7073,9 +7074,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Same contract as [_openTvHomeStyle], for the sidebar chrome picker.
   Future<void> _openTvSidebarStyle() async {
-    await pushSettingsPage(context, const TvSidebarStylePage());
+    final current = await StorageService.getTvSidebarStyle();
     if (!mounted) return;
-    final style = await StorageService.getTvSidebarStyle();
+    final style = await _chooseSidebarStyle(
+      title: 'Sidebar style',
+      current: current,
+      choices: kTvSidebarStyleChoices
+          .map((choice) => (choice.value, choice.label, choice.subtitle))
+          .toList(),
+    );
+    if (style == null || style == current || !mounted) return;
+    await StorageService.setTvSidebarStyle(style);
     if (!mounted) return;
     setState(() {
       _tvSidebarStyle = style;
@@ -7084,14 +7093,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Same contract, for the desktop/tablet sidebar picker.
   Future<void> _openDesktopSidebarStyle() async {
-    await pushSettingsPage(context, const DesktopSidebarStylePage());
+    final current = await StorageService.getDesktopSidebarStyle();
     if (!mounted) return;
-    final style = await StorageService.getDesktopSidebarStyle();
+    final style = await _chooseSidebarStyle(
+      title: 'Sidebar style',
+      current: current,
+      choices: kDesktopSidebarStyleChoices
+          .map((choice) => (choice.value, choice.label, choice.subtitle))
+          .toList(),
+    );
+    if (style == null || style == current || !mounted) return;
+    await StorageService.setDesktopSidebarStyle(style);
     if (!mounted) return;
     setState(() {
       _desktopSidebarStyle = style;
     });
   }
+
+  Future<String?> _chooseSidebarStyle({
+    required String title,
+    required String current,
+    required List<(String, String, String)> choices,
+  }) => showDialog<String>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Text(title),
+      contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final choice in choices)
+            ListTile(
+              leading: Icon(
+                Icons.view_sidebar_rounded,
+                color: current == choice.$1 ? const Color(0xFFC7BFFF) : null,
+              ),
+              title: Text(
+                choice.$2,
+                style: TextStyle(
+                  fontWeight: current == choice.$1
+                      ? FontWeight.w800
+                      : FontWeight.w600,
+                ),
+              ),
+              subtitle: Text(choice.$3, style: const TextStyle(fontSize: 12)),
+              trailing: current == choice.$1
+                  ? const Icon(Icons.check_rounded, color: Color(0xFFC7BFFF))
+                  : null,
+              onTap: () => Navigator.of(dialogContext).pop(choice.$1),
+            ),
+        ],
+      ),
+    ),
+  );
 
   Future<void> _openSidebarCustomization() async {
     await pushSettingsPage(context, const SidebarCustomizationPage());
@@ -7735,6 +7789,7 @@ class _SettingsLayout extends StatelessWidget {
   final String phoneNavStyleLabel;
   final String desktopSidebarStyleLabel;
   final Future<void> Function() onOpenDesktopSidebarStyle;
+  final Future<void> Function() onOpenSidebarCustomization;
   final String profileAppearanceLabel;
   final Future<void> Function() onOpenProfileAppearance;
 
@@ -7816,6 +7871,7 @@ class _SettingsLayout extends StatelessWidget {
     required this.phoneNavStyleLabel,
     required this.desktopSidebarStyleLabel,
     required this.onOpenDesktopSidebarStyle,
+    required this.onOpenSidebarCustomization,
     required this.profileAppearanceLabel,
     required this.onOpenProfileAppearance,
   });
@@ -7948,6 +8004,12 @@ class _SettingsLayout extends StatelessWidget {
               SettingsRows.desktopSidebarStyle,
               subtitle: desktopSidebarStyleLabel,
               onTap: onOpenDesktopSidebarStyle,
+            ),
+            SettingsTile(
+              icon: Icons.tune_rounded,
+              title: 'Sidebar items',
+              subtitle: 'Choose the order, names and visibility',
+              onTap: onOpenSidebarCustomization,
             ),
           ],
         );
@@ -8497,14 +8559,23 @@ class _SettingsLayout extends StatelessWidget {
                       subtitle: phoneNavStyleLabel,
                       onTap: onOpenNavigationSettings,
                     ),
-                    // Wide-window chrome: the desktop/tablet rail's picker
-                    // (rail or pill). Phones never reach the wide layout but
-                    // an iPad rotates in and out of it, so the row is not
-                    // width-gated.
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SettingsSection(
+                  title: 'Sidebar',
+                  blurb: 'Choose the sidebar look, then arrange its items.',
+                  children: [
                     SettingsTile.spec(
                       SettingsRows.desktopSidebarStyle,
                       subtitle: desktopSidebarStyleLabel,
                       onTap: onOpenDesktopSidebarStyle,
+                    ),
+                    SettingsTile(
+                      icon: Icons.tune_rounded,
+                      title: 'Sidebar items',
+                      subtitle: 'Order, names and visibility',
+                      onTap: onOpenSidebarCustomization,
                     ),
                   ],
                 ),
