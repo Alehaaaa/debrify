@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../models/advanced_search_selection.dart';
 import '../../models/stremio_addon.dart';
+import '../storage_service.dart';
 import 'trakt_item_transformer.dart';
 import 'trakt_service.dart';
 
@@ -36,6 +39,41 @@ class TraktContinueWatchingItem {
   String? get year => meta.year;
   String? get posterUrl => meta.poster;
   bool get isSeries => meta.type == 'series';
+
+  Map<String, dynamic> toCacheJson() => {
+    'meta': meta.toJson(),
+    'content_type': traktContentType,
+    if (progress != null) 'progress': progress,
+    if (season != null) 'season': season,
+    if (episode != null) 'episode': episode,
+    if (runtime != null) 'runtime': runtime,
+    if (playbackIds.isNotEmpty) 'playback_ids': playbackIds,
+    if (pausedAtMs != null) 'paused_at_ms': pausedAtMs,
+  };
+
+  static TraktContinueWatchingItem? fromCacheJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final metaRaw = raw['meta'];
+    if (metaRaw is! Map<String, dynamic>) return null;
+    final type = raw['content_type'] as String?;
+    if (type != 'movies' && type != 'episodes') return null;
+    final meta = StremioMeta.fromJson(metaRaw);
+    if (meta.id.isEmpty) return null;
+    final playbackRaw = raw['playback_ids'];
+    final playbackIds = playbackRaw is List<dynamic>
+        ? playbackRaw.whereType<int>().toList(growable: false)
+        : const <int>[];
+    return TraktContinueWatchingItem(
+      meta: meta,
+      traktContentType: type!,
+      progress: (raw['progress'] as num?)?.toDouble(),
+      season: raw['season'] as int?,
+      episode: raw['episode'] as int?,
+      runtime: raw['runtime'] as int?,
+      playbackIds: playbackIds,
+      pausedAtMs: raw['paused_at_ms'] as int?,
+    );
+  }
 }
 
 class TraktContinueWatchingService {
@@ -49,6 +87,51 @@ class TraktContinueWatchingService {
   static const showsContentType = 'episodes';
 
   final TraktService _traktService;
+
+  /// Read the last complete snapshot without touching the network. A malformed
+  /// or old cache is discarded rather than delaying Home with an exception.
+  Future<
+    ({
+      List<TraktContinueWatchingItem> movies,
+      List<TraktContinueWatchingItem> shows,
+    })?
+  >
+  readCachedItems() async {
+    try {
+      final raw = await StorageService.getTraktContinueWatchingCache();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      List<TraktContinueWatchingItem> readList(String key) {
+        final values = decoded[key];
+        if (values is! List<dynamic>) return const [];
+        return values
+            .map(TraktContinueWatchingItem.fromCacheJson)
+            .whereType<TraktContinueWatchingItem>()
+            .toList(growable: false);
+      }
+
+      return (
+        movies: readList(moviesContentType),
+        shows: readList(showsContentType),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedItems(
+    List<TraktContinueWatchingItem> movies,
+    List<TraktContinueWatchingItem> shows,
+  ) => StorageService.setTraktContinueWatchingCache(
+    jsonEncode({
+      moviesContentType: movies.map((item) => item.toCacheJson()).toList(),
+      showsContentType: shows.map((item) => item.toCacheJson()).toList(),
+    }),
+  );
+
+  Future<void> clearCachedItems() =>
+      StorageService.clearTraktContinueWatchingCache();
 
   Future<List<TraktContinueWatchingItem>> fetchMovies() {
     return fetchItems(moviesContentType);

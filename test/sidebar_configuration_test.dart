@@ -60,6 +60,31 @@ void main() {
     expect(configuration.order.length, sidebarDestinations.length);
   });
 
+  test('optional destinations can be hidden while Home and Settings remain', () {
+    final configuration = SidebarConfiguration(
+      order: const <String>['downloads', 'home', 'settings'],
+      hiddenDestinationIds: const <String>[
+        'downloads',
+        'home',
+        'settings',
+      ],
+    );
+
+    expect(configuration.hiddenDestinationIds, <String>{'downloads'});
+    expect(
+      configuration.orderVisibleTabs(const <int>[
+        MainTab.home,
+        MainTab.downloads,
+        MainTab.settings,
+      ]),
+      <int>[MainTab.home, MainTab.settings],
+    );
+    expect(
+      SidebarConfiguration.tryDecode(configuration.encode())!.hiddenDestinationIds,
+      <String>{'downloads'},
+    );
+  });
+
   test('labels are sidebar-only overrides with bounded safe normalization', () {
     final configuration = SidebarConfiguration(
       order: const <String>[],

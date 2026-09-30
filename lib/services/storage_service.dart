@@ -313,6 +313,12 @@ class StorageService {
       'home_continue_watching_enabled';
   static const String _homeCwHoldToQuickPlayKey = 'home_cw_hold_to_quick_play';
   static const String _homeCwMergedRowsKeyPrefix = 'home_cw_merge_';
+  // Last successful remote Continue Watching snapshots. These are
+  // profile-scoped so Home can draw them before a network refresh completes.
+  static const String _traktContinueWatchingCacheKey =
+      'trakt_continue_watching_cache';
+  static const String _simklContinueWatchingCacheKey =
+      'simkl_continue_watching_cache';
   static const String _homeFavoritesOpenFolderKey =
       'home_favorites_open_folder';
   static const String _homeCardOrientationKey = 'home_card_orientation';
@@ -2094,6 +2100,7 @@ class StorageService {
     final normalized = SidebarConfiguration(
       order: configuration.order,
       labels: configuration.labels,
+      hiddenDestinationIds: configuration.hiddenDestinationIds,
     );
     final prefs = await ProfilePreferences.instance();
     final saved = await prefs.setString(
@@ -6527,6 +6534,31 @@ class StorageService {
   static Future<void> setHomeCwMergedRows(String provider, bool value) async {
     final prefs = await ProfilePreferences.instance();
     await prefs.setBool('$_homeCwMergedRowsKeyPrefix$provider', value);
+  }
+
+  static Future<String?> getTraktContinueWatchingCache() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_traktContinueWatchingCacheKey);
+  }
+
+  static Future<void> setTraktContinueWatchingCache(String value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_traktContinueWatchingCacheKey, value);
+  }
+
+  static Future<void> clearTraktContinueWatchingCache() async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.remove(_traktContinueWatchingCacheKey);
+  }
+
+  static Future<String?> getSimklContinueWatchingCache() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_simklContinueWatchingCacheKey);
+  }
+
+  static Future<void> setSimklContinueWatchingCache(String value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_simklContinueWatchingCacheKey, value);
   }
 
   static Future<String> getHomeFavoritesTapAction() async {

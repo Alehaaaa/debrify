@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../models/media_identity.dart';
 import 'package:flutter/foundation.dart';
 
@@ -5,6 +7,7 @@ import '../../models/advanced_search_selection.dart';
 import '../../models/stremio_addon.dart';
 import 'simkl_item_transformer.dart';
 import 'simkl_service.dart';
+import '../storage_service.dart';
 
 /// One Simkl "continue watching" entry: a paused movie, the paused episode of a
 /// show, OR an "up next" entry (the next unwatched episode of a show you're
@@ -48,6 +51,33 @@ class SimklContinueWatchingItem {
 
   String get id => meta.progressId ?? meta.id;
   bool get isSeries => !isMovie;
+
+  Map<String, dynamic> toCacheJson() => {
+    'meta': meta.toJson(),
+    if (progress != null) 'progress': progress,
+    if (season != null) 'season': season,
+    if (episode != null) 'episode': episode,
+    if (pausedAtMs != null) 'paused_at_ms': pausedAtMs,
+    'is_movie': isMovie,
+    'is_up_next': isUpNext,
+  };
+
+  static SimklContinueWatchingItem? fromCacheJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final metaRaw = raw['meta'];
+    if (metaRaw is! Map<String, dynamic>) return null;
+    final meta = StremioMeta.fromJson(metaRaw);
+    if (meta.id.isEmpty) return null;
+    return SimklContinueWatchingItem(
+      meta: meta,
+      progress: (raw['progress'] as num?)?.toDouble(),
+      season: raw['season'] as int?,
+      episode: raw['episode'] as int?,
+      pausedAtMs: raw['paused_at_ms'] as int?,
+      isMovie: raw['is_movie'] == true,
+      isUpNext: raw['is_up_next'] == true,
+    );
+  }
 }
 
 /// Builds the Simkl "Continue Watching" rows from the account-wide paused
@@ -60,6 +90,43 @@ class SimklContinueWatchingService {
   SimklContinueWatchingService._();
   static final SimklContinueWatchingService instance =
       SimklContinueWatchingService._();
+
+  Future<
+    ({
+      List<SimklContinueWatchingItem> movies,
+      List<SimklContinueWatchingItem> shows,
+    })?
+  >
+  readCachedItems() async {
+    try {
+      final raw = await StorageService.getSimklContinueWatchingCache();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      List<SimklContinueWatchingItem> readList(String key) {
+        final values = decoded[key];
+        if (values is! List<dynamic>) return const [];
+        return values
+            .map(SimklContinueWatchingItem.fromCacheJson)
+            .whereType<SimklContinueWatchingItem>()
+            .toList(growable: false);
+      }
+
+      return (movies: readList('movies'), shows: readList('shows'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedItems({
+    required List<SimklContinueWatchingItem> movies,
+    required List<SimklContinueWatchingItem> shows,
+  }) => StorageService.setSimklContinueWatchingCache(
+    jsonEncode({
+      'movies': movies.map((item) => item.toCacheJson()).toList(),
+      'shows': shows.map((item) => item.toCacheJson()).toList(),
+    }),
+  );
 
   /// Fetch the paused movies + shows, each newest-first. Returns:
   ///  - empty lists when DISCONNECTED (authoritative — the caller clears rows);

@@ -128,8 +128,8 @@ final Map<int, SidebarDestination> sidebarDestinationByTab =
     });
 
 /// Profile-scoped customization shared by Android TV and desktop/tablet
-/// sidebars. It deliberately cannot hide destinations: visibility remains the
-/// authority of integration settings and profile policy.
+/// sidebars. Integration settings and profile policy still gate availability;
+/// this configuration can additionally hide optional destinations.
 class SidebarConfiguration {
   static const int schemaVersion = 1;
   static const int maxLabelRunes = 24;
@@ -137,12 +137,17 @@ class SidebarConfiguration {
 
   final List<String> order;
   final Map<String, String> labels;
+  final Set<String> hiddenDestinationIds;
 
   SidebarConfiguration({
     required Iterable<String> order,
     Map<String, String> labels = const <String, String>{},
+    Iterable<String> hiddenDestinationIds = const <String>{},
   }) : order = List<String>.unmodifiable(_normalizeOrder(order)),
-       labels = Map<String, String>.unmodifiable(_normalizeLabels(labels));
+       labels = Map<String, String>.unmodifiable(_normalizeLabels(labels)),
+       hiddenDestinationIds = Set<String>.unmodifiable(
+         _normalizeHiddenDestinationIds(hiddenDestinationIds),
+       );
 
   factory SidebarConfiguration.defaults() => SidebarConfiguration(
     order: sidebarDestinations.map((destination) => destination.id),
@@ -161,6 +166,8 @@ class SidebarConfiguration {
       final rawOrder = decoded['order'];
       final rawLabels = decoded['labels'];
       if (rawOrder is! List || rawLabels is! Map) return null;
+      final rawHidden = decoded['hidden'];
+      if (rawHidden != null && rawHidden is! List) return null;
 
       final order = <String>[];
       final seen = <String>{};
@@ -186,7 +193,18 @@ class SidebarConfiguration {
         if (normalized == null || normalized != value) return null;
         labels[key] = value;
       }
-      return SidebarConfiguration(order: order, labels: labels);
+      final hidden = <String>[];
+      for (final value in rawHidden ?? const <dynamic>[]) {
+        if (value is! String || !sidebarDestinationById.containsKey(value)) {
+          return null;
+        }
+        hidden.add(value);
+      }
+      return SidebarConfiguration(
+        order: order,
+        labels: labels,
+        hiddenDestinationIds: hidden,
+      );
     } on FormatException {
       return null;
     }
@@ -196,15 +214,20 @@ class SidebarConfiguration {
     'version': schemaVersion,
     'order': order,
     'labels': labels,
+    if (hiddenDestinationIds.isNotEmpty) 'hidden': hiddenDestinationIds.toList()..sort(),
   });
 
   SidebarConfiguration copyWith({
     Iterable<String>? order,
     Map<String, String>? labels,
+    Iterable<String>? hiddenDestinationIds,
   }) => SidebarConfiguration(
     order: order ?? this.order,
     labels: labels ?? this.labels,
+    hiddenDestinationIds: hiddenDestinationIds ?? this.hiddenDestinationIds,
   );
+
+  bool isVisible(String id) => !hiddenDestinationIds.contains(id);
 
   String labelForId(String id) =>
       labels[id] ?? sidebarDestinationById[id]?.defaultLabel ?? id;
@@ -218,7 +241,10 @@ class SidebarConfiguration {
   /// visible. Unknown future tabs stay reachable and retain their incoming
   /// relative order at the end until the catalog learns about them.
   List<int> orderVisibleTabs(Iterable<int> visibleTabs) {
-    final visible = List<int>.of(visibleTabs);
+    final visible = [
+      for (final tabIndex in visibleTabs)
+        if (isVisible(sidebarDestinationByTab[tabIndex]?.id ?? '')) tabIndex,
+    ];
     final rank = <int, int>{};
     for (var i = 0; i < order.length; i++) {
       final destination = sidebarDestinationById[order[i]];
@@ -239,7 +265,9 @@ class SidebarConfiguration {
   }
 
   bool get isDefault {
-    if (labels.isNotEmpty || order.length != sidebarDestinations.length) {
+    if (labels.isNotEmpty ||
+        hiddenDestinationIds.isNotEmpty ||
+        order.length != sidebarDestinations.length) {
       return false;
     }
     for (var i = 0; i < order.length; i++) {
@@ -286,4 +314,12 @@ class SidebarConfiguration {
     }
     return result;
   }
+
+  static Set<String> _normalizeHiddenDestinationIds(Iterable<String> raw) => {
+    for (final id in raw)
+      if (sidebarDestinationById.containsKey(id) &&
+          id != 'home' &&
+          id != 'settings')
+        id,
+  };
 }

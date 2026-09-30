@@ -3599,6 +3599,18 @@ class _SearchScreenState extends State<SearchScreen>
     final raw = await StorageService.getContinueWatchingItems();
     final configuredAddons = raw.any((m) => CustomSeriesIdentity.isCustom(m['imdbId'] as String?))
         ? await _stremio.getEnabledAddons() : const <StremioAddon>[];
+    // Each saved position is independent. Reading them serially delayed this
+    // local-only rail by one preferences/database round-trip per card.
+    final savedItems = raw.where((m) {
+      final id = m['imdbId'] as String?;
+      return id != null && id.isNotEmpty;
+    }).toList(growable: false);
+    final playbackStates = await Future.wait<Map<String, dynamic>?>([
+      for (final m in savedItems)
+        (m['contentType'] as String? ?? 'movie') == 'series'
+            ? StorageService.getLastPlayedEpisodeByImdbId(m['imdbId'] as String)
+            : StorageService.getVideoPlaybackStateByImdbId(m['imdbId'] as String),
+    ]);
     final items = <StremioMeta>[];
     final progress = <String, double>{};
     final episode = <String, String>{};
@@ -3606,9 +3618,10 @@ class _SearchScreenState extends State<SearchScreen>
     final episodeRefs = <String, ({int season, int episode})>{};
     final ids = <String>{};
     final addonIds = <String, String?>{};
-    for (final m in raw) {
+    for (var itemIndex = 0; itemIndex < savedItems.length; itemIndex++) {
+      final m = savedItems[itemIndex];
       final imdbId = m['imdbId'] as String?;
-      if (imdbId == null || imdbId.isEmpty) continue;
+      if (imdbId == null || imdbId.isEmpty) continue; // guarded above
       final type = (m['contentType'] as String?) ?? 'movie';
       items.add(
         StremioMeta(
@@ -3628,9 +3641,7 @@ class _SearchScreenState extends State<SearchScreen>
       // HomeContinueWatchingSection (finished episodes count as 100%).
       double? pct;
       if (type == 'series') {
-        final lastEp = await StorageService.getLastPlayedEpisodeByImdbId(
-          imdbId,
-        );
+        final lastEp = playbackStates[itemIndex];
         if (lastEp != null) {
           final finished = lastEp['finished'] == true;
           final posMs = lastEp['positionMs'] as int? ?? 0;
@@ -3658,9 +3669,7 @@ class _SearchScreenState extends State<SearchScreen>
           if (left != null) remainingMinutes[imdbId] = left;
         }
       } else {
-        final state = await StorageService.getVideoPlaybackStateByImdbId(
-          imdbId,
-        );
+        final state = playbackStates[itemIndex];
         if (state != null) {
           final posMs = state['positionMs'] as int? ?? 0;
           final durMs = state['durationMs'] as int? ?? 1;
@@ -5171,8 +5180,7 @@ class _SearchScreenState extends State<SearchScreen>
     // assignment, not setState: the sync prefix runs during initState on cold
     // start, and the first build reads the field anyway.
     _traktCwLoading = true;
-    final List<TraktContinueWatchingItem> movies;
-    final List<TraktContinueWatchingItem> shows;
+    final cw = TraktContinueWatchingService.instance;
     try {
       final authed = await TraktService.instance.isAuthenticated();
       if (!mounted || token != _traktCwToken) return;
@@ -5190,9 +5198,20 @@ class _SearchScreenState extends State<SearchScreen>
           _traktEpisodeArtwork.clear();
           _traktByImdb.clear();
         });
+        unawaited(cw.clearCachedItems());
         return;
       }
-      final cw = TraktContinueWatchingService.instance;
+      // Draw the complete snapshot first; Trakt's authoritative refresh can
+      // require several paged endpoints on a large history.
+      final cached = await cw.readCachedItems();
+      if (cached != null && mounted && token == _traktCwToken) {
+        await _applyTraktContinueWatching(
+          movies: cached.movies,
+          shows: cached.shows,
+          token: token,
+          refreshBound: false,
+        );
+      }
       final reads = await Future.wait<Object?>([
         cw.fetchMoviesOrNull(),
         cw.fetchShowsOrNull(),
@@ -5202,8 +5221,14 @@ class _SearchScreenState extends State<SearchScreen>
       if (movieRead == null || showRead == null) {
         throw StateError('Trakt Continue Watching read failed');
       }
-      movies = movieRead;
-      shows = showRead;
+      // Only a complete remote read replaces the durable snapshot.
+      unawaited(cw.saveCachedItems(movieRead, showRead));
+      await _applyTraktContinueWatching(
+        movies: movieRead,
+        shows: showRead,
+        token: token,
+        refreshBound: refreshBound,
+      );
     } catch (e) {
       // Leave any existing rows in place on a transient Trakt/network error,
       // but stop reserving the skeleton slot so it doesn't shimmer forever.
@@ -5213,6 +5238,14 @@ class _SearchScreenState extends State<SearchScreen>
       }
       return;
     }
+  }
+
+  Future<void> _applyTraktContinueWatching({
+    required List<TraktContinueWatchingItem> movies,
+    required List<TraktContinueWatchingItem> shows,
+    required int token,
+    required bool refreshBound,
+  }) async {
     await _ensureCwMergeFlags();
     if (!mounted || token != _traktCwToken) return;
 
@@ -5783,13 +5816,40 @@ class _SearchScreenState extends State<SearchScreen>
   /// runs a bound-source refresh at the end (skip when the caller already does).
   Future<void> _loadSimklContinueWatching({bool refreshBound = true}) async {
     final token = ++_simklCwToken;
-    final result = await SimklContinueWatchingService.instance.fetchItems();
-    await _ensureCwMergeFlags();
-    if (!mounted || token != _simklCwToken) return;
+    final service = SimklContinueWatchingService.instance;
+    final cached = await service.readCachedItems();
+    if (cached != null && mounted && token == _simklCwToken) {
+      await _applySimklContinueWatching(
+        movies: cached.movies,
+        shows: cached.shows,
+        token: token,
+        refreshBound: false,
+      );
+    }
+    final result = await service.fetchItems();
     // Null = a transient fetch failure — leave any existing rows in place (a
     // real disconnect returns empty lists, which fall through and clear them).
     if (result == null) return;
+    unawaited(service.saveCachedItems(
+      movies: result.movies,
+      shows: result.shows,
+    ));
+    await _applySimklContinueWatching(
+      movies: result.movies,
+      shows: result.shows,
+      token: token,
+      refreshBound: refreshBound,
+    );
+  }
 
+  Future<void> _applySimklContinueWatching({
+    required List<SimklContinueWatchingItem> movies,
+    required List<SimklContinueWatchingItem> shows,
+    required int token,
+    required bool refreshBound,
+  }) async {
+    await _ensureCwMergeFlags();
+    if (!mounted || token != _simklCwToken) return;
     final movieMetas = <StremioMeta>[];
     final showMetas = <StremioMeta>[];
     final progress = <String, double>{};
@@ -5816,8 +5876,8 @@ class _SearchScreenState extends State<SearchScreen>
       }
     }
 
-    ingest(result.movies, movieMetas);
-    ingest(result.shows, showMetas);
+    ingest(movies, movieMetas);
+    ingest(shows, showMetas);
     // Merge into one paused-order list for the See-All grid: newest paused_at
     // first, timestamp-less items last, ties fall back to movies-then-shows.
     final allMetas = [...movieMetas, ...showMetas];

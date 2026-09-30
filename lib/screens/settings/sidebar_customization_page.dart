@@ -13,9 +13,8 @@ import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 
-/// Shared Android TV + desktop editor for sidebar order and display names.
-/// Destination visibility is intentionally absent: integrations and profile
-/// policy remain the only authorities allowed to hide app surfaces.
+/// Shared Android TV + desktop editor for sidebar order, display names, and
+/// visibility. Home and Settings always remain available.
 class SidebarCustomizationPage extends StatefulWidget {
   const SidebarCustomizationPage({super.key});
 
@@ -180,6 +179,20 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focusRow(id);
     });
+  }
+
+  void _setVisible(String id, bool visible) {
+    if (id == 'home' || id == 'settings') return;
+    final hidden = Set<String>.of(_configuration.hiddenDestinationIds);
+    if (visible) {
+      hidden.remove(id);
+    } else {
+      hidden.add(id);
+    }
+    setState(() {
+      _configuration = _configuration.copyWith(hiddenDestinationIds: hidden);
+    });
+    _schedulePersist();
   }
 
   Future<void> _reset() async {
@@ -368,6 +381,8 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                           final customized = _configuration.labels.containsKey(
                             id,
                           );
+                          final mandatory = id == 'home' || id == 'settings';
+                          final visible = _configuration.isVisible(id);
                           final picked = _pickedId == id;
                           final node = _nodeFor(id);
                           return Focus(
@@ -384,7 +399,8 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                               listenable: node,
                               builder: (context, _) => Semantics(
                                 button: true,
-                                label: '$label, position ${index + 1}',
+                                label: '$label, position ${index + 1}, '
+                                    '${visible ? 'visible' : 'hidden'}',
                                 hint: _isTelevision
                                     ? 'Press OK to move or RIGHT to rename'
                                     : 'Click to rename or drag to reorder',
@@ -488,6 +504,17 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                                             _StatusBadge(
                                               label: 'RENAMED',
                                               color: t.accent2,
+                                            ),
+                                          if (!mandatory)
+                                            Checkbox(
+                                              value: visible,
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  _setVisible(id, value);
+                                                }
+                                              },
+                                              semanticLabel:
+                                                  'Show $label in sidebar',
                                             ),
                                           const SizedBox(width: 8),
                                           Icon(
