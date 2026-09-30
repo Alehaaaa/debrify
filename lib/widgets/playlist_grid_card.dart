@@ -217,7 +217,8 @@ class _PlaylistGridCardState extends State<PlaylistGridCard> {
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
-                borderRadius: app.shape.br(16),
+                // The artwork radius, matching ThemedArtwork's clip below.
+                borderRadius: app.shape.brImg(16),
                 boxShadow: isActive
                     ? [
                         BoxShadow(
@@ -433,7 +434,7 @@ class _PlaylistGridCardState extends State<PlaylistGridCard> {
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOutCubic,
                         decoration: BoxDecoration(
-                          borderRadius: app.shape.br(16),
+                          borderRadius: app.shape.brImg(16),
                           border: Border.all(
                             color: isActive
                                 ? app.fade(app.core.tx, 0.25)
