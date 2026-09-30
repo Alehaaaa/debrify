@@ -1056,7 +1056,7 @@ class SettingsSectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 10),
       child: Text(
@@ -1544,7 +1544,7 @@ class _ConnectionCardState extends State<ConnectionCard> {
         ? (active ? t.success : t.danger)
         : t.dim2;
     final bool lit = _focused || _hovered;
-    final bool spotlight = app.id == 'spotlight';
+    final bool spotlight = app.formId == 'spotlight';
     final bool inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;
     final Color foreground = inverse ? app.inkOn(app.core.tx) : app.core.tx;
@@ -1753,7 +1753,7 @@ class SettingsSection extends StatelessWidget {
     final rule =
         app.surface.modelFor(SurfaceFamily.settingsGroup) ==
         SeparationModel.rule;
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2094,7 +2094,7 @@ class _SettingsTileState extends State<SettingsTile> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     final bool lit = widget.enabled && (_focused || _hovered);
     final bool inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;
@@ -2314,7 +2314,7 @@ class _SettingsToggleTileState extends State<SettingsToggleTile> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     final bool lit = _focused || _hovered;
     final bool inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;

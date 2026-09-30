@@ -131,7 +131,50 @@ class AppTheme {
     required this.sound,
     required this.brightness,
     required this.sheetSurface,
+    this.form = '',
   });
+
+  /// Which FORM this theme wears (Appearance → Form) — the theme id whose
+  /// structure built it. Empty means its own ([id]). Anything that picks a
+  /// whole visual style — Spotlight's bespoke Settings, for one — must ask
+  /// this, not [id]: [id] is the PALETTE, and a palette change must not
+  /// restyle the app.
+  final String form;
+  String get formId => form.isEmpty ? id : form;
+
+  /// This theme, recorded as wearing [form].
+  AppTheme withForm(String form) => AppTheme._(
+    id: id,
+    label: label,
+    isLegacy: isLegacy,
+    core: core,
+    home: home,
+    seeAll: seeAll,
+    settings: settings,
+    cloud: cloud,
+    calendar: calendar,
+    downloads: downloads,
+    youtube: youtube,
+    playlist: playlist,
+    stremioTv: stremioTv,
+    debrifyTv: debrifyTv,
+    iptv: iptv,
+    shell: shell,
+    shape: shape,
+    type: type,
+    motion: motion,
+    surface: surface,
+    light: light,
+    art: art,
+    focus: focus,
+    idle: idle,
+    wait: wait,
+    density: density,
+    sound: sound,
+    brightness: brightness,
+    sheetSurface: sheetSurface,
+    form: form,
+  );
 
   bool get isLight => brightness == Brightness.light;
 

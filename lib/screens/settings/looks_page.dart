@@ -2,25 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../../services/analytics_service.dart';
 import '../../theme/app_looks.dart';
-import '../../theme/app_theme.dart';
 import '../../theme/app_theme_controller.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/shipped_themes.dart' show kDetailThemesShipped;
 import '../../utils/platform_util.dart';
-import '../../widgets/detail/theme/detail_themes.dart';
+import 'form_palette_pages.dart';
 import 'theme_tokens_page.dart';
 import 'widgets/settings_widgets.dart';
 
-/// Appearance → **Looks**, as two independent picks.
+/// Appearance → **Looks**.
 ///
-///  * **Structure** — the app's form: corners, type, artwork framing, the
-///    focus expression, motion and surfaces, plus the Look's layouts (details
-///    page, launch ident, TV and desktop chrome). Never touches colour.
-///  * **Colour palette** — the app's colours (and, for the curated palettes,
-///    the text brightness they were tuned for). Never touches form.
-///
-/// Either can change without moving the other; every individual picker is
-/// still where it was, and Advanced still layers token edits over both.
+/// The two independent choices first — **Form** (how the app is built) and
+/// **Colour palette** (its colours) — then **Presets**, which set both plus
+/// the layouts in one pick. Changing either choice afterwards simply moves
+/// the preset tick away; nothing else is touched.
 class LooksPage extends StatefulWidget {
   const LooksPage({super.key});
 
@@ -29,8 +23,6 @@ class LooksPage extends StatefulWidget {
 }
 
 class _LooksPageState extends State<LooksPage> {
-  /// Non-focusable marker around the first card; on TV it hands entry focus
-  /// to the first option row. Same idiom as the other Appearance pickers.
   final FocusNode _firstCardMarker = FocusNode(
     debugLabel: 'looks-first-card',
     skipTraversal: true,
@@ -59,83 +51,25 @@ class _LooksPageState extends State<LooksPage> {
     super.dispose();
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _apply(AppLook look) async {
     if (_applying) return;
     setState(() => _applying = true);
-    try {
-      await action();
-    } finally {
-      if (mounted) setState(() => _applying = false);
-    }
+    await AppThemeController.instance.clearOverrides();
+    await LookApplier.apply(look);
+    if (!mounted) return;
+    setState(() => _applying = false);
   }
 
-  List<Color> _swatchesFor(String themeId) {
-    if (themeId == AppThemes.legacyId) {
-      final l = AppThemes.legacy;
-      return [l.home.bg, l.settings.panel, l.settings.accent, l.home.chromeAccent];
-    }
-    final t = DetailThemes.byId(themeId);
-    return [t.ground, t.panel, t.accent, t.focus];
+  Future<void> _open(Widget page) async {
+    await pushSettingsPage(context, page);
+    if (mounted) setState(() {});
   }
-
-  static const Map<String, String> _inkLabels = {
-    'bright': 'Bright text',
-    'soft': 'Soft text',
-    'dim': 'Dim text',
-  };
 
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final controller = AppThemeController.instance;
-    final edits = controller.overrides.count;
-    final classicPalette = controller.isLegacy;
-    final activeStructure = LookParts.activeStructure();
-    final shipped = [
-      for (final t in DetailThemes.catalogue)
-        if (kDetailThemesShipped.contains(t.id)) (id: t.id, label: t.label),
-    ];
-    final more = LookParts.morePalettes(shipped);
-
-    Widget check(bool on) => on
-        ? Icon(Icons.check_rounded, size: 20, color: app.settings.accent2)
-        : const SizedBox(width: 20);
-
-    Widget swatches(String themeId, bool on) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final c in _swatchesFor(themeId))
-          Container(
-            width: 14,
-            height: 14,
-            margin: const EdgeInsets.only(left: 4),
-            decoration: BoxDecoration(
-              color: c,
-              shape: BoxShape.circle,
-              border: Border.all(color: app.fade(app.core.tx, 0.25)),
-            ),
-          ),
-        const SizedBox(width: 10),
-        check(on),
-      ],
-    );
-
-    Widget paletteTile(LookPalette p, {String? subtitle}) {
-      final on = p.isActive;
-      return SettingsTile(
-        icon: on
-            ? Icons.radio_button_checked_rounded
-            : Icons.radio_button_unchecked_rounded,
-        title: p.label,
-        subtitle: subtitle ??
-            (p.textBrightness == null
-                ? 'Colours only'
-                : 'Colours · ${_inkLabels[p.textBrightness] ?? p.textBrightness}'),
-        trailing: swatches(p.themeId, on),
-        onTap: () => _run(() => LookParts.applyPalette(p)),
-      );
-    }
-
+    final edits = AppThemeController.instance.overrides.count;
+    final active = edits == 0 ? AppLooks.active() : null;
     return SettingsPageScaffold(
       title: 'Looks',
       body: SingleChildScrollView(
@@ -149,68 +83,59 @@ class _LooksPageState extends State<LooksPage> {
                 const SettingsPageHeader(
                   icon: Icons.auto_awesome_rounded,
                   title: 'Looks',
-                  subtitle: 'Pick the structure and the colour palette separately',
+                  subtitle: 'Form and colour are separate choices',
                 ),
                 const SizedBox(height: 18),
-                if (edits > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: SettingsInfoBanner(
-                      icon: Icons.tune_rounded,
-                      text: '$edits ${edits == 1 ? "token" : "tokens"} edited '
-                          'under Advanced still apply on top of the structure '
-                          'and palette below.',
-                    ),
-                  ),
-
-                // ── Structure ────────────────────────────────────────────
                 Focus(
                   focusNode: _firstCardMarker,
                   canRequestFocus: false,
                   skipTraversal: true,
                   child: SettingsSection(
-                    title: 'Structure',
-                    blurb: classicPalette
-                        ? 'The Debrify Classic palette is hand-built with its '
-                            'own form. Pick another palette to change the '
-                            'structure.'
-                        : 'Form and layout — corners, type, artwork framing, '
-                            'focus, motion and the page layouts. Your colours '
-                            'stay as they are.',
+                    title: 'Your look',
+                    blurb: 'Change either one — the other stays as it is.',
                     children: [
-                      for (final s in LookParts.structures)
-                        SettingsTile(
-                          icon: s.id == activeStructure?.id
-                              ? Icons.radio_button_checked_rounded
-                              : Icons.radio_button_unchecked_rounded,
-                          title: s.label,
-                          subtitle: s.blurb,
-                          enabled: !classicPalette || s.themeId == AppThemes.legacyId,
-                          trailing: check(s.id == activeStructure?.id),
-                          onTap: () => _run(() => LookParts.applyStructure(s)),
-                        ),
+                      SettingsTile(
+                        icon: Icons.dashboard_customize_rounded,
+                        title: 'Form',
+                        subtitle: '${LookParts.formLabel()} — panels, artwork '
+                            'framing, focus and motion',
+                        onTap: () => _open(const FormPage()),
+                      ),
+                      SettingsTile(
+                        icon: Icons.palette_rounded,
+                        title: 'Colour palette',
+                        subtitle:
+                            '${LookParts.paletteLabel(AppThemeController.instance.id)}'
+                            ' — background, panels, accent and focus',
+                        onTap: () => _open(const PalettePage()),
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 18),
-
-                // ── Colour palette ───────────────────────────────────────
                 SettingsSection(
-                  title: 'Colour palette',
-                  blurb: 'Colours only — grounds, panels, accent and focus. '
-                      'Your structure and layouts stay as they are.',
+                  title: 'Presets',
+                  blurb: 'Sets a form, a palette and the page layouts in one '
+                      'pick.',
                   children: [
-                    for (final p in LookParts.curatedPalettes) paletteTile(p),
+                    for (final look in AppLooks.all)
+                      SettingsTile(
+                        icon: look.id == active?.id
+                            ? Icons.radio_button_checked_rounded
+                            : Icons.radio_button_unchecked_rounded,
+                        title: look.label,
+                        subtitle: '${_formOf(look)} form · '
+                            '${LookParts.paletteLabel(look.values['app_theme'] ?? 'legacy')} '
+                            'palette — ${look.blurb}',
+                        trailing: look.id == active?.id
+                            ? Icon(Icons.check_rounded,
+                                size: 20, color: app.settings.accent2)
+                            : const SizedBox.shrink(),
+                        onTap: () => _apply(look),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 14),
-                SettingsSection(
-                  title: 'More palettes',
-                  children: [
-                    for (final p in more) paletteTile(p, subtitle: 'Colours only'),
-                  ],
-                ),
-                const SizedBox(height: 18),
                 SettingsSection(
                   title: '',
                   children: [
@@ -220,14 +145,8 @@ class _LooksPageState extends State<LooksPage> {
                       subtitle: edits == 0
                           ? 'Edit individual tokens — colour, shape, motion'
                           : '$edits ${edits == 1 ? "token" : "tokens"} '
-                              'changed on top of your picks',
-                      onTap: () async {
-                        await pushSettingsPage(
-                          context,
-                          const ThemeTokensPage(),
-                        );
-                        if (mounted) setState(() {});
-                      },
+                              'changed on top of your look',
+                      onTap: () => _open(const ThemeTokensPage()),
                     ),
                   ],
                 ),
@@ -237,5 +156,13 @@ class _LooksPageState extends State<LooksPage> {
         ),
       ),
     );
+  }
+
+  static String _formOf(AppLook look) {
+    final id = look.values['app_structure'] ?? 'legacy';
+    for (final f in LookParts.forms) {
+      if (f.id == id) return f.label;
+    }
+    return 'Classic';
   }
 }

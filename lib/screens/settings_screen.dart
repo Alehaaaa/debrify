@@ -79,6 +79,7 @@ import '../widgets/launch/launch_ident.dart';
 import 'settings/detail_page_style_page.dart';
 import 'settings/app_theme_page.dart';
 import 'settings/looks_page.dart';
+import 'settings/form_palette_pages.dart';
 import 'settings/theme_tokens_page.dart';
 import 'settings/theme_lab_page.dart';
 import 'settings/detail_theme_page.dart';
@@ -8052,11 +8053,24 @@ class _SettingsLayout extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             SettingsSection(
-              title: 'Presets',
+              title: 'Look',
               blurb:
-                  'One pick sets the theme, layouts, and launch animation '
-                  'together.',
+                  'Form and colour palette are separate choices. Looks also '
+                  'has presets that set both.',
               children: [
+                SettingsTile(
+                  icon: Icons.dashboard_customize_rounded,
+                  title: 'Form',
+                  subtitle: '${LookParts.formLabel()} — panels, framing, focus, motion',
+                  onTap: () => pushSettingsPage(context, const FormPage()),
+                ),
+                SettingsTile(
+                  icon: Icons.palette_rounded,
+                  title: 'Colour palette',
+                  subtitle: '${LookParts.paletteLabel(AppThemeController.instance.id)}'
+                      ' — colours only',
+                  onTap: () => pushSettingsPage(context, const PalettePage()),
+                ),
                 SettingsTile.spec(
                   SettingsRows.themeTokens,
                   subtitle: themeTokensLabel,
@@ -8387,7 +8401,7 @@ class _SettingsLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    if (app.id == 'spotlight') return _buildSpotlight(context);
+    if (app.formId == 'spotlight') return _buildSpotlight(context);
     final t = app.settings;
     return SettingsBackground(
       child: SingleChildScrollView(
@@ -8460,11 +8474,24 @@ class _SettingsLayout extends StatelessWidget {
                 // pickers live in the TV layout's Appearance category — this
                 // layout never renders on Android TV.
                 SettingsSection(
-                  title: 'Presets',
+                  title: 'Look',
                   blurb:
-                      'One pick that sets the theme, layouts and launch '
-                      'animation together.',
+                      'Form and colour palette are separate choices. Looks '
+                      'also has presets that set both.',
                   children: [
+                    SettingsTile(
+                      icon: Icons.dashboard_customize_rounded,
+                      title: 'Form',
+                      subtitle: '${LookParts.formLabel()} — panels, framing, focus, motion',
+                      onTap: () => pushSettingsPage(context, const FormPage()),
+                    ),
+                    SettingsTile(
+                      icon: Icons.palette_rounded,
+                      title: 'Colour palette',
+                      subtitle: '${LookParts.paletteLabel(AppThemeController.instance.id)}'
+                          ' — colours only',
+                      onTap: () => pushSettingsPage(context, const PalettePage()),
+                    ),
                     SettingsTile.spec(
                       SettingsRows.looks,
                       subtitle: LookParts.currentLabel(),

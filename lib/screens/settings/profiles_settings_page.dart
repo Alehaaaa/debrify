@@ -614,7 +614,7 @@ class _ProfileRosterTileState extends State<_ProfileRosterTile> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     final lit = _focusNode.hasFocus || _hovered;
     final inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;

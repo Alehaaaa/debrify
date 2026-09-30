@@ -280,6 +280,7 @@ abstract final class AppLooks {
       label: 'Debrify Classic',
       blurb: 'The app exactly as it has always looked.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'legacy',
         'detail_page_style': 'classic',
         'launch_animation': 'horizon',
@@ -306,6 +307,7 @@ abstract final class AppLooks {
           'The tvOS idiom — full-bleed art, borderless focus that lifts '
           'and tilts, and a details page that dissolves into colour.',
       values: {
+        'app_structure': 'spotlight',
         'app_theme': 'spotlight',
         'detail_page_style': 'showcase',
         'tv_home_style': 'spotlight',
@@ -320,6 +322,7 @@ abstract final class AppLooks {
       label: 'Midnight Signal',
       blurb: 'Today\'s palette, taken app-wide — dark glass and one gold.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'signal',
         'detail_page_style': 'stage',
         'launch_animation': 'horizon',
@@ -335,6 +338,7 @@ abstract final class AppLooks {
       blurb:
           'Squared, monospaced, technical. Everything reads as an instrument.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'blueprint',
         'detail_page_style': 'console',
         'launch_animation': 'blueprint',
@@ -350,6 +354,7 @@ abstract final class AppLooks {
       label: 'Cinema',
       blurb: 'Widescreen and unhurried — grain, deep grounds, room to breathe.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'cinemascope',
         'detail_page_style': 'marquee',
         'launch_animation': 'anamorphic',
@@ -364,6 +369,7 @@ abstract final class AppLooks {
       label: 'Neon Arcade',
       blurb: 'Saturated, rounded and loud. The one that looks like a game.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'aurora',
         'detail_page_style': 'stage',
         'launch_animation': 'neon',
@@ -378,6 +384,7 @@ abstract final class AppLooks {
       label: 'Quiet Hours',
       blurb: 'Low-contrast and calm, for a dark room and a late episode.',
       values: {
+        'app_structure': 'legacy',
         'app_theme': 'obsidian',
         'detail_page_style': 'dossier',
         'launch_animation': 'silk',
@@ -424,152 +431,118 @@ abstract final class AppLooks {
   }
 }
 
-/// Keys that are COLOUR. Everything else a Look sets is form or layout.
-const Set<String> _paletteKeys = {'app_theme', 'text_brightness', 'launch_ident_palette'};
-
-/// Appearance → Looks → **Structure**: a Look's form without its colours —
-/// the theme whose shape, type, artwork framing, focus, motion and surfaces
-/// the app wears, plus the Look's layouts (details page, launch ident, TV and
-/// desktop chrome). Picking one never touches the palette.
+/// Appearance → **Form**: one of the app's genuinely different structures —
+/// how panels separate, how artwork is framed, what focus does, how things
+/// move. Independent of the palette.
+///
+/// There are only these. The rest of the old Looks were the Classic form in
+/// other colours, which is what the palette picker now is.
 @immutable
-class LookStructure {
+class AppForm {
+  /// `legacy` (Classic) or a premium spec id.
   final String id;
   final String label;
   final String blurb;
 
-  /// The theme whose FORM this is (`app_structure`).
-  final String themeId;
-
-  /// Layout keys the Look sets, minus every colour key.
-  final Map<String, String> layout;
-
-  const LookStructure({
-    required this.id,
-    required this.label,
-    required this.blurb,
-    required this.themeId,
-    required this.layout,
-  });
-
-  AppLook get asLook => AppLook(
-    id: 'structure:$id',
-    label: label,
-    blurb: blurb,
-    values: {'app_structure': themeId, ...layout},
-  );
-
-  bool get isActive => asLook.isActiveIgnoringMirror;
-}
-
-/// Appearance → Looks → **Colour palette**: a theme's colours alone (plus the
-/// text brightness a curated palette was tuned for). Picking one never
-/// touches the structure.
-@immutable
-class LookPalette {
-  final String id;
-  final String label;
-
-  /// The theme whose COLOURS these are (`app_theme`).
-  final String themeId;
-
-  /// Curated palettes carry the ink level they were tuned for.
-  final String? textBrightness;
-
-  const LookPalette({
-    required this.id,
-    required this.label,
-    required this.themeId,
-    this.textBrightness,
-  });
+  const AppForm({required this.id, required this.label, required this.blurb});
 
   bool get isActive =>
-      StorageService.appThemeCached == themeId &&
-      (textBrightness == null ||
-          TextBrightnessController.current.name == textBrightness);
+      AppThemeController.instance.effectiveStructureId == id;
+}
+
+/// Appearance → **Colour palette**: a theme's colours alone. Independent of
+/// the form.
+@immutable
+class LookPalette {
+  /// The theme whose COLOURS these are (`app_theme`).
+  final String themeId;
+  final String label;
+
+  const LookPalette({required this.themeId, required this.label});
+
+  bool get isActive => StorageService.appThemeCached == themeId;
 }
 
 abstract final class LookParts {
-  static const Map<String, String> _structureBlurbs = {
-    'classic': 'The original form: soft cards, the classic details page and '
-        'Canvas TV home.',
-    'spotlight': 'Full-bleed art, borderless focus that lifts and tilts, the '
-        'Showcase details page and pill navigation.',
-    'midnight': 'Glass panes and a focus ring, the Stage details page, Horizon '
-        'ident and Stage Discover.',
-    'console': 'Squared corners and monospaced type, the Console details page '
-        'and Blueprint ident.',
-    'cinema': 'Widescreen and unhurried — grain, deep margins, the Marquee '
-        'details page and Anamorphic ident.',
-    'neon': 'Rounded and bold, the Stage details page and Neon ident.',
-    'quiet': 'Restrained and calm, the Dossier details page and Silk ident.',
-  };
-
-  /// One structure per shipped Look, in the Looks' order.
-  static final List<LookStructure> structures = [
-    for (final look in AppLooks.all)
-      LookStructure(
-        id: look.id,
-        label: look.label,
-        blurb: _structureBlurbs[look.id] ?? look.blurb,
-        themeId: look.values['app_theme'] ?? AppThemes.legacyId,
-        layout: {
-          for (final e in look.values.entries)
-            if (!_paletteKeys.contains(e.key)) e.key: e.value,
-        },
-      ),
+  static const List<AppForm> forms = [
+    AppForm(
+      id: 'legacy',
+      label: 'Classic',
+      blurb: 'Filled cards and a focus ring. Each palette keeps its own '
+          'corners and fonts.',
+    ),
+    AppForm(
+      id: 'spotlight',
+      label: 'Spotlight',
+      blurb: 'Full-bleed artwork, borderless focus that lifts and tilts, and '
+          'its own Settings style.',
+    ),
+    AppForm(
+      id: 'glass',
+      label: 'Glass',
+      blurb: 'Floating panes of tinted glass over the artwork, a focus ring '
+          'and gliding motion.',
+    ),
+    AppForm(
+      id: 'field',
+      label: 'Deep Field',
+      blurb: 'No boxes — artwork bleeds and space separates. Focus scales up.',
+    ),
+    AppForm(
+      id: 'hearth',
+      label: 'Warm Room',
+      blurb: 'Soft filled panels, artwork that fades into the page, focus '
+          'that lifts.',
+    ),
+    AppForm(
+      id: 'console',
+      label: 'Console',
+      blurb: 'Square corners and hairline rules. Focus inverts; motion snaps.',
+    ),
+    AppForm(
+      id: 'reel',
+      label: 'Cinema',
+      blurb: 'Artwork mounted like a print on filled panels, focus that lifts.',
+    ),
   ];
 
-  /// The curated palettes (one per Look), then every other shipped theme's
-  /// colours.
-  static final List<LookPalette> curatedPalettes = [
-    for (final look in AppLooks.all)
-      LookPalette(
-        id: look.id,
-        label: look.label,
-        themeId: look.values['app_theme'] ?? AppThemes.legacyId,
-        textBrightness: look.values['text_brightness'],
-      ),
-  ];
-
-  static List<LookPalette> morePalettes(
-    List<({String id, String label})> shippedThemes,
-  ) {
-    final curated = {for (final p in curatedPalettes) p.themeId};
-    return [
-      for (final t in shippedThemes)
-        if (!curated.contains(t.id))
-          LookPalette(id: 'theme:${t.id}', label: t.label, themeId: t.id),
-    ];
-  }
-
-  static LookStructure? activeStructure() {
-    for (final s in structures) {
-      if (s.isActive) return s;
+  static AppForm? activeForm() {
+    for (final f in forms) {
+      if (f.isActive) return f;
     }
     return null;
   }
 
-  /// The palette's name: its Look's when curated, else the theme's own.
-  static String paletteLabel(String themeId) {
-    for (final p in curatedPalettes) {
-      if (p.themeId == themeId) return p.label;
-    }
-    return themeId == AppThemes.legacyId
-        ? 'Debrify Classic'
-        : DetailThemes.byId(themeId).label;
+  static String formLabel() => activeForm()?.label ?? 'Custom';
+
+  /// Classic, then every palette this build ships.
+  static List<LookPalette> palettes(
+    List<({String id, String label})> shippedThemes,
+  ) => [
+    const LookPalette(themeId: 'legacy', label: 'Debrify Classic'),
+    for (final t in shippedThemes) LookPalette(themeId: t.id, label: t.label),
+  ];
+
+  static String paletteLabel(String themeId) =>
+      themeId == AppThemes.legacyId
+          ? 'Debrify Classic'
+          : DetailThemes.byId(themeId).label;
+
+  /// "Spotlight form · Signal" — for the Settings rows.
+  static String currentLabel() =>
+      '${formLabel()} form · ${paletteLabel(StorageService.appThemeCached)}';
+
+  /// Picks a form. Never touches colours.
+  static Future<void> applyForm(AppForm form) async {
+    LookApplier.noteExternalWrite('app_structure');
+    await AppThemeController.instance.selectStructure(form.id);
   }
 
-  /// "Spotlight · Midnight Signal" — structure, then palette — for the
-  /// Settings row that opens Looks.
-  static String currentLabel() =>
-      '${activeStructure()?.label ?? 'Custom'} · '
-      '${paletteLabel(StorageService.appThemeCached)}';
-
-  /// Picks a palette while keeping the structure exactly where it is.
+  /// Picks a palette while keeping the form exactly where it is.
   ///
-  /// With no structure picked the app follows the palette's own form, so a
-  /// palette change would silently restyle everything else too. Pinning the
-  /// current form first is what keeps the two isolated.
+  /// With no form picked the app follows the palette (a premium palette
+  /// wears its own form), so a palette change could restyle everything.
+  /// Pinning the current form first is what keeps the two isolated.
   static Future<void> applyPalette(LookPalette palette) async {
     final controller = AppThemeController.instance;
     if (controller.structureId.isEmpty) {
@@ -577,15 +550,7 @@ abstract final class LookParts {
     }
     LookApplier.noteExternalWrite('app_theme');
     await controller.select(palette.themeId);
-    final tb = palette.textBrightness;
-    if (tb != null) {
-      LookApplier.noteExternalWrite('text_brightness');
-      await LookKeys.textBrightness.write(tb);
-    }
   }
-
-  static Future<void> applyStructure(LookStructure structure) =>
-      LookApplier.apply(structure.asLook);
 }
 
 /// Applies a Look.

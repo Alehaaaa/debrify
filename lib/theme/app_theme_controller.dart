@@ -66,12 +66,27 @@ class AppThemeController extends ChangeNotifier {
   String _structureId = '';
   String get structureId => _structureId;
 
-  /// The theme whose FORM is on screen: the picked structure, or the
-  /// palette's own when none is picked. Classic (legacy) is hand-built and
-  /// always wears its own form.
-  String get effectiveStructureId => isLegacy || _structureId.isEmpty
-      ? _id
-      : _structureId;
+  /// The FORM on screen (Appearance → Form): `legacy` (Classic) or a premium
+  /// spec id. With none picked, a premium palette keeps its own form and
+  /// every other palette is Classic — exactly how each rendered before form
+  /// and palette were split. The Classic palette is hand-built and always
+  /// Classic.
+  /// The structure the CORE takes, or null to keep the palette's own —
+  /// Classic form, or a premium palette wearing its own form.
+  String? get formCoreId {
+    final s = effectiveStructureId;
+    return s == AppThemes.legacyId || s == _id ? null : s;
+  }
+
+  String get effectiveStructureId {
+    if (isLegacy) return AppThemes.legacyId;
+    if (_structureId.isNotEmpty &&
+        (_structureId == AppThemes.legacyId ||
+            PremiumLooks.byId(_structureId) != null)) {
+      return _structureId;
+    }
+    return PremiumLooks.byId(_id) != null ? _id : AppThemes.legacyId;
+  }
 
   /// The preset-resolved theme the root [AppThemeScope] provides.
   AppTheme get theme => _theme;
@@ -275,8 +290,11 @@ class AppThemeController extends ChangeNotifier {
     // palette's colours in the structure's form, and the structure's spec
     // (framing, focus, motion, surfaces…) is what builds the app below.
     final structure = effectiveStructureId;
+    // Classic form keeps the palette's own core untouched (its authored radii
+    // and fonts); a spec form lays its structure over the palette's colours.
+    final formCore = formCoreId;
     final core = AppThemeAdapter.resolveCoreText(
-      ThemeCoreResolver.resolve(_id, overrides, structureId: structure),
+      ThemeCoreResolver.resolve(_id, overrides, structureId: formCore),
       preset,
     );
     // A premium look is a SPEC, and `fromDetail(core)` alone would deliver
@@ -304,6 +322,7 @@ class AppThemeController extends ChangeNotifier {
         ),
       );
     }
+    _theme = _theme.withForm(structure);
     _themeData = AppThemeAdapter.themed(_theme, preset);
   }
 }
