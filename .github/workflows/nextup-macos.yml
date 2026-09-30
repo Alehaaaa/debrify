@@ -1,0 +1,46 @@
+name: Up Next macOS build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Merge upstream updates
+        run: |
+          git config user.name "Alehaaaa"
+          git config user.email "41898283+Alehaaaa@users.noreply.github.com"
+          git remote add upstream https://github.com/varunsalian/debrify.git || true
+          git fetch upstream main
+          git merge --no-edit upstream/main
+      - name: Keep the fork current
+        run: git push origin HEAD:${{ github.ref_name }}
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: stable
+      - name: Get dependencies
+        run: flutter pub get
+      - name: Build macOS app
+        run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false
+      - name: Package app
+        run: |
+          cd build/macos/Build/Products/Release
+          ditto -c -k --sequesterRsrc --keepParent debrify.app Debrify-Up-Next.zip
+      - name: Publish rolling release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="nextup-$(git rev-parse --short HEAD)"
+          gh release delete "$VERSION" --yes || true
+          gh release create "$VERSION" build/macos/Build/Products/Release/Debrify-Up-Next.zip \
+            --title "Up Next build $VERSION" --notes "Automated build of upstream Debrify with episode-link support." --latest

@@ -2275,6 +2275,16 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       }
     };
 
+    deepLinkService.onEpisodeLinkReceived = (episode) async {
+      if (!mounted) return;
+      if (!_allowsProfileFeature(ProfileFeature.incomingLinks) ||
+          !_allowsProfileFeature(ProfileFeature.addonUse)) {
+        _showPolicyDeniedSnack();
+        return;
+      }
+      MainPageBridge.requestCatalogDetailOpen(episode);
+    };
+
     // Initialize the service
     deepLinkService.initialize();
   }

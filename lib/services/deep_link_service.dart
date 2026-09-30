@@ -38,6 +38,9 @@ class DeepLinkService {
   // Callback function to handle Stremio addon URLs
   Future<void> Function(String manifestUrl)? onStremioAddonReceived;
 
+  /// Opens a catalog series at a particular episode from a Debrify URL.
+  Future<void> Function(Map<String, dynamic> episode)? onEpisodeLinkReceived;
+
   // Track recently processed links to avoid duplicates
   final Map<String, DateTime> _recentlyProcessedMagnets = {};
   final Map<String, DateTime> _recentlyProcessedUrls = {};
@@ -265,6 +268,7 @@ class DeepLinkService {
         const <String>{
           'magnet',
           'stremio',
+          'debrify',
           'http',
           'https',
         }.contains(uri.scheme);
@@ -299,6 +303,8 @@ class DeepLinkService {
 
     if (uri.scheme == 'magnet') {
       _handleMagnetUri(uri);
+    } else if (uri.scheme == 'debrify' && uri.host == 'episode') {
+      _handleEpisodeUri(uri);
     } else if (uri.scheme == 'stremio') {
       _handleStremioUri(uri);
     } else if (uri.scheme == 'https' || uri.scheme == 'http') {
@@ -307,6 +313,28 @@ class DeepLinkService {
         _handleStremioManifestUrl(uri.toString());
       }
     }
+  }
+
+  void _handleEpisodeUri(Uri uri) {
+    final imdbId = uri.queryParameters['imdb']?.trim();
+    final season = int.tryParse(uri.queryParameters['season'] ?? '');
+    final episode = int.tryParse(uri.queryParameters['episode'] ?? '');
+    if (imdbId == null ||
+        !RegExp(r'^tt[0-9]{5,12}$', caseSensitive: false).hasMatch(imdbId) ||
+        season == null ||
+        episode == null ||
+        season < 0 ||
+        episode < 1) {
+      debugPrint('Ignoring malformed Debrify episode link');
+      return;
+    }
+    onEpisodeLinkReceived?.call(<String, dynamic>{
+      'imdbId': imdbId,
+      'type': 'series',
+      'season': season,
+      'episode': episode,
+      'title': uri.queryParameters['title']?.trim(),
+    });
   }
 
   /// Handle magnet URI
