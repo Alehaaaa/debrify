@@ -118,6 +118,7 @@ import 'utils/tvos_device.dart';
 import 'services/desktop_recording_service.dart';
 import 'services/desktop_schedule_service.dart';
 import 'services/update_service.dart';
+import 'services/local_source_update_service.dart';
 import 'services/webdav_sync/webdav_sync_runtime.dart';
 
 /// Flutter's default image cache (1000 images / 100 MB) is far too large for a
@@ -2400,6 +2401,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       if (!_allowsProfileFeature(ProfileFeature.appUpdates)) return true;
       final autoEnabled = await StorageService.getUpdateAutoCheckEnabled();
       if (!autoEnabled) return true;
+      // This macOS build updates from source: check the ORIGINAL repo
+      // (upstream) through the local checkout, same as Settings → Check for
+      // Updates, instead of the fork's GitHub releases.
+      if (!kIsWeb && Platform.isMacOS) {
+        return await _performLocalSourceUpdateCheck();
+      }
       final includeAlpha = await StorageService.getUpdateIncludeAlphaEnabled();
       final packageInfo = await AppVersionInfo.get();
       UpdateSummary summary;
@@ -2438,6 +2445,57 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       _startupModalActive = false;
       // Ignore auto-update failures silently
       return true;
+    }
+  }
+
+  /// Startup check against the original repo via the local source checkout.
+  /// Silent when up to date or when the checkout/toolchain isn't available.
+  Future<bool> _performLocalSourceUpdateCheck() async {
+    final bool available;
+    try {
+      available = await LocalSourceUpdateService.updateAvailable();
+    } catch (_) {
+      return true;
+    }
+    if (!available || !mounted) return true;
+    if (_startupModalActive) {
+      Future<void>.delayed(const Duration(seconds: 3), () async {
+        if (!mounted) return;
+        await _runDeferredAutoUpdateCheck();
+      });
+      return false;
+    }
+    _startupModalActive = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Debrify update available'),
+          content: const Text(
+            'The original Debrify repo has new changes. Debrify will merge them '
+            'into your local fork (keeping your changes), build it, replace this '
+            'app and relaunch when the build succeeds.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                try {
+                  await LocalSourceUpdateService.buildAndInstall();
+                } catch (_) {}
+              },
+              child: const Text('Build & Install'),
+            ),
+          ],
+        ),
+      );
+      return true;
+    } finally {
+      _startupModalActive = false;
     }
   }
 
