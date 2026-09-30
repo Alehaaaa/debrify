@@ -19,7 +19,7 @@ class LocalSourceUpdateService {
       sourceDirectory.path,
       'fetch',
       'upstream',
-      'main',
+      'main:refs/remotes/upstream/main',
     ]);
     final base = await _output('/usr/bin/git', [
       '-C',
@@ -51,7 +51,7 @@ class LocalSourceUpdateService {
     await script.writeAsString('''#!/bin/zsh
 set -eu
 cd $quotedSource
-/usr/bin/git fetch upstream main
+/usr/bin/git fetch upstream main:refs/remotes/upstream/main
 /usr/bin/git merge --no-edit upstream/main
 PATH=$quotedPods:\$PATH $quotedFlutter build macos --release --build-name 0.10.0-nextup --build-number 1 --dart-define=DEBRIFY_LOCAL_VALIDATION=false || exit 1
 app=build/macos/Build/Products/Release/debrify.app
