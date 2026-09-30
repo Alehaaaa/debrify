@@ -350,7 +350,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         child: AnimatedContainer(
           duration: fx,
           decoration: BoxDecoration(
-            borderRadius: app.shape.br(14),
+            // The artwork radius, like [ThemedArtwork]'s clip below, so the
+            // shadow and focus border share the poster's own corners.
+            borderRadius: app.shape.brImg(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: _active ? 0.7 : 0.35),
@@ -398,7 +400,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
                   IgnorePointer(
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: app.shape.br(14),
+                        borderRadius: app.shape.brImg(14),
                         border: Border.all(color: app.home.focus, width: 2.5),
                       ),
                     ),

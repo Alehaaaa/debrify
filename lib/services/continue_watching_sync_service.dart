@@ -113,6 +113,7 @@ class ContinueWatchingSyncService {
           title: item['title'] as String? ?? id,
           posterUrl: item['posterUrl'] as String?,
           year: item['year'] as String?,
+          updatedAtMs: item['updatedAt'] as int?,
         ).withLocalState(await _localState(id, type)),
         atLocal,
       );
@@ -155,8 +156,23 @@ class ContinueWatchingSyncService {
       }
     }
 
-    // Titles missing locally are imported in one write at their tracker
-    // recency, so they slot in by date instead of pushing local titles out.
+    // When each title was really last watched. Trackers record every play
+    // (sync scrobbles local playback too), so their time wins unless Debrify is
+    // ahead of all of them — then its own playback time is newer. Local times
+    // written by earlier syncs are therefore ignored and get corrected.
+    int? watchedAt(String key) {
+      final l = atLocal[key], t = atTrakt[key], s = atSimkl[key];
+      final trackerTime = _MatchEntry._latest(t?.updatedAtMs, s?.updatedAtMs);
+      if (l == null) return trackerTime;
+      if (trackerTime == null) return l.updatedAtMs;
+      final localAhead = [t, s].whereType<_MatchEntry>().every(l.isAheadOf);
+      return localAhead
+          ? _MatchEntry._latest(l.updatedAtMs, trackerTime)
+          : trackerTime;
+    }
+
+    // Titles missing locally are imported in one write at their watched
+    // time, so they slot in chronologically instead of pushing titles out.
     final imports = <Map<String, dynamic>>[
       for (final MapEntry(key: key, value: target) in best.entries)
         if (!atLocal.containsKey(key))
@@ -166,7 +182,7 @@ class ContinueWatchingSyncService {
             'contentType': target.contentType,
             'posterUrl': target.posterUrl,
             'year': target.year,
-            if (target.updatedAtMs != null) 'updatedAt': target.updatedAtMs,
+            if (watchedAt(key) case final int at) 'updatedAt': at,
           },
     ];
     var toLocal = await StorageService.importContinueWatchingItems(imports);
@@ -174,7 +190,11 @@ class ContinueWatchingSyncService {
     for (final MapEntry(key: key, value: target) in best.entries) {
       final localEntry = atLocal[key];
       if ((localEntry == null || target.isAheadOf(localEntry)) &&
-          await _writeLocalPosition(target, local: localEntry) &&
+          await _writeLocalPosition(
+            target,
+            local: localEntry,
+            watchedAtMs: watchedAt(key),
+          ) &&
           localEntry != null) {
         toLocal++;
       }
@@ -214,6 +234,12 @@ class ContinueWatchingSyncService {
       }
     }
     if (toTrakt > 0) await traktService.clearCachedItems();
+    // Re-date titles already in local Continue Watching (including ones an
+    // earlier sync stamped with the sync time) so the rows stay chronological.
+    await StorageService.setContinueWatchingTimes({
+      for (final key in atLocal.keys)
+        if (watchedAt(key) case final int at) key: at,
+    });
     WatchlistSyncResult watchlist;
     try {
       watchlist = await WatchlistSyncService.sync();
@@ -240,6 +266,7 @@ class ContinueWatchingSyncService {
   static Future<bool> _writeLocalPosition(
     _MatchEntry target, {
     _MatchEntry? local,
+    int? watchedAtMs,
   }) async {
     final isSeries = target.contentType == 'series';
     if (isSeries && (target.season == null || target.episode == null)) {
@@ -256,7 +283,8 @@ class ContinueWatchingSyncService {
       // Already pointing at this episode — rewriting would only churn.
       if (local != null &&
           local.season == target.season &&
-          local.episode == target.episode) {
+          local.episode == target.episode &&
+          (watchedAtMs == null || local.stateUpdatedAtMs == watchedAtMs)) {
         return false;
       }
     }
@@ -272,6 +300,7 @@ class ContinueWatchingSyncService {
           positionMs: positionMs,
           durationMs: durationMs,
           imdbId: target.imdbId,
+          recoveryUpdatedAtMs: watchedAtMs,
         );
       } else {
         await StorageService.saveVideoPlaybackState(
@@ -280,6 +309,7 @@ class ContinueWatchingSyncService {
           positionMs: positionMs,
           durationMs: durationMs,
           imdbId: target.imdbId,
+          recoveryUpdatedAtMs: watchedAtMs,
         );
       }
       return true;
@@ -292,7 +322,13 @@ class ContinueWatchingSyncService {
   /// Local resume point for a Debrify Continue Watching title. A finished
   /// episode counts as 100% of that episode.
   static Future<
-    ({double? progress, int? season, int? episode, int? runtimeMinutes})
+    ({
+      double? progress,
+      int? season,
+      int? episode,
+      int? runtimeMinutes,
+      int? updatedAtMs,
+    })
   >
   _localState(String imdbId, String contentType) async {
     const none = (
@@ -300,6 +336,7 @@ class ContinueWatchingSyncService {
       season: null,
       episode: null,
       runtimeMinutes: null,
+      updatedAtMs: null,
     );
     try {
       final state = contentType == 'series'
@@ -318,6 +355,7 @@ class ContinueWatchingSyncService {
         season: state['season'] as int?,
         episode: state['episode'] as int?,
         runtimeMinutes: duration > 60000 ? (duration / 60000).round() : null,
+        updatedAtMs: (state['updatedAt'] as num?)?.toInt(),
       );
     } catch (_) {
       return none;
@@ -420,6 +458,9 @@ class _MatchEntry {
   /// When this owner last saw playback (epoch ms), used as local recency.
   final int? updatedAtMs;
 
+  /// Debrify only: `updatedAt` of the saved playback state itself.
+  final int? stateUpdatedAtMs;
+
   const _MatchEntry({
     required this.imdbId,
     required this.contentType,
@@ -431,6 +472,7 @@ class _MatchEntry {
     this.episode,
     this.runtimeMinutes,
     this.updatedAtMs,
+    this.stateUpdatedAtMs,
   });
 
   String get key => imdbId.trim().toLowerCase();
@@ -456,7 +498,14 @@ class _MatchEntry {
   }
 
   _MatchEntry withLocalState(
-    ({double? progress, int? season, int? episode, int? runtimeMinutes}) value,
+    ({
+      double? progress,
+      int? season,
+      int? episode,
+      int? runtimeMinutes,
+      int? updatedAtMs,
+    })
+    value,
   ) => _MatchEntry(
     imdbId: imdbId,
     contentType: contentType,
@@ -467,7 +516,8 @@ class _MatchEntry {
     season: value.season,
     episode: value.episode,
     runtimeMinutes: value.runtimeMinutes,
-    updatedAtMs: updatedAtMs,
+    updatedAtMs: _latest(updatedAtMs, value.updatedAtMs),
+    stateUpdatedAtMs: value.updatedAtMs,
   );
 
   /// Keeps this entry's position and fills metadata gaps from [other]. The

@@ -2750,6 +2750,30 @@ class StorageService {
   /// cap is roomy because tracker sync can mirror every tracker title here.
   static const int continueWatchingLimit = 200;
 
+  /// Re-dates existing Continue Watching titles (keyed by lower-case id) to
+  /// when they were really last watched and re-sorts, so the rows stay
+  /// chronological. Writes only when something changed.
+  static Future<void> setContinueWatchingTimes(Map<String, int> byId) async {
+    if (byId.isEmpty) return;
+    final items = await getContinueWatchingItems();
+    var changed = false;
+    for (final item in items) {
+      final key = (item['imdbId'] as String? ?? '').trim().toLowerCase();
+      final at = byId[key];
+      if (at != null && at > 0 && item['updatedAt'] != at) {
+        item['updatedAt'] = at;
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    items.sort(
+      (a, b) => ((b['updatedAt'] as int?) ?? 0).compareTo(
+        (a['updatedAt'] as int?) ?? 0,
+      ),
+    );
+    await _saveContinueWatchingItems(items, tombstoneRemovals: false);
+  }
+
   /// Adds titles that aren't in local Continue Watching yet, keeping each one's
   /// own `updatedAt` (its tracker recency) instead of jumping to the front, so
   /// an import never pushes existing local titles out. Returns how many were

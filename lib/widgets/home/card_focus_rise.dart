@@ -65,7 +65,12 @@ class CardFocusRise extends StatelessWidget {
   /// background is its artwork, which this widget never sees.
   Widget _cursor(bool ownCursor, Widget child) => ownCursor
       ? child
-      : FocusExpressionBox(focused: active, radius: 10, child: child);
+      : FocusExpressionBox(
+          focused: active,
+          radius: 10,
+          artwork: true,
+          child: child,
+        );
 
   @override
   Widget build(BuildContext context) {
@@ -77,7 +82,11 @@ class CardFocusRise extends StatelessWidget {
     // TV but 1.5 elsewhere, and `FocusTokens.legacy` is 2.5 with no width
     // override to hand a site. Every other theme gets one cursor, the one it
     // asked for, instead of the theme's expression stacked on this one.
-    final ownCursor = AppThemeScope.of(context).isLegacy;
+    final app = AppThemeScope.of(context);
+    final ownCursor = app.isLegacy;
+    // The artwork radius — the one [ThemedArtwork] clips the poster to — so
+    // the clip, shadow and ring all share the poster's own corners.
+    final corners = app.shape.brImg(10);
     return AnimatedScale(
       duration: focusFx,
       curve: Curves.easeOutCubic,
@@ -90,7 +99,7 @@ class CardFocusRise extends StatelessWidget {
           duration: focusFx,
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: corners,
             boxShadow: [
               // Resting shadow — constant, keeps the card grounded.
               const BoxShadow(
@@ -111,7 +120,7 @@ class CardFocusRise extends StatelessWidget {
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: corners,
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -142,7 +151,7 @@ class CardFocusRise extends StatelessWidget {
                         curve: Curves.easeOutCubic,
                         child: DecoratedBox(
                           decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: corners,
                             border: Border.all(
                               color:
                                   ringColor ??
