@@ -1367,7 +1367,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenTvHeroArtworkQuality: _openTvHeroArtworkQuality,
       tvSidebarStyleLabel: tvSidebarStyleLabel(_tvSidebarStyle),
       onOpenTvSidebarStyle: _openTvSidebarStyle,
-      onOpenSidebarCustomization: _openSidebarCustomization,
       discoverLayoutLabel: discoverLayoutLabel(_discoverLayout),
       onOpenDiscoverLayout: _openDiscoverLayout,
       onOpenCollectionListStyle: _openCollectionListStyle,
@@ -1521,6 +1520,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : 'Classic bar',
       desktopSidebarStyleLabel: desktopSidebarStyleLabel(_desktopSidebarStyle),
       onOpenDesktopSidebarStyle: _openDesktopSidebarStyle,
+      onOpenSidebarCustomization: _openSidebarCustomization,
       profileAppearanceLabel: ProfileGateStyle.labelFor(
         ProfileGateStyle.cached,
       ),

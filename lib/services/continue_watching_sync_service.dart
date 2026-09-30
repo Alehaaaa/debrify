@@ -87,7 +87,7 @@ class ContinueWatchingSyncService {
       );
     }
     if (traktReadable) {
-      for (final item in [...traktMovies!, ...traktShows!]) {
+      for (final item in [...traktMovies, ...traktShows]) {
         merge(
           _MatchEntry(
             imdbId: item.id,
@@ -104,7 +104,7 @@ class ContinueWatchingSyncService {
       }
     }
     if (simklReadable) {
-      for (final item in [...simkl!.movies, ...simkl!.shows]) {
+      for (final item in [...simkl.movies, ...simkl.shows]) {
         merge(
           _MatchEntry(
             imdbId: item.id,
