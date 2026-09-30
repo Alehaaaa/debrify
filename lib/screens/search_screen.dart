@@ -3748,6 +3748,9 @@ class _SearchScreenState extends State<SearchScreen>
     if (!mounted) return;
     unawaited(_loadTraktContinueWatching(refreshBound: false));
     unawaited(_loadSimklContinueWatching(refreshBound: false));
+    if (result.watchlistAdded + result.watchlistRemoved > 0) {
+      unawaited(_loadMyWatchlist());
+    }
   }
 
   void _onLocalCompletionChanged() {

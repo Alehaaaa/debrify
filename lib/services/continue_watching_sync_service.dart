@@ -5,6 +5,7 @@ import 'simkl/simkl_service.dart';
 import 'storage_service.dart';
 import 'trakt/trakt_continue_watching_service.dart';
 import 'trakt/trakt_service.dart';
+import 'watchlist_sync_service.dart';
 
 /// Removes a title from every Continue Watching owner when unified tracking is
 /// enabled. Each remote operation is best-effort so one disconnected account
@@ -129,6 +130,7 @@ class ContinueWatchingSyncService {
             season: item.season,
             episode: item.episode,
             runtimeMinutes: item.isSeries ? null : item.runtime,
+            updatedAtMs: item.pausedAtMs,
           ),
           atTrakt,
         );
@@ -146,33 +148,37 @@ class ContinueWatchingSyncService {
             progress: item.progress,
             season: item.season,
             episode: item.episode,
+            updatedAtMs: item.pausedAtMs,
           ),
           atSimkl,
         );
       }
     }
 
-    var toLocal = 0, toTrakt = 0, toSimkl = 0;
+    // Titles missing locally are imported in one write at their tracker
+    // recency, so they slot in by date instead of pushing local titles out.
+    final imports = <Map<String, dynamic>>[
+      for (final MapEntry(key: key, value: target) in best.entries)
+        if (!atLocal.containsKey(key))
+          {
+            'imdbId': target.imdbId,
+            'title': target.title,
+            'contentType': target.contentType,
+            'posterUrl': target.posterUrl,
+            'year': target.year,
+            if (target.updatedAtMs != null) 'updatedAt': target.updatedAtMs,
+          },
+    ];
+    var toLocal = await StorageService.importContinueWatchingItems(imports);
+    var toTrakt = 0, toSimkl = 0;
     for (final MapEntry(key: key, value: target) in best.entries) {
       final localEntry = atLocal[key];
-      if (localEntry == null) {
-        await StorageService.saveContinueWatchingItem(
-          imdbId: target.imdbId,
-          title: target.title,
-          contentType: target.contentType,
-          posterUrl: target.posterUrl,
-          year: target.year,
-        );
+      if ((localEntry == null || target.isAheadOf(localEntry)) &&
+          await _writeLocalPosition(target, local: localEntry) &&
+          localEntry != null) {
         toLocal++;
       }
       if (!target.resumable) continue;
-      if ((localEntry == null || target.isAheadOf(localEntry)) &&
-          await _writeLocalPosition(
-            target,
-            fallbackRuntimeMinutes: localEntry?.runtimeMinutes,
-          )) {
-        if (localEntry != null) toLocal++;
-      }
       final traktEntry = atTrakt[key];
       if (traktReadable &&
           (traktEntry == null || target.isAheadOf(traktEntry))) {
@@ -208,7 +214,16 @@ class ContinueWatchingSyncService {
       }
     }
     if (toTrakt > 0) await traktService.clearCachedItems();
+    WatchlistSyncResult watchlist;
+    try {
+      watchlist = await WatchlistSyncService.sync();
+    } catch (e) {
+      debugPrint('ContinueWatchingSync: watchlist sync failed: $e');
+      watchlist = const WatchlistSyncResult();
+    }
     return ContinueWatchingMatchResult(
+      watchlistAdded: watchlist.added,
+      watchlistRemoved: watchlist.removed,
       addedToDebrify: toLocal,
       addedToTrakt: toTrakt,
       addedToSimkl: toSimkl,
@@ -217,21 +232,39 @@ class ContinueWatchingSyncService {
     );
   }
 
-  /// Writes a Debrify resume position for [target] when a runtime is known
-  /// (Trakt movies carry one, a series can borrow its last local episode's). Without it a guessed duration would make the
-  /// player seek to the wrong time, so the title is only listed.
+  /// Brings Debrify's own position for [target] up to date. With a known
+  /// runtime (Trakt movies, or a show's last local episode) it writes a real
+  /// resume position. A show without one gets an episode pointer: a
+  /// zero-length state the app reads as "last played episode", so the card
+  /// and Continue open that episode while the percent stays with the tracker.
   static Future<bool> _writeLocalPosition(
     _MatchEntry target, {
-    int? fallbackRuntimeMinutes,
+    _MatchEntry? local,
   }) async {
-    // A series falls back to the runtime of the last locally played episode
-    // of the same show, which is a close estimate for its next episodes.
-    final minutes = target.runtimeMinutes ?? fallbackRuntimeMinutes;
-    if (minutes == null || minutes <= 0) return false;
-    final durationMs = minutes * 60000;
-    final positionMs = (durationMs * target.progress! / 100).round();
+    final isSeries = target.contentType == 'series';
+    if (isSeries && (target.season == null || target.episode == null)) {
+      return false;
+    }
+    if (!isSeries && !target.resumable) return false;
+    final minutes = target.runtimeMinutes ?? (isSeries ? local?.runtimeMinutes : null);
+    final started = target.resumable;
+    final durationMs = minutes != null && minutes > 0 && started
+        ? minutes * 60000
+        : 0;
+    if (durationMs == 0) {
+      if (!isSeries) return false;
+      // Already pointing at this episode — rewriting would only churn.
+      if (local != null &&
+          local.season == target.season &&
+          local.episode == target.episode) {
+        return false;
+      }
+    }
+    final positionMs = durationMs == 0
+        ? 0
+        : (durationMs * target.progress! / 100).round();
     try {
-      if (target.contentType == 'series') {
+      if (isSeries) {
         await StorageService.saveSeriesPlaybackState(
           seriesTitle: target.title,
           season: target.season!,
@@ -330,8 +363,12 @@ class ContinueWatchingMatchResult {
   final int addedToSimkl;
   final bool traktSkipped;
   final bool simklSkipped;
+  final int watchlistAdded;
+  final int watchlistRemoved;
 
   const ContinueWatchingMatchResult({
+    this.watchlistAdded = 0,
+    this.watchlistRemoved = 0,
     required this.addedToDebrify,
     required this.addedToTrakt,
     required this.addedToSimkl,
@@ -339,7 +376,12 @@ class ContinueWatchingMatchResult {
     this.simklSkipped = false,
   });
 
-  int get total => addedToDebrify + addedToTrakt + addedToSimkl;
+  int get total =>
+      addedToDebrify +
+      addedToTrakt +
+      addedToSimkl +
+      watchlistAdded +
+      watchlistRemoved;
 
   String get summary {
     final parts = [
@@ -347,13 +389,15 @@ class ContinueWatchingMatchResult {
       if (addedToTrakt > 0) '$addedToTrakt on Trakt',
       if (addedToSimkl > 0) '$addedToSimkl on Simkl',
     ];
+    if (watchlistAdded > 0) parts.add('$watchlistAdded watchlist adds');
+    if (watchlistRemoved > 0) parts.add('$watchlistRemoved watchlist removals');
     final skipped = [
       if (traktSkipped) 'Trakt',
       if (simklSkipped) 'Simkl',
     ];
     final base = parts.isEmpty
-        ? 'Continue Watching already matched'
-        : 'Continue Watching synced: updated ${parts.join(', ')}';
+        ? 'Continue Watching and watchlists already in sync'
+        : 'Synced: ${parts.join(', ')}';
     return skipped.isEmpty
         ? base
         : '$base (${skipped.join(' and ')} unreachable, skipped)';
@@ -373,6 +417,9 @@ class _MatchEntry {
   final int? episode;
   final int? runtimeMinutes;
 
+  /// When this owner last saw playback (epoch ms), used as local recency.
+  final int? updatedAtMs;
+
   const _MatchEntry({
     required this.imdbId,
     required this.contentType,
@@ -383,6 +430,7 @@ class _MatchEntry {
     this.season,
     this.episode,
     this.runtimeMinutes,
+    this.updatedAtMs,
   });
 
   String get key => imdbId.trim().toLowerCase();
@@ -419,6 +467,7 @@ class _MatchEntry {
     season: value.season,
     episode: value.episode,
     runtimeMinutes: value.runtimeMinutes,
+    updatedAtMs: updatedAtMs,
   );
 
   /// Keeps this entry's position and fills metadata gaps from [other]. The
@@ -435,5 +484,9 @@ class _MatchEntry {
     runtimeMinutes:
         runtimeMinutes ??
         (contentType == 'series' ? null : other.runtimeMinutes),
+    updatedAtMs: _latest(updatedAtMs, other.updatedAtMs),
   );
+
+  static int? _latest(int? a, int? b) =>
+      a == null ? b : (b == null ? a : (a > b ? a : b));
 }

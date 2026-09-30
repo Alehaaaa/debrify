@@ -2739,10 +2739,62 @@ class StorageService {
       'updatedAt': DateTime.now().millisecondsSinceEpoch,
     });
 
-    // Keep max 50 items
-    if (items.length > 50) items = items.sublist(0, 50);
+    if (items.length > continueWatchingLimit) {
+      items = items.sublist(0, continueWatchingLimit);
+    }
 
     await _saveContinueWatchingItems(items, tombstoneRemovals: false);
+  }
+
+  /// Local Continue Watching is capped so the list stays quick to decode; the
+  /// cap is roomy because tracker sync can mirror every tracker title here.
+  static const int continueWatchingLimit = 200;
+
+  /// Adds titles that aren't in local Continue Watching yet, keeping each one's
+  /// own `updatedAt` (its tracker recency) instead of jumping to the front, so
+  /// an import never pushes existing local titles out. Returns how many were
+  /// added.
+  static Future<int> importContinueWatchingItems(
+    List<Map<String, dynamic>> incoming,
+  ) async {
+    if (incoming.isEmpty) return 0;
+    var items = await getContinueWatchingItems();
+    final have = {
+      for (final item in items)
+        (item['imdbId'] as String? ?? '').trim().toLowerCase(),
+    };
+    var added = 0;
+    for (final raw in incoming) {
+      final type = raw['contentType'] as String? ?? 'movie';
+      final id = MediaIdentity.progressId(raw['imdbId'] as String? ?? '', type);
+      final key = id.trim().toLowerCase();
+      if (key.isEmpty || id.startsWith('medialibrary:') || have.contains(key)) {
+        continue;
+      }
+      have.add(key);
+      items.add({
+        'imdbId': id,
+        'title': raw['title'],
+        'contentType': type,
+        'posterUrl': raw['posterUrl'],
+        'addonId': raw['addonId'],
+        'year': raw['year'],
+        'updatedAt':
+            raw['updatedAt'] as int? ?? DateTime.now().millisecondsSinceEpoch,
+      });
+      added++;
+    }
+    if (added == 0) return 0;
+    items.sort(
+      (a, b) => ((b['updatedAt'] as int?) ?? 0).compareTo(
+        (a['updatedAt'] as int?) ?? 0,
+      ),
+    );
+    if (items.length > continueWatchingLimit) {
+      items = items.sublist(0, continueWatchingLimit);
+    }
+    await _saveContinueWatchingItems(items, tombstoneRemovals: false);
+    return added;
   }
 
   /// Remove a continue watching entry by IMDB ID.
@@ -6808,7 +6860,25 @@ class StorageService {
   static Future<void> setSyncAllContinueWatching(bool value) async {
     final prefs = await ProfilePreferences.instance();
     await prefs.setBool(_syncAllContinueWatchingKey, value);
+    // Removals seen while sync was off must not be replayed when it comes back
+    // on; the next run starts from a fresh union instead.
+    if (!value) await prefs.remove(_watchlistSyncSnapshotKey);
     trackingSourceRevision.value++;
+  }
+
+  static const String _watchlistSyncSnapshotKey = 'watchlist_sync_snapshot_v1';
+
+  /// Titles (`type|imdb`) every watchlist agreed on after the last sync, so a
+  /// title missing from one list afterwards reads as removed there. Null
+  /// before the first sync.
+  static Future<Set<String>?> getWatchlistSyncSnapshot() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getStringList(_watchlistSyncSnapshotKey)?.toSet();
+  }
+
+  static Future<void> setWatchlistSyncSnapshot(Set<String> keys) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setStringList(_watchlistSyncSnapshotKey, keys.toList()..sort());
   }
 
   static Future<WatchProgressSource> getWatchProgressSource() async {

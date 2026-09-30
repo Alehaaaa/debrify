@@ -169,8 +169,8 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
         icon: Icons.sync_rounded,
         title: 'Sync Continue Watching everywhere',
         subtitle: _syncAllContinueWatching
-            ? 'Adds and removes Continue Watching in Debrify and every connected tracker'
-            : 'Keep each provider\'s Continue Watching list separate',
+            ? 'Keeps Continue Watching and watchlists matched in Debrify and every connected tracker'
+            : 'Keep each provider\'s lists separate',
         value: _syncAllContinueWatching,
         onChanged: _setSyncAllContinueWatching,
       ),
