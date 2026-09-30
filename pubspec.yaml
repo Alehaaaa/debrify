@@ -208,7 +208,9 @@ flutter_launcher_icons:
   adaptive_icon_foreground: assets/app_icon_foreground.png
   macos:
     generate: true
-    image_path: assets/app_icon.png
+    # The full macOS icon (mark on its rounded tile). assets/app_icon.png is
+    # the bare mark the app draws in its own UI.
+    image_path: assets/app_icon_macos.png
   windows:
     generate: true
     image_path: assets/app_icon.png

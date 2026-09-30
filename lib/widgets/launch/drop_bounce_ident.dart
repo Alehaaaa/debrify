@@ -63,7 +63,7 @@ class DropBouncePainter extends CustomPainter {
       : super(repaint: animation);
 
   static const LinearGradient _glyphGradient = LinearGradient(
-    colors: [Color(0xFF4F74FF), Color(0xFF6E6BFF), Color(0xFF8A5CFF)],
+    colors: [Color(0xFF1EEBFD), Color(0xFF06AAFD), Color(0xFF0A5BEA)],
     stops: [0, 0.5, 1],
   );
 
@@ -140,7 +140,7 @@ class DropBouncePainter extends CustomPainter {
     }
 
     final glyphPath = identPlayPath(glyphSize);
-    final innerPath = identPlayPath(glyphSize * 0.52);
+    final innerPath = identMarkSheen(glyphSize);
     final glyphShader = _glyphGradient.createShader(
       Rect.fromCenter(center: Offset.zero, width: glyphSize, height: glyphSize),
     );

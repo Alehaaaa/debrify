@@ -90,7 +90,7 @@ class _RipplePainter extends CustomPainter {
     _g = _u * 2.4;
     _slices = lightweight ? 5 : 12;
     _mark = identPlayPath(_g);
-    _inner = identPlayPath(_g * 0.52);
+    _inner = identMarkSheen(_g);
     _markRect = Rect.fromCenter(center: Offset.zero, width: _g, height: _g);
     _markShader = const LinearGradient(
       colors: [Color(0xFF5B7BFF), Color(0xFF9C7BFF)],

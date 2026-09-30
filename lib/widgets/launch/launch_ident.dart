@@ -282,32 +282,108 @@ double identNoise(double x) {
   return v - v.floorToDouble();
 }
 
-/// Rounded right-pointing play triangle centred at the origin, inscribed in
-/// ±s/2. Same geometry as the shipped splash mark.
+/// The Debrify mark — a ribbon folded into a play symbol — as one closed
+/// outline traced from the app icon, centred vertically at the origin and
+/// sized like the triangle it replaced: ±0.40·s tall with its left edge at
+/// -0.30·s (lockups that butt the wordmark against that edge keep working).
+/// Points are in units of s; [identPlayPath] joins them with a closed
+/// Catmull-Rom spline so the ribbon's rounded ends stay smooth at any size.
+const List<Offset> _kMarkOutline = [
+  Offset(-0.1385, -0.4000),
+  Offset(-0.1665, -0.3968),
+  Offset(-0.1869, -0.3915),
+  Offset(-0.2141, -0.3796),
+  Offset(-0.2389, -0.3631),
+  Offset(-0.2592, -0.3439),
+  Offset(-0.2762, -0.3210),
+  Offset(-0.2877, -0.2988),
+  Offset(-0.2961, -0.2725),
+  Offset(-0.3000, -0.2402),
+  Offset(-0.3000, 0.1118),
+  Offset(-0.2987, 0.1254),
+  Offset(-0.2952, 0.1382),
+  Offset(-0.2837, 0.1603),
+  Offset(-0.2677, 0.1772),
+  Offset(-0.2490, 0.1885),
+  Offset(-0.2311, 0.1940),
+  Offset(-0.2082, 0.1951),
+  Offset(-0.1878, 0.1904),
+  Offset(-0.1650, 0.1776),
+  Offset(-0.1482, 0.1602),
+  Offset(-0.1374, 0.1399),
+  Offset(-0.1336, 0.1262),
+  Offset(-0.1317, 0.1084),
+  Offset(-0.1325, -0.2198),
+  Offset(-0.1305, -0.2247),
+  Offset(-0.1232, -0.2220),
+  Offset(0.1540, -0.0038),
+  Offset(0.1582, 0.0028),
+  Offset(0.1538, 0.0090),
+  Offset(-0.1912, 0.2465),
+  Offset(-0.2045, 0.2575),
+  Offset(-0.2130, 0.2674),
+  Offset(-0.2234, 0.2878),
+  Offset(-0.2269, 0.3099),
+  Offset(-0.2241, 0.3328),
+  Offset(-0.2142, 0.3558),
+  Offset(-0.2013, 0.3724),
+  Offset(-0.1818, 0.3873),
+  Offset(-0.1589, 0.3968),
+  Offset(-0.1342, 0.4000),
+  Offset(-0.1164, 0.3984),
+  Offset(-0.1028, 0.3951),
+  Offset(-0.0862, 0.3883),
+  Offset(-0.0693, 0.3784),
+  Offset(0.2841, 0.1279),
+  Offset(0.3097, 0.1015),
+  Offset(0.3280, 0.0718),
+  Offset(0.3351, 0.0548),
+  Offset(0.3403, 0.0370),
+  Offset(0.3444, 0.0021),
+  Offset(0.3427, -0.0200),
+  Offset(0.3389, -0.0387),
+  Offset(0.3261, -0.0735),
+  Offset(0.3045, -0.1076),
+  Offset(0.2781, -0.1343),
+  Offset(0.0757, -0.2837),
+  Offset(-0.0423, -0.3682),
+  Offset(-0.0628, -0.3806),
+  Offset(-0.0875, -0.3916),
+  Offset(-0.1070, -0.3968),
+];
+
+/// The Debrify mark centred at the origin, inscribed in ±s/2. Every ident
+/// paints this in its own material, so the mark reads the same everywhere.
 Path identPlayPath(double s) {
-  final pts = [
-    Offset(-0.30 * s, -0.40 * s),
-    Offset(-0.30 * s, 0.40 * s),
-    Offset(0.43 * s, 0),
-  ];
-  final r = 0.14 * s;
-  final path = Path();
-  for (int i = 0; i < 3; i++) {
-    final a = pts[i], b = pts[(i + 1) % 3], c = pts[(i + 2) % 3];
-    final v1 = a - b, v2 = c - b;
-    final l1 = v1.distance == 0 ? 1.0 : v1.distance;
-    final l2 = v2.distance == 0 ? 1.0 : v2.distance;
-    final t1 = b + v1 * (r / l1), t2 = b + v2 * (r / l2);
-    if (i == 0) {
-      path.moveTo(t1.dx, t1.dy);
-    } else {
-      path.lineTo(t1.dx, t1.dy);
-    }
-    path.quadraticBezierTo(b.dx, b.dy, t2.dx, t2.dy);
+  const pts = _kMarkOutline;
+  final n = pts.length;
+  final path = Path()..moveTo(pts[0].dx * s, pts[0].dy * s);
+  for (int i = 0; i < n; i++) {
+    final p0 = pts[(i - 1 + n) % n], p1 = pts[i];
+    final p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
+    final c1 = p1 + (p2 - p0) / 6, c2 = p2 - (p3 - p1) / 6;
+    path.cubicTo(c1.dx * s, c1.dy * s, c2.dx * s, c2.dy * s, p2.dx * s, p2.dy * s);
   }
   path.close();
   return path;
 }
+
+/// The mark's highlight: its upper-left part — the bar's top and the start of
+/// the upper fold, where the icon's gloss sits — for idents that lay a
+/// translucent sheen over the mark. Replaces the old half-size inner
+/// triangle, which on a ribbon would float in the mark's open middle.
+Path identMarkSheen(double s) => Path.combine(
+  PathOperation.intersect,
+  identPlayPath(s),
+  Path()
+    ..addOval(
+      Rect.fromCenter(
+        center: Offset(-0.16 * s, -0.24 * s),
+        width: 0.62 * s,
+        height: 0.50 * s,
+      ),
+    ),
+);
 
 /// Glow idiom: on TV two translucent strokes (the trick shipped in the
 /// original splash — no Gaussian over a TV-sized shape), elsewhere a real

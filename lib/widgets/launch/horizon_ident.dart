@@ -83,8 +83,8 @@ class _HorizonPainter extends CustomPainter {
 
   /// The burning ring and the condensing wordmark. A themed palette moves the
   /// hue; the collapse geometry, the star count and the timeline do not move.
-  static const _ownRingInner = Color(0xFF4F74FF);
-  static const _ownRingOuter = Color(0xFF8A5CFF);
+  static const _ownRingInner = Color(0xFF12C8FE);
+  static const _ownRingOuter = Color(0xFF0A5BEA);
   static const _ownMarkInk = Color(0xFFD9DEFF);
 
   Color get _ringInner => palette?.accent ?? _ownRingInner;
@@ -136,7 +136,7 @@ class _HorizonPainter extends CustomPainter {
     _dimBuf = Float32List(count * 4);
     _brightBuf = Float32List(count * 4);
     _mark = identPlayPath(_g);
-    _inner = identPlayPath(_g * 0.52);
+    _inner = identMarkSheen(_g);
     _markRect = Rect.fromCenter(center: Offset.zero, width: _g, height: _g);
     // No longer `const`: the two stops now come from the palette when one is
     // supplied. Still built once per (size, TV-flag) in `_build`, so this is

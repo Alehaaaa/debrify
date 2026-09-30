@@ -65,10 +65,10 @@ class _MonogramPainter extends CustomPainter {
     _r = min(w, h) * 0.17;
     final s = _r * 0.74;
     _markFull = identPlayPath(s);
-    _markInner = identPlayPath(s * 0.52);
+    _markInner = identMarkSheen(s);
     _markRect = Rect.fromLTRB(-s / 2, 0, s / 2, 1);
     _markShader = LinearGradient(
-      colors: const [Color(0xFF4F74FF), Color(0xFF8A5CFF)],
+      colors: const [Color(0xFF12C8FE), Color(0xFF0A5BEA)],
     ).createShader(_markRect);
     _word = IdentWordLayout.fit(
       styleFor: (fz) => TextStyle(
@@ -142,8 +142,8 @@ class _MonogramPainter extends CustomPainter {
           ..shader = mk >= 1
               ? _markShader
               : LinearGradient(colors: [
-                  Color.fromRGBO(79, 116, 255, mk),
-                  Color.fromRGBO(138, 92, 255, mk),
+                  Color.fromRGBO(18, 200, 254, mk),
+                  Color.fromRGBO(10, 91, 234, mk),
                 ]).createShader(_markRect),
       );
       canvas.drawPath(

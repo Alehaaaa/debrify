@@ -81,30 +81,50 @@ class _OrigamiPainter extends CustomPainter {
     _baseY = h / 2 + _u * 2.5;
     _g = _u * 3.0;
 
-    // Subdivide the play triangle at its edge midpoints.
+    // Fold a play triangle at its edge midpoints, then cut every facet to the
+    // Debrify mark: the triangle is sized to enclose the ribbon, so the four
+    // folds together paint exactly the mark. Done once per size, not per frame.
+    final mark = identPlayPath(_g);
     final p = [
-      Offset(-0.30 * _g, -0.40 * _g),
-      Offset(-0.30 * _g, 0.40 * _g),
-      Offset(0.43 * _g, 0),
+      Offset(-0.36 * _g, -0.56 * _g),
+      Offset(-0.36 * _g, 0.56 * _g),
+      Offset(0.64 * _g, 0),
     ];
     Offset mid(Offset a, Offset b) => (a + b) / 2;
     final m01 = mid(p[0], p[1]), m12 = mid(p[1], p[2]), m20 = mid(p[2], p[0]);
-    Path tri(Offset a, Offset b, Offset c) => Path()
-      ..moveTo(a.dx, a.dy)
-      ..lineTo(b.dx, b.dy)
-      ..lineTo(c.dx, c.dy)
-      ..close();
+    Path tri(Offset a, Offset b, Offset c) => Path.combine(
+      PathOperation.intersect,
+      Path()
+        ..moveTo(a.dx, a.dy)
+        ..lineTo(b.dx, b.dy)
+        ..lineTo(c.dx, c.dy)
+        ..close(),
+      mark,
+    );
+    // A crease is a hairline band, cut to the mark like the facets, so it
+    // never runs across the open space inside the ribbon.
+    final creaseW = max(1.0, _u * 0.02) / 2;
+    Path band(Offset a, Offset b) {
+      final d = b - a;
+      final n = Offset(-d.dy, d.dx) / d.distance * creaseW;
+      return Path()
+        ..moveTo((a + n).dx, (a + n).dy)
+        ..lineTo((b + n).dx, (b + n).dy)
+        ..lineTo((b - n).dx, (b - n).dy)
+        ..lineTo((a - n).dx, (a - n).dy)
+        ..close();
+    }
     _facets = [
       _Facet(tri(p[0], m01, m20), m20.dx, const Color(0xFFF4EFE4)),
       _Facet(tri(m01, p[1], m12), m12.dx, const Color(0xFFCFC5B2)),
       _Facet(tri(m20, m12, p[2]), m20.dx, const Color(0xFF8F8674)),
       _Facet(tri(m01, m12, m20), m01.dx, const Color(0xFFE3DAC8)),
     ];
-    _creases = Path()
-      ..moveTo(m01.dx, m01.dy)
-      ..lineTo(m12.dx, m12.dy)
-      ..moveTo(m20.dx, m20.dy)
-      ..lineTo(m12.dx, m12.dy);
+    _creases = Path.combine(
+      PathOperation.intersect,
+      Path.combine(PathOperation.union, band(m01, m12), band(m20, m12)),
+      mark,
+    );
 
     _word = IdentWordLayout.fit(
       styleFor: (fz) => TextStyle(
@@ -151,10 +171,7 @@ class _OrigamiPainter extends CustomPainter {
     if (set > 0) {
       canvas.drawPath(
         _creases,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = max(1, _u * 0.02)
-          ..color = Color.fromRGBO(28, 22, 16, 0.35 * set),
+        Paint()..color = Color.fromRGBO(28, 22, 16, 0.35 * set),
       );
     }
     canvas.restore();

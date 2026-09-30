@@ -286,7 +286,7 @@ class _ColliderPainter extends CustomPainter {
     _bBright = Float32List(count * 4);
 
     _mark = identPlayPath(g);
-    _markInner = identPlayPath(g * 0.52);
+    _markInner = identMarkSheen(g);
     _markRect = Rect.fromCenter(center: Offset.zero, width: g, height: g);
     // The fusion: the mark is literally drawn in both galaxies' colours.
     _markShader =
