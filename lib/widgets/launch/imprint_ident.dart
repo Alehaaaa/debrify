@@ -267,7 +267,7 @@ class _ImprintPainter extends CustomPainter {
     // portrait it collapses the mark to a single letter's size.
     final s0 = min(h * 0.105, w * 0.120);
     // Reserve the inline mark and its gap before fitting the word.
-    const reserve = 0.74 * 0.645 + 0.42;
+    const reserve = 0.74 * 0.64 + 0.42;
     _word = IdentWordLayout.fit(
       styleFor: (fz) => TextStyle(
         fontSize: fz,
@@ -282,11 +282,11 @@ class _ImprintPainter extends CustomPainter {
     // The lockup stays proportional if fit() had to shrink the type.
     _s = _word!.fontSize;
     _markSize = _s * 0.74;
-    final markW = _markSize * 0.645;
+    final markW = _markSize * 0.64;
     final gap = _s * 0.42;
     final total = markW + gap + _word!.width;
     final left = w / 2 - total / 2;
-    // identPlayPath spans -0.30s..0.345s, so its left edge sits 0.30s left of
+    // identPlayPath spans -0.30s..0.34s, so its left edge sits 0.30s left of
     // the centre it is drawn about.
     _markCx = left + _markSize * 0.30;
     _wordLeft = left + markW + gap;

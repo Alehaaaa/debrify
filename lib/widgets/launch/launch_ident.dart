@@ -282,91 +282,33 @@ double identNoise(double x) {
   return v - v.floorToDouble();
 }
 
-/// The Debrify mark — a ribbon folded into a play symbol — as one closed
-/// outline traced from the app icon, centred vertically at the origin and
-/// sized like the triangle it replaced: ±0.40·s tall with its left edge at
-/// -0.30·s (lockups that butt the wordmark against that edge keep working).
-/// Points are in units of s; [identPlayPath] joins them with a closed
-/// Catmull-Rom spline so the ribbon's rounded ends stay smooth at any size.
-const List<Offset> _kMarkOutline = [
-  Offset(-0.1385, -0.4000),
-  Offset(-0.1665, -0.3968),
-  Offset(-0.1869, -0.3915),
-  Offset(-0.2141, -0.3796),
-  Offset(-0.2389, -0.3631),
-  Offset(-0.2592, -0.3439),
-  Offset(-0.2762, -0.3210),
-  Offset(-0.2877, -0.2988),
-  Offset(-0.2961, -0.2725),
-  Offset(-0.3000, -0.2402),
-  Offset(-0.3000, 0.1118),
-  Offset(-0.2987, 0.1254),
-  Offset(-0.2952, 0.1382),
-  Offset(-0.2837, 0.1603),
-  Offset(-0.2677, 0.1772),
-  Offset(-0.2490, 0.1885),
-  Offset(-0.2311, 0.1940),
-  Offset(-0.2082, 0.1951),
-  Offset(-0.1878, 0.1904),
-  Offset(-0.1650, 0.1776),
-  Offset(-0.1482, 0.1602),
-  Offset(-0.1374, 0.1399),
-  Offset(-0.1336, 0.1262),
-  Offset(-0.1317, 0.1084),
-  Offset(-0.1325, -0.2198),
-  Offset(-0.1305, -0.2247),
-  Offset(-0.1232, -0.2220),
-  Offset(0.1540, -0.0038),
-  Offset(0.1582, 0.0028),
-  Offset(0.1538, 0.0090),
-  Offset(-0.1912, 0.2465),
-  Offset(-0.2045, 0.2575),
-  Offset(-0.2130, 0.2674),
-  Offset(-0.2234, 0.2878),
-  Offset(-0.2269, 0.3099),
-  Offset(-0.2241, 0.3328),
-  Offset(-0.2142, 0.3558),
-  Offset(-0.2013, 0.3724),
-  Offset(-0.1818, 0.3873),
-  Offset(-0.1589, 0.3968),
-  Offset(-0.1342, 0.4000),
-  Offset(-0.1164, 0.3984),
-  Offset(-0.1028, 0.3951),
-  Offset(-0.0862, 0.3883),
-  Offset(-0.0693, 0.3784),
-  Offset(0.2841, 0.1279),
-  Offset(0.3097, 0.1015),
-  Offset(0.3280, 0.0718),
-  Offset(0.3351, 0.0548),
-  Offset(0.3403, 0.0370),
-  Offset(0.3444, 0.0021),
-  Offset(0.3427, -0.0200),
-  Offset(0.3389, -0.0387),
-  Offset(0.3261, -0.0735),
-  Offset(0.3045, -0.1076),
-  Offset(0.2781, -0.1343),
-  Offset(0.0757, -0.2837),
-  Offset(-0.0423, -0.3682),
-  Offset(-0.0628, -0.3806),
-  Offset(-0.0875, -0.3916),
-  Offset(-0.1070, -0.3968),
-];
+/// The Debrify mark centred at the origin, inscribed in ±s/2: a ribbon of
+/// constant width folded into a play symbol, sized like the triangle it
+/// replaced (±0.40·s tall, left edge at -0.30·s, so lockups that butt the
+/// wordmark against that edge keep working). Every ident paints this in its
+/// own material, so the mark reads the same everywhere.
+///
+/// Built from the mark's real geometry — straight runs, round ends, outer
+/// corners rounded, the inner top corner sharp and the inner tip barely eased
+/// — fitted to the app icon. Exact lines and arcs, so the joins stay clean
+/// at any size (a traced outline smoothed through its points overshot at the
+/// corners).
+Path identPlayPath(double s) => Path()
+    ..moveTo(-0.1278 * s, 0.1061 * s)
+    ..arcTo(_c(-0.2139, 0.1061, 0.0861, s), 0.0000, 3.1416, false)
+    ..lineTo(-0.3000 * s, -0.2339 * s)
+    ..arcTo(_c(-0.1336, -0.2339, 0.1664, s), -3.1416, 2.1943, false)
+    ..lineTo(0.2638 * s, -0.1530 * s)
+    ..arcTo(_c(0.1569, -0.0044, 0.1830, s), -0.9473, 1.9188, false)
+    ..lineTo(-0.0891 * s, 0.3852 * s)
+    ..arcTo(_c(-0.1377, 0.3141, 0.0861, s), 0.9715, 3.1416, false)
+    ..lineTo(0.1630 * s, 0.0046 * s)
+    ..arcTo(_c(0.1569, -0.0044, 0.0108, s), 0.9715, -1.9188, false)
+    ..lineTo(-0.1278 * s, -0.2225 * s)
+    ..close();
 
-/// The Debrify mark centred at the origin, inscribed in ±s/2. Every ident
-/// paints this in its own material, so the mark reads the same everywhere.
-Path identPlayPath(double s) {
-  const pts = _kMarkOutline;
-  final n = pts.length;
-  final path = Path()..moveTo(pts[0].dx * s, pts[0].dy * s);
-  for (int i = 0; i < n; i++) {
-    final p0 = pts[(i - 1 + n) % n], p1 = pts[i];
-    final p2 = pts[(i + 1) % n], p3 = pts[(i + 2) % n];
-    final c1 = p1 + (p2 - p0) / 6, c2 = p2 - (p3 - p1) / 6;
-    path.cubicTo(c1.dx * s, c1.dy * s, c2.dx * s, c2.dy * s, p2.dx * s, p2.dy * s);
-  }
-  path.close();
-  return path;
-}
+Rect _c(double x, double y, double r, double s) =>
+    Rect.fromCircle(center: Offset(x * s, y * s), radius: r * s);
 
 /// The mark's highlight: its upper-left part — the bar's top and the start of
 /// the upper fold, where the icon's gloss sits — for idents that lay a
