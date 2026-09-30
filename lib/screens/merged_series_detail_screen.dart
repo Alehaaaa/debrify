@@ -385,6 +385,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     AppThemeController.instance.isLegacy
         ? ThemeOverrides.none
         : AppThemeController.instance.overrides,
+    structureId: AppThemeController.instance.isLegacy
+        ? null
+        : AppThemeController.instance.structureId,
   );
 
   /// Filmstrip pushes the focused episode's still here. Painted by the shell as

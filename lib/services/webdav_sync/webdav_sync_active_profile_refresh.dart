@@ -85,6 +85,7 @@ final class DefaultWebDavSyncActiveProfileRefresher
       await guarded(TextBrightnessController.warm);
     }
     if (changedKeys.contains('app_theme') ||
+        changedKeys.contains('app_structure') ||
         changedKeys.contains('theme_overrides')) {
       await guarded(AppThemeController.warm);
     }

@@ -6,6 +6,7 @@ import '../services/storage_service.dart';
 import '../services/text_brightness.dart';
 import 'app_theme.dart';
 import 'app_theme_controller.dart';
+import '../widgets/detail/theme/detail_themes.dart';
 
 /// One preference a Look is allowed to set.
 ///
@@ -57,6 +58,16 @@ abstract final class LookKeys {
     // them leaves an older-build-consistent view) and its own sequence token.
     // A Look that wrote the two keys itself would have to reimplement both.
     write: (v) => AppThemeController.instance.select(v),
+  );
+
+  static final appStructure = LookKey(
+    id: 'app_structure',
+    label: 'Structure',
+    // Effective, not stored: "follow the palette" reads as the palette's own
+    // theme, so a structure option can be detected as active without the user
+    // ever having picked one.
+    read: () => AppThemeController.instance.effectiveStructureId,
+    write: (v) => AppThemeController.instance.selectStructure(v),
   );
 
   static final detailPageStyle = LookKey(
@@ -163,6 +174,7 @@ abstract final class LookKeys {
 
   static final List<LookKey> all = [
     appTheme,
+    appStructure,
     detailPageStyle,
     parentsGuideStyle,
     launchAnimation,
@@ -218,6 +230,16 @@ class AppLook {
   /// remembered, so a Look can never go stale against a manual change: touch
   /// one picker afterwards and the answer becomes [kCustom] by itself, with
   /// nothing to keep in sync and no way for the stored answer to lie.
+  /// [isActive] without the `detail_theme` mirror check — for bundles that
+  /// name no `app_theme` (a structure alone).
+  bool get isActiveIgnoringMirror {
+    for (final entry in values.entries) {
+      final key = LookKeys.byId(entry.key);
+      if (key == null || key.read() != entry.value) return false;
+    }
+    return true;
+  }
+
   bool get isActive {
     for (final entry in values.entries) {
       final key = LookKeys.byId(entry.key);
@@ -400,6 +422,170 @@ abstract final class AppLooks {
     }
     return problems;
   }
+}
+
+/// Keys that are COLOUR. Everything else a Look sets is form or layout.
+const Set<String> _paletteKeys = {'app_theme', 'text_brightness', 'launch_ident_palette'};
+
+/// Appearance → Looks → **Structure**: a Look's form without its colours —
+/// the theme whose shape, type, artwork framing, focus, motion and surfaces
+/// the app wears, plus the Look's layouts (details page, launch ident, TV and
+/// desktop chrome). Picking one never touches the palette.
+@immutable
+class LookStructure {
+  final String id;
+  final String label;
+  final String blurb;
+
+  /// The theme whose FORM this is (`app_structure`).
+  final String themeId;
+
+  /// Layout keys the Look sets, minus every colour key.
+  final Map<String, String> layout;
+
+  const LookStructure({
+    required this.id,
+    required this.label,
+    required this.blurb,
+    required this.themeId,
+    required this.layout,
+  });
+
+  AppLook get asLook => AppLook(
+    id: 'structure:$id',
+    label: label,
+    blurb: blurb,
+    values: {'app_structure': themeId, ...layout},
+  );
+
+  bool get isActive => asLook.isActiveIgnoringMirror;
+}
+
+/// Appearance → Looks → **Colour palette**: a theme's colours alone (plus the
+/// text brightness a curated palette was tuned for). Picking one never
+/// touches the structure.
+@immutable
+class LookPalette {
+  final String id;
+  final String label;
+
+  /// The theme whose COLOURS these are (`app_theme`).
+  final String themeId;
+
+  /// Curated palettes carry the ink level they were tuned for.
+  final String? textBrightness;
+
+  const LookPalette({
+    required this.id,
+    required this.label,
+    required this.themeId,
+    this.textBrightness,
+  });
+
+  bool get isActive =>
+      StorageService.appThemeCached == themeId &&
+      (textBrightness == null ||
+          TextBrightnessController.current.name == textBrightness);
+}
+
+abstract final class LookParts {
+  static const Map<String, String> _structureBlurbs = {
+    'classic': 'The original form: soft cards, the classic details page and '
+        'Canvas TV home.',
+    'spotlight': 'Full-bleed art, borderless focus that lifts and tilts, the '
+        'Showcase details page and pill navigation.',
+    'midnight': 'Glass panes and a focus ring, the Stage details page, Horizon '
+        'ident and Stage Discover.',
+    'console': 'Squared corners and monospaced type, the Console details page '
+        'and Blueprint ident.',
+    'cinema': 'Widescreen and unhurried — grain, deep margins, the Marquee '
+        'details page and Anamorphic ident.',
+    'neon': 'Rounded and bold, the Stage details page and Neon ident.',
+    'quiet': 'Restrained and calm, the Dossier details page and Silk ident.',
+  };
+
+  /// One structure per shipped Look, in the Looks' order.
+  static final List<LookStructure> structures = [
+    for (final look in AppLooks.all)
+      LookStructure(
+        id: look.id,
+        label: look.label,
+        blurb: _structureBlurbs[look.id] ?? look.blurb,
+        themeId: look.values['app_theme'] ?? AppThemes.legacyId,
+        layout: {
+          for (final e in look.values.entries)
+            if (!_paletteKeys.contains(e.key)) e.key: e.value,
+        },
+      ),
+  ];
+
+  /// The curated palettes (one per Look), then every other shipped theme's
+  /// colours.
+  static final List<LookPalette> curatedPalettes = [
+    for (final look in AppLooks.all)
+      LookPalette(
+        id: look.id,
+        label: look.label,
+        themeId: look.values['app_theme'] ?? AppThemes.legacyId,
+        textBrightness: look.values['text_brightness'],
+      ),
+  ];
+
+  static List<LookPalette> morePalettes(
+    List<({String id, String label})> shippedThemes,
+  ) {
+    final curated = {for (final p in curatedPalettes) p.themeId};
+    return [
+      for (final t in shippedThemes)
+        if (!curated.contains(t.id))
+          LookPalette(id: 'theme:${t.id}', label: t.label, themeId: t.id),
+    ];
+  }
+
+  static LookStructure? activeStructure() {
+    for (final s in structures) {
+      if (s.isActive) return s;
+    }
+    return null;
+  }
+
+  /// The palette's name: its Look's when curated, else the theme's own.
+  static String paletteLabel(String themeId) {
+    for (final p in curatedPalettes) {
+      if (p.themeId == themeId) return p.label;
+    }
+    return themeId == AppThemes.legacyId
+        ? 'Debrify Classic'
+        : DetailThemes.byId(themeId).label;
+  }
+
+  /// "Spotlight · Midnight Signal" — structure, then palette — for the
+  /// Settings row that opens Looks.
+  static String currentLabel() =>
+      '${activeStructure()?.label ?? 'Custom'} · '
+      '${paletteLabel(StorageService.appThemeCached)}';
+
+  /// Picks a palette while keeping the structure exactly where it is.
+  ///
+  /// With no structure picked the app follows the palette's own form, so a
+  /// palette change would silently restyle everything else too. Pinning the
+  /// current form first is what keeps the two isolated.
+  static Future<void> applyPalette(LookPalette palette) async {
+    final controller = AppThemeController.instance;
+    if (controller.structureId.isEmpty) {
+      await controller.selectStructure(controller.effectiveStructureId);
+    }
+    LookApplier.noteExternalWrite('app_theme');
+    await controller.select(palette.themeId);
+    final tb = palette.textBrightness;
+    if (tb != null) {
+      LookApplier.noteExternalWrite('text_brightness');
+      await LookKeys.textBrightness.write(tb);
+    }
+  }
+
+  static Future<void> applyStructure(LookStructure structure) =>
+      LookApplier.apply(structure.asLook);
 }
 
 /// Applies a Look.

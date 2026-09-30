@@ -75,6 +75,8 @@ abstract final class SanitizedProfilePreferences {
         return _boundedInt(value, 0, 5);
       case 'app_theme':
         return value is String && _appThemes.contains(value);
+      case 'app_structure':
+        return value is String && _appThemes.contains(value);
       case 'detail_theme':
         return value is String && _detailThemes.contains(value);
       case 'content_display_match_mode':

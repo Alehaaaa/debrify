@@ -13,6 +13,7 @@ abstract final class ProfileAppearancePreferences {
     'defaults_generation',
     'sources_presentation_defaults_copied_v1',
     'app_theme',
+    'app_structure',
     'detail_theme',
     'theme_overrides',
     'text_brightness',

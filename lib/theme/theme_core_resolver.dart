@@ -25,12 +25,36 @@ abstract final class ThemeCoreResolver {
   /// Returns the registry's own theme untouched when there is nothing to apply
   /// — the fast path, and the reason an unedited install resolves down exactly
   /// the code it always did.
-  static DetailTheme resolve(String id, ThemeOverrides overrides) {
-    final base = DetailThemes.byId(id);
-    if (!overrides.touchesCore) return base;
+  ///
+  /// [structureId] is Appearance → Looks → Structure: when it names a theme
+  /// other than [id], the core keeps [id]'s colours and takes that theme's
+  /// form (see [DetailTheme.withStructureOf]). Overrides land on top, so a
+  /// user's own token edits still win over both.
+  static DetailTheme resolve(
+    String id,
+    ThemeOverrides overrides, {
+    String? structureId,
+  }) {
+    final structured = structureId != null &&
+        structureId.isNotEmpty &&
+        structureId != id;
+    if (!structured && !overrides.touchesCore) return DetailThemes.byId(id);
 
-    final key = '$id|${overrides.encode()}';
+    final key = '$id|${structured ? structureId : ''}|${overrides.encode()}';
     if (key == _key && _cached != null) return _cached!;
+
+    var base = DetailThemes.byId(id);
+    if (structured) {
+      // Classic is hand-built on the Signal core, so its form is Signal's.
+      base = base.withStructureOf(
+        DetailThemes.byId(structureId == 'legacy' ? 'signal' : structureId!),
+      );
+    }
+    if (!overrides.touchesCore) {
+      _key = key;
+      _cached = base;
+      return base;
+    }
 
     final resolved = base.withTokens(
       // A swatch id nobody recognises resolves to null, which `withTokens`

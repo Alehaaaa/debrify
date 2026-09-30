@@ -1396,7 +1396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       detailPageStyleLabel: detailPageStyleLabel(_detailPageStyle),
       onOpenDetailPageStyle: _openDetailPageStylePage,
       appThemeLabel: appThemeLabel(AppThemeController.instance.id),
-      looksLabel: AppLooks.active()?.label ?? 'Custom',
+      looksLabel: LookParts.currentLabel(),
       onOpenLooks: _openLooksPage,
       onOpenThemeTokens: _openThemeTokensPage,
       themeTokensLabel: _themeTokensLabel,
@@ -2426,7 +2426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         SettingsRows.looks,
         'Appearance',
         _openLooksPage,
-        subtitle: AppLooks.active()?.label ?? 'Custom',
+        subtitle: LookParts.currentLabel(),
         keywords: [
           'app',
           'theme',
@@ -8046,7 +8046,7 @@ class _SettingsLayout extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             SettingsLookHero(
-              label: AppLooks.active()?.label ?? 'Custom',
+              label: LookParts.currentLabel(),
               subtitle: 'Full-bleed art, borderless focus, and ambient detail.',
               onTap: onOpenLooks,
             ),
@@ -8467,7 +8467,7 @@ class _SettingsLayout extends StatelessWidget {
                   children: [
                     SettingsTile.spec(
                       SettingsRows.looks,
-                      subtitle: AppLooks.active()?.label ?? 'Custom',
+                      subtitle: LookParts.currentLabel(),
                       onTap: onOpenLooks,
                     ),
                     SettingsTile.spec(

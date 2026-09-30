@@ -1407,6 +1407,38 @@ class StorageService {
     appThemeCached = normalized;
   }
 
+  static const String _appStructureKey = 'app_structure';
+
+  /// Appearance → Looks → **Structure**: which theme's FORM the app wears —
+  /// corners, type, artwork framing, the focus expression, motion, surfaces —
+  /// independently of [appThemeCached], which picks the COLOUR palette.
+  ///
+  /// Empty means "follow the palette": each palette keeps the structure it was
+  /// authored with, which is exactly what the app did before the two were
+  /// split, so an install that never touches this renders unchanged. Unknown
+  /// ids normalize to empty for the same downgrade-safety as `app_theme`.
+  static String appStructureCached = '';
+
+  static Future<String> getAppStructure() async {
+    final prefs = await ProfilePreferences.instance();
+    final value = prefs.getString(_appStructureKey) ?? '';
+    appStructureCached =
+        (value == 'legacy' || kDetailThemes.contains(value)) ? value : '';
+    return appStructureCached;
+  }
+
+  static Future<void> setAppStructure(String value) async {
+    final prefs = await ProfilePreferences.instance();
+    final normalized =
+        (value == 'legacy' || kDetailThemes.contains(value)) ? value : '';
+    if (normalized.isEmpty) {
+      await prefs.remove(_appStructureKey);
+    } else {
+      await prefs.setString(_appStructureKey, normalized);
+    }
+    appStructureCached = normalized;
+  }
+
   /// The user's per-token edits, as the raw JSON `ThemeOverrides` encodes.
   ///
   /// Kept as a string here rather than a parsed object so this layer stays free
