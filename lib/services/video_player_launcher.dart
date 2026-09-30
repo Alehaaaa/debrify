@@ -976,7 +976,8 @@ class VideoPlayerLauncher {
           initialSubtitles: args.initialSubtitles,
         );
         // Clean up any existing local Continue Watching entry (Trakt tracks it now)
-        if (!trackingPolicy.forcesLocalCompletion &&
+        if (!trackingPolicy.syncAllContinueWatching &&
+            !trackingPolicy.forcesLocalCompletion &&
             !trackingPolicy.nativeIdentity) {
           await StorageService.removeContinueWatchingItem(args.contentImdbId!);
         }
@@ -1077,7 +1078,8 @@ class VideoPlayerLauncher {
         // Simkl was connected, or a prior non-Simkl play) — Simkl's own CW row
         // tracks it now, so leaving the local entry would duplicate it. Mirrors
         // the Trakt branch above.
-        if (!trackingPolicy.forcesLocalCompletion) {
+        if (!trackingPolicy.syncAllContinueWatching &&
+            !trackingPolicy.forcesLocalCompletion) {
           await StorageService.removeContinueWatchingItem(args.contentImdbId!);
         }
       }
@@ -1130,7 +1132,8 @@ class VideoPlayerLauncher {
       debugPrint(
         '[MDBListDiag] launch tracking enabled imdb=${args.contentImdbId}',
       );
-      if (!trackingPolicy.forcesLocalCompletion &&
+      if (!trackingPolicy.syncAllContinueWatching &&
+          !trackingPolicy.forcesLocalCompletion &&
           !trackingPolicy.nativeIdentity) {
         await StorageService.removeContinueWatchingItem(args.contentImdbId!);
       }

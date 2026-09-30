@@ -25,6 +25,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
   Set<TrackingSource> _ticks = Set<TrackingSource>.of(TrackingSource.values);
   Set<TrackingSource> _connected = {};
   bool _hideWatched = HideWatchedPrefs.enabled;
+  bool _syncAllContinueWatching = false;
   int _selectedSection = 0;
 
   @override
@@ -37,6 +38,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
   Future<void> _load() async {
     final values = await Future.wait<Object>([
       StorageService.getTrackingScrobbleTargets(),
+      StorageService.getSyncAllContinueWatching(),
       StorageService.getWatchProgressSource(),
       StorageService.getHomeTickSources(),
       TraktService.instance.isAuthenticated(),
@@ -47,11 +49,11 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     ]);
     if (!mounted) return;
     final connected = <TrackingSource>{
-      if (values[3] as bool) TrackingSource.trakt,
-      if (values[4] as bool) TrackingSource.simkl,
-      if (values[5] as bool) TrackingSource.mdblist,
+      if (values[4] as bool) TrackingSource.trakt,
+      if (values[5] as bool) TrackingSource.simkl,
+      if (values[6] as bool) TrackingSource.mdblist,
     };
-    var progress = values[1] as WatchProgressSource;
+    var progress = values[2] as WatchProgressSource;
     final dedicated = _trackingSourceForProgress(progress);
     var fellBack = false;
     if (dedicated != null &&
@@ -65,12 +67,13 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     setState(() {
       _scrobble = Set<TrackingSource>.of(values[0] as Set<TrackingSource>);
       _progress = progress;
-      _ticks = Set<TrackingSource>.of(values[2] as Set<TrackingSource>);
+      _ticks = Set<TrackingSource>.of(values[3] as Set<TrackingSource>);
       _connected = connected;
-      _hideWatched = values[7] as bool;
+      _syncAllContinueWatching = values[1] as bool;
+      _hideWatched = values[8] as bool;
       _loading = false;
     });
-    if (fellBack || values[6] as bool) {
+    if (fellBack || values[7] as bool) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -117,6 +120,12 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     MainPageBridge.notifyIntegrationChanged();
   }
 
+  Future<void> _setSyncAllContinueWatching(bool enabled) async {
+    setState(() => _syncAllContinueWatching = enabled);
+    await StorageService.setSyncAllContinueWatching(enabled);
+    MainPageBridge.notifyIntegrationChanged();
+  }
+
   Future<void> _setProgress(WatchProgressSource? source) async {
     if (source == null) return;
     setState(() => _progress = source);
@@ -145,6 +154,15 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     blurb:
         'Which services record what you watch. Debrify always keeps its own progress.',
     children: [
+      SettingsToggleTile(
+        icon: Icons.sync_rounded,
+        title: 'Sync Continue Watching everywhere',
+        subtitle: _syncAllContinueWatching
+            ? 'Adds and removes Continue Watching in Debrify and every connected tracker'
+            : 'Keep each provider\'s Continue Watching list separate',
+        value: _syncAllContinueWatching,
+        onChanged: _setSyncAllContinueWatching,
+      ),
       for (final source in TrackingSource.values)
         CheckboxListTile(
           value: _scrobble.contains(source),

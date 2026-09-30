@@ -99,6 +99,7 @@ import '../services/torrent_playback_service.dart';
 import '../services/torrent_service.dart';
 import '../services/simkl/simkl_continue_watching_service.dart';
 import '../services/trakt/trakt_continue_watching_service.dart';
+import '../services/continue_watching_sync_service.dart';
 import '../services/trakt/trakt_service.dart';
 import '../services/simkl/simkl_service.dart';
 import '../services/video_player_launcher.dart';
@@ -5754,8 +5755,15 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _removeLocalCwItem(StremioMeta item) async {
     final imdbId = _imdbOf(item) ?? item.id;
     if (imdbId.isEmpty) return;
-    await StorageService.removeContinueWatchingItem(imdbId);
-    await StorageService.clearPlaybackStateByImdbId(imdbId);
+    if (await ContinueWatchingSyncService.enabled()) {
+      await ContinueWatchingSyncService.removeEverywhere(
+        imdbId: imdbId,
+        contentType: item.type,
+      );
+    } else {
+      await StorageService.removeContinueWatchingItem(imdbId);
+      await StorageService.clearPlaybackStateByImdbId(imdbId);
+    }
     if (!mounted) return;
     _snack('Removed from Continue Watching');
     await _loadContinueWatching();
@@ -5766,7 +5774,15 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _removeTraktCwItem(StremioMeta item) async {
     final imdbId = _imdbOf(item);
     if (imdbId == null) return;
-    await _removeFromTraktContinueWatching(imdbId, popDetail: false);
+    if (await ContinueWatchingSyncService.enabled()) {
+      await ContinueWatchingSyncService.removeEverywhere(
+        imdbId: imdbId,
+        contentType: item.type,
+      );
+      await _loadTraktContinueWatching(refreshBound: false);
+    } else {
+      await _removeFromTraktContinueWatching(imdbId, popDetail: false);
+    }
   }
 
   /// Remove a Simkl Continue Watching title from the row itself. Routes through
@@ -5774,6 +5790,14 @@ class _SearchScreenState extends State<SearchScreen>
   /// own result snackbar), so a series is moved to On Hold and its paused
   /// session cleared, and a movie just loses the session.
   Future<void> _removeSimklCwItem(StremioMeta item) async {
+    if (await ContinueWatchingSyncService.enabled()) {
+      await ContinueWatchingSyncService.removeEverywhere(
+        imdbId: _simklCardKey(item) ?? item.id,
+        contentType: item.type,
+      );
+      await _loadSimklContinueWatching(refreshBound: false);
+      return;
+    }
     await handleSimklMenuAction(
       context,
       item,

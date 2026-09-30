@@ -76,6 +76,8 @@ class StorageService {
       'explicitly_watched_series_v1';
   static const String trackingScrobbleTargetsKey =
       TrackingScrobblePreferences.key;
+  static const String _syncAllContinueWatchingKey =
+      'sync_all_continue_watching';
   static const String watchProgressSourceKey = 'watch_progress_source';
   static const String homeTickSourcesKey = 'home_tick_sources';
 
@@ -6790,6 +6792,17 @@ class StorageService {
   ) async {
     final changed = await TrackingScrobblePreferences.enableCurrent(source);
     if (changed) trackingSourceRevision.value++;
+  }
+
+  static Future<bool> getSyncAllContinueWatching() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getBool(_syncAllContinueWatchingKey) ?? false;
+  }
+
+  static Future<void> setSyncAllContinueWatching(bool value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setBool(_syncAllContinueWatchingKey, value);
+    trackingSourceRevision.value++;
   }
 
   static Future<WatchProgressSource> getWatchProgressSource() async {

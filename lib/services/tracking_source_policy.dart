@@ -14,6 +14,7 @@ class TrackingSourcePolicy {
     required this.scrobbleTargets,
     required this.progressSource,
     required this.homeTickSources,
+    this.syncAllContinueWatching = false,
     this.nativeIdentity = false,
   });
 
@@ -21,6 +22,7 @@ class TrackingSourcePolicy {
   final Set<TrackingSource> scrobbleTargets;
   final WatchProgressSource progressSource;
   final Set<TrackingSource> homeTickSources;
+  final bool syncAllContinueWatching;
 
   TrackingSourcePolicy forContent(String? id) =>
       CustomSeriesIdentity.isCustom(id) ||
@@ -29,6 +31,7 @@ class TrackingSourcePolicy {
           scrobbleTargets: {},
           progressSource: WatchProgressSource.local,
           homeTickSources: {TrackingSource.local},
+          syncAllContinueWatching: false,
         )
       : MediaIdentity.isNative(id)
       ? TrackingSourcePolicy(
@@ -42,6 +45,7 @@ class TrackingSourcePolicy {
               ? WatchProgressSource.local
               : progressSource,
           homeTickSources: homeTickSources,
+          syncAllContinueWatching: syncAllContinueWatching,
           nativeIdentity: true,
         )
       : this;
@@ -71,11 +75,14 @@ class TrackingSourcePolicy {
       scrobbleTargets: scrobbleTargets,
       progressSource: progressSource,
       homeTickSources: await StorageService.getHomeTickSources(),
+      syncAllContinueWatching: await StorageService.getSyncAllContinueWatching(),
     );
   }
 
   bool scrobbles(TrackingSource source) =>
-      source == TrackingSource.local || scrobbleTargets.contains(source);
+      source == TrackingSource.local ||
+      syncAllContinueWatching ||
+      scrobbleTargets.contains(source);
 
   /// Smart preserves the legacy merged/recency behavior. A dedicated source
   /// admits only itself; local means data written by this Debrify profile.
@@ -109,6 +116,7 @@ class TrackingSourcePolicy {
     required bool simklScrobble,
     required bool mdblistScrobble,
   }) =>
+      syncAllContinueWatching ||
       forcesLocalCompletion ||
       (!simklScrobble &&
           (nativeIdentity || (!traktScrobble && !mdblistScrobble)));
