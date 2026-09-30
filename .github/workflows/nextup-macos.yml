@@ -41,6 +41,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="v0.10.0-nextup.${{ github.run_number }}"
-          gh release delete "$VERSION" --yes || true
-          gh release create "$VERSION" build/macos/Build/Products/Release/Debrify-Up-Next.zip \
+          gh release delete "$VERSION" --repo "$GITHUB_REPOSITORY" --yes || true
+          gh release create "$VERSION" build/macos/Build/Products/Release/Debrify-Up-Next.zip --repo "$GITHUB_REPOSITORY" \
             --title "Up Next build $VERSION" --notes "Automated build of upstream Debrify with episode-link support." --latest
