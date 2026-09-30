@@ -4,6 +4,10 @@
 
 <h1 align="center">Debrify</h1>
 
+> This personal fork adds `debrify://episode` links, allowing Up Next for Trakt
+> to open a Debrify show directly at the requested season and episode. GitHub
+> Actions keeps the `nextup` branch current with upstream and builds macOS releases.
+
 <p align="center">
   <strong>Your personal media hub</strong><br>
   One app to browse, stream, and organize media from your own services — with a cinematic player built in

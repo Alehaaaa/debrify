@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-const String _kGithubOwner = 'varunsalian';
+const String _kGithubOwner = 'Alehaaaa';
 const String _kGithubRepo = 'debrify';
 const String _kReleasesPage =
     'https://github.com/$_kGithubOwner/$_kGithubRepo/releases';

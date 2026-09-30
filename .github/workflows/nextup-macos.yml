@@ -31,7 +31,7 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
       - name: Build macOS app
-        run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false
+        run: flutter build macos --release --build-name 0.10.0-nextup --build-number ${{ github.run_number }} --dart-define=DEBRIFY_LOCAL_VALIDATION=false
       - name: Package app
         run: |
           cd build/macos/Build/Products/Release
@@ -40,7 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          VERSION="nextup-$(git rev-parse --short HEAD)"
+          VERSION="v0.10.0-nextup.${{ github.run_number }}"
           gh release delete "$VERSION" --yes || true
           gh release create "$VERSION" build/macos/Build/Products/Release/Debrify-Up-Next.zip \
             --title "Up Next build $VERSION" --notes "Automated build of upstream Debrify with episode-link support." --latest
