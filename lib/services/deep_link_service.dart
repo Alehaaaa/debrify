@@ -241,7 +241,8 @@ class DeepLinkService {
     if (!_profileMayDispatch ||
         (onMagnetLinkReceived == null &&
             onUrlShared == null &&
-            onStremioAddonReceived == null)) {
+            onStremioAddonReceived == null &&
+            onEpisodeLinkReceived == null)) {
       return;
     }
     if (ProfileRuntime.isProfileCommitted) {

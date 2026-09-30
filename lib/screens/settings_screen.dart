@@ -61,6 +61,7 @@ import '../services/android_native_downloader.dart';
 import '../services/live_recording_service.dart';
 import '../services/desktop_schedule_service.dart';
 import '../services/update_service.dart';
+import '../services/local_source_update_service.dart';
 import '../widgets/support_donation_chooser_dialog.dart';
 import '../widgets/tv_text_field.dart';
 import 'settings/debrify_tv_settings_page.dart';
@@ -633,7 +634,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         () => StorageService.getUpdateIncludeAlphaEnabled(),
         false,
       ),
-      summaries.read('Media servers', () async => (await MediaServerService.connections()).length, 0),
+      summaries.read(
+        'Media servers',
+        () async => (await MediaServerService.connections()).length,
+        0,
+      ),
     ]);
 
     if (!mounted || ProfileRuntime.scope.value != startingScope) return;
@@ -1192,9 +1197,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int _mediaServerCount = 0;
   ConnectionInfo get _mediaServersInfo => ConnectionInfo(
     title: 'Jellyfin & Emby',
-    connected: !_summaryFailures.contains('Media servers') && _mediaServerCount > 0,
-    status: _summaryFailures.contains('Media servers') ? 'Unavailable' : _mediaServerCount > 0 ? 'Configured' : 'Not configured',
-    caption: _mediaServerCount > 0 ? '$_mediaServerCount server connections' : 'Play movies and episodes from your servers',
+    connected:
+        !_summaryFailures.contains('Media servers') && _mediaServerCount > 0,
+    status: _summaryFailures.contains('Media servers')
+        ? 'Unavailable'
+        : _mediaServerCount > 0
+        ? 'Configured'
+        : 'Not configured',
+    caption: _mediaServerCount > 0
+        ? '$_mediaServerCount server connections'
+        : 'Play movies and episodes from your servers',
     onTap: _openMediaServerSettings,
   );
   ConnectionInfo get _webDavInfo => ConnectionInfo(
@@ -1737,7 +1749,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'password',
         'app token',
       ]),
-      conn(_mediaServersInfo, const ['jellyfin', 'emby', 'media server', 'nas', 'server', 'login']),
+      conn(_mediaServersInfo, const [
+        'jellyfin',
+        'emby',
+        'media server',
+        'nas',
+        'server',
+        'login',
+      ]),
       conn(_iptvInfo, const [
         'live tv',
         'm3u',
@@ -2104,7 +2123,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _openCollectionListStyle,
           subtitle: 'Grid · Gallery · Filmstrip · Journal · Spotlight',
           keywords: [
-            'collection', 'list', 'gallery', 'filmstrip', 'journal', 'spotlight',
+            'collection',
+            'list',
+            'gallery',
+            'filmstrip',
+            'journal',
+            'spotlight',
           ],
         ),
       if (_isAndroidTv)
@@ -6702,6 +6726,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_checkingUpdates) return;
     if (_currentVersionName.isEmpty) return;
     await StorageService.setIgnoredUpdateVersion(null);
+
+    if (!kIsWeb && Platform.isMacOS) {
+      setState(() {
+        _checkingUpdates = true;
+        _updateSubtitle = 'Checking local fork for upstream changes...';
+      });
+      try {
+        final available = await LocalSourceUpdateService.updateAvailable();
+        if (!mounted) return;
+        setState(() {
+          _checkingUpdates = false;
+          _updateSubtitle = available
+              ? 'Upstream update available — build locally'
+              : 'You are on the latest upstream build';
+        });
+        if (available) {
+          await showDialog<void>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Build local update?'),
+              content: const Text(
+                'Debrify will merge the upstream update, build it locally, replace this app, and relaunch when the build succeeds.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Later'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    await LocalSourceUpdateService.buildAndInstall();
+                    if (!mounted) return;
+                    setState(
+                      () => _updateSubtitle = 'Building local update...',
+                    );
+                  },
+                  child: const Text('Build & Install'),
+                ),
+              ],
+            ),
+          );
+        }
+      } on LocalSourceUpdateException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _checkingUpdates = false;
+          _updateSubtitle = 'Local update check failed';
+        });
+        _showSnack(
+          error.message.isEmpty ? 'Local update check failed.' : error.message,
+        );
+      }
+      return;
+    }
 
     setState(() {
       _checkingUpdates = true;
