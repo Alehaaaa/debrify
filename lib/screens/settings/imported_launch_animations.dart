@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -81,9 +82,9 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
   }
 
   Future<void> _import() => _run(() async {
-    FilePickerResult? result;
+    PickedFiles? result;
     try {
-      result = await FilePicker.platform.pickFiles(
+      result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: false,

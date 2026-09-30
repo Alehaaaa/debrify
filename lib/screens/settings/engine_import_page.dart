@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:yaml/yaml.dart';
 import '../../services/engine/remote_engine_manager.dart';
 import '../../services/engine/local_engine_storage.dart';
@@ -218,7 +219,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
   Future<void> _importFromLocalFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -239,7 +240,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
       if (file.bytes != null) {
         yamlContent = String.fromCharCodes(file.bytes!);
       } else if (file.path != null) {
-        final fileBytes = await file.xFile.readAsBytes();
+        final fileBytes = await file.readAsBytes();
         yamlContent = String.fromCharCodes(fileBytes);
       } else {
         throw Exception('Could not read file content');
@@ -1096,7 +1097,7 @@ class _EngineImportPageState extends State<EngineImportPage> {
   Future<void> _importFromLocalFile() async {
     try {
       // Pick YAML file - use FileType.any for better Android compatibility
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true, // Loads file bytes directly (works better on Android)
@@ -1119,7 +1120,7 @@ class _EngineImportPageState extends State<EngineImportPage> {
       if (file.bytes != null) {
         yamlContent = String.fromCharCodes(file.bytes!);
       } else if (file.path != null) {
-        final fileBytes = await file.xFile.readAsBytes();
+        final fileBytes = await file.readAsBytes();
         yamlContent = String.fromCharCodes(fileBytes);
       } else {
         throw Exception('Could not read file content');

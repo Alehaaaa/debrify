@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
@@ -373,7 +374,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
     // dialog below opens after the file picker returns.
     final app = AppThemeScope.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -388,7 +389,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
       if (file.bytes != null) {
         yamlContent = String.fromCharCodes(file.bytes!);
       } else if (file.path != null) {
-        yamlContent = String.fromCharCodes(await file.xFile.readAsBytes());
+        yamlContent = String.fromCharCodes(await file.readAsBytes());
       } else {
         throw Exception('Could not read file content');
       }
@@ -683,7 +684,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
   Future<void> _importJson() async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -697,7 +698,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
       if (file.bytes != null) {
         bytes = file.bytes!;
       } else if (file.path != null) {
-        bytes = await file.xFile.readAsBytes();
+        bytes = await file.readAsBytes();
       } else {
         throw Exception('Could not read the selected file.');
       }

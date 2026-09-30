@@ -4,6 +4,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import '../utils/file_pick.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2597,7 +2598,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     // `yaml`/`yml`/`debrify`, so a custom filter silently greys those files out
     // in the system picker (and throws "Unsupported filter" outright when every
     // extension is unmapped). The importer validates the bytes/format below.
-    final selection = await FilePicker.platform.pickFiles(
+    final selection = await FilePick.pickFiles(
       type: FileType.any,
       withData: true,
       withReadStream: true,
@@ -2883,7 +2884,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     );
   }
 
-  Future<Uint8List> _readPickedFileBytes(PlatformFile file) async {
+  Future<Uint8List> _readPickedFileBytes(PickedFile file) async {
     if (file.bytes != null && file.bytes!.isNotEmpty) {
       return Uint8List.fromList(file.bytes!);
     }

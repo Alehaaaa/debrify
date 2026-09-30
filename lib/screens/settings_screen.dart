@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:io' show File, Platform, exit;
 
 import 'package:file_picker/file_picker.dart';
+import '../utils/file_pick.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5737,7 +5738,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (!mounted) return;
 
       if (kIsWeb) {
-        final savedReference = await FilePicker.platform.saveFile(
+        final savedReference = await FilePicker.saveFile(
           dialogTitle: 'Save diagnostic logs',
           fileName: exported.fileName,
           type: FileType.custom,
@@ -5892,13 +5893,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final FilePickerResult? pick;
+    final PickedFiles? pick;
     try {
       // FileType.any instead of custom: Android's MIME mapping for `json` is
       // unreliable and throws PlatformException("Unsupported filter") on many
       // devices, leaving the backup unselectable. The contents are validated by
       // BackupRestoreService.parse below, so no extension filter is needed.
-      pick = await FilePicker.platform.pickFiles(
+      pick = await FilePick.pickFiles(
         dialogTitle: 'Choose Debrify backup file',
         type: FileType.any,
         withData: false,
@@ -6396,7 +6397,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _chooseDownloadFolderDesktop() async {
     String? dir;
     try {
-      dir = await FilePicker.platform.getDirectoryPath(
+      dir = await FilePicker.getDirectoryPath(
         dialogTitle: 'Choose download folder',
       );
     } catch (e) {

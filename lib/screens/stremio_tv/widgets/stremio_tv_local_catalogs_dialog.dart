@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import '../../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -1039,7 +1040,7 @@ class StremioTvLocalCatalogsDialog extends StatefulWidget {
       // FileType.any instead of custom: Android's MIME mapping for `json` is
       // unreliable and throws PlatformException("Unsupported filter"). The JSON
       // content is validated by LocalCatalogImporter.import below.
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         withData: true,
       );

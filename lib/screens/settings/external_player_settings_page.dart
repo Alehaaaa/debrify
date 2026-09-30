@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import '../../services/external_player_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/android_native_downloader.dart';
@@ -768,7 +769,7 @@ class _ExternalPlayerSettingsPageState
 
   Future<void> _browseForCustomApp() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['app'],
         dialogTitle: 'Select Video Player Application',
@@ -1319,7 +1320,7 @@ class _ExternalPlayerSettingsPageState
       // FileType.any instead of custom: Android's MIME mapping for `ttf`/`otf`
       // is unreliable and throws PlatformException("Unsupported filter"). We
       // validate the extension ourselves below.
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
       );

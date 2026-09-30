@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -597,7 +598,7 @@ class ProfileBackupFlows {
     }
 
     if (source == _ProfileBackupSource.localFile) {
-      final pick = await FilePicker.platform.pickFiles(
+      final pick = await FilePick.pickFiles(
         dialogTitle: 'Choose a Debrify backup',
         type: FileType.any,
         withData: false,

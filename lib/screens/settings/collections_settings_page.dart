@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -173,7 +174,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: text));
     } else {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         dialogTitle: 'Export collection',
         fileName:
             'collection-${collection.id.replaceAll(RegExp(r"[^a-zA-Z0-9_-]"), "_")}.json',
@@ -195,7 +196,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
 
   Future<void> _importFromFile() => _guarded(() async {
     final session = HomeCollectionsStore.captureSession();
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePick.pickFiles(
       type: FileType.any,
       allowMultiple: false,
       withData: false,
@@ -210,7 +211,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     if (file.bytes != null) {
       bytes = file.bytes!;
     } else if (file.path != null) {
-      bytes = await file.xFile.readAsBytes();
+      bytes = await file.readAsBytes();
     } else {
       throw const FormatException('Could not read the selected file.');
     }

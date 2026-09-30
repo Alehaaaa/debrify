@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -165,7 +166,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -182,7 +183,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
       if (file.bytes != null) {
         bytes = file.bytes!;
       } else if (file.path != null) {
-        bytes = await file.xFile.readAsBytes();
+        bytes = await file.readAsBytes();
       } else {
         throw Exception('Could not read the selected file.');
       }

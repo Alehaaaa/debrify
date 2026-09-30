@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/backup_restore_service.dart';
@@ -120,7 +121,7 @@ class _ProfileRecoveryScreenState extends State<ProfileRecoveryScreen> {
 
   Future<void> _restoreBackup() async {
     await _run(() async {
-      final pick = await FilePicker.platform.pickFiles(
+      final pick = await FilePick.pickFiles(
         dialogTitle: 'Choose a Debrify backup',
         type: FileType.any,
         withData: false,

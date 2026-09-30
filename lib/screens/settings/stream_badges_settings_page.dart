@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/stream_badge_rules.dart';
@@ -100,7 +101,7 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
   }
 
   Future<void> _importFromFile() => _guarded(() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePick.pickFiles(
       type: FileType.any,
       allowMultiple: false,
       withData: true,
@@ -111,7 +112,7 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
     if (file.bytes != null) {
       bytes = file.bytes!;
     } else if (file.path != null) {
-      bytes = await file.xFile.readAsBytes();
+      bytes = await file.readAsBytes();
     } else {
       throw const FormatException('Could not read the selected file.');
     }

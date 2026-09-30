@@ -21,7 +21,7 @@ void main() {
         contains('DownloadService.instance.saveGeneratedFileFromPath('),
       );
       expect(source, contains('source: _ProfileBackupSource.localFile'));
-      expect(source, contains('FilePicker.platform.pickFiles('));
+      expect(source, contains('FilePick.pickFiles('));
       expect(source, contains('LocalBackupZip.looksLikeArchive(File(path))'));
       expect(source, contains('return await _restoreLocalArchive(path);'));
       expect(

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import '../../models/iptv_playlist.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../../services/iptv_catalog_key.dart';
@@ -853,7 +854,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
       // FileType.any instead of custom extensions: Android's MIME mapping for
       // .m3u/.m3u8 is unreliable and can leave valid files unselectable in the
       // picker. The extension is validated below instead.
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -875,7 +876,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
       // Read file content
       final Uint8List? fileBytes =
           file.bytes ??
-          (file.path != null ? await file.xFile.readAsBytes() : null);
+          (file.path != null ? await file.readAsBytes() : null);
       if (fileBytes == null) {
         _showSnackBar('Could not read file content');
         return;

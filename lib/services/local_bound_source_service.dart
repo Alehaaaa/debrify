@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import '../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -133,7 +134,7 @@ class LocalBoundSourceService {
 
     if (Platform.isAndroid) return _pickAndroidSeries(context, title);
 
-    final path = await FilePicker.platform.getDirectoryPath();
+    final path = await FilePicker.getDirectoryPath();
     if (path == null || path.trim().isEmpty) return null;
     if (!context.mounted) return null;
 
@@ -226,7 +227,7 @@ class LocalBoundSourceService {
 
   static Future<SeriesSource?> _pickFile(BuildContext context) async {
     if (Platform.isAndroid) return _pickAndroidMovie(context, folder: false);
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePick.pickFiles(
       type: FileType.custom,
       allowedExtensions: _videoExtensions,
       allowMultiple: false,
@@ -243,7 +244,7 @@ class LocalBoundSourceService {
     String? year,
   }) async {
     if (Platform.isAndroid) return _pickAndroidMovie(context, folder: true);
-    final path = await FilePicker.platform.getDirectoryPath();
+    final path = await FilePicker.getDirectoryPath();
     if (path == null || path.trim().isEmpty) return null;
 
     final candidates = await _scanFolder(path);
