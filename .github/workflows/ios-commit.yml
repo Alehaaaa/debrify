@@ -1,0 +1,173 @@
+name: iOS Commit Build
+
+# Builds a sideloadable IPA for every pushed commit. Commits on the default
+# branch are also published to the rolling `ios-commits` pre-release together
+# with a SideStore/AltStore source, reachable at:
+#   https://github.com/<owner>/<repo>/releases/download/ios-commits/apps.json
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ios-commits
+
+jobs:
+  build:
+    runs-on: macos-latest
+    outputs:
+      ipa_name: ${{ steps.ipa.outputs.name }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Optional here (unlike the release workflow) so forks and branches
+    # without the secret still get a build; TMDB metadata is just disabled.
+    - name: Configure TMDB build token
+      shell: python
+      env:
+        TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+      run: |
+        import json, os
+        from pathlib import Path
+        token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
+        config = {}
+        if token:
+            config["TMDB_READ_ACCESS_TOKEN"] = token
+        else:
+            print("::warning::TMDB_READ_ACCESS_TOKEN is not set; building without TMDB metadata")
+        path = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        path.write_text(json.dumps(config), encoding="utf-8")
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.44.8'
+        channel: 'stable'
+        cache: true
+
+    - name: Cache CocoaPods
+      uses: actions/cache@v4
+      with:
+        path: ios/Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+        restore-keys: ${{ runner.os }}-pods-
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    # run_number gives every commit a strictly increasing CFBundleVersion so
+    # SideStore sees each build as an update.
+    - name: Build iOS (unsigned)
+      run: >
+        flutter build ios --release --no-codesign
+        --build-number=${{ github.run_number }}
+        --dart-define=DEBRIFY_LOCAL_VALIDATION=false
+        --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+
+    # --no-codesign emits Mach-Os with no LC_CODE_SIGNATURE, so __LINKEDIT has no
+    # room reserved for a signature and SideStore/ldid abort. Ad-hoc signing
+    # reserves that space; SideStore replaces it with the user's own cert.
+    - name: Ad-hoc sign for sideloading
+      run: |
+        set -euo pipefail
+        APP=build/ios/iphoneos/Runner.app
+        for d in "$APP"/Frameworks/*.dylib; do
+          [ -f "$d" ] && codesign -f -s - --timestamp=none "$d"
+        done
+        for f in "$APP"/Frameworks/*.framework; do
+          [ -d "$f" ] && codesign -f -s - --timestamp=none "$f"
+        done
+        codesign -f -s - --timestamp=none "$APP"
+
+        missing=0
+        check() {
+          if [ -f "$1" ] && [ "$(otool -l "$1" | grep -c LC_CODE_SIGNATURE)" -eq 0 ]; then
+            echo "::error::no LC_CODE_SIGNATURE in $1"
+            missing=$((missing + 1))
+          fi
+        }
+        check "$APP/Runner"
+        for d in "$APP"/Frameworks/*.dylib; do check "$d"; done
+        for f in "$APP"/Frameworks/*.framework; do
+          check "$f/$(basename "$f" .framework)"
+        done
+        if [ "$missing" -ne 0 ]; then
+          echo "::error::$missing binary(ies) left unsigned; IPA would not sideload"
+          exit 1
+        fi
+
+    - name: Package IPA
+      id: ipa
+      run: |
+        set -euo pipefail
+        NAME="debrify-ios-${{ github.run_number }}-${GITHUB_SHA::7}.ipa"
+        cd build/ios/iphoneos
+        rm -rf Payload && mkdir Payload
+        cp -R Runner.app Payload/
+        zip -qry "$NAME" Payload
+        rm -rf Payload
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debrify-ios-${{ github.run_number }}
+        path: build/ios/iphoneos/${{ steps.ipa.outputs.name }}
+
+    - name: Publish to SideStore source
+      if: github.ref_name == github.event.repository.default_branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+        IPA_NAME: ${{ steps.ipa.outputs.name }}
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        set -euo pipefail
+        IPA="build/ios/iphoneos/$IPA_NAME"
+        BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
+
+        if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          gh release create "$RELEASE_TAG" --prerelease --target "$GITHUB_SHA" \
+            --title "iOS commit builds" \
+            --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`."
+        fi
+
+        mkdir -p "$RUNNER_TEMP/prev"
+        gh release download "$RELEASE_TAG" -p apps.json -D "$RUNNER_TEMP/prev" --clobber || true
+
+        python3 .github/scripts/sidestore_source.py \
+          --app build/ios/iphoneos/Runner.app \
+          --ipa "$IPA" \
+          --download-url "$BASE/$IPA_NAME" \
+          --previous "$RUNNER_TEMP/prev/apps.json" \
+          --output "$RUNNER_TEMP/apps.json" \
+          --repo "$GITHUB_REPOSITORY" \
+          --branch "$GITHUB_REF_NAME" \
+          --sha "$GITHUB_SHA" \
+          --commit-message "$COMMIT_MESSAGE"
+
+        # IPA first so the source never points at a missing download.
+        gh release upload "$RELEASE_TAG" "$IPA" --clobber
+        gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/apps.json" --clobber
+
+        # Drop IPAs that have aged out of the source.
+        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for a in json.load(open(sys.argv[1]))["apps"] for v in a["versions"]))' "$RUNNER_TEMP/apps.json")
+        gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep '\.ipa$' | while read -r asset; do
+          if ! grep -qxF "$asset" <<<"$keep"; then
+            gh release delete-asset "$RELEASE_TAG" "$asset" -y
+          fi
+        done
+
+        gh release edit "$RELEASE_TAG" --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`.
+
+        Latest: build ${{ github.run_number }} from $GITHUB_SHA
+
+        **SideStore source:** \`$BASE/apps.json\`"
+
+        echo "### SideStore source" >> "$GITHUB_STEP_SUMMARY"
+        echo "\`$BASE/apps.json\`" >> "$GITHUB_STEP_SUMMARY"
