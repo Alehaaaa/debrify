@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/efe9730f5cf9cf35b798c0a3afbd9897702cb47c/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610011737",
+          "date": "2026-10-01T17:42:02Z",
+          "localizedDescription": "What's new:\n• Update sync and settings coverage (dcc66fb4)\n• Add WebDAV saved syncs & snapshot versions (6f85883d)\n\nBuild 202610011737 from nextup@efe9730\nhttps://github.com/Alehaaaa/debrify/compare/595c70f...efe9730",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-9-efe9730.ipa",
+          "size": 39336991,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610011448",
