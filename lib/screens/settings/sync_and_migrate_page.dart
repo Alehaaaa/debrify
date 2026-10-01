@@ -1,3 +1,7 @@
+import '../../services/webdav_protocol_client.dart';
+import '../../services/webdav_sync/webdav_sync_versions.dart';
+import 'profile_backup_flows.dart';
+import '../../services/webdav_sync/webdav_saved_syncs.dart';
 import '../../services/webdav_sync/webdav_log_upload.dart';
 import '../../services/webdav_sync/webdav_sync_binding_store.dart';
 import '../../services/profiles/profile_preferences.dart';
@@ -36,8 +40,11 @@ class SyncAndMigratePage extends StatefulWidget {
     this.syncActivation,
     this.syncFeatureEnabled,
     this.launchSyncLogin,
+    this.loadSyncVersions,
   });
 
+  final Future<List<WebDavSyncVersion>> Function(WebDavSyncFolderExisting)?
+  loadSyncVersions;
   final WebDavSyncSetupService? syncService;
   final WebDavSyncSetupAuthorization? syncAuthorization;
   final WebDavSyncActivationController? syncActivation;
@@ -65,6 +72,10 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
   WebDavSyncRuntimeStatus? _runtimeStatus;
   String? _syncStateMessage;
   bool _syncBusy = false;
+  final _savedSyncStore = WebDavSavedSyncs();
+  List<WebDavSavedSync> _savedSyncs = [];
+  String? _activeSavedSyncId;
+
   bool _logUploadEnabled = false;
   bool _logSettingsBusy = false;
   bool _logUploading = false;
@@ -205,6 +216,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         _logoutPending = WebDavSyncBindingStore.logoutPending(snapshot);
         _deviceRemoved = removed && _syncBinding == null;
       });
+      unawaited(_loadSavedSyncs());
       unawaited(_loadActiveSyncState());
     } catch (error) {
       if (!mounted) return;
@@ -353,7 +365,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
     }
   }
 
-  Future<void> _configureSync() async {
+  Future<void> _configureSync({WebDavSavedSync? saved}) async {
     if (_syncBusy) return;
     if (_logoutPending && !await _forgetConnection()) return;
     if (!mounted) return;
@@ -370,32 +382,85 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         didPause = true;
       }
       if (!mounted) return;
-      final reconnectBinding = _syncBinding?.requiresStateReconnect == true
+      final reconnectBinding =
+          saved == null && _syncBinding?.requiresStateReconnect == true
           ? _syncBinding
           : null;
       final reconnectUsername = reconnectBinding == null
           ? null
           : (await _syncService.store.readSecrets(reconnectBinding)).username;
       if (!mounted) return;
-      final credentials = widget.launchSyncLogin != null
-          ? await widget.launchSyncLogin!(context, _syncConnectController)
-          : await Navigator.of(context).push<WebDavSyncLoginCredentials>(
-              MaterialPageRoute(
-                builder: (_) => WebDavSyncLoginScreen(
-                  connectController: _syncConnectController,
-                  repairBinding: reconnectBinding,
-                  initialUsername: reconnectUsername,
+      WebDavSyncLoginCredentials? credentials = saved?.credentials;
+      if (credentials == null) {
+        if (!mounted) return;
+        credentials = widget.launchSyncLogin != null
+            ? await widget.launchSyncLogin!(context, _syncConnectController)
+            : await Navigator.of(context).push<WebDavSyncLoginCredentials>(
+                MaterialPageRoute(
+                  builder: (_) => WebDavSyncLoginScreen(
+                    connectController: _syncConnectController,
+                    repairBinding: reconnectBinding,
+                    initialUsername: reconnectUsername,
+                  ),
                 ),
+              );
+      }
+      if (!mounted || credentials == null) return;
+      final selectedCredentials = credentials;
+      final current = _syncBinding;
+      if (current != null && current.lifecycle == WebDavSyncLifecycle.active) {
+        final secrets = await _syncService.store.readSecrets(current);
+        final currentLogin = WebDavSyncLoginCredentials(
+          endpoint: current.location.endpoint,
+          username: secrets.username,
+          password: secrets.password,
+          serverName: current.location.serverName,
+        );
+        await _rememberSync(currentLogin);
+        final targetLocation = WebDavSyncFolderLocation.fromConfig(
+          credentials.toConfig(),
+          WebDavSyncConnectController.folderPath,
+        );
+        // The existing binding identity is endpoint-based. Different users on
+        // one provider must leave that binding before adopting another root.
+        if (targetLocation.fingerprint == current.id &&
+            secrets.username != credentials.username) {
+          await _syncConnectController.inspect(credentials);
+          if (!mounted) return;
+          final confirmed = await showSettingsDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Switch sync account?'),
+              content: const Text(
+                'Disconnect the current account before connecting this saved login. Your current login remains in Saved syncs. You will be asked before replacing local data.',
               ),
-            );
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Switch account'),
+                ),
+              ],
+            ),
+          );
+          if (confirmed != true) return;
+          final logout = _logoutController;
+          if (logout == null) {
+            throw StateError('Account switching is unavailable');
+          }
+          await logout.logout();
+        }
+      }
       if (!mounted) return;
-      if (credentials == null) return;
       final outcome = await runWebDavForegroundSync(
         context,
         stage: 'Preparing WebDAV sync…',
         progressLimit: null,
         operation: (updateStage) => _syncConnectController.connect(
-          credentials: credentials,
+          credentials: selectedCredentials,
           reconnectActive: reconnectBinding != null,
           confirmExistingReplacement: _confirmExistingReplacement,
           onProgress: updateStage,
@@ -412,6 +477,21 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       if (binding == null) return;
       if (!mounted) return;
       setState(() => _syncBinding = binding);
+      try {
+        await _rememberSync(selectedCredentials);
+        await _loadSavedSyncs();
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Sync connected, but the login could not be added to saved syncs.',
+              ),
+            ),
+          );
+        }
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_completionMessage(binding.lifecycle))),
       );
@@ -421,6 +501,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       try {
         if (didPause) await reconfiguration!.resumeAfterReconfiguration();
         if (mounted) await _loadActiveSyncState();
+        if (mounted) await _loadSavedSyncs();
       } catch (error) {
         if (mounted) _showError(error);
       } finally {
@@ -428,6 +509,296 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       }
     }
   }
+
+  Future<void> _rememberSync(WebDavSyncLoginCredentials credentials) async {
+    final entry = WebDavSavedSync(
+      name: credentials.serverName,
+      credentials: credentials,
+    );
+    final rows = await _savedSyncStore.load();
+    final existing = rows.where((row) => row.id == entry.id).firstOrNull;
+    await _savedSyncStore.save(
+      WebDavSavedSync(
+        name: existing?.name ?? entry.name,
+        credentials: credentials,
+      ),
+    );
+  }
+
+  Future<void> _loadSavedSyncs() async {
+    try {
+      String? activeId;
+      final binding = (await _syncService.store.load()).activeBinding;
+      if (binding != null) {
+        final secrets = await _syncService.store.readSecrets(binding);
+        final current = WebDavSavedSync(
+          name: binding.location.serverName,
+          credentials: WebDavSyncLoginCredentials(
+            endpoint: binding.location.endpoint,
+            username: secrets.username,
+            password: secrets.password,
+            serverName: binding.location.serverName,
+          ),
+        );
+        await _savedSyncStore.importCurrentIfNeeded(current);
+        if (binding.lifecycle == WebDavSyncLifecycle.active) {
+          activeId = current.id;
+        }
+      }
+      final saved = await _savedSyncStore.load();
+      if (mounted) {
+        setState(() {
+          _savedSyncs = saved;
+          _activeSavedSyncId = activeId;
+        });
+      }
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _addSync() async {
+    if (!mounted || _syncBusy) return;
+    setState(() => _syncBusy = true);
+    WebDavSavedSync? added;
+    try {
+      await _syncAuthorization.requireAdmin();
+      if (!mounted) return;
+      final credentials = widget.launchSyncLogin != null
+          ? await widget.launchSyncLogin!(context, _syncConnectController)
+          : await Navigator.of(context).push<WebDavSyncLoginCredentials>(
+              MaterialPageRoute(
+                builder: (_) => WebDavSyncLoginScreen(
+                  connectController: _syncConnectController,
+                ),
+              ),
+            );
+      if (credentials == null || !mounted) return;
+      await _rememberSync(credentials);
+      await _loadSavedSyncs();
+      added = WebDavSavedSync(
+        name: credentials.serverName,
+        credentials: credentials,
+      );
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _syncBusy = false);
+    }
+    if (mounted && added != null) await _openSyncVersions(added);
+  }
+
+  Future<void> _openSyncVersions(WebDavSavedSync sync) async {
+    if (!mounted || _syncBusy) return;
+    setState(() => _syncBusy = true);
+    Object? action;
+    WebDavSyncFolderExisting? existing;
+    try {
+      final result = await runWebDavForegroundSync(
+        context,
+        title: 'Loading sync',
+        stage: 'Checking saved versions…',
+        operation: (_) async {
+          final inspection = await _syncConnectController.inspect(
+            sync.credentials,
+          );
+          if (inspection is! WebDavSyncFolderExisting) {
+            return <WebDavSyncVersion>[];
+          }
+          existing = inspection;
+          if (widget.loadSyncVersions != null) {
+            return widget.loadSyncVersions!(inspection);
+          }
+          return _syncAuthorization.runForAdminSession((beforeSend) async {
+            final client = WebDavProtocolClient(
+              endpoint: sync.credentials.endpoint,
+              credentials: WebDavCredentials(
+                username: sync.credentials.username,
+                password: sync.credentials.password,
+              ),
+            );
+            try {
+              return await WebDavSyncVersions(
+                client,
+                folderPath: inspection.location.folderPath,
+                beforeSend: beforeSend,
+              ).list();
+            } finally {
+              client.close();
+            }
+          });
+        },
+      );
+      if (!mounted) return;
+      final active = sync.id == _activeSavedSyncId;
+      action = await showSettingsDialog<Object>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(sync.name),
+          scrollable: true,
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '${sync.credentials.username} • ${sync.credentials.endpoint.host}',
+                ),
+                const SizedBox(height: 16),
+                if (!active)
+                  FilledButton.icon(
+                    onPressed: () => Navigator.pop(dialogContext, 'latest'),
+                    icon: const Icon(Icons.sync),
+                    label: Text(
+                      existing == null
+                          ? 'Start syncing this device'
+                          : 'Use current sync data',
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                const Text(
+                  'Saved versions',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Load a dated snapshot, then continue syncing. Restored data will be shared with your other devices through normal sync.',
+                ),
+                if (result.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'No snapshots yet. A snapshot is saved after each successful manual sync.',
+                    ),
+                  ),
+                for (final version in result)
+                  ListTile(
+                    leading: const Icon(Icons.history),
+                    title: Text(
+                      _formatSyncTime(version.createdAt.millisecondsSinceEpoch),
+                    ),
+                    subtitle: Text(
+                      version.sizeBytes == null
+                          ? 'Encrypted snapshot'
+                          : '${(version.sizeBytes! / 1048576).toStringAsFixed(1)} MB • encrypted',
+                    ),
+                    trailing: const Icon(Icons.restore),
+                    onTap: () => Navigator.pop(dialogContext, version),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted) return;
+      if (action is WebDavSyncVersion && existing != null) {
+        await ProfileBackupFlows(context).restoreSyncVersion(existing!, action);
+        if (mounted) await _loadSyncState();
+      }
+    } catch (error) {
+      if (mounted) _showError(error);
+    } finally {
+      if (mounted) setState(() => _syncBusy = false);
+    }
+    if (mounted && action == 'latest') await _configureSync(saved: sync);
+  }
+
+  Future<void> _editSavedSync(WebDavSavedSync sync) async {
+    try {
+      await _syncAuthorization.requireAdmin();
+      if (!mounted) return;
+      final controller = TextEditingController(text: sync.name);
+      final name = await showSettingsDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Name this sync'),
+          content: TvTextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Sync name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) {
+                  Navigator.pop(context, controller.text.trim());
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      // Dispose after the dialog's reverse transition releases its text field.
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      controller.dispose();
+      if (name == null || !mounted) return;
+      await _savedSyncStore.save(
+        WebDavSavedSync(name: name, credentials: sync.credentials),
+      );
+      await _loadSavedSyncs();
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Future<void> _removeSavedSync(WebDavSavedSync sync) async {
+    try {
+      await _syncAuthorization.requireAdmin();
+      await _savedSyncStore.remove(sync.id);
+      await _loadSavedSyncs();
+    } catch (error) {
+      if (mounted) _showError(error);
+    }
+  }
+
+  Widget _buildSavedSyncs() => SettingsSection(
+    title: 'Your syncs',
+    blurb:
+        'Add a connection, then choose current data or a dated snapshot. One sync is active on this device at a time.',
+    children: [
+      SettingsTile(
+        icon: Icons.add,
+        title: 'Add sync',
+        subtitle: 'Save a WebDAV connection',
+        enabled: !_syncBusy,
+        onTap: _addSync,
+      ),
+      for (final sync in _savedSyncs)
+        SettingsTile(
+          icon: sync.id == _activeSavedSyncId
+              ? Icons.check_circle_outline
+              : Icons.cloud_outlined,
+          title: sync.name,
+          subtitle:
+              '${sync.id == _activeSavedSyncId ? 'Active • ' : ''}${sync.credentials.username} • Versions and restore',
+          enabled: !_syncBusy,
+          onTap: () => _openSyncVersions(sync),
+          trailing: PopupMenuButton<String>(
+            enabled: !_syncBusy,
+            tooltip: 'Manage saved sync',
+            onSelected: (action) => action == 'rename'
+                ? _editSavedSync(sync)
+                : _removeSavedSync(sync),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'rename', child: Text('Rename')),
+              PopupMenuItem(value: 'remove', child: Text('Remove saved login')),
+            ],
+          ),
+        ),
+    ],
+  );
 
   Future<bool> _confirmExistingReplacement() async {
     return await showSettingsDialog<bool>(
@@ -508,7 +879,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
 
   Future<void> _logout() async {
     final controller = _logoutController;
-    if (_syncBusy || controller == null) return;
+    if (!mounted || _syncBusy || controller == null) return;
     final confirmed = await showSettingsDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -516,7 +887,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         title: const Text('Log out of WebDAV sync?'),
         content: const Text(
           'This device will stop syncing and leave the connected devices list. '
-          'Its saved sync login will be removed.\n\n'
+          'Saved syncs remain available in the list below.\n\n'
           'Your profiles and data stay on this device. Already synced data stays '
           'on WebDAV so you and your other devices can use it later. Changes '
           'that have not synced stay only on this device.\n\n'
@@ -576,7 +947,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
 
   Future<void> _syncNow() async {
     final activation = _syncActivation;
-    if (_syncBusy || activation == null) return;
+    if (!mounted || _syncBusy || activation == null) return;
     setState(() => _syncBusy = true);
     try {
       final report = await runWebDavForegroundSync(
@@ -585,12 +956,34 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         operation: (_) => activation.syncNow(),
       );
       if (!mounted) return;
+      var snapshotSaved = false;
+      if (report.disposition == WebDavSyncCycleDisposition.completed &&
+          report.localPublicationConfirmed &&
+          !report.localChangeFollowUp &&
+          !report.localProfilesSuppressed) {
+        try {
+          snapshotSaved = await _saveSnapshotAfterManualSync();
+        } catch (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Sync finished, but its snapshot could not be saved: ${_userFacingSyncError(error)}',
+                ),
+              ),
+            );
+          }
+        }
+      }
+      if (!mounted) return;
       final message = switch (report.disposition) {
         WebDavSyncCycleDisposition.completed =>
           report.localChangeFollowUp ||
                   !report.localPublicationConfirmed ||
                   report.localProfilesSuppressed
               ? 'Sync still has pending changes. Keep Debrify open and retry.'
+              : snapshotSaved
+              ? 'WebDAV Sync is up to date. Snapshot saved.'
               : report.statusHint ?? 'WebDAV Sync is up to date.',
         WebDavSyncCycleDisposition.clockPaused =>
           'Sync is paused because the device or server clock needs attention.',
@@ -621,6 +1014,29 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
     } finally {
       if (mounted) setState(() => _syncBusy = false);
     }
+  }
+
+  Future<bool> _saveSnapshotAfterManualSync() async {
+    final binding = (await _syncService.store.load()).activeBinding;
+    if (binding == null || binding.lifecycle != WebDavSyncLifecycle.active) {
+      return false;
+    }
+    final secrets = await _syncService.store.readSecrets(binding);
+    final credentials = WebDavSyncLoginCredentials(
+      endpoint: binding.location.endpoint,
+      username: secrets.username,
+      password: secrets.password,
+      serverName: binding.location.serverName,
+    );
+    final inspection = await _syncConnectController.inspect(credentials);
+    if (inspection is! WebDavSyncFolderExisting) {
+      throw StateError('The connected sync is no longer available.');
+    }
+    await ProfileBackupFlows(context).createSyncVersion(
+      inspection,
+      announce: false,
+    );
+    return true;
   }
 
   Future<void> _syncDebrifyTv() async {
@@ -988,7 +1404,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SettingsSection(
-          title: 'WebDAV sync',
+          title: 'Sync status',
           blurb: active
               ? 'Your profiles, shared settings and watch progress sync automatically while the app is open. Appearance stays on this device.'
               : 'Keep your profiles, shared settings and watch progress together across your devices. Appearance stays on each device.',
@@ -1056,11 +1472,11 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
                     : _syncStatus(),
               ),
             ),
-            if (!active)
+            if (!active && _syncBinding != null)
               SettingsTile(
                 icon: Icons.login_rounded,
-                title: finishingFirstSync ? 'Continue setup' : 'Connect WebDAV',
-                subtitle: 'Use Koofr or another WebDAV provider',
+                title: 'Continue setup',
+                subtitle: 'Finish connecting this device',
                 enabled: !_syncBusy,
                 onTap: _configureSync,
               ),
@@ -1095,32 +1511,6 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
             ),
           ],
         ),
-        if (active && !_logoutPending) ...[
-          const SizedBox(height: 16),
-          SettingsSection(
-            title: 'Diagnostics',
-            children: [
-              SettingsToggleTile(
-                icon: Icons.upload_file_outlined,
-                title: 'Upload diagnostic logs to WebDAV',
-                subtitle:
-                    'This device only. Saves one rolling file in logs/ every 5 minutes while the app is open. Anyone with folder access can read it.',
-                subtitleMaxLines: 4,
-                value: _logUploadEnabled,
-                onChanged: _setLogUpload,
-              ),
-              if (_logUploadEnabled)
-                SettingsTile(
-                  icon: Icons.cloud_upload_outlined,
-                  title: _logUploading ? 'Uploading logs…' : 'Upload logs now',
-                  subtitle:
-                      'Replace this device’s file with its latest diagnostic history',
-                  enabled: !_logUploading && !_logSettingsBusy && !_syncBusy,
-                  onTap: _uploadLogsNow,
-                ),
-            ],
-          ),
-        ],
         if (clockMessage != null || _syncStateMessage != null) ...[
           const SizedBox(height: 12),
           Text(
@@ -1141,18 +1531,11 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
                   enabled: !_syncBusy && !_logoutPending,
                   onTap: _manageDevices,
                 ),
-              SettingsTile(
-                icon: Icons.manage_accounts_outlined,
-                title: 'Change account',
-                subtitle: 'Use a different WebDAV account',
-                enabled: !_syncBusy,
-                onTap: _configureSync,
-              ),
               if (_logoutController != null)
                 SettingsTile(
                   icon: Icons.logout_rounded,
                   title: _logoutPending ? 'Retry logout' : 'Log out',
-                  subtitle: 'Stop syncing and forget this saved login',
+                  subtitle: 'Stop syncing with this account',
                   enabled: !_syncBusy,
                   onTap: _logout,
                 ),
@@ -1209,6 +1592,32 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
             ],
           ),
         ],
+        if (active && !_logoutPending) ...[
+          const SizedBox(height: 16),
+          SettingsSection(
+            title: 'Diagnostics',
+            children: [
+              SettingsToggleTile(
+                icon: Icons.upload_file_outlined,
+                title: 'Upload diagnostic logs to WebDAV',
+                subtitle:
+                    'This device only. Saves one rolling file in logs/ every 5 minutes while the app is open. Anyone with folder access can read it.',
+                subtitleMaxLines: 4,
+                value: _logUploadEnabled,
+                onChanged: _setLogUpload,
+              ),
+              if (_logUploadEnabled)
+                SettingsTile(
+                  icon: Icons.cloud_upload_outlined,
+                  title: _logUploading ? 'Uploading logs…' : 'Upload logs now',
+                  subtitle:
+                      'Replace this device’s file with its latest diagnostic history',
+                  enabled: !_logUploading && !_logSettingsBusy && !_syncBusy,
+                  onTap: _uploadLogsNow,
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 24),
       ],
     );
@@ -1250,7 +1659,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
   @override
   Widget build(BuildContext context) {
     return SettingsPageScaffold(
-      title: 'Sync and Migrate',
+      title: 'Sync & versions',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -1258,7 +1667,13 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
             constraints: const BoxConstraints(maxWidth: kSettingsMaxWidth),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [if (_syncFeatureEnabled) _buildSyncSection()],
+              children: [
+                if (_syncFeatureEnabled) ...[
+                  _buildSavedSyncs(),
+                  const SizedBox(height: 16),
+                  _buildSyncSection(),
+                ],
+              ],
             ),
           ),
         ),

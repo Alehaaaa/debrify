@@ -305,7 +305,6 @@ class ProfileDatabaseSnapshot {
   ) async {
     final db = await openDatabase(
       source.path,
-      readOnly: true,
       singleInstance: false,
     );
     try {
@@ -320,10 +319,11 @@ class ProfileDatabaseSnapshot {
       } else {
         try {
           await db.execute("VACUUM INTO '$escaped'");
-        } on DatabaseException catch (error) {
-          // VACUUM INTO needs SQLite 3.27 (2019). Android 7-9 falls back to a
-          // checkpointed copy, which is validated before it is accepted.
-          if (!_looksLikeSyntaxError(error)) rethrow;
+        } on DatabaseException {
+          // Some desktop SQLite builds reject VACUUM INTO from the readonly
+          // snapshot connection even though the source database is healthy.
+          // The checkpointed copy has the same integrity validation and is
+          // also the compatibility path for older SQLite versions.
           await db.close();
           await _checkpointCopySnapshot(source, snapshot);
         }
@@ -748,11 +748,6 @@ class ProfileDatabaseSnapshot {
       await db.close();
       await _removeCompanions(file);
     }
-  }
-
-  static bool _looksLikeSyntaxError(DatabaseException error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('syntax error');
   }
 
   static Future<void> _removeCompanions(File database) async {

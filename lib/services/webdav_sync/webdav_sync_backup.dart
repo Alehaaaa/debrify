@@ -191,6 +191,39 @@ final class WebDavSyncBackup {
     return value is Map ? Map<String, String>.from(value) : null;
   }
 
+  /// Keep restored identity maps while using the login verified on this device.
+  WebDavSyncBackup forSnapshotRestore({
+    required WebDavConfig config,
+    required String folderPath,
+    required String syncPassphrase,
+  }) {
+    final saved = connection;
+    if (saved == null ||
+        WebDavSyncFolderLocation(
+              endpoint: saved['endpoint'],
+              folderPath: saved['folder'],
+              serverName: saved['name'],
+            ).fingerprint !=
+            WebDavSyncFolderLocation.fromConfig(
+              config,
+              folderPath,
+            ).fingerprint ||
+        saved['username'] != config.username ||
+        saved['passphrase'] != syncPassphrase) {
+      throw const FormatException('This snapshot belongs to a different sync.');
+    }
+    return WebDavSyncBackup(
+      connection: {
+        ...saved,
+        'username': config.username,
+        'password': config.password,
+        'enabled': true,
+      },
+      profileIds: profileIds,
+      resourceIds: resourceIds,
+    );
+  }
+
   WebDavConfig get config => WebDavConfig(
     id: 'restored-sync',
     name: connection!['name'],

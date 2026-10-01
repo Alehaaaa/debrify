@@ -1879,13 +1879,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       nav(
         SettingsRows.badges,
-        'Badges',
+        'Home & Display',
         _openBadgesSettings,
         keywords: const ['stream badges', 'rules', 'nuvio'],
       ),
       nav(
         SettingsRows.collections,
-        'Collections',
+        'Home & Display',
         _openCollectionsSettings,
         keywords: const [
           'collections',
@@ -1899,7 +1899,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       nav(
         SettingsRows.metadata,
-        'Metadata',
+        'Home & Display',
         _openMetadataSettings,
         keywords: const [
           'tmdb',
@@ -2555,7 +2555,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       nav(
         SettingsRows.remote,
-        'Devices',
+        'Playback',
         _openRemoteControl,
         keywords: const [
           'cast',
@@ -2756,7 +2756,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
       nav(
         SettingsRows.syncAndMigrate,
-        'Sync and Migrate',
+        'Data & Backup',
         _openSyncAndMigrate,
         keywords: const [
           'webdav',
@@ -7560,31 +7560,6 @@ const List<SettingsCategoryDefinition> _kAdaptiveSettingsCategories = [
         'device.',
   ),
   SettingsCategoryDefinition(
-    icon: Icons.collections_bookmark_rounded,
-    label: 'Collections',
-    subtitle: 'Import and manage folder collections',
-    eyebrow: 'Collections',
-    title: 'Collections',
-    description: 'Import and manage folder collections.',
-  ),
-  SettingsCategoryDefinition(
-    icon: Icons.sell_rounded,
-    label: 'Badges',
-    subtitle: 'Import and manage stream badge rules',
-    eyebrow: 'Badges',
-    title: 'Badges',
-    description: 'Import and manage stream badge rules.',
-  ),
-  SettingsCategoryDefinition(
-    icon: Icons.info_outline_rounded,
-    label: 'Metadata',
-    subtitle: 'Providers, artwork, languages & discovery',
-    eyebrow: 'Metadata',
-    title: 'Choose your metadata.',
-    description:
-        'Choose providers for title information, artwork and trailers, and set your preferred languages.',
-  ),
-  SettingsCategoryDefinition(
     icon: Icons.auto_awesome_rounded,
     label: 'Appearance',
     subtitle: 'Look, text, motion & layouts',
@@ -7615,16 +7590,6 @@ const List<SettingsCategoryDefinition> _kAdaptiveSettingsCategories = [
         'pipeline.',
   ),
   SettingsCategoryDefinition(
-    icon: Icons.explore_rounded,
-    label: 'Discover',
-    subtitle: 'Source & poster cards',
-    eyebrow: 'Discover',
-    title: 'Open where you want to browse.',
-    description:
-        'Remember the last source you used or choose one source to show every '
-        'time Discover opens.',
-  ),
-  SettingsCategoryDefinition(
     icon: Icons.live_tv_rounded,
     label: 'Live TV & DVR',
     subtitle: 'Channels, guide & recordings',
@@ -7633,16 +7598,6 @@ const List<SettingsCategoryDefinition> _kAdaptiveSettingsCategories = [
     description:
         'Manage channel sources, recordings, and the guide from one focused '
         'area.',
-  ),
-  SettingsCategoryDefinition(
-    icon: Icons.devices_rounded,
-    label: 'Devices',
-    subtitle: 'Remote & setup transfer',
-    eyebrow: 'Devices',
-    title: 'Let your devices work together.',
-    description:
-        'Control another screen or move this setup without re-entering every '
-        'service.',
   ),
   SettingsCategoryDefinition(
     icon: Icons.switch_account_rounded,
@@ -7655,19 +7610,9 @@ const List<SettingsCategoryDefinition> _kAdaptiveSettingsCategories = [
         'profile can reach.',
   ),
   SettingsCategoryDefinition(
-    icon: Icons.sync_alt_rounded,
-    label: 'Sync and Migrate',
-    subtitle: 'Sync across devices with WebDAV',
-    eyebrow: 'Sync and Migrate',
-    title: 'Keep your devices in sync.',
-    description:
-        'Connect your WebDAV account to sync profiles, settings and watch '
-        'progress.',
-  ),
-  SettingsCategoryDefinition(
     icon: Icons.storage_rounded,
     label: 'Data & Backup',
-    subtitle: 'Downloads, backup & restore',
+    subtitle: 'Sync, downloads, backup & restore',
     eyebrow: 'Data & Backup',
     title: 'Your data, under your control.',
     description:
@@ -7990,59 +7935,67 @@ class _SettingsLayout extends StatelessWidget {
           ],
         );
       case 2:
-        return SettingsSection(
-          title: '',
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SettingsTile.spec(
-              SettingsRows.homePage,
-              onTap: onOpenHomePageSettings,
+            SettingsSection(
+              title: '',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.homePage,
+                  onTap: onOpenHomePageSettings,
+                ),
+                SettingsTile.spec(
+                  SettingsRows.navigationStyle,
+                  subtitle: phoneNavStyleLabel,
+                  onTap: onOpenNavigationSettings,
+                ),
+                SettingsTile.spec(
+                  SettingsRows.desktopSidebarStyle,
+                  subtitle: desktopSidebarStyleLabel,
+                  onTap: onOpenDesktopSidebarStyle,
+                ),
+                SettingsTile(
+                  icon: Icons.tune_rounded,
+                  title: 'Sidebar items',
+                  subtitle: 'Choose the order, names and visibility',
+                  onTap: onOpenSidebarCustomization,
+                ),
+              ],
             ),
-            SettingsTile.spec(
-              SettingsRows.navigationStyle,
-              subtitle: phoneNavStyleLabel,
-              onTap: onOpenNavigationSettings,
+            const SizedBox(height: 18),
+            SettingsSection(
+              title: 'Collections',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.collections,
+                  onTap: onOpenCollectionsSettings,
+                ),
+              ],
             ),
-            SettingsTile.spec(
-              SettingsRows.desktopSidebarStyle,
-              subtitle: desktopSidebarStyleLabel,
-              onTap: onOpenDesktopSidebarStyle,
+            const SizedBox(height: 18),
+            SettingsSection(
+              title: 'Badges',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.badges,
+                  onTap: onOpenBadgesSettings,
+                ),
+              ],
             ),
-            SettingsTile(
-              icon: Icons.tune_rounded,
-              title: 'Sidebar items',
-              subtitle: 'Choose the order, names and visibility',
-              onTap: onOpenSidebarCustomization,
+            const SizedBox(height: 18),
+            SettingsSection(
+              title: 'Metadata',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.metadata,
+                  onTap: onOpenMetadataSettings,
+                ),
+              ],
             ),
           ],
         );
       case 3:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(
-              SettingsRows.collections,
-              onTap: onOpenCollectionsSettings,
-            ),
-          ],
-        );
-      case 4:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(SettingsRows.badges, onTap: onOpenBadgesSettings),
-          ],
-        );
-      case 5:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(
-              SettingsRows.metadata,
-              onTap: onOpenMetadataSettings,
-            ),
-          ],
-        );
-      case 6:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -8061,13 +8014,15 @@ class _SettingsLayout extends StatelessWidget {
                 SettingsTile(
                   icon: Icons.dashboard_customize_rounded,
                   title: 'Form',
-                  subtitle: '${LookParts.formLabel()} — panels, framing, focus, motion',
+                  subtitle:
+                      '${LookParts.formLabel()} — panels, framing, focus, motion',
                   onTap: () => pushSettingsPage(context, const FormPage()),
                 ),
                 SettingsTile(
                   icon: Icons.palette_rounded,
                   title: 'Colour palette',
-                  subtitle: '${LookParts.paletteLabel(AppThemeController.instance.id)}'
+                  subtitle:
+                      '${LookParts.paletteLabel(AppThemeController.instance.id)}'
                       ' — colours only',
                   onTap: () => pushSettingsPage(context, const PalettePage()),
                 ),
@@ -8111,6 +8066,10 @@ class _SettingsLayout extends StatelessWidget {
                   subtitle: detailPageStyleLabel,
                   onTap: onOpenDetailPageStyle,
                 ),
+                SettingsTile.spec(
+                  SettingsRows.discoverDefault,
+                  onTap: onOpenDiscoverSettings,
+                ),
                 if (showIptvAppearance)
                   SettingsTile.spec(
                     SettingsRows.iptvAppearance,
@@ -8152,21 +8111,36 @@ class _SettingsLayout extends StatelessWidget {
             ),
           ],
         );
-      case 7:
-        return SettingsSection(
-          title: '',
+      case 4:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final section in PlaybackSettingsSection.values)
-              SettingsTile(
-                key: ValueKey('playback-category-${section.name}'),
-                icon: section.icon,
-                title: section.label,
-                subtitle: section.description,
-                onTap: () => onOpenPlaybackSection(section),
-              ),
+            SettingsSection(
+              title: '',
+              children: [
+                for (final section in PlaybackSettingsSection.values)
+                  SettingsTile(
+                    key: ValueKey('playback-category-${section.name}'),
+                    icon: section.icon,
+                    title: section.label,
+                    subtitle: section.description,
+                    onTap: () => onOpenPlaybackSection(section),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            SettingsSection(
+              title: 'Devices',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.remote,
+                  onTap: () async => onOpenRemoteControl(),
+                ),
+              ],
+            ),
           ],
         );
-      case 8:
+      case 5:
         return SettingsSection(
           title: '',
           children: [
@@ -8188,17 +8162,7 @@ class _SettingsLayout extends StatelessWidget {
             ),
           ],
         );
-      case 9:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(
-              SettingsRows.discoverDefault,
-              onTap: onOpenDiscoverSettings,
-            ),
-          ],
-        );
-      case 10:
+      case 6:
         return SettingsSection(
           title: '',
           children: [
@@ -8213,17 +8177,7 @@ class _SettingsLayout extends StatelessWidget {
             ),
           ],
         );
-      case 11:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(
-              SettingsRows.remote,
-              onTap: () async => onOpenRemoteControl(),
-            ),
-          ],
-        );
-      case 12:
+      case 7:
         // Profiles' own card (it used to be a tenant row under Devices). A
         // legacy-mode install keeps the card but says why it's empty rather
         // than presenting actions that would fail.
@@ -8252,21 +8206,21 @@ class _SettingsLayout extends StatelessWidget {
               ),
           ],
         );
-      case 13:
-        return SettingsSection(
-          title: '',
-          children: [
-            SettingsTile.spec(
-              SettingsRows.syncAndMigrate,
-              onTap: onOpenSyncAndMigrate,
-              trailing: const WebDavSyncPendingBadge(),
-            ),
-          ],
-        );
-      case 14:
+      case 8:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            SettingsSection(
+              title: 'Sync',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.syncAndMigrate,
+                  onTap: onOpenSyncAndMigrate,
+                  trailing: const WebDavSyncPendingBadge(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             if (onOpenDownloadLocation != null) ...[
               SettingsSection(
                 title: 'Downloads',
@@ -8321,7 +8275,7 @@ class _SettingsLayout extends StatelessWidget {
             ],
           ],
         );
-      case 15:
+      case 9:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -8381,7 +8335,7 @@ class _SettingsLayout extends StatelessWidget {
             ),
           ],
         );
-      case 16:
+      case 10:
         return SettingsSection(
           title: '',
           accentColor: t.danger,
@@ -8482,15 +8436,18 @@ class _SettingsLayout extends StatelessWidget {
                     SettingsTile(
                       icon: Icons.dashboard_customize_rounded,
                       title: 'Form',
-                      subtitle: '${LookParts.formLabel()} — panels, framing, focus, motion',
+                      subtitle:
+                          '${LookParts.formLabel()} — panels, framing, focus, motion',
                       onTap: () => pushSettingsPage(context, const FormPage()),
                     ),
                     SettingsTile(
                       icon: Icons.palette_rounded,
                       title: 'Colour palette',
-                      subtitle: '${LookParts.paletteLabel(AppThemeController.instance.id)}'
+                      subtitle:
+                          '${LookParts.paletteLabel(AppThemeController.instance.id)}'
                           ' — colours only',
-                      onTap: () => pushSettingsPage(context, const PalettePage()),
+                      onTap: () =>
+                          pushSettingsPage(context, const PalettePage()),
                     ),
                     SettingsTile.spec(
                       SettingsRows.looks,
@@ -8538,6 +8495,10 @@ class _SettingsLayout extends StatelessWidget {
                       SettingsRows.detailPageStyle,
                       subtitle: detailPageStyleLabel,
                       onTap: onOpenDetailPageStyle,
+                    ),
+                    SettingsTile.spec(
+                      SettingsRows.discoverDefault,
+                      onTap: onOpenDiscoverSettings,
                     ),
                     if (showIptvAppearance)
                       SettingsTile.spec(
@@ -8623,6 +8584,16 @@ class _SettingsLayout extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 SettingsSection(
+                  title: 'Devices',
+                  children: [
+                    SettingsTile.spec(
+                      SettingsRows.remote,
+                      onTap: () async => onOpenRemoteControl(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                SettingsSection(
                   title: 'Search',
                   children: [
                     SettingsTile.spec(
@@ -8645,16 +8616,6 @@ class _SettingsLayout extends StatelessWidget {
                 ),
                 const SizedBox(height: 24),
                 SettingsSection(
-                  title: 'Discover',
-                  children: [
-                    SettingsTile.spec(
-                      SettingsRows.discoverDefault,
-                      onTap: onOpenDiscoverSettings,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SettingsSection(
                   title: 'Live TV & DVR',
                   children: [
                     SettingsTile.spec(
@@ -8672,21 +8633,6 @@ class _SettingsLayout extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
-                SettingsSection(
-                  title: 'Devices',
-                  children: [
-                    // Remote is listed on every platform. It used to be hidden
-                    // off TV and desktop on the grounds that "mobile keeps its
-                    // entry in the floating menu" — but that menu is gated on
-                    // width (isDesktopWide, >= 600 px), not on platform, so a
-                    // tablet or a phone in landscape lost both entry points at
-                    // once and could only reach Remote through settings search.
-                    SettingsTile.spec(
-                      SettingsRows.remote,
-                      onTap: () async => onOpenRemoteControl(),
-                    ),
-                  ],
-                ),
                 // Profiles' own card (it used to be a tenant row under
                 // Devices). The list layout simply hides it in legacy mode —
                 // no index coupling to preserve here, unlike the category
@@ -8713,19 +8659,13 @@ class _SettingsLayout extends StatelessWidget {
                 ],
                 const SizedBox(height: 24),
                 SettingsSection(
-                  title: 'Sync and Migrate',
+                  title: 'Data & Backup',
                   children: [
                     SettingsTile.spec(
                       SettingsRows.syncAndMigrate,
                       onTap: onOpenSyncAndMigrate,
                       trailing: const WebDavSyncPendingBadge(),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                SettingsSection(
-                  title: 'Data & Backup',
-                  children: [
                     if (onOpenDownloadLocation != null)
                       SettingsTile.spec(
                         SettingsRows.downloadLocation,

@@ -1,3 +1,7 @@
+import '../../services/webdav_sync/webdav_sync_models.dart';
+import '../../services/webdav_sync/webdav_sync_versions.dart';
+import '../../services/webdav_sync/webdav_sync_setup_service.dart';
+import '../../services/webdav_sync/webdav_sync_setup_authorization.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -76,6 +80,159 @@ class ProfileBackupFlows {
   final BuildContext context;
   final Future<void> Function()? onRestored;
   final bool completingOnboarding;
+
+  /// A sync version uses the account's existing sync secret, so other devices
+  /// can restore it after authenticating without another backup password.
+  Future<void> createSyncVersion(
+    WebDavSyncFolderExisting target, {
+    bool announce = true,
+  }) async {
+    await const ProfileWebDavSyncSetupAuthorization().runForAdminSession((
+      beforeSend,
+    ) async {
+      final registry = ProfileBootstrap.registry;
+      final authorization = await ProfileAuthorizationContext.capture(registry);
+      await authorization.validate(registry);
+      if (!context.mounted) return;
+      final exporter = WebDavBackupArchive(
+        LocalBackupExporter(
+          service: ProfilePackageService(
+            registry: registry,
+            resources: ConnectionResourceService(
+              registry: registry,
+              cipher: DeviceKeyProvider.cipher,
+            ),
+          ),
+        ),
+      );
+      await LocalBackupOperationGuard.run(() async {
+        final staging = await LocalBackupScratch.create('sync-version');
+        final cancellation = LocalBackupCancellation();
+        final client = WebDavProtocolClient(
+          endpoint: target.location.endpoint,
+          credentials: WebDavCredentials(
+            username: target.config.username,
+            password: target.config.password,
+          ),
+        );
+        try {
+          final archive = await _profileBackupProgress<WebDavArchiveExport>(
+            'Saving snapshot…',
+            (
+              setStage,
+            ) => WebDavSyncRuntime.instance.withBackupSnapshot(() async {
+              await beforeSend?.call();
+              final runtime = WebDavSyncRuntime.instance;
+              final snapshot = await runtime.bindingStore.load();
+              final binding = snapshot.activeBinding;
+              if (binding == null ||
+                  binding.lifecycle != WebDavSyncLifecycle.active ||
+                  snapshot.stagedBindingId != null ||
+                  binding.id != target.location.fingerprint) {
+                throw StateError('Select this sync before saving a snapshot.');
+              }
+              final secrets = await runtime.bindingStore.readSecrets(binding);
+              if (secrets.username != target.config.username ||
+                  secrets.syncPassphrase != target.syncPassphrase) {
+                throw StateError(
+                  'The active sync changed. Open its versions again.',
+                );
+              }
+              return exporter.export(
+                context: authorization,
+                staging: staging,
+                passphrase: target.syncPassphrase,
+                onStage: setStage,
+                onBytes: _byteStageReporter(setStage),
+                cancellation: cancellation,
+                captureSync: runtime.captureBackupConnection,
+              );
+            }),
+            cancellation: cancellation,
+          );
+          cancellation.throwIfCancelled();
+          await _profileBackupProgress(
+            'Uploading and verifying snapshot…',
+            (_) => WebDavSyncVersions(
+              client,
+              folderPath: target.location.folderPath,
+              beforeSend: beforeSend,
+            ).upload(archive.file, staging),
+          );
+          if (announce && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Snapshot saved. Other devices can now load this version.',
+                ),
+              ),
+            );
+          }
+        } finally {
+          client.close();
+          await LocalBackupScratch.delete(staging);
+        }
+      });
+    });
+  }
+
+  Future<ProfileBackupRestoreResult?> restoreSyncVersion(
+    WebDavSyncFolderExisting target,
+    WebDavSyncVersion version,
+  ) async {
+    await const ProfileWebDavSyncSetupAuthorization().requireAdmin();
+    final authorization = await ProfileAsyncAuthorization.capture(
+      ProfileFeature.backupRestore,
+    );
+    if (authorization == null) {
+      throw StateError('Snapshot restore authorization is unavailable');
+    }
+    final staging = await LocalBackupScratch.create('sync-version-restore');
+    final encrypted = File(p.join(staging.path, 'snapshot.enc'));
+    final archive = File(p.join(staging.path, 'snapshot.debrify'));
+    final client = WebDavProtocolClient(
+      endpoint: target.location.endpoint,
+      credentials: WebDavCredentials(
+        username: target.config.username,
+        password: target.config.password,
+      ),
+    );
+    try {
+      await const ProfileWebDavSyncSetupAuthorization().runForAdminSession(
+        (beforeSend) => _profileBackupProgress(
+          'Downloading snapshot…',
+          (_) => WebDavSyncVersions(
+            client,
+            folderPath: target.location.folderPath,
+            beforeSend: beforeSend,
+          ).download(version, encrypted),
+        ),
+      );
+      final cancellation = LocalBackupCancellation();
+      await _profileBackupProgress(
+        'Opening snapshot…',
+        (setStage) => authorization.runIfCurrent(
+          () => WebDavBackupArchive.decrypt(
+            source: encrypted,
+            destination: archive,
+            passphrase: target.syncPassphrase,
+            cancellation: cancellation,
+            onBytes: _byteStageReporter(setStage),
+          ),
+        ),
+        cancellation: cancellation,
+      );
+      if (!context.mounted) return null;
+      return await _restoreLocalArchive(
+        archive.path,
+        migrateAuthorization: authorization,
+        syncVersionTarget: target,
+      );
+    } finally {
+      client.close();
+      await LocalBackupScratch.delete(staging);
+    }
+  }
 
   Future<void> createProfileBackup() async {
     try {
@@ -806,6 +963,7 @@ class ProfileBackupFlows {
   Future<ProfileBackupRestoreResult?> _restoreLocalArchive(
     String path, {
     ProfileAsyncAuthorization? migrateAuthorization,
+    WebDavSyncFolderExisting? syncVersionTarget,
   }) {
     return LocalBackupOperationGuard.run(() async {
       final inspection = await _profileBackupProgress<LocalBackupInspection>(
@@ -813,19 +971,30 @@ class ProfileBackupFlows {
         (_) => LocalBackupRestorer.inspect(File(path)),
       );
       if (!context.mounted) return null;
+      var syncBackup = inspection.manifest.webDavSync;
+      if (syncVersionTarget != null) {
+        if (syncBackup == null) {
+          throw const FormatException('Snapshot has no sync connection');
+        }
+        syncBackup = syncBackup.forSnapshotRestore(
+          config: syncVersionTarget.config,
+          folderPath: syncVersionTarget.location.folderPath,
+          syncPassphrase: syncVersionTarget.syncPassphrase,
+        );
+      }
       final summary = _archiveSummary(inspection.manifest);
       final confirmation = await _confirmRestore(
         mode: summary.mode,
         profileCount: summary.profileCount,
         omissions: summary.omissions,
-        syncNotice: inspection.manifest.webDavSync == null
+        syncNotice: syncBackup == null
             ? null
-            : inspection.manifest.webDavSync!.connection?['enabled'] == true
+            : syncBackup.connection?['enabled'] == true
             ? 'This backup restores your WebDAV sync login. Sync resumes automatically after restore.'
             : 'WebDAV sync stays off, as saved in this backup.',
       );
       if (confirmation == null) return null;
-      if (inspection.manifest.webDavSync != null &&
+      if (syncBackup != null &&
           (!confirmation.actor.isAdmin ||
               !confirmation.actor.allows(ProfileFeature.manageProfiles))) {
         throw StateError(
@@ -833,7 +1002,7 @@ class ProfileBackupFlows {
         );
       }
 
-      await inspection.manifest.webDavSync?.validate();
+      await syncBackup?.validate();
       final staging = await LocalBackupScratch.create('restore');
       final cancellation = LocalBackupCancellation();
       LocalBackupRestoreStage? stage;
@@ -860,9 +1029,9 @@ class ProfileBackupFlows {
           confirmation,
           migrateAuthorization: migrateAuthorization,
           databaseFileResolver: prepared.resolveDatabase,
-          syncBackup: prepared.manifest.webDavSync,
+          syncBackup: syncBackup,
         );
-        return prepared.manifest.webDavSync == null
+        return syncBackup == null
             ? await restore()
             : await WebDavSyncRuntime.instance.withBackupRestore(restore);
       } on LocalBackupCancelledException {

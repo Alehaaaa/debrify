@@ -300,27 +300,6 @@ const List<_Category> _kCategories = [
     'Arrange the home screen and tune this television for the room.',
   ),
   _Category(
-    Icons.collections_bookmark_rounded,
-    'Collections',
-    'Import and manage folder collections',
-    'Collections',
-    'Import and manage folder collections.',
-  ),
-  _Category(
-    Icons.sell_rounded,
-    'Badges',
-    'Import and manage stream badge rules',
-    'Badges',
-    'Import and manage stream badge rules.',
-  ),
-  _Category(
-    Icons.info_outline_rounded,
-    'Metadata',
-    'Providers, artwork, languages & discovery',
-    'Choose your metadata.',
-    'Choose providers for title information, artwork and trailers, and set your preferred languages.',
-  ),
-  _Category(
     Icons.auto_awesome_rounded,
     'Appearance',
     'Text, home, sidebar, IPTV & player looks',
@@ -342,25 +321,11 @@ const List<_Category> _kCategories = [
     'Engines, default filters, and provider routing form one pipeline.',
   ),
   _Category(
-    Icons.explore_rounded,
-    'Discover',
-    'Source & poster cards',
-    'Open Discover where you left it.',
-    'Remember the last source or choose one place to open every time.',
-  ),
-  _Category(
     Icons.fiber_dvr_rounded,
     'Live TV & DVR',
     'Debrify TV, recordings & IPTV',
     'Live television, organized.',
     'Manage channel sources, recordings, and the on-screen guide.',
-  ),
-  _Category(
-    Icons.devices_rounded,
-    'Devices',
-    'Remote control & setup transfer',
-    'Let your devices work together.',
-    'Control another screen or move this setup without retyping it.',
   ),
   _Category(
     Icons.switch_account_rounded,
@@ -370,16 +335,9 @@ const List<_Category> _kCategories = [
     'Switch between people, add someone new, and shape their access.',
   ),
   _Category(
-    Icons.sync_alt_rounded,
-    'Sync and Migrate',
-    'Sync across devices with WebDAV',
-    'Keep your devices in sync.',
-    'Sync profiles, settings and watch progress with WebDAV.',
-  ),
-  _Category(
     Icons.storage_rounded,
     'Data & Backup',
-    'Downloads, backup & restore',
+    'Sync, downloads, backup & restore',
     'Your data, under your control.',
     'Manage stored state and keep a portable copy of your setup.',
   ),
@@ -414,7 +372,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
   /// so a row added past the pool throws on build.
   /// Appearance is the longest fixed category. The pool must cover it, or the
   /// last row of that category has no node and cannot be reached.
-  static const int _kMaxCategoryRows = 20;
+  static const int _kMaxCategoryRows = 21;
 
   /// Selected category. A [ValueNotifier] (not setState) so a rail focus-move
   /// only rebuilds the pane and the two affected rail items via their
@@ -947,47 +905,41 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
               ),
             ],
           ),
-        ];
-      case 3:
-        return [
+          const SizedBox(height: 18),
           SettingsSection(
-            title: '',
+            title: 'Collections',
             children: [
               SettingsTile.spec(
                 SettingsRows.collections,
                 onTap: widget.onOpenCollectionsSettings,
-                focusNode: _paneNodes[0],
+                focusNode: _paneNodes[2],
               ),
             ],
           ),
-        ];
-      case 4:
-        return [
+          const SizedBox(height: 18),
           SettingsSection(
-            title: '',
+            title: 'Badges',
             children: [
               SettingsTile.spec(
                 SettingsRows.badges,
                 onTap: widget.onOpenBadgesSettings,
-                focusNode: _paneNodes[0],
+                focusNode: _paneNodes[3],
               ),
             ],
           ),
-        ];
-      case 5: // Metadata
-        return [
+          const SizedBox(height: 18),
           SettingsSection(
-            title: '',
+            title: 'Metadata',
             children: [
               SettingsTile.spec(
                 SettingsRows.metadata,
                 onTap: widget.onOpenMetadataSettings,
-                focusNode: _paneNodes[0],
+                focusNode: _paneNodes[4],
               ),
             ],
           ),
         ];
-      case 6: // Appearance — grouped by the QUESTION each row answers.
+      case 3: // Appearance — grouped by the QUESTION each row answers.
         // Four groups, not one list of fifteen. The rows used to interleave
         // four different kinds of decision — a global theme, a per-screen
         // layout, a per-device performance cap and a preset that sets several
@@ -1061,6 +1013,11 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
                 focusNode: _paneNodes[5],
               ),
               SettingsTile.spec(
+                SettingsRows.discoverDefault,
+                onTap: widget.onOpenDiscoverSettings,
+                focusNode: _paneNodes[6],
+              ),
+              SettingsTile.spec(
                 SettingsRows.collectionListStyle,
                 subtitle: 'Grid · Gallery · Filmstrip · Journal',
                 onTap:
@@ -1069,55 +1026,55 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
                       context,
                       const TvCollectionListStylePage(),
                     ),
-                focusNode: _paneNodes[6],
+                focusNode: _paneNodes[7],
               ),
               SettingsTile.spec(
                 SettingsRows.detailPageStyle,
                 subtitle: widget.detailPageStyleLabel,
                 onTap: widget.onOpenDetailPageStyle,
-                focusNode: _paneNodes[7],
+                focusNode: _paneNodes[8],
               ),
               SettingsTile.spec(
                 SettingsRows.tvSidebarStyle,
                 subtitle: widget.tvSidebarStyleLabel,
                 onTap: widget.onOpenTvSidebarStyle,
-                focusNode: _paneNodes[8],
+                focusNode: _paneNodes[9],
               ),
               SettingsTile.spec(
                 SettingsRows.iptvAppearance,
                 subtitle: widget.iptvStyleLabel,
                 onTap: widget.onOpenIptvStyle,
-                focusNode: _paneNodes[9],
+                focusNode: _paneNodes[10],
               ),
               SettingsTile.spec(
                 SettingsRows.debrifyTvAppearance,
                 subtitle: widget.debrifyTvStyleLabel,
                 onTap: widget.onOpenDebrifyTvStyle,
-                focusNode: _paneNodes[10],
+                focusNode: _paneNodes[11],
               ),
               SettingsTile.spec(
                 SettingsRows.playerGuideStyle,
                 subtitle: widget.playerGuideStyleLabel,
                 onTap: widget.onOpenPlayerGuideStyle,
-                focusNode: _paneNodes[11],
+                focusNode: _paneNodes[12],
               ),
               SettingsTile.spec(
                 SettingsRows.playLoaderStyle,
                 subtitle: widget.playLoaderStyleLabel,
                 onTap: widget.onOpenPlayLoaderStyle,
-                focusNode: _paneNodes[12],
+                focusNode: _paneNodes[13],
               ),
               SettingsTile.spec(
                 SettingsRows.parentsGuideStyle,
                 subtitle: widget.parentsGuideStyleLabel,
                 onTap: widget.onOpenParentsGuideStyle,
-                focusNode: _paneNodes[13],
+                focusNode: _paneNodes[14],
               ),
               SettingsTile.spec(
                 SettingsRows.profileAppearance,
                 subtitle: widget.profileAppearanceLabel,
                 onTap: widget.onOpenProfileAppearance,
-                focusNode: _paneNodes[14],
+                focusNode: _paneNodes[15],
               ),
             ],
           ),
@@ -1132,19 +1089,19 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
                 SettingsRows.tvScreenSize,
                 subtitle: tvUiScaleLabel(widget.tvUiScalePercent),
                 onTap: widget.onOpenTvScreenSize,
-                focusNode: _paneNodes[15],
+                focusNode: _paneNodes[16],
               ),
               SettingsTile.spec(
                 SettingsRows.tvRenderQuality,
                 subtitle: widget.tvRenderQualityLabel,
                 onTap: widget.onOpenTvRenderQuality,
-                focusNode: _paneNodes[16],
+                focusNode: _paneNodes[17],
               ),
               SettingsTile.spec(
                 SettingsRows.tvHeroArtworkQuality,
                 subtitle: widget.tvHeroArtworkQualityLabel,
                 onTap: widget.onOpenTvHeroArtworkQuality,
-                focusNode: _paneNodes[17],
+                focusNode: _paneNodes[18],
               ),
             ],
           ),
@@ -1165,19 +1122,19 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
                   SettingsRows.tvPlayerControls,
                   subtitle: widget.tvPlayerControlsStyleLabel,
                   onTap: widget.onOpenTvPlayerControlsStyle,
-                  focusNode: _paneNodes[18],
+                  focusNode: _paneNodes[19],
                 ),
                 SettingsTile.spec(
                   SettingsRows.debrifyTvPlayer,
                   subtitle: widget.debrifyTvPlayerStyleLabel,
                   onTap: widget.onOpenDebrifyTvPlayerStyle,
-                  focusNode: _paneNodes[19],
+                  focusNode: _paneNodes[20],
                 ),
               ],
             ),
           ],
         ];
-      case 7: // Playback
+      case 4: // Playback
         return [
           SettingsSection(
             title: '',
@@ -1193,8 +1150,19 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
                 ),
             ],
           ),
+          const SizedBox(height: 18),
+          SettingsSection(
+            title: 'Devices',
+            children: [
+              SettingsTile.spec(
+                SettingsRows.remote,
+                onTap: () async => widget.onOpenRemoteControl(),
+                focusNode: _paneNodes[PlaybackSettingsSection.values.length],
+              ),
+            ],
+          ),
         ];
-      case 8: // Search
+      case 5: // Search
         return [
           SettingsSection(
             title: '',
@@ -1222,20 +1190,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
             ],
           ),
         ];
-      case 9: // Discover
-        return [
-          SettingsSection(
-            title: '',
-            children: [
-              SettingsTile.spec(
-                SettingsRows.discoverDefault,
-                onTap: widget.onOpenDiscoverSettings,
-                focusNode: _paneNodes[0],
-              ),
-            ],
-          ),
-        ];
-      case 10: // Live TV & DVR
+      case 6: // Live TV & DVR
         return [
           SettingsSection(
             title: '',
@@ -1258,20 +1213,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
             ],
           ),
         ];
-      case 11: // Devices
-        return [
-          SettingsSection(
-            title: '',
-            children: [
-              SettingsTile.spec(
-                SettingsRows.remote,
-                onTap: () async => widget.onOpenRemoteControl(),
-                focusNode: _paneNodes[0],
-              ),
-            ],
-          ),
-        ];
-      case 12: // Profiles — its own card (it was a tenant row under Devices).
+      case 7: // Profiles — its own card (it was a tenant row under Devices).
         return [
           SettingsSection(
             title: '',
@@ -1313,27 +1255,25 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
             ],
           ),
         ];
-      case 13: // Sync and Migrate
-        return [
-          SettingsSection(
-            title: '',
-            children: [
-              SettingsTile.spec(
-                SettingsRows.syncAndMigrate,
-                onTap: widget.onOpenSyncAndMigrate,
-                focusNode: _paneNodes[0],
-                trailing: const WebDavSyncPendingBadge(),
-              ),
-            ],
-          ),
-        ];
-      case 14: // Data & Backup
+      case 8: // Data & Backup
         {
           // Focus nodes are claimed sequentially so the optional
           // download-location row doesn't shift hardcoded indices.
           int paneIdx = 0;
           FocusNode nextNode() => _paneNodes[paneIdx++];
           return [
+            SettingsSection(
+              title: 'Sync',
+              children: [
+                SettingsTile.spec(
+                  SettingsRows.syncAndMigrate,
+                  onTap: widget.onOpenSyncAndMigrate,
+                  focusNode: nextNode(),
+                  trailing: const WebDavSyncPendingBadge(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             if (widget.onOpenDownloadLocation != null) ...[
               const SettingsSectionLabel('Downloads'),
               SettingsSection(
@@ -1398,7 +1338,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
             ],
           ];
         }
-      case 15: // About (Updates + Support merged — matches the phone layout)
+      case 9: // About (Updates + Support merged — matches the phone layout)
         {
           // The donation row is conditional, so index the pane nodes off a
           // running counter to keep Up/Down wiring contiguous.
@@ -1473,7 +1413,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
             ),
           ];
         }
-      case 16: // Danger Zone
+      case 10: // Danger Zone
         return [
           SettingsSection(
             title: '',
