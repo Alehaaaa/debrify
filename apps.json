@@ -1,9 +1,9 @@
 {
-  "name": "Debrify (commit builds)",
+  "name": "Debrify Latest Builds",
   "identifier": "io.github.alehaaaa.debrify.commits",
-  "subtitle": "Every commit on nextup, built for sideloading.",
-  "description": "Automatic iOS builds of Debrify for each commit to nextup in Alehaaaa/debrify.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/icon/app_icon_flat.png",
+  "subtitle": "Fresh iOS builds of every nextup commit.",
+  "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/595c70f74a99e5159f91f15375dfbd4bcf7b8f51/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610011448",
+          "date": "2026-10-01T14:54:12Z",
+          "localizedDescription": "What's new:\n• Add changelogs to SideStore builds and give the source a clearer name (595c70f7)\n• Publish the SideStore source atomically from a branch (69639cb4)\n\nBuild 202610011448 from nextup@595c70f\nhttps://github.com/Alehaaaa/debrify/compare/233562c...595c70f",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-8-595c70f.ipa",
+          "size": 39305795,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610011141",
