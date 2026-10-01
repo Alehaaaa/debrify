@@ -78,6 +78,50 @@ def validate(source: dict) -> None:
             seen.add(vid)
 
 
+COMMIT_RE = re.compile(r"/(?:commit/|compare/[0-9a-f]+\.\.\.)([0-9a-f]{7,40})")
+MAX_CHANGES = 25
+
+
+def published_sha(version: dict) -> str | None:
+    """The commit a published version was built from, read back from its notes."""
+    match = COMMIT_RE.search(version.get("localizedDescription", ""))
+    if not match:
+        return None
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", match.group(1) + "^{commit}"],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip() or None
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
+def changelog(previous_versions: list, sha: str, commit_message: str) -> str:
+    """Commits since the previous published build, newest first."""
+    since = published_sha(previous_versions[0]) if previous_versions else None
+    subjects: list[str] = []
+    if since and since != sha:
+        try:
+            out = subprocess.run(
+                ["git", "log", "--no-merges", "--format=%h %s", f"{since}..{sha}"],
+                capture_output=True, text=True, check=True,
+            ).stdout
+            subjects = [line for line in out.splitlines() if line.strip()]
+        except (OSError, subprocess.CalledProcessError):
+            subjects = []
+    if not subjects:
+        headline = commit_message.strip().splitlines()[0] if commit_message.strip() else ""
+        return f"What's new:\n• {headline}" if headline else "What's new: rebuild with no new commits."
+    lines = []
+    for line in subjects[:MAX_CHANGES]:
+        short, _, subject = line.partition(" ")
+        subject = subject.replace(" [skip ci]", "")
+        lines.append(f"• {subject} ({short})")
+    if len(subjects) > MAX_CHANGES:
+        lines.append(f"• …and {len(subjects) - MAX_CHANGES} more")
+    return "What's new:\n" + "\n".join(lines)
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--app", required=True, type=Path, help="Path to Runner.app")
@@ -102,20 +146,6 @@ def main() -> None:
     raw = f"https://raw.githubusercontent.com/{args.repo}/{args.sha}"
     repo_url = f"https://github.com/{args.repo}"
     short_sha = args.sha[:7]
-    headline = args.commit_message.strip().splitlines()[0] if args.commit_message.strip() else ""
-
-    new_version = {
-        "version": version,
-        "buildVersion": build,
-        "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "localizedDescription": f"Build {build} from {args.branch}@{short_sha}"
-        + (f"\n\n{headline}" if headline else "")
-        + f"\n\n{repo_url}/commit/{args.sha}",
-        "downloadURL": args.download_url,
-        "size": args.ipa.stat().st_size,
-        "minOSVersion": min_os,
-    }
-
     previous_versions = []
     if args.previous and args.previous.is_file():
         try:
@@ -128,6 +158,25 @@ def main() -> None:
     previous_versions = [
         v for v in previous_versions if str(v.get("buildVersion")) != build
     ]
+
+    notes = changelog(previous_versions, args.sha, args.commit_message)
+    previous_sha = published_sha(previous_versions[0]) if previous_versions else None
+    link = (
+        f"{repo_url}/compare/{previous_sha[:7]}...{short_sha}"
+        if previous_sha and previous_sha != args.sha
+        else f"{repo_url}/commit/{args.sha}"
+    )
+
+    new_version = {
+        "version": version,
+        "buildVersion": build,
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "localizedDescription": f"{notes}\n\nBuild {build} from {args.branch}@{short_sha}\n{link}",
+        "downloadURL": args.download_url,
+        "size": args.ipa.stat().st_size,
+        "minOSVersion": min_os,
+    }
+
     versions = ([new_version] + previous_versions)[: args.keep]
 
     screenshots = [
@@ -137,10 +186,11 @@ def main() -> None:
     ]
 
     source = {
-        "name": "Debrify (commit builds)",
+        "name": "Debrify Latest Builds",
         "identifier": f"io.github.{args.repo.split('/')[0].lower()}.debrify.commits",
-        "subtitle": f"Every commit on {args.branch}, built for sideloading.",
-        "description": f"Automatic iOS builds of Debrify for each commit to {args.branch} in {args.repo}.",
+        "subtitle": f"Fresh iOS builds of every {args.branch} commit.",
+        "description": f"Debrify built automatically from every commit to {args.branch} in {args.repo}, "
+        "each with a changelog of what changed since the previous build.",
         "iconURL": f"{raw}/assets/icon/app_icon_flat.png",
         "website": repo_url,
         "tintColor": "#7C4DFF",

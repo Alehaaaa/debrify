@@ -31,6 +31,11 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        # Full history (without blobs) so the changelog can list every commit
+        # since the previous published build.
+        fetch-depth: 0
+        filter: blob:none
 
     # Optional here (unlike the release workflow) so forks and branches
     # without the secret still get a build; TMDB metadata is just disabled.
@@ -145,7 +150,9 @@ jobs:
             --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`."
         fi
 
-        # IPA first so the source never points at a missing download.
+        # No downtime: each build's IPA has its own name, so uploading it never
+        # touches the IPAs already listed. The source switches to it only after
+        # the upload has finished, and old IPAs are pruned only after that.
         gh release upload "$RELEASE_TAG" "$IPA" --clobber
 
         # The source lives alone on an orphan branch.
@@ -155,7 +162,7 @@ jobs:
         for attempt in 1 2 3 4 5; do
           rm -rf "$SRC"
           if git ls-remote --exit-code origin "refs/heads/$SOURCE_BRANCH" >/dev/null; then
-            git clone -q --depth 1 --branch "$SOURCE_BRANCH" \
+            git clone -q --depth 2 --branch "$SOURCE_BRANCH" \
               "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" "$SRC"
             PREVIOUS="$SRC/apps.json"
           else
@@ -190,12 +197,15 @@ jobs:
           sleep $((attempt * 3))
         done
 
-        # Keep the legacy release-asset URL updated for sources added before
-        # the move to the branch.
-        gh release upload "$RELEASE_TAG" "$SRC/apps.json" --clobber
+        # The old release-asset copy of the source was re-uploaded in place,
+        # which briefly deleted it. Retire it so nobody fetches a stale copy.
+        gh release delete-asset "$RELEASE_TAG" apps.json -y 2>/dev/null || true
 
-        # Drop IPAs that have aged out of the source.
-        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for a in json.load(open(sys.argv[1]))["apps"] for v in a["versions"]))' "$SRC/apps.json")
+        # Drop IPAs that have aged out of the source. IPAs the previous source
+        # listed survive one more build, since raw.githubusercontent.com can
+        # serve that version for a few minutes after the push.
+        git -C "$SRC" show HEAD^:apps.json > "$RUNNER_TEMP/previous.json" 2>/dev/null || echo '{"apps":[]}' > "$RUNNER_TEMP/previous.json"
+        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for f in sys.argv[1:] for a in json.load(open(f))["apps"] for v in a["versions"]))' "$SRC/apps.json" "$RUNNER_TEMP/previous.json")
         gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep '\.ipa$' | while read -r asset; do
           if ! grep -qxF "$asset" <<<"$keep"; then
             gh release delete-asset "$RELEASE_TAG" "$asset" -y

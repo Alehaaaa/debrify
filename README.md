@@ -168,7 +168,7 @@ This fork builds an IPA for every commit to `nextup` and publishes it to a sourc
 https://raw.githubusercontent.com/Alehaaaa/debrify/sidestore/apps.json
 ```
 
-The source keeps the last 10 builds. If you added the older `releases/download/ios-commits/apps.json` URL, remove it and add this one: it's updated atomically, so it never shows up as corrupted mid-publish.
+Each build lists what changed since the previous one, and the source keeps the last 10 builds. A new build only replaces the listed one after its IPA has finished uploading, so there's always an installable version. The older `releases/download/ios-commits/apps.json` URL is retired; use the one above.
 
 > **Note:** Sideloaded apps require re-signing every 7 days. AltStore can handle this automatically.
 
