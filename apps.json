@@ -1,0 +1,67 @@
+{
+  "name": "Debrify (commit builds)",
+  "identifier": "io.github.alehaaaa.debrify.commits",
+  "subtitle": "Every commit on nextup, built for sideloading.",
+  "description": "Automatic iOS builds of Debrify for each commit to nextup in Alehaaaa/debrify.",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/icon/app_icon_flat.png",
+  "website": "https://github.com/Alehaaaa/debrify",
+  "tintColor": "#7C4DFF",
+  "featuredApps": [
+    "com.varunsalian.debrify"
+  ],
+  "apps": [
+    {
+      "name": "Debrify",
+      "bundleIdentifier": "com.varunsalian.debrify",
+      "developerName": "Alehaaaa",
+      "subtitle": "Torrent search and debrid management.",
+      "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/icon/app_icon_flat.png",
+      "tintColor": "#7C4DFF",
+      "category": "entertainment",
+      "screenshots": [
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/233562c258a9fc38b7d7b142662e5b8f6fa67ce8/assets/screenshots/stremio-catalog.png"
+      ],
+      "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610011141",
+          "date": "2026-10-01T11:47:00Z",
+          "localizedDescription": "Build 202610011141 from nextup@233562c\n\nHide hidden sections in phone navigation too\n\nhttps://github.com/Alehaaaa/debrify/commit/233562c258a9fc38b7d7b142662e5b8f6fa67ce8",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-5-233562c.ipa",
+          "size": 39305791,
+          "minOSVersion": "14.0"
+        },
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610010804",
+          "date": "2026-10-01T08:09:54Z",
+          "localizedDescription": "Build 202610010804 from nextup@229753c\n\nUse a timestamp build number for iOS commit builds\n\nhttps://github.com/Alehaaaa/debrify/commit/229753ca322610ded1f15919351054e47a01ab41",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-4-229753c.ipa",
+          "size": 39180786,
+          "minOSVersion": "14.0"
+        },
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "2",
+          "date": "2026-10-01T07:53:11Z",
+          "localizedDescription": "Build 2 from nextup@c28d166\n\nBuild an iOS IPA for every commit and publish a SideStore source\n\nhttps://github.com/Alehaaaa/debrify/commit/c28d1661790feec19df94586436f11dd183c9b85",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-2-c28d166.ipa",
+          "size": 39180801,
+          "minOSVersion": "14.0"
+        }
+      ],
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {
+          "NSLocalNetworkUsageDescription": "Debrify connects to WebDAV servers and companion devices on your local network."
+        }
+      }
+    }
+  ],
+  "news": []
+}
