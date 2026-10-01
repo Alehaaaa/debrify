@@ -11,6 +11,7 @@ dropped once there are more than --keep.
 import argparse
 import json
 import plistlib
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,50 @@ def entitlements(app: Path) -> list[str]:
         return sorted(plistlib.loads(out).keys())
     except Exception:
         return []
+
+
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2}))?$")
+HEX_RE = re.compile(r"^#?([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$")
+
+
+def validate(source: dict) -> None:
+    """Fail the build rather than publish something SideStore would reject.
+
+    Mirrors the checks in SideStore's Source/StoreApp/AppVersion decoders.
+    """
+    def need(cond: bool, what: str) -> None:
+        if not cond:
+            raise SystemExit(f"invalid SideStore source: {what}")
+
+    def url(value, what: str) -> None:
+        need(isinstance(value, str) and value.startswith("https://") and " " not in value, f"{what} is not a URL")
+
+    need(isinstance(source.get("name"), str) and source["name"], "source name missing")
+    need(HEX_RE.match(source.get("tintColor", "#000")) is not None, "source tintColor")
+    apps = source.get("apps")
+    need(isinstance(apps, list) and apps, "no apps")
+    for app in apps:
+        for key in ("name", "bundleIdentifier", "developerName", "localizedDescription"):
+            need(isinstance(app.get(key), str) and app[key], f"app {key} missing")
+        url(app.get("iconURL"), "app iconURL")
+        need(HEX_RE.match(app.get("tintColor", "#000")) is not None, "app tintColor")
+        for shot in app.get("screenshots", []):
+            url(shot, "screenshot")
+        perms = app.get("appPermissions", {})
+        need(all(isinstance(e, str) for e in perms.get("entitlements", [])), "entitlements")
+        need(all(isinstance(v, str) and v for v in perms.get("privacy", {}).values()), "privacy usage descriptions")
+        versions = app.get("versions")
+        need(isinstance(versions, list) and versions, "app has no versions")
+        seen = set()
+        for v in versions:
+            need(isinstance(v.get("version"), str) and v["version"], "version string")
+            need(isinstance(v.get("buildVersion"), str), "buildVersion")
+            need(isinstance(v.get("date"), str) and DATE_RE.match(v["date"]) is not None, "version date")
+            url(v.get("downloadURL"), "downloadURL")
+            need(isinstance(v.get("size"), int) and v["size"] > 0, "version size")
+            vid = f"{v['version']}|{v['buildVersion']}"
+            need(vid not in seen, f"duplicate version {vid}")
+            seen.add(vid)
 
 
 def main() -> None:
@@ -123,7 +168,11 @@ def main() -> None:
         "news": [],
     }
 
-    args.output.write_text(json.dumps(source, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    text = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
+    validate(json.loads(text))
+    tmp = args.output.with_name(args.output.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(args.output)
     print(f"Wrote {args.output}: {bundle_id} {version} ({build}), {len(versions)} version(s)")
 
 

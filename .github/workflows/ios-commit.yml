@@ -1,13 +1,18 @@
 name: iOS Commit Build
 
 # Builds a sideloadable IPA for every pushed commit. Commits on the default
-# branch are also published to the rolling `ios-commits` pre-release together
-# with a SideStore/AltStore source, reachable at:
-#   https://github.com/<owner>/<repo>/releases/download/ios-commits/apps.json
+# branch are also published: the IPA goes to the rolling `ios-commits`
+# pre-release and the SideStore/AltStore source to the `sidestore` branch,
+# reachable at:
+#   https://raw.githubusercontent.com/<owner>/<repo>/sidestore/apps.json
+# A git push swaps the file atomically, so SideStore never sees a missing or
+# half-written source (re-uploading a release asset deletes it first).
 
 on:
   push:
-    branches: ['**']
+    branches: ['**', '!sidestore']
+    # Docs-only commits change nothing in the app.
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
 
 permissions:
@@ -15,6 +20,7 @@ permissions:
 
 env:
   RELEASE_TAG: ios-commits
+  SOURCE_BRANCH: sidestore
 
 jobs:
   build:
@@ -131,6 +137,7 @@ jobs:
         set -euo pipefail
         IPA="build/ios/iphoneos/$IPA_NAME"
         BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
+        SOURCE_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$SOURCE_BRANCH/apps.json"
 
         if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
           gh release create "$RELEASE_TAG" --prerelease --target "$GITHUB_SHA" \
@@ -138,26 +145,57 @@ jobs:
             --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`."
         fi
 
-        mkdir -p "$RUNNER_TEMP/prev"
-        gh release download "$RELEASE_TAG" -p apps.json -D "$RUNNER_TEMP/prev" --clobber || true
-
-        python3 .github/scripts/sidestore_source.py \
-          --app build/ios/iphoneos/Runner.app \
-          --ipa "$IPA" \
-          --download-url "$BASE/$IPA_NAME" \
-          --previous "$RUNNER_TEMP/prev/apps.json" \
-          --output "$RUNNER_TEMP/apps.json" \
-          --repo "$GITHUB_REPOSITORY" \
-          --branch "$GITHUB_REF_NAME" \
-          --sha "$GITHUB_SHA" \
-          --commit-message "$COMMIT_MESSAGE"
-
         # IPA first so the source never points at a missing download.
         gh release upload "$RELEASE_TAG" "$IPA" --clobber
-        gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/apps.json" --clobber
+
+        # The source lives alone on an orphan branch.
+        SRC="$RUNNER_TEMP/sidestore"
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        for attempt in 1 2 3 4 5; do
+          rm -rf "$SRC"
+          if git ls-remote --exit-code origin "refs/heads/$SOURCE_BRANCH" >/dev/null; then
+            git clone -q --depth 1 --branch "$SOURCE_BRANCH" \
+              "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" "$SRC"
+            PREVIOUS="$SRC/apps.json"
+          else
+            git init -q -b "$SOURCE_BRANCH" "$SRC"
+            git -C "$SRC" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git"
+            # First run: carry over the builds already listed in the release.
+            mkdir -p "$RUNNER_TEMP/prev"
+            gh release download "$RELEASE_TAG" -p apps.json -D "$RUNNER_TEMP/prev" --clobber || true
+            PREVIOUS="$RUNNER_TEMP/prev/apps.json"
+          fi
+
+          # Writes to a temp file and only replaces apps.json once the result
+          # has passed validation, so a bad build can't publish a bad source.
+          python3 .github/scripts/sidestore_source.py \
+            --app build/ios/iphoneos/Runner.app \
+            --ipa "$IPA" \
+            --download-url "$BASE/$IPA_NAME" \
+            --previous "$PREVIOUS" \
+            --output "$SRC/apps.json" \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "$GITHUB_REF_NAME" \
+            --sha "$GITHUB_SHA" \
+            --commit-message "$COMMIT_MESSAGE"
+
+          git -C "$SRC" add apps.json
+          git -C "$SRC" commit -q -m "Publish build ${{ github.run_number }} from ${GITHUB_SHA::7}"
+          # Another commit's build may have published meanwhile: rebuild on top.
+          if git -C "$SRC" push -q origin "HEAD:refs/heads/$SOURCE_BRANCH"; then
+            break
+          fi
+          [ "$attempt" -lt 5 ] || { echo "::error::could not publish the source"; exit 1; }
+          sleep $((attempt * 3))
+        done
+
+        # Keep the legacy release-asset URL updated for sources added before
+        # the move to the branch.
+        gh release upload "$RELEASE_TAG" "$SRC/apps.json" --clobber
 
         # Drop IPAs that have aged out of the source.
-        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for a in json.load(open(sys.argv[1]))["apps"] for v in a["versions"]))' "$RUNNER_TEMP/apps.json")
+        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for a in json.load(open(sys.argv[1]))["apps"] for v in a["versions"]))' "$SRC/apps.json")
         gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep '\.ipa$' | while read -r asset; do
           if ! grep -qxF "$asset" <<<"$keep"; then
             gh release delete-asset "$RELEASE_TAG" "$asset" -y
@@ -168,7 +206,7 @@ jobs:
 
         Latest: build ${{ github.run_number }} from $GITHUB_SHA
 
-        **SideStore source:** \`$BASE/apps.json\`"
+        **SideStore source:** \`$SOURCE_URL\`"
 
         echo "### SideStore source" >> "$GITHUB_STEP_SUMMARY"
-        echo "\`$BASE/apps.json\`" >> "$GITHUB_STEP_SUMMARY"
+        echo "\`$SOURCE_URL\`" >> "$GITHUB_STEP_SUMMARY"

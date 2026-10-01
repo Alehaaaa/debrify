@@ -161,6 +161,15 @@ chmod +x debrify-*.AppImage
 ### iOS
 Download the unsigned IPA and sideload using **AltStore** or **Sideloadly**. See the [iOS Installation Guide](docs/iOS-Installation.md) for step-by-step instructions.
 
+#### SideStore / AltStore source (commit builds)
+This fork builds an IPA for every commit to `nextup` and publishes it to a source, so updates show up in the app. In SideStore (or AltStore), open **Sources → +** and add:
+
+```
+https://raw.githubusercontent.com/Alehaaaa/debrify/sidestore/apps.json
+```
+
+The source keeps the last 10 builds. If you added the older `releases/download/ios-commits/apps.json` URL, remove it and add this one: it's updated atomically, so it never shows up as corrupted mid-publish.
+
 > **Note:** Sideloaded apps require re-signing every 7 days. AltStore can handle this automatically.
 
 ---
