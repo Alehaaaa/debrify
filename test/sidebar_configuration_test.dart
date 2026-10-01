@@ -85,6 +85,24 @@ void main() {
     );
   });
 
+  test('phone navigation drops hidden destinations but keeps its order', () {
+    final configuration = SidebarConfiguration(
+      order: const <String>['settings', 'cloud', 'home'],
+      hiddenDestinationIds: const <String>['downloads', 'iptv'],
+    );
+
+    expect(
+      configuration.filterHiddenTabs(const <int>[
+        MainTab.home,
+        MainTab.downloads,
+        MainTab.cloud,
+        MainTab.iptv,
+        MainTab.settings,
+      ]),
+      <int>[MainTab.home, MainTab.cloud, MainTab.settings],
+    );
+  });
+
   test('labels are sidebar-only overrides with bounded safe normalization', () {
     final configuration = SidebarConfiguration(
       order: const <String>[],

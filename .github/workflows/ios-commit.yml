@@ -1,0 +1,222 @@
+name: iOS Commit Build
+
+# Builds a sideloadable IPA for every pushed commit. Commits on the default
+# branch are also published: the IPA goes to the rolling `ios-commits`
+# pre-release and the SideStore/AltStore source to the `sidestore` branch,
+# reachable at:
+#   https://raw.githubusercontent.com/<owner>/<repo>/sidestore/apps.json
+# A git push swaps the file atomically, so SideStore never sees a missing or
+# half-written source (re-uploading a release asset deletes it first).
+
+on:
+  push:
+    branches: ['**', '!sidestore']
+    # Docs-only commits change nothing in the app.
+    paths-ignore: ['**.md', 'docs/**', 'LICENSE']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_TAG: ios-commits
+  SOURCE_BRANCH: sidestore
+
+jobs:
+  build:
+    runs-on: macos-latest
+    outputs:
+      ipa_name: ${{ steps.ipa.outputs.name }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        # Full history (without blobs) so the changelog can list every commit
+        # since the previous published build.
+        fetch-depth: 0
+        filter: blob:none
+
+    # Optional here (unlike the release workflow) so forks and branches
+    # without the secret still get a build; TMDB metadata is just disabled.
+    - name: Configure TMDB build token
+      shell: python
+      env:
+        TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+      run: |
+        import json, os
+        from pathlib import Path
+        token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
+        config = {}
+        if token:
+            config["TMDB_READ_ACCESS_TOKEN"] = token
+        else:
+            print("::warning::TMDB_READ_ACCESS_TOKEN is not set; building without TMDB metadata")
+        path = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        path.write_text(json.dumps(config), encoding="utf-8")
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.44.8'
+        channel: 'stable'
+        cache: true
+
+    - name: Cache CocoaPods
+      uses: actions/cache@v4
+      with:
+        path: ios/Pods
+        key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile.lock') }}
+        restore-keys: ${{ runner.os }}-pods-
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    # A UTC timestamp gives every commit a strictly increasing CFBundleVersion
+    # that is always above pubspec's small +N build numbers (and so above any
+    # release IPA already installed), so SideStore sees each build as an update.
+    - name: Build iOS (unsigned)
+      run: >
+        flutter build ios --release --no-codesign
+        --build-number=$(date -u +%Y%m%d%H%M)
+        --dart-define=DEBRIFY_LOCAL_VALIDATION=false
+        --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+
+    # --no-codesign emits Mach-Os with no LC_CODE_SIGNATURE, so __LINKEDIT has no
+    # room reserved for a signature and SideStore/ldid abort. Ad-hoc signing
+    # reserves that space; SideStore replaces it with the user's own cert.
+    - name: Ad-hoc sign for sideloading
+      run: |
+        set -euo pipefail
+        APP=build/ios/iphoneos/Runner.app
+        for d in "$APP"/Frameworks/*.dylib; do
+          [ -f "$d" ] && codesign -f -s - --timestamp=none "$d"
+        done
+        for f in "$APP"/Frameworks/*.framework; do
+          [ -d "$f" ] && codesign -f -s - --timestamp=none "$f"
+        done
+        codesign -f -s - --timestamp=none "$APP"
+
+        missing=0
+        check() {
+          if [ -f "$1" ] && [ "$(otool -l "$1" | grep -c LC_CODE_SIGNATURE)" -eq 0 ]; then
+            echo "::error::no LC_CODE_SIGNATURE in $1"
+            missing=$((missing + 1))
+          fi
+        }
+        check "$APP/Runner"
+        for d in "$APP"/Frameworks/*.dylib; do check "$d"; done
+        for f in "$APP"/Frameworks/*.framework; do
+          check "$f/$(basename "$f" .framework)"
+        done
+        if [ "$missing" -ne 0 ]; then
+          echo "::error::$missing binary(ies) left unsigned; IPA would not sideload"
+          exit 1
+        fi
+
+    - name: Package IPA
+      id: ipa
+      run: |
+        set -euo pipefail
+        NAME="debrify-ios-${{ github.run_number }}-${GITHUB_SHA::7}.ipa"
+        cd build/ios/iphoneos
+        rm -rf Payload && mkdir Payload
+        cp -R Runner.app Payload/
+        zip -qry "$NAME" Payload
+        rm -rf Payload
+        echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+    - name: Upload IPA artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: debrify-ios-${{ github.run_number }}
+        path: build/ios/iphoneos/${{ steps.ipa.outputs.name }}
+
+    - name: Publish to SideStore source
+      if: github.ref_name == github.event.repository.default_branch
+      env:
+        GH_TOKEN: ${{ github.token }}
+        IPA_NAME: ${{ steps.ipa.outputs.name }}
+        COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: |
+        set -euo pipefail
+        IPA="build/ios/iphoneos/$IPA_NAME"
+        BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
+        SOURCE_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$SOURCE_BRANCH/apps.json"
+
+        if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+          gh release create "$RELEASE_TAG" --prerelease --target "$GITHUB_SHA" \
+            --title "iOS commit builds" \
+            --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`."
+        fi
+
+        # No downtime: each build's IPA has its own name, so uploading it never
+        # touches the IPAs already listed. The source switches to it only after
+        # the upload has finished, and old IPAs are pruned only after that.
+        gh release upload "$RELEASE_TAG" "$IPA" --clobber
+
+        # The source lives alone on an orphan branch.
+        SRC="$RUNNER_TEMP/sidestore"
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        for attempt in 1 2 3 4 5; do
+          rm -rf "$SRC"
+          if git ls-remote --exit-code origin "refs/heads/$SOURCE_BRANCH" >/dev/null; then
+            git clone -q --depth 2 --branch "$SOURCE_BRANCH" \
+              "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git" "$SRC"
+            PREVIOUS="$SRC/apps.json"
+          else
+            git init -q -b "$SOURCE_BRANCH" "$SRC"
+            git -C "$SRC" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git"
+            # First run: carry over the builds already listed in the release.
+            mkdir -p "$RUNNER_TEMP/prev"
+            gh release download "$RELEASE_TAG" -p apps.json -D "$RUNNER_TEMP/prev" --clobber || true
+            PREVIOUS="$RUNNER_TEMP/prev/apps.json"
+          fi
+
+          # Writes to a temp file and only replaces apps.json once the result
+          # has passed validation, so a bad build can't publish a bad source.
+          python3 .github/scripts/sidestore_source.py \
+            --app build/ios/iphoneos/Runner.app \
+            --ipa "$IPA" \
+            --download-url "$BASE/$IPA_NAME" \
+            --previous "$PREVIOUS" \
+            --output "$SRC/apps.json" \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "$GITHUB_REF_NAME" \
+            --sha "$GITHUB_SHA" \
+            --commit-message "$COMMIT_MESSAGE"
+
+          git -C "$SRC" add apps.json
+          git -C "$SRC" commit -q -m "Publish build ${{ github.run_number }} from ${GITHUB_SHA::7}"
+          # Another commit's build may have published meanwhile: rebuild on top.
+          if git -C "$SRC" push -q origin "HEAD:refs/heads/$SOURCE_BRANCH"; then
+            break
+          fi
+          [ "$attempt" -lt 5 ] || { echo "::error::could not publish the source"; exit 1; }
+          sleep $((attempt * 3))
+        done
+
+        # The old release-asset copy of the source was re-uploaded in place,
+        # which briefly deleted it. Retire it so nobody fetches a stale copy.
+        gh release delete-asset "$RELEASE_TAG" apps.json -y 2>/dev/null || true
+
+        # Drop IPAs that have aged out of the source. IPAs the previous source
+        # listed survive one more build, since raw.githubusercontent.com can
+        # serve that version for a few minutes after the push.
+        git -C "$SRC" show HEAD^:apps.json > "$RUNNER_TEMP/previous.json" 2>/dev/null || echo '{"apps":[]}' > "$RUNNER_TEMP/previous.json"
+        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for f in sys.argv[1:] for a in json.load(open(f))["apps"] for v in a["versions"]))' "$SRC/apps.json" "$RUNNER_TEMP/previous.json")
+        gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep '\.ipa$' | while read -r asset; do
+          if ! grep -qxF "$asset" <<<"$keep"; then
+            gh release delete-asset "$RELEASE_TAG" "$asset" -y
+          fi
+        done
+
+        gh release edit "$RELEASE_TAG" --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`.
+
+        Latest: build ${{ github.run_number }} from $GITHUB_SHA
+
+        **SideStore source:** \`$SOURCE_URL\`"
+
+        echo "### SideStore source" >> "$GITHUB_STEP_SUMMARY"
+        echo "\`$SOURCE_URL\`" >> "$GITHUB_STEP_SUMMARY"

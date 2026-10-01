@@ -200,26 +200,28 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.1
 
 flutter_launcher_icons:
-  image_path: assets/app_icon.png
+  # Home-screen icons are rendered by tool/generate_app_icons.py from
+  # assets/icon/{background,foreground}.png; prefer that script, which also
+  # covers tvOS and the Android TV banner. assets/app_icon.png is the bare mark
+  # the app draws in its own UI.
+  image_path: assets/icon/app_icon_flat.png
   android: true
   ios: true
   remove_alpha_ios: true
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/app_icon_foreground.png
+  adaptive_icon_foreground: assets/icon/foreground.png
   macos:
     generate: true
-    # The full macOS icon (mark on its rounded tile). assets/app_icon.png is
-    # the bare mark the app draws in its own UI.
-    image_path: assets/app_icon_macos.png
+    image_path: assets/icon/app_icon_rounded.png
   windows:
     generate: true
-    image_path: assets/app_icon.png
+    image_path: assets/icon/app_icon_rounded.png
   linux:
     generate: true
-    image_path: assets/app_icon.png
+    image_path: assets/icon/app_icon_rounded.png
   web:
     generate: true
-    image_path: assets/app_icon.png
+    image_path: assets/icon/app_icon_rounded.png
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

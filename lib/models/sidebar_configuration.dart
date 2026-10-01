@@ -237,14 +237,18 @@ class SidebarConfiguration {
     return destination == null ? fallback : labelForId(destination.id);
   }
 
+  /// Drops hidden destinations but keeps the incoming order. Phone navigation
+  /// uses this: it honours visibility without adopting the sidebar ordering.
+  List<int> filterHiddenTabs(Iterable<int> visibleTabs) => [
+    for (final tabIndex in visibleTabs)
+      if (isVisible(sidebarDestinationByTab[tabIndex]?.id ?? '')) tabIndex,
+  ];
+
   /// Applies the saved ranking only after MainPage has decided which tabs are
   /// visible. Unknown future tabs stay reachable and retain their incoming
   /// relative order at the end until the catalog learns about them.
   List<int> orderVisibleTabs(Iterable<int> visibleTabs) {
-    final visible = [
-      for (final tabIndex in visibleTabs)
-        if (isVisible(sidebarDestinationByTab[tabIndex]?.id ?? '')) tabIndex,
-    ];
+    final visible = filterHiddenTabs(visibleTabs);
     final rank = <int, int>{};
     for (var i = 0; i < order.length; i++) {
       final destination = sidebarDestinationById[order[i]];
