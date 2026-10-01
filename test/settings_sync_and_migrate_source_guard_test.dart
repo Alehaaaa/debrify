@@ -11,19 +11,36 @@ void main() {
     'lib/screens/settings/sync_and_migrate_page.dart',
   ).readAsStringSync();
 
-  test('adaptive, TV, and search surfaces all register Sync and Migrate', () {
-    expect(adaptive, contains("label: 'Sync and Migrate'"));
+  test('adaptive, TV, and search surfaces group sync under Data & Backup', () {
+    expect(adaptive, isNot(contains("label: 'Sync and Migrate'")));
     expect(
       adaptive,
-      contains("SettingsRows.syncAndMigrate,\n        'Sync and Migrate'"),
+      contains("SettingsRows.syncAndMigrate,\n        'Data & Backup'"),
     );
-    expect(adaptive, contains("title: 'Sync and Migrate'"));
+    expect(adaptive, contains("title: 'Data & Backup'"));
     expect(
       tv,
-      contains("'Sync and Migrate',\n    'Sync across devices with WebDAV'"),
+      contains("'Data & Backup',\n    'Sync, downloads, backup & restore'"),
     );
     expect(page, isNot(contains('SettingsRows.createWebDavBackup')));
     expect(page, isNot(contains('SettingsRows.restoreWebDavBackup')));
+  });
+
+  test('Discover defaults live with Appearance screen layouts', () {
+    expect(adaptive, isNot(contains("label: 'Discover'")));
+    expect(
+      adaptive,
+      matches(
+        RegExp(r"title: 'Screen layouts'[\s\S]*?SettingsRows\.discoverDefault"),
+      ),
+    );
+    expect(tv, isNot(contains("case 9: // Discover")));
+    expect(
+      tv,
+      matches(
+        RegExp(r"title: 'Screen layouts'[\s\S]*?SettingsRows\.discoverDefault"),
+      ),
+    );
   });
 
   test('index-based category switches preserve the destructive tail', () {
@@ -31,7 +48,7 @@ void main() {
       adaptive,
       matches(
         RegExp(
-          r'case 13:[\s\S]*?SettingsRows\.syncAndMigrate[\s\S]*?case 14:[\s\S]*?SettingsRows\.downloadLocation[\s\S]*?case 15:[\s\S]*?SettingsRows\.autoUpdate[\s\S]*?case 16:[\s\S]*?SettingsRows\.resetDebrify',
+          r'case 8:[\s\S]*?SettingsRows\.syncAndMigrate[\s\S]*?SettingsRows\.downloadLocation[\s\S]*?case 9:[\s\S]*?SettingsRows\.autoUpdate[\s\S]*?case 10:[\s\S]*?SettingsRows\.resetDebrify',
         ),
       ),
     );
@@ -39,7 +56,7 @@ void main() {
       tv,
       matches(
         RegExp(
-          r'case 13: // Sync and Migrate[\s\S]*?case 14: // Data & Backup[\s\S]*?case 15: // About[\s\S]*?case 16: // Danger Zone',
+          r'case 8: // Data & Backup[\s\S]*?case 9: // About[\s\S]*?case 10: // Danger Zone',
         ),
       ),
     );

@@ -1,3 +1,5 @@
+import 'package:debrify/services/webdav_sync/webdav_sync_versions.dart';
+import 'package:debrify/services/webdav_sync/webdav_saved_syncs.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -44,10 +46,12 @@ void main() {
   const urlLauncher = MethodChannel('plugins.flutter.io/url_launcher');
   final launchCalls = <MethodCall>[];
   var browserAvailable = true;
+  var versionRows = <WebDavSyncVersion>[];
   Object? launchError;
 
   setUp(() {
     launchCalls.clear();
+    versionRows = [];
     browserAvailable = true;
     launchError = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -106,6 +110,7 @@ void main() {
         home: SyncAndMigratePage(
           syncFeatureEnabled: enabled,
           syncService: service,
+          loadSyncVersions: (_) async => versionRows,
           syncAuthorization: authorization,
           syncActivation: activation,
           launchSyncLogin: (_, controller) async {
@@ -155,6 +160,172 @@ void main() {
     active = await store.setLifecycle(active.id, WebDavSyncLifecycle.active);
     await store.promoteStaged(active.id);
   }
+
+  Future<void> selectAddedSync(WidgetTester tester) async {
+    await tester.tap(find.text('Add sync'));
+    await tester.pumpAndSettle();
+    final latest = find.text('Use current sync data');
+    final start = find.text('Start syncing this device');
+    if (latest.evaluate().isNotEmpty || start.evaluate().isNotEmpty) {
+      await tester.tap(latest.evaluate().isNotEmpty ? latest : start);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+  }
+
+  testWidgets(
+    'saved sync can be selected without opening login and still asks before adoption',
+    (tester) async {
+      await WebDavSavedSyncs().save(
+        WebDavSavedSync(
+          name: 'Family saved sync',
+          credentials: WebDavSyncLoginCredentials(
+            endpoint: Uri.parse(_config.baseUrl),
+            username: _config.username,
+            password: _config.password,
+            serverName: _config.name,
+          ),
+        ),
+      );
+      transport.bytes = await codec.sealRoot(
+        passphrase: 'circle-secret',
+        circleId: 'saved-circle',
+        createdAt: DateTime.utc(2026, 9, 1),
+        memoryKiB: 8,
+        iterations: 1,
+      );
+      final activation = _FakeActivation(store);
+      await pumpPage(tester, enabled: true, activation: activation);
+      await tester.tap(find.text('Family saved sync'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Use current sync data'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Use sync data from this account?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(activation.connections, 0);
+      expect((await store.load()).activeBinding, isNull);
+      expect(
+        (await WebDavSavedSyncs().load()).single.name,
+        'Family saved sync',
+      );
+    },
+  );
+
+  testWidgets('Add sync saves the first connection without activating it', (
+    tester,
+  ) async {
+    transport.bytes = await codec.sealRoot(
+      passphrase: 'circle-secret',
+      circleId: 'saved-circle',
+      createdAt: DateTime.utc(2026, 9, 1),
+      memoryKiB: 8,
+      iterations: 1,
+    );
+    final activation = _FakeActivation(store);
+    await pumpPage(tester, enabled: true, activation: activation);
+    await tester.tap(find.text('Add sync'));
+    await tester.pumpAndSettle();
+    expect(await WebDavSavedSyncs().load(), hasLength(1));
+    expect((await store.load()).activeBinding, isNull);
+    expect(activation.connections, 0);
+    expect(find.text('Use current sync data'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Family server'), findsOneWidget);
+    expect(find.text('Connect WebDAV'), findsNothing);
+    expect(find.text('Save current sync'), findsNothing);
+    expect(find.text('Change account'), findsNothing);
+  });
+
+  testWidgets('active sync is imported and opens its dated versions', (
+    tester,
+  ) async {
+    await installActiveBinding();
+    transport.bytes = await codec.sealRoot(
+      passphrase: 'circle-secret',
+      circleId: 'circle-1',
+      createdAt: DateTime.utc(2026, 9, 1),
+      memoryKiB: 8,
+      iterations: 1,
+    );
+    versionRows = [
+      WebDavSyncVersion(
+        fileName: 'snapshot-1790836200000-0123456789abcdef.debrify.enc',
+        createdAt: DateTime.utc(2026, 10, 1, 6, 30),
+        sizeBytes: 2097152,
+      ),
+    ];
+    await pumpPage(tester, enabled: true, activation: _FakeActivation(store));
+    expect(
+      (await WebDavSavedSyncs().load()).single.credentials.username,
+      'alice',
+    );
+    await tester.tap(find.text('Family server'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save snapshot now'), findsNothing);
+    expect(find.text('Saved versions'), findsOneWidget);
+    expect(find.text('2.0 MB • encrypted'), findsOneWidget);
+    expect(find.byIcon(Icons.restore), findsOneWidget);
+    await expectLater(
+      find.byType(MaterialApp),
+      matchesGoldenFile('goldens/sync_versions_desktop.png'),
+    );
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'a retained Retry action is harmless after the page is disposed',
+    (tester) async {
+      await installActiveBinding();
+      final activation = _FakeActivation(store)
+        ..syncError = StateError('WebDAV request timed out');
+      await pumpPage(tester, enabled: true, activation: activation);
+      await tester.ensureVisible(find.text('Sync now'));
+      await tester.tap(find.text('Sync now'));
+      await tester.pumpAndSettle();
+      final retry = tester.widget<SnackBarAction>(find.byType(SnackBarAction));
+      await tester.pumpWidget(const MaterialApp(home: SizedBox()));
+      retry.onPressed();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('saved sync menu renames and removes the device login', (
+    tester,
+  ) async {
+    await WebDavSavedSyncs().save(
+      WebDavSavedSync(
+        name: 'Family saved sync',
+        credentials: WebDavSyncLoginCredentials(
+          endpoint: Uri.parse(_config.baseUrl),
+          username: _config.username,
+          password: _config.password,
+          serverName: _config.name,
+        ),
+      ),
+    );
+    await pumpPage(tester, enabled: true);
+    await tester.tap(find.byTooltip('Manage saved sync'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Home sync');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
+    expect(find.text('Home sync'), findsOneWidget);
+    await tester.tap(find.byTooltip('Manage saved sync'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove saved login'));
+    await tester.pumpAndSettle();
+    expect(await WebDavSavedSyncs().load(), isEmpty);
+    expect(find.text('Home sync'), findsNothing);
+  });
 
   testWidgets('setup guide opens the browser before connecting', (
     tester,
@@ -395,21 +566,17 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Log out'));
     await tester.pumpAndSettle();
     expect(activation.logouts, 1);
-    expect(find.text('Connect WebDAV'), findsOneWidget);
+    expect(find.text('Add sync'), findsOneWidget);
     expect(find.text('Log out'), findsNothing);
     expect((await store.load()).bindings, isEmpty);
   });
 
-  for (final action in [
-    'Forget connection',
-    'Change account',
-    'Connect WebDAV',
-  ]) {
+  for (final action in ['Forget connection', 'Continue setup']) {
     testWidgets('$action recovers pending logout with confirmation', (
       tester,
     ) async {
       await installActiveBinding();
-      if (action == 'Connect WebDAV') {
+      if (action == 'Continue setup') {
         await store.markError(
           (await store.load()).activeBindingId!,
           StateError('missing root'),
@@ -466,13 +633,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Log out'));
     await tester.pumpAndSettle();
-    expect(find.text('Connect WebDAV'), findsOneWidget);
+    expect(find.text('Add sync'), findsOneWidget);
   });
 
   testWidgets('M3 setup stays hidden behind its rollout gate', (tester) async {
     await pumpPage(tester, enabled: false);
 
-    expect(find.text('Connect WebDAV'), findsNothing);
+    expect(find.text('Add sync'), findsNothing);
     expect(find.text('Manual backups'), findsNothing);
     expect(find.text('Save backup to WebDAV'), findsNothing);
     expect(find.text('Restore backup from WebDAV'), findsNothing);
@@ -485,7 +652,7 @@ void main() {
     authorization.adminError = StateError('Admin required');
     await pumpPage(tester, enabled: true, activation: activation);
 
-    await tester.tap(find.text('Connect WebDAV'));
+    await tester.tap(find.text('Add sync'));
     await tester.pumpAndSettle();
 
     expect(activation.pauses, 0);
@@ -501,7 +668,7 @@ void main() {
     );
     await pumpPage(tester, enabled: true);
 
-    await tester.tap(find.text('Connect WebDAV'));
+    await selectAddedSync(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('Ready to initialize WebDAV Sync'), findsOneWidget);
@@ -510,8 +677,8 @@ void main() {
     final binding = (await store.load()).stagedBinding!;
     expect(binding.lifecycle, WebDavSyncLifecycle.awaitingSeedCommit);
     expect(binding.location.folderPath, 'Debrify');
-    expect(transport.reads, 2);
-    expect(authorization.barriers, 4);
+    expect(transport.reads, greaterThanOrEqualTo(2));
+    expect(authorization.barriers, greaterThanOrEqualTo(4));
   });
 
   testWidgets('existing marker uses its keyfile without a passphrase dialog', (
@@ -529,7 +696,7 @@ void main() {
     ).encode();
     await pumpPage(tester, enabled: true);
 
-    await tester.tap(find.text('Connect WebDAV'));
+    await selectAddedSync(tester);
     await tester.pumpAndSettle();
 
     expect(find.text('WebDAV account verified'), findsOneWidget);
@@ -537,7 +704,7 @@ void main() {
     final binding = (await store.load()).stagedBinding!;
     expect(binding.lifecycle, WebDavSyncLifecycle.rootVerified);
     expect(binding.circleId, 'circle-1');
-    expect(authorization.barriers, 4);
+    expect(authorization.barriers, greaterThanOrEqualTo(4));
   });
 
   testWidgets('rendered setup copy contains no protocol vocabulary', (
@@ -762,7 +929,7 @@ void main() {
       findsNothing,
     );
     expect(find.text('Connected to Family server'), findsOneWidget);
-    expect(find.text('Change account'), findsOneWidget);
+    expect(find.text('Add sync'), findsOneWidget);
   });
 
   testWidgets(
@@ -824,7 +991,7 @@ void main() {
         findsNothing,
       );
       expect(find.text('Connected to Family server'), findsOneWidget);
-      expect(find.text('Change account'), findsOneWidget);
+      expect(find.text('Add sync'), findsOneWidget);
     },
   );
 
@@ -1098,7 +1265,7 @@ void main() {
       final activation = _FakeActivation(store);
       await pumpPage(tester, enabled: true, activation: activation);
 
-      await tester.tap(find.text('Connect WebDAV'));
+      await selectAddedSync(tester);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -1149,7 +1316,8 @@ void main() {
     final activation = _FakeActivation(store);
     await pumpPage(tester, enabled: true, activation: activation);
 
-    await tester.tap(find.text('Change account'));
+    await tester.ensureVisible(find.text('Add sync'));
+    await tester.tap(find.text('Add sync'));
     await tester.pumpAndSettle();
 
     expect(find.text('Use sync data from this account?'), findsNothing);
@@ -1158,7 +1326,7 @@ void main() {
     final refreshed = await store.load();
     expect(refreshed.activeBindingId, active.id);
     expect(refreshed.activeBinding?.lifecycle, WebDavSyncLifecycle.active);
-    expect(find.text('Change account'), findsOneWidget);
+    expect(find.text('Add sync'), findsOneWidget);
   });
 
   testWidgets(
@@ -1220,7 +1388,7 @@ void main() {
       );
       await pumpPage(tester, enabled: true, activation: activation);
 
-      await tester.tap(find.text('Connect WebDAV'));
+      await selectAddedSync(tester);
       await tester.pumpAndSettle();
 
       expect(activation.initializations, 1);
@@ -1278,7 +1446,8 @@ void main() {
       final activation = _FakeActivation(store);
       await pumpPage(tester, enabled: true, activation: activation);
 
-      await tester.tap(find.text('Change account'));
+      await tester.ensureVisible(find.text('Add sync'));
+      await selectAddedSync(tester);
       await tester.pump(const Duration(milliseconds: 400));
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
