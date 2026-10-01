@@ -61,12 +61,13 @@ jobs:
     - name: Get dependencies
       run: flutter pub get
 
-    # run_number gives every commit a strictly increasing CFBundleVersion so
-    # SideStore sees each build as an update.
+    # A UTC timestamp gives every commit a strictly increasing CFBundleVersion
+    # that is always above pubspec's small +N build numbers (and so above any
+    # release IPA already installed), so SideStore sees each build as an update.
     - name: Build iOS (unsigned)
       run: >
         flutter build ios --release --no-codesign
-        --build-number=${{ github.run_number }}
+        --build-number=$(date -u +%Y%m%d%H%M)
         --dart-define=DEBRIFY_LOCAL_VALIDATION=false
         --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
 
