@@ -3909,13 +3909,16 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     (Platform.isAndroid || Platform.isIOS) &&
                     !PlatformUtil.isTelevision &&
                     MediaQuery.of(context).size.shortestSide < 600;
-                // Profile sidebar customization stops at the wide-layout
-                // boundary. Phone navigation keeps its canonical order and
-                // its separate classic-bar picks.
+                // Sidebar ordering stops at the wide-layout boundary: phone
+                // navigation keeps its canonical order and its separate
+                // classic-bar picks. Hidden sections are hidden everywhere,
+                // though, including the floating button's popup.
                 final nonTvIndices =
                     (isDesktopWide
                             ? _sidebarOrderedIndices(visibleIndices)
-                            : visibleIndices)
+                            : _sidebarConfiguration.filterHiddenTabs(
+                                visibleIndices,
+                              ))
                         .where(
                           (i) =>
                               (isDesktopWide && !isPhone) ||
