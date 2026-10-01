@@ -669,15 +669,15 @@ jobs:
 
         # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
         mkdir -p AppDir/usr/share/applications
 
         # Copy built app
         cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/app_icon.png AppDir/usr/share/icons/hicolor/256x256/apps/debrify.png
-        cp assets/app_icon.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/debrify.png
 
         # Create desktop file
         cat > AppDir/debrify.desktop << EOF
@@ -871,15 +871,15 @@ jobs:
 
         # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
         mkdir -p AppDir/usr/share/applications
 
         # Copy built app (arm64 path)
         cp -r build/linux/arm64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/app_icon.png AppDir/usr/share/icons/hicolor/256x256/apps/debrify.png
-        cp assets/app_icon.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/debrify.png
 
         # Create desktop file
         cat > AppDir/debrify.desktop << EOF

@@ -96,7 +96,7 @@ def main() -> None:
         "identifier": f"io.github.{args.repo.split('/')[0].lower()}.debrify.commits",
         "subtitle": f"Every commit on {args.branch}, built for sideloading.",
         "description": f"Automatic iOS builds of Debrify for each commit to {args.branch} in {args.repo}.",
-        "iconURL": f"{raw}/assets/app_icon.png",
+        "iconURL": f"{raw}/assets/icon/app_icon_flat.png",
         "website": repo_url,
         "tintColor": "#7C4DFF",
         "featuredApps": [bundle_id],
@@ -109,7 +109,7 @@ def main() -> None:
                 "localizedDescription": "A modern torrent search and debrid management app.\n\n"
                 "These are unsigned commit builds produced by GitHub Actions; "
                 "SideStore re-signs them with your own certificate on install.",
-                "iconURL": f"{raw}/assets/app_icon.png",
+                "iconURL": f"{raw}/assets/icon/app_icon_flat.png",
                 "tintColor": "#7C4DFF",
                 "category": "entertainment",
                 "screenshots": screenshots,
