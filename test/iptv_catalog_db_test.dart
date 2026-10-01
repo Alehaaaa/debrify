@@ -956,7 +956,11 @@ void main() {
       await notDirectory.writeAsString('x');
       IptvCatalogDb.debugDirectoryOverride = notDirectory.path;
 
-      await expectLater(IptvCatalogDb.open(), throwsA(isA<StateError>()));
+      // sqlite3 v3 surfaces the open failure as its own SqliteException.
+      await expectLater(
+        IptvCatalogDb.open(),
+        throwsA(anyOf(isA<StateError>(), isA<raw.SqliteException>())),
+      );
       expect(IptvCatalogDb.isOpen, isFalse);
 
       IptvCatalogDb.debugDirectoryOverride = dir.path;

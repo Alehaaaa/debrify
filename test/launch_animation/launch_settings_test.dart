@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:android_file_picker/android_file_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:debrify/utils/platform_util.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -115,10 +116,10 @@ void main() {
       ProfileRuntime.debugReset();
       ProfileRuntime.initializeLegacy();
       PlatformUtil.debugSetAndroidTvCached(true);
-      FilePickerIO.registerWith();
+      FilePickerAndroid.registerWith();
       const channel = MethodChannel(
         'miguelruivo.flutter.plugins.filepicker',
-        JSONMethodCodec(),
+        StandardMethodCodec(),
       );
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
         _,

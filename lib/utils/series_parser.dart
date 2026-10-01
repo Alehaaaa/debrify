@@ -397,9 +397,18 @@ class SeriesParser {
     );
     cleaned = cleaned.replaceAll(RegExp(r'\s*[/\\].+$'), '');
 
-    // 4. Trim and remove trailing numbers that are leftovers (like "HEVC 1" → "1")
+    // 4. Trim and remove a number left dangling after a technical tag by a
+    //    truncated title ("… x265 HEVC 1"). Only after such a tag: a trailing
+    //    number is otherwise part of the title ("Beverly Hills 90210") or of
+    //    a season range still to be removed ("Seasons 1 through 5").
     cleaned = cleaned.trim();
-    cleaned = cleaned.replaceAll(RegExp(r'\s+\d+\s*$'), '');
+    cleaned = cleaned.replaceAllMapped(
+      RegExp(
+        r'\b(HEVC|AVC|x26[45]|H\.?26[45]|AAC|AC3|E?AC-?3|DDP?|DTS|\d{3,4}p|10bit|8bit)\s+\d{1,2}\s*$',
+        caseSensitive: false,
+      ),
+      (m) => m.group(1)!,
+    );
 
     // PHASE 1: NORMALIZATION
     // 1. Normalize separators - replace dots and underscores with spaces
@@ -887,6 +896,19 @@ class SeriesParser {
         isMoviePattern = true;
         break;
       }
+    }
+
+    // A release/product code ("ABCD-222", "WXYZ-456 1080p") is an ID, not a
+    // season+episode: its digits must not read as S2E22. An explicit SxxEyy
+    // anywhere in the name still wins.
+    if (!isMoviePattern &&
+        RegExp(r'^[A-Za-z]{2,6}-\d{2,5}(?=$|[\s._\[(])').hasMatch(
+          nameWithoutExt.trim(),
+        ) &&
+        !RegExp(r's\d{1,2}\s*e\d{1,3}', caseSensitive: false).hasMatch(
+          nameWithoutExt,
+        )) {
+      isMoviePattern = true;
     }
 
     // Check if it's a sample file

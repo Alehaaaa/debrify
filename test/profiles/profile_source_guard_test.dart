@@ -14,7 +14,8 @@ void main() {
         'lib/services/profiles/profile_package_service.dart': 1,
         'lib/services/profiles/profile_data_generation.dart': 5,
         'lib/services/profiles/native_profile_projection.dart': 3,
-        'lib/services/profiles/device_key_provider.dart': 5,
+        // Device vault state (Linux wrapped key): device-wide by design.
+        'lib/services/profiles/device_key_provider.dart': 7,
         // Adoption must enumerate and atomically project whole scoped stores;
         // the exact count keeps any additional raw access review-visible.
         'lib/services/webdav_sync/webdav_sync_adoption_operations.dart': 2,
@@ -28,6 +29,8 @@ void main() {
         'lib/services/remote_control/remote_pairing_store.dart': 7,
         'lib/services/android_download_history.dart': 1,
         'lib/services/desktop_schedule_service.dart': 2,
+        // Device-level "a sync save is pending" flag; not profile data.
+        'lib/services/webdav_sync/webdav_sync_save_feedback.dart': 1,
       };
       final violations = <String>[];
       for (final entity in Directory('lib').listSync(recursive: true)) {
@@ -358,7 +361,7 @@ void main() {
     expect(nativeClear, contains('.clear()'));
     final nativeAppend = nativeLog.substring(
       nativeLog.indexOf('private fun append('),
-      nativeLog.indexOf('private fun trimSegment('),
+      nativeLog.indexOf('private fun pruneExpired('),
     );
     expect(
       nativeAppend.indexOf('if (!accepting) return'),

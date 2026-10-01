@@ -527,6 +527,10 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'stremio_addons_v1': jsonEncode([a.toJson()]),
       HomeCollectionsStore.folderLayoutKey: 'tabs',
+      // These cover the poster-grid tabs; pin that style over the Spotlight
+      // rollout default.
+      'tv_collection_list_style': 'grid',
+      'tv_collection_spotlight_alpha_migrated_v1': true,
       HomeCollectionsStore.prefsKey: jsonEncode([c.toJson()]),
     });
     await tester.runAsync(() async {
@@ -646,6 +650,10 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'stremio_addons_v1': jsonEncode([a.toJson()]),
       HomeCollectionsStore.folderLayoutKey: 'tabs',
+      // These cover the poster-grid tabs; pin that style over the Spotlight
+      // rollout default.
+      'tv_collection_list_style': 'grid',
+      'tv_collection_spotlight_alpha_migrated_v1': true,
     });
     await tester.runAsync(() async {
       await StremioService.instance.getCatalogAddons();

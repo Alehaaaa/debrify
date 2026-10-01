@@ -24,6 +24,7 @@ import 'profiles/profile_preferences.dart';
 import 'profiles/profile_bootstrap.dart';
 import 'profiles/profile_credential_facade.dart';
 import 'profiles/profile_runtime.dart';
+import '../models/downloaded_media.dart';
 import 'package:synchronized/synchronized.dart';
 
 class DownloadEntry {
@@ -313,6 +314,48 @@ class DownloadService {
       result[entry.key] = DownloadRecordDetails.fromMap(entry.key, entry.value);
     }
     return result;
+  }
+
+  /// Returns a completed local media file linked to this exact catalog target.
+  /// Records without the media identity are intentionally ignored: filename
+  /// guesses can launch the wrong episode.
+  Future<String?> completedMediaPath({
+    required String imdbId,
+    required String contentType,
+    int? season,
+    int? episode,
+  }) async {
+    await initialize();
+    for (final record in _records.values) {
+      if (record['state'] != 'complete') continue;
+      final raw = record['meta'];
+      if (raw is! String) continue;
+      try {
+        final media = DownloadedMedia.fromMetadata(raw);
+        if (media == null ||
+            media.id != imdbId ||
+            media.type != contentType ||
+            media.season != season ||
+            media.episode != episode) {
+          continue;
+        }
+        final path = record['destPath']?.toString();
+        if (path != null && await File(path).exists()) return path;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Folders finished downloads are saved into, so the library can be built
+  /// from what is actually on disk. Empty on Android, where files are handed
+  /// to MediaStore / the user's SAF folder and aren't listable by path.
+  Future<List<String>> libraryFolders() async {
+    if (Platform.isAndroid) return const [];
+    try {
+      return [await _appDownloadsSubdir()];
+    } catch (_) {
+      return const [];
+    }
   }
 
   bool isPausedQueuedTask(String taskId) => _pausedPending.containsKey(taskId);

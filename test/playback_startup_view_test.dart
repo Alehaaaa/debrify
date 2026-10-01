@@ -21,7 +21,11 @@ void main() {
     expect(overlay, contains('child: inPip'));
     expect(
       overlay,
-      contains('? const AbsorbPointer(child: ColoredBox(color: Colors.black))'),
+      matches(
+        RegExp(
+          r'\? const AbsorbPointer\(\s*child: ColoredBox\(color: Colors\.black\),?\s*\)',
+        ),
+      ),
     );
     expect(overlay, contains(': PlaybackStartupView('));
   });

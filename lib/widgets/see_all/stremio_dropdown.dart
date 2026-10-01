@@ -233,7 +233,7 @@ class _StremioDropdownState<T extends Object>
       elevation: widget.editorial ? 20 : 12,
       shape: RoundedRectangleBorder(
         borderRadius: widget.editorial
-            ? BorderRadius.circular(20)
+            ? app.shape.br(20)
             : app.shape.br(14),
         side: BorderSide(color: app.seeAll.line),
       ),
@@ -341,7 +341,7 @@ class _StremioDropdownState<T extends Object>
         color: active
             ? const Color(0xFFF3F1EC)
             : app.core.tx.withValues(alpha: 0.075),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: app.shape.br(28),
         border: Border.all(
           color: app.core.tx.withValues(alpha: active ? 0 : 0.15),
         ),

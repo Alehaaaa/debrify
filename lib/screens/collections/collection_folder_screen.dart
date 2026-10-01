@@ -484,10 +484,13 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
         (r) => r.source.key == (oldSource ?? widget.sourceKey),
       );
       final offersAll = _collection.showAllTab && rails.length > 1;
+      // Spotlight already shows every list as its own row; opening it on the
+      // merged "All" row would hide exactly that.
       final defaultAll =
           !preserveSelection &&
           widget.sourceKey == null &&
           !widget.isTelevision &&
+          !_spotlight &&
           (defaultTargetPlatform == TargetPlatform.android ||
               defaultTargetPlatform == TargetPlatform.iOS);
       final selectAll = offersAll && (wasAll || defaultAll);

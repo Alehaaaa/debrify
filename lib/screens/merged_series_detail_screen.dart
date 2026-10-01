@@ -1,10 +1,11 @@
+import '../widgets/downloaded_media_button.dart';
+import '../services/downloaded_media_service.dart';
 import '../widgets/metadata_franchise_rail.dart';
 import '../widgets/metadata_title_navigation.dart';
 import '../services/metadata_provider_service.dart';
 import '../services/metadata_preferences_service.dart';
 import '../models/metadata_preferences.dart';
 import '../services/profiles/profile_runtime.dart';
-import 'metadata_explore_page.dart';
 import '../services/metadata_details_service.dart';
 import '../widgets/metadata_presentation_mixin.dart';
 import 'dart:async';
@@ -527,13 +528,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   @override
   void initState() {
     super.initState();
+    _downloads; // start watching this title's downloads
     StorageService.trackingSourceRevision.addListener(
       _onMovieProgressPolicyChanged,
     );
     StorageService.movieFinishedRevision.addListener(_loadLocalMovieFinished);
-    MdblistService.instance.watchedRevision.addListener(
-      _loadLocalMovieFinished,
-    );
+    MdblistService.instance.watchedRevision.addListener(_loadLocalMovieFinished);
     AnalyticsService.screenView('series_detail');
     MainPageBridge.addPlaybackReturnListener(_onPlaybackReturned);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -619,10 +619,40 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       'loaderInFlight=$_resumeLoaderInFlight '
       'promised=${promised == null ? 'none' : 'S${promised.season}E${promised.episode}'}',
     );
-    unawaited(_guardPlay(() => widget.onResume(promised)));
+    unawaited(_guardPlay(() async {
+      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
+          season: promised?.season ?? _resumeSeason ?? widget.initialSeason,
+          episode: promised?.episode ?? _resumeEpisode ?? widget.initialEpisode)) return;
+      if (mounted) await widget.onResume(promised);
+    }));
   }
 
   bool _seriesCompleted = false;
+
+  /// Local downloads for this title — drives the Download button.
+  late final DownloadedTitleWatcher _downloads =
+      DownloadedTitleWatcher(_item.imdbId ?? _item.id)
+        ..addListener(_onDownloadsChanged);
+
+  void _onDownloadsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// Not downloaded: the movie's source list or the series' season-pack
+  /// search, where a source can be downloaded. Otherwise: the download page.
+  VoidCallback? get _downloadAction {
+    if (_downloads.state != DownloadedTitleState.none) {
+      return () => unawaited(_downloads.open(context));
+    }
+    if (_isMovie) return widget.onBrowse;
+    if (widget.onTraktAction != null &&
+        _appMenuOptions.any(
+          (o) => o.action == TraktItemMenuAction.searchPacks,
+        )) {
+      return () => widget.onTraktAction!(TraktItemMenuAction.searchPacks);
+    }
+    return null;
+  }
   bool _rewatchPending = false;
 
   Future<void> _rewatchTitle() async {
@@ -703,13 +733,21 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _quickPlayEpisode(AdvancedSearchSelection selection) {
     final play = widget.onQuickPlay;
     if (play == null) return;
-    unawaited(_guardPlay(() => play(selection)));
+    unawaited(_guardPlay(() async {
+      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
+          season: selection.season, episode: selection.episode)) return;
+      if (mounted) await play(selection);
+    }));
   }
 
   void _playDirectEpisode(TraktEpisode episode) {
     final play = widget.onPlayEpisode;
     if (play == null) return;
-    unawaited(_guardPlay(() => play(episode)));
+    unawaited(_guardPlay(() async {
+      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
+          season: episode.season, episode: episode.number)) return;
+      if (mounted) await play(episode);
+    }));
   }
 
   Future<void> _loadShowcaseOpeningData() async {
@@ -1127,15 +1165,14 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   @override
   void dispose() {
+    _downloads
+      ..removeListener(_onDownloadsChanged)
+      ..dispose();
     StorageService.trackingSourceRevision.removeListener(
       _onMovieProgressPolicyChanged,
     );
-    StorageService.movieFinishedRevision.removeListener(
-      _loadLocalMovieFinished,
-    );
-    MdblistService.instance.watchedRevision.removeListener(
-      _loadLocalMovieFinished,
-    );
+    StorageService.movieFinishedRevision.removeListener(_loadLocalMovieFinished);
+    MdblistService.instance.watchedRevision.removeListener(_loadLocalMovieFinished);
     appRouteObserver.unsubscribe(this);
     MainPageBridge.removePlaybackReturnListener(_onPlaybackReturned);
     _infoScroll.dispose();
@@ -1453,28 +1490,6 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       ),
       // Watching the trailer must not suppress the ambient trailer backdrop.
       isTrailer: true,
-    );
-  }
-
-  VoidCallback? get _metadataExploreAction =>
-      metadataPreferences.features.isNotEmpty &&
-          widget.onRecommendationTap != null
-      ? _openMetadataExplore
-      : null;
-
-  void _openMetadataExplore() {
-    final prefs = metadataPreferences;
-    final onOpen = widget.onRecommendationTap;
-    if (prefs.features.isEmpty || onOpen == null) return;
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => MetadataExplorePage(
-          item: _item,
-          preferences: prefs,
-          onOpen: onOpen,
-          isTelevision: widget.isTelevision,
-        ),
-      ),
     );
   }
 
@@ -1885,7 +1900,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       primaryBusy: _primaryBusy,
       sourceCount: widget.boundSourceCount?.call(widget.item) ?? 0,
       boundSources: _boundSources,
-      hasTrailer: _trailerYtId != null,
+      // The Trailer button is hidden on detail pages; the ambient backdrop
+      // trailer still plays.
+      hasTrailer: false,
       trailerBusy: _trailerResolving || _trailerLoading,
       trailerPlaying: _trailerAmbientPlaying,
       hasTrakt: _traktOnlyMenuOptions.isNotEmpty,
@@ -1912,14 +1929,8 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       // season packs" row opens, promoted to a first-class button. Gated on
       // that row actually being in the menu so the button never mounts for a
       // host that didn't offer the action.
-      onBrowse: _isMovie
-          ? widget.onBrowse
-          : (widget.onTraktAction != null &&
-                _appMenuOptions.any(
-                  (o) => o.action == TraktItemMenuAction.searchPacks,
-                ))
-          ? () => widget.onTraktAction!(TraktItemMenuAction.searchPacks)
-          : null,
+      onBrowse: _downloadAction,
+      downloadState: _downloads.state,
       onTrailer: _playTrailer,
       onSelectSource: widget.onSelectSource == null
           ? null
@@ -1927,7 +1938,8 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
               await widget.onSelectSource!(widget.item);
               if (mounted) setState(() {});
             },
-      onMetadataExplore: _metadataExploreAction,
+      // Explore is hidden on detail pages.
+      onMetadataExplore: null,
       onAppMenu: (_appMenuOptions.isNotEmpty && widget.onTraktAction != null)
           ? _showAppActionsMenu
           : null,
@@ -2785,26 +2797,13 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             autofocus: widget.isTelevision && _isMovie,
             glow: _accent,
           ),
-        // Trailer — sits right after Play. Only when Cinemeta gave us a YouTube
-        // trailer id. Reflects the ambient backdrop's state: spinner while the
-        // trailer loads, "Watch Trailer" once it's playing (tap = fullscreen),
-        // plain "Trailer" otherwise (tap = resolve & play).
-        if (_trailerYtId != null)
+        // Download: the source list / season-pack search until the title has
+        // a download, then its download page. (Trailer is hidden here.)
+        if (_downloadAction != null)
           _GhostButton(
-            label: _trailerAmbientPlaying ? 'Watch Trailer' : 'Trailer',
-            icon: _trailerAmbientPlaying
-                ? Icons.play_circle_outline_rounded
-                : Icons.movie_outlined,
-            busy: _trailerResolving || _trailerLoading,
-            onTap: _playTrailer,
-          ),
-        // Movie: a Sources (manual list) button — the episode list is the
-        // picker for series, so this is movie-only.
-        if (_isMovie && widget.onBrowse != null)
-          _GhostButton(
-            label: 'Sources',
-            icon: Icons.layers_rounded,
-            onTap: widget.onBrowse!,
+            label: _downloads.state.label,
+            icon: _downloads.state.icon,
+            onTap: _downloadAction!,
           ),
         if (_supportsMyWatchlist)
           _GhostButton(
@@ -2831,12 +2830,6 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         // Debrify's own actions (bind source, Stremio TV, random episode,
         // season packs, local Continue Watching) — no tracker involved, so a
         // neutral button rather than a branded one.
-        if (_metadataExploreAction != null)
-          _RoundIconButton(
-            icon: Icons.explore_outlined,
-            tooltip: 'Explore',
-            onTap: _metadataExploreAction!,
-          ),
         if (_appMenuOptions.isNotEmpty && widget.onTraktAction != null)
           _RoundIconButton(
             icon: Icons.more_horiz_rounded,
@@ -4113,14 +4106,10 @@ class _GhostButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
 
-  /// Shows a small spinner in place of the icon (e.g. trailer resolving).
-  final bool busy;
-
   const _GhostButton({
     required this.label,
     required this.icon,
     required this.onTap,
-    this.busy = false,
   });
 
   @override
@@ -4151,17 +4140,7 @@ class _GhostButtonState extends State<_GhostButton> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.busy)
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white70,
-                    ),
-                  )
-                else
-                  Icon(widget.icon, color: Colors.white, size: 18),
+                Icon(widget.icon, color: Colors.white, size: 18),
                 const SizedBox(width: 7),
                 Text(
                   widget.label,

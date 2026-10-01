@@ -309,9 +309,12 @@ void main() {
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 
+  // Native (TMDB) metadata supplies details and episodes without an IMDb
+  // identity, so a suggestion that can't be mapped to IMDb — or whose lookup
+  // fails — opens on its native id instead of falling back to a text search.
   for (final fails in [false, true]) {
     testWidgets(
-      'unresolved suggestion submits Catalog title search (error: $fails)',
+      'unresolved suggestion opens its native detail page (error: $fails)',
       (tester) async {
         await mount(
           tester,
@@ -324,16 +327,11 @@ void main() {
         await tester.pump(const Duration(milliseconds: 350));
         await tester.pump();
         await drive(tester, () => tester.tap(find.text('Dune (2021)')));
-        expect(find.byType(MergedDetailScreen), findsNothing);
-        expect(find.text('No catalog matches'), findsOneWidget);
-        expect(
-          tester
-              .widget<TvTextField>(find.byType(TvTextField).first)
-              .controller
-              .text,
-          'Dune',
+        final detail = tester.widget<MergedDetailScreen>(
+          find.byType(MergedDetailScreen),
         );
-        expect(find.text('Retry'), findsNothing);
+        expect(detail.item.id, 'tmdb:438631');
+        expect(find.text('No catalog matches'), findsNothing);
         await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
       },
     );

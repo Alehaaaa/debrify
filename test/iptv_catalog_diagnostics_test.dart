@@ -6,11 +6,11 @@ void main() {
   test('captures extended SQLite codes without SQL or bound credentials', () {
     final fields = iptvCatalogFailureFields(
       SqliteException(
-        2067,
-        'UNIQUE constraint failed: private_provider_key',
-        'https://provider.example/user/password',
-        "INSERT INTO channels VALUES ('private-password')",
-        ['private-password'],
+        extendedResultCode: 2067,
+        message: 'UNIQUE constraint failed: private_provider_key',
+        explanation: 'https://provider.example/user/password',
+        causingStatement: "INSERT INTO channels VALUES ('private-password')",
+        parametersToStatement: ['private-password'],
       ),
     );
     expect(fields['sqlite_code'], 19);
@@ -31,7 +31,9 @@ void main() {
   });
 
   test('omits unrecognized messages and non-SQLite error content', () {
-    expect(iptvCatalogFailureFields(SqliteException(1, 'secret-token')), {
+    expect(iptvCatalogFailureFields(
+      SqliteException(extendedResultCode: 1, message: 'secret-token'),
+    ), {
       'error_type': 'SqliteException',
       'sqlite_code': 1,
       'sqlite_extended_code': 1,

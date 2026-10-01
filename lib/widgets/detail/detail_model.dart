@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/downloaded_title_state.dart';
 import '../../models/stremio_addon.dart';
 import '../../models/metadata_preferences.dart';
 import '../../services/metadata_details_service.dart';
@@ -150,9 +151,13 @@ class DetailModel {
   /// Null keeps the button tap-only (for direct-source pages with no picker).
   final VoidCallback? onPrimaryLongPress;
 
-  // Movie: the full browse/search source list. Series: the season-pack
-  // search (Showcase mounts it; other layouts still gate on isMovie).
+  // The Download button. Not downloaded yet: the full source list (movie)
+  // or the season-pack search (series), where a source can be downloaded.
+  // Downloaded or downloading: opens this title's download page.
   final VoidCallback? onBrowse;
+
+  /// Drives the Download button's label and icon.
+  final DownloadedTitleState downloadState;
   final VoidCallback onTrailer;
   final VoidCallback? onSelectSource;
   final VoidCallback? onAppMenu;
@@ -239,6 +244,7 @@ class DetailModel {
     required this.onPrimary,
     this.onPrimaryLongPress,
     required this.onBrowse,
+    this.downloadState = DownloadedTitleState.none,
     required this.onTrailer,
     required this.onSelectSource,
     required this.onAppMenu,

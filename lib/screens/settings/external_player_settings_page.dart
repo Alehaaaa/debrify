@@ -1778,6 +1778,7 @@ class _ExternalPlayerSettingsPageState
     FocusNode? focusNode,
   }) {
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     final theme = Theme.of(context);
     final isSelected = _defaultPlayerMode == value;
 
@@ -1795,7 +1796,7 @@ class _ExternalPlayerSettingsPageState
               focusNode: focusNode,
               canRequestFocus: !disabled,
               onTap: disabled ? null : () => _setDefaultPlayerMode(value),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: app.shape.br(12),
               // Snap, don't tween — per-keypress decoration lerps jank TVs.
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -1806,7 +1807,7 @@ class _ExternalPlayerSettingsPageState
                   color: isSelected || isFocused
                       ? t.panel2
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: app.shape.br(12),
                   border: Border.all(
                     color: isFocused || isSelected ? t.accent : t.line,
                     width: isFocused || isSelected ? 2 : 1,
@@ -1871,7 +1872,7 @@ class _ExternalPlayerSettingsPageState
                                   ),
                                   decoration: BoxDecoration(
                                     color: t.accent.withValues(alpha: 0.16),
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: app.shape.br(4),
                                   ),
                                   child: Text(
                                     'Default',
@@ -1914,6 +1915,7 @@ class _ExternalPlayerSettingsPageState
     bool enabled = true,
   }) {
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     final theme = Theme.of(context);
 
     return Shortcuts(
@@ -1956,7 +1958,7 @@ class _ExternalPlayerSettingsPageState
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: t.panel2,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: app.shape.br(8),
                   border: Border.all(
                     color: enabled && isFocused ? t.accent : t.line,
                     width: enabled && isFocused ? 2 : 1,
@@ -2016,6 +2018,7 @@ class _ExternalPlayerSettingsPageState
     bool isFocused = false,
   }) {
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     final theme = Theme.of(context);
 
     return Shortcuts(
@@ -2043,7 +2046,7 @@ class _ExternalPlayerSettingsPageState
         // Snap, don't tween — animated focus decorations jank TVs.
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: app.shape.br(8),
             color: isFocused ? t.panel2 : null,
             border: isFocused ? Border.all(color: t.accent, width: 2) : null,
             boxShadow: isFocused
@@ -2059,7 +2062,7 @@ class _ExternalPlayerSettingsPageState
           child: InkWell(
             focusNode: focusNode,
             onTap: () => onChanged(!value),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: app.shape.br(8),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
@@ -2113,6 +2116,7 @@ class _ExternalPlayerSettingsPageState
     bool isFocused = false,
   }) {
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     final theme = Theme.of(context);
 
     return Shortcuts(
@@ -2150,7 +2154,7 @@ class _ExternalPlayerSettingsPageState
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   color: t.panel2,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: app.shape.br(8),
                   border: Border.all(
                     color: isFocused ? t.accent : t.line,
                     width: isFocused ? 2 : 1,
@@ -2793,6 +2797,7 @@ class _ExternalPlayerSettingsPageState
   List<Widget> _nightModeSettings() {
     final theme = Theme.of(context);
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     return [
       // Night Mode (Android TV only)
       if (_isAndroidTv) ...[
@@ -2845,7 +2850,7 @@ class _ExternalPlayerSettingsPageState
                           final isFocused = Focus.of(context).hasFocus;
                           return InkWell(
                             onTap: () => _setNightModeIndex(index),
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: app.shape.br(8),
                             // Snap, don't tween (TV GPU rule).
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -2856,7 +2861,7 @@ class _ExternalPlayerSettingsPageState
                                 color: isSelected
                                     ? t.panel2
                                     : Colors.transparent,
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: app.shape.br(8),
                                 border: Border.all(
                                   color: isFocused
                                       ? t.accent
@@ -2910,7 +2915,7 @@ class _ExternalPlayerSettingsPageState
                                       ),
                                       decoration: BoxDecoration(
                                         color: t.accent.withValues(alpha: 0.16),
-                                        borderRadius: BorderRadius.circular(4),
+                                        borderRadius: app.shape.br(4),
                                       ),
                                       child: Text(
                                         'Recommended',
@@ -2942,6 +2947,7 @@ class _ExternalPlayerSettingsPageState
   List<Widget> _subtitleSettings() {
     final theme = Theme.of(context);
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     return [
       SettingsSection(
         title: '',
@@ -3215,7 +3221,7 @@ class _ExternalPlayerSettingsPageState
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.black87,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: app.shape.br(12),
                 ),
                 child: Center(
                   child: Builder(
@@ -3255,6 +3261,7 @@ class _ExternalPlayerSettingsPageState
   List<Widget> _externalPlayerSettings() {
     final theme = Theme.of(context);
     final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
     return [
       // Android External Player info
       if (Platform.isAndroid && _defaultPlayerMode == 'external') ...[
@@ -3339,7 +3346,7 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: app.shape.br(14),
                     boxShadow: _iosSchemeFocused
                         ? [
                             BoxShadow(
@@ -3398,7 +3405,7 @@ class _ExternalPlayerSettingsPageState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: t.panel2,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: app.shape.br(8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3524,7 +3531,7 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: app.shape.br(14),
                     boxShadow: _linuxCommandFocused
                         ? [
                             BoxShadow(
@@ -3583,7 +3590,7 @@ class _ExternalPlayerSettingsPageState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: t.panel2,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: app.shape.br(8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3708,7 +3715,7 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: app.shape.br(14),
                     boxShadow: _windowsCommandFocused
                         ? [
                             BoxShadow(
@@ -3767,7 +3774,7 @@ class _ExternalPlayerSettingsPageState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: t.panel2,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: app.shape.br(8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -3891,7 +3898,7 @@ class _ExternalPlayerSettingsPageState
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: t.panel2,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: app.shape.br(8),
                     ),
                     child: Row(
                       children: [
@@ -3980,7 +3987,7 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: app.shape.br(14),
                     border: _commandFocused
                         ? Border.all(color: t.accent, width: 1.8)
                         : null,
@@ -4050,7 +4057,7 @@ class _ExternalPlayerSettingsPageState
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: t.panel2,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: app.shape.br(8),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

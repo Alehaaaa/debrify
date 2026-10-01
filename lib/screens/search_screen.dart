@@ -16424,8 +16424,11 @@ class _SearchScreenState extends State<SearchScreen>
       );
     }
     final topInset = MediaQuery.viewPaddingOf(context).top;
+    // Full-bleed both ways: the hero owns the status-bar strip, and the board
+    // scrolls on under a translucent tab bar (its tail clears the bar).
     return SafeArea(
       top: false,
+      bottom: false,
       child: Stack(
         children: [
           Positioned.fill(child: _buildBody()),

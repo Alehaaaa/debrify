@@ -1508,6 +1508,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// a duplicate deep link doesn't stack a second identical provider route.
   bool _cloudProviderRouteOpen = false;
 
+  /// Tabs whose pages keep their own content clear of the status bar and the
+  /// tab bar (their own SafeArea, AppBar or CloudScaffold), so on iOS the
+  /// shell lets them draw edge-to-edge. Every other tab stays inset by the
+  /// shell: Playlist (1), Debrify TV (3), Addons (7), Settings (8),
+  /// Stremio TV (9) and Calendar (19) don't handle the top inset themselves.
+  static const Set<int> _kEdgeToEdgeTabs = {
+    2, // Downloads
+    4, 5, 6, 10, 11, 12, // cloud providers (CloudScaffold)
+    13, 14, // IPTV, YouTube (BrowseScreen)
+    15, 17, 18, // Home, Search, Discover (SearchScreen)
+    16, // Cloud hub
+  };
+
   final List<Widget> _pages = [
     const SizedBox.shrink(), // 0: (deprecated old Home — kept as an inert slot
     // so every later tab index stays stable; removed from the visible nav below
@@ -3951,6 +3964,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     !isDesktopWide &&
                     _phoneNavLoaded &&
                     _phoneNavStyle == 'classic';
+                // iPhone/iPad: pages run edge-to-edge — under the status bar
+                // and under a translucent tab bar — when they keep their own
+                // content clear of the insets (see [_kEdgeToEdgeTabs]).
+                final iosEdge =
+                    PlatformUtil.isIosMobile && !_isAndroidTv && !isDesktopWide;
+                final edgePage =
+                    iosEdge && _kEdgeToEdgeTabs.contains(_selectedIndex);
                 return Scaffold(
                   // Opaque page ink rather than transparent-to-the-wallpaper.
                   //
@@ -3976,6 +3996,10 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   // TV keeps its transparent shell above — TvAmbientArtStage is
                   // the real background there.
                   backgroundColor: app.shell.ink,
+                  // On iOS the body runs under the (translucent) tab bar;
+                  // Scaffold then reports the bar's height as bottom padding
+                  // to the page, so content can still clear it.
+                  extendBody: iosEdge && classicBottomNav,
                   // The REAL Scaffold slot, not a body child: Scaffold then
                   // owns the geometry — body inset above the bar, descendant
                   // MediaQuery stripped of the bottom padding the bar
@@ -3983,6 +4007,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   // exit") anchor ABOVE the bar instead of covering it.
                   bottomNavigationBar: classicBottomNav
                       ? MobileClassicNav(
+                          translucent: iosEdge,
                           currentIndex: _selectedIndex,
                           visibleIndices: nonTvIndices,
                           barIndices: _phoneNavEffectiveBar(nonTvIndices),
@@ -4030,6 +4055,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                             // must take the inset back (iPad landscape
                             // notch) or the first column sits under it.
                             left: !isDesktopWide || desktopPill,
+                            // Edge-to-edge pages keep the top and bottom
+                            // insets in MediaQuery and handle them
+                            // themselves, so their backgrounds (and Home's
+                            // hero) reach under the status bar and tab bar.
+                            top: !edgePage,
+                            bottom: !edgePage,
                             child: Stack(
                               children: [
                                 // Page fills the whole area so its own

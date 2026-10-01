@@ -9,6 +9,7 @@ import '../episodes_panel.dart';
 import '../parents_guide_section.dart';
 import 'detail_episode_cells.dart';
 import 'detail_identity.dart';
+import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
@@ -121,7 +122,7 @@ class _DetailStageState extends State<DetailStage> {
     if (tabs.isNotEmpty && !tabs.contains(_active)) _active = tabs.first;
     // Sources is a tab-shaped ACTION, so a movie with no panel content still
     // needs the strip drawn — otherwise the button is unreachable.
-    final hasSources = m.isMovie && m.onBrowse != null;
+    final hasSources = m.onBrowse != null;
     final showStrip = tabs.isNotEmpty || hasSources;
     final topFraction = size.isPhone ? 0.38 : 0.52;
 
@@ -190,7 +191,7 @@ class _DetailStageState extends State<DetailStage> {
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   Widget _tabStrip(DetailModel m, List<_Tab> tabs, DetailSize size) {
-    final hasSources = m.isMovie && m.onBrowse != null;
+    final hasSources = m.onBrowse != null;
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: _t.hair)),
@@ -229,7 +230,7 @@ class _DetailStageState extends State<DetailStage> {
             if (hasSources) ...[
               const SizedBox(width: 20),
               _TabButton(
-                label: 'Sources',
+                label: m.downloadState.label,
                 active: false,
                 focusNode: _sourcesNode,
                 trapLeft: tabs.isEmpty,

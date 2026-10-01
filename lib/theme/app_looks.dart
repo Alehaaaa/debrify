@@ -592,21 +592,29 @@ abstract final class LookApplier {
       for (final id in look.values.keys) id: generationOf(id),
     };
 
+    // Every write STARTS in this synchronous loop — each publishes its mirror
+    // before its first await — so the whole Look is on screen on the next
+    // frame. Awaiting each write before starting the next left later keys
+    // (the app theme among them) waiting on earlier keys' disk writes.
+    final pending = <Future<void>>[];
     for (final entry in look.values.entries) {
       final key = LookKeys.byId(entry.key);
       if (key == null) continue; // validate() reports these; never throw here
       if (generationOf(entry.key) != before[entry.key]) continue; // human won
       noteExternalWrite(entry.key);
-      try {
-        await key.write(entry.value);
-      } catch (e) {
-        // A cosmetic preference must never take the app down with it. The
-        // mirror is already published, so the session is correct either way;
-        // the cost of a failed write is stickiness across a restart.
-        debugPrint('LookApplier: ${entry.key} failed: $e');
-      }
-      key.notify?.call();
+      pending.add(
+        Future<void>.sync(() => key.write(entry.value))
+            .catchError((Object e) {
+              // A cosmetic preference must never take the app down with it.
+              // The mirror is already published, so the session is correct
+              // either way; the cost of a failed write is stickiness across a
+              // restart.
+              debugPrint('LookApplier: ${entry.key} failed: $e');
+            })
+            .whenComplete(() => key.notify?.call()),
+      );
     }
+    await Future.wait(pending);
   }
 
   @visibleForTesting

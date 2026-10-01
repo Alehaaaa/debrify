@@ -81,6 +81,15 @@ void main() {
       await ProfileCleanupLedger.resume(null);
       expect(await stuckDirectory.exists(), isFalse);
     },
-    skip: !Platform.isMacOS && !Platform.isLinux,
+    // Root ignores directory permissions, so the refusal can't be simulated.
+    skip: (!Platform.isMacOS && !Platform.isLinux) || _runningAsRoot(),
   );
+}
+
+bool _runningAsRoot() {
+  try {
+    return (Process.runSync('id', ['-u']).stdout as String).trim() == '0';
+  } catch (_) {
+    return false;
+  }
 }

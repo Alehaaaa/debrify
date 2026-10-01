@@ -1408,7 +1408,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                   DialogTapGuard.markKeyAction();
                   Navigator.of(sheetCtx).pop();
                   unawaited(
-                    TorrentPlaybackService.downloadDirectStream(context, t),
+                    TorrentPlaybackService.downloadDirectStream(context, t, meta: widget.meta),
                   );
                 },
               ),

@@ -18,6 +18,7 @@ import '../episodes_panel.dart';
 import '../season_action_region.dart';
 import '../tracker_brand_marks.dart';
 import '../viewport_artwork_scope.dart';
+import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 
 /// Card metrics as FRACTIONS of the viewport.
@@ -566,8 +567,8 @@ class ShowcaseIdentity extends StatelessWidget {
       actions.add(
         _Circle(
           node: next(),
-          icon: Icons.layers_rounded,
-          label: m.isMovie ? 'Sources' : 'Season packs',
+          icon: m.downloadState.icon,
+          label: m.downloadState.label,
           onTap: m.onBrowse!,
         ),
       );

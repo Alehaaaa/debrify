@@ -7,6 +7,7 @@ import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../tracker_brand_marks.dart';
 import '../season_action_region.dart';
+import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
@@ -740,10 +741,10 @@ class DetailActionRow extends StatelessWidget {
           busy: model.trailerBusy,
           onTap: model.onTrailer,
         ),
-      if (model.isMovie && model.onBrowse != null)
+      if (model.onBrowse != null)
         DetailGhostButton(
-          label: 'Sources',
-          icon: Icons.layers_rounded,
+          label: model.downloadState.label,
+          icon: model.downloadState.icon,
           onTap: model.onBrowse!,
         ),
       if (model.onToggleMyWatchlist != null)

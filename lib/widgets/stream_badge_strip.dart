@@ -285,8 +285,15 @@ class StreamBadgeChip extends StatelessWidget {
                   fadeInDuration: Duration.zero,
                   imageBuilder: (_, provider) {
                     onImageReady?.call();
+                    // CachedNetworkImage hands this builder its UNRESIZED
+                    // provider; reuse the same memCacheHeight resize it just
+                    // loaded, or the badge decodes a second time at full size.
                     return Image(
-                      image: provider,
+                      image: ResizeImage.resizeIfNeeded(
+                        null,
+                        (inner * 3).round(),
+                        provider,
+                      ),
                       height: inner,
                       fit: BoxFit.contain,
                     );

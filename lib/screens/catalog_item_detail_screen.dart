@@ -1,9 +1,10 @@
+import '../widgets/downloaded_media_button.dart';
+import '../services/downloaded_media_service.dart';
 import '../services/metadata_provider_service.dart';
 import '../widgets/metadata_franchise_rail.dart';
 import '../widgets/metadata_title_navigation.dart';
 import '../services/metadata_preferences_service.dart';
 import '../services/profiles/profile_runtime.dart';
-import 'metadata_explore_page.dart';
 import '../services/metadata_details_service.dart';
 import '../widgets/metadata_presentation_mixin.dart';
 import 'dart:async';
@@ -228,9 +229,19 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
       _item.type != 'series' &&
       _localMovieFinished;
 
+  /// Local downloads for this title — drives the movie Download button.
+  late final DownloadedTitleWatcher _downloads =
+      DownloadedTitleWatcher(_item.imdbId ?? _item.id)
+        ..addListener(_onDownloadsChanged);
+
+  void _onDownloadsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void initState() {
     super.initState();
+    _downloads; // start watching this title's downloads
     StorageService.trackingSourceRevision.addListener(_onMovieProgressPolicyChanged);
     StorageService.movieFinishedRevision.addListener(_loadLocalMovieFinished);
     MdblistService.instance.watchedRevision.addListener(_loadLocalMovieFinished);
@@ -397,8 +408,21 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
   bool _rewatchPending = false;
   bool _rewatchBusy = false;
 
+  bool _primaryPlayBusy = false;
   Future<void> _playPrimary() async {
+    if (_primaryPlayBusy) return;
+    _primaryPlayBusy = true;
+    try { await _playPrimaryImpl(); }
+    finally { _primaryPlayBusy = false; }
+  }
+
+  Future<void> _playPrimaryImpl() async {
     if (_rewatchBusy) return;
+    if (_item.type != 'series' && _primaryLabel != 'Rewatch' &&
+        await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id)) {
+      return;
+    }
+    if (!mounted) return;
     final restart = widget.onRewatch;
     if (restart == null || _item.type == 'series' || _primaryLabel != 'Rewatch') {
       widget.onPlay();
@@ -634,6 +658,9 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
 
   @override
   void dispose() {
+    _downloads
+      ..removeListener(_onDownloadsChanged)
+      ..dispose();
     StorageService.trackingSourceRevision.removeListener(_onMovieProgressPolicyChanged);
     StorageService.movieFinishedRevision.removeListener(_loadLocalMovieFinished);
     MdblistService.instance.watchedRevision.removeListener(_loadLocalMovieFinished);
@@ -698,8 +725,6 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
     String? backdropUrl,
   ) {
     return Scaffold(
-      floatingActionButton: MetadataExploreButton(item: _item,
-        onOpen: widget.onRecommendationTap, isTelevision: widget.isTelevision),
       backgroundColor: const Color(0xFF050507),
       body: Stack(
         fit: StackFit.expand,
@@ -1810,7 +1835,13 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
         // this detail screen so the user returns here when playback ends.
         // Browse keeps the detail for the same reason (series drill-down
         // stacks on top). The host handles teardown via _returnToCatalogIfNeeded.
-        onBrowse: widget.onBrowse,
+        // Movies: a Download button — the source list until the title has a
+        // download, then its download page. Series keep their Episodes button.
+        onBrowse: item.type != 'series' &&
+                _downloads.state != DownloadedTitleState.none
+            ? () => unawaited(_downloads.open(context))
+            : widget.onBrowse,
+        downloadState: _downloads.state,
         inMyWatchlist: _inMyWatchlist,
         onToggleMyWatchlist: _supportsMyWatchlist ? _toggleMyWatchlist : null,
       ),
@@ -2557,6 +2588,7 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback? onPlayLongPress;
   final VoidCallback onBrowse;
+  final DownloadedTitleState downloadState;
   final bool inMyWatchlist;
   final VoidCallback? onToggleMyWatchlist;
 
@@ -2578,6 +2610,7 @@ class _ActionRow extends StatelessWidget {
     required this.onPlay,
     this.onPlayLongPress,
     required this.onBrowse,
+    this.downloadState = DownloadedTitleState.none,
     required this.inMyWatchlist,
     required this.onToggleMyWatchlist,
     this.onArrowUp,
@@ -2585,8 +2618,8 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final browseLabel = isSeries ? 'Episodes' : 'Sources';
-    final browseIcon = isSeries ? Icons.list_alt_rounded : Icons.layers_rounded;
+    final browseLabel = isSeries ? 'Episodes' : downloadState.label;
+    final browseIcon = isSeries ? Icons.list_alt_rounded : downloadState.icon;
     final gap = compact ? 8.0 : 10.0;
 
     final browse = _PrimaryButton(

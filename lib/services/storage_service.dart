@@ -10881,6 +10881,7 @@ class StorageService {
     detailPageSectionVisibilityCached = DetailPageSectionVisibility.defaults;
     detailThemeCached = 'signal';
     appThemeCached = 'legacy';
+    appStructureCached = '';
     themeOverridesCached = '';
     parentsGuideStyleCached = 'compass';
     iptvStyleCached = kIptvStyleDefault;

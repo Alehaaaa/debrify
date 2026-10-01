@@ -301,7 +301,10 @@ void _literalGuard() {
       r'0xFFF5C518' // IMDb badge
       r'|0xFF4ADE80|0xFFFBBF24|0xFFFB923C|0xFFEF4444|0xFF8A8A8A' // severity
       r'|Colors\.black\.withValues' // scrim over artwork
-      r'|color: Colors\.black,', // IMDb badge foreground
+      r'|color: Colors\.black,' // IMDb badge foreground
+      // Chrome that floats ABOVE the page in every theme (the long-press hint
+      // pill: black glass, white ink). Opted in per line, never per file.
+      r'|// theme-independent overlay',
     );
     final literal = RegExp(
       r'Colors\.(white|black)\w*|Color\(0x[0-9A-Fa-f]{8}\)',

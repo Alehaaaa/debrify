@@ -39,27 +39,27 @@ const Map<String, int> kShapeResidue = {
   'lib/screens/alldebrid/alldebrid_files_screen.dart': 1,
   'lib/screens/cloud_screen.dart': 0,
   'lib/screens/debrid_downloads_screen.dart': 23,
-  'lib/screens/debrify_tv/dialogs/community_channels_dialog.dart': 12,
+  'lib/screens/debrify_tv/dialogs/community_channels_dialog.dart': 0,
   'lib/screens/debrify_tv/dialogs/external_player_notice_dialog.dart': 0,
   'lib/screens/debrify_tv/dialogs/spotlight_dialog.dart': 0,
   'lib/screens/debrify_tv/widgets/tv_focusable_button.dart': 0,
   'lib/screens/debrify_tv/widgets/tv_focusable_card.dart': 0,
-  'lib/screens/downloads_screen.dart': 2,
-  'lib/screens/magic_tv_screen.dart': 7,
+  'lib/screens/downloads_screen.dart': 0,
+  'lib/screens/magic_tv_screen.dart': 0,
   'lib/screens/pikpak/pikpak_files_screen.dart': 9,
   'lib/screens/playlist_content_view_screen.dart': 0,
   'lib/screens/playlist_screen.dart': 0,
   'lib/screens/premiumize/premiumize_files_screen.dart': 6,
   'lib/screens/search/search_card_widgets.dart': 0,
   'lib/screens/search/search_hero_widgets.dart': 2,
-  'lib/screens/search/search_sources.dart': 3,
+  'lib/screens/search/search_sources.dart': 1,
   'lib/screens/search/search_stage_widgets.dart': 0,
   'lib/screens/search_screen.dart': 1,
   'lib/screens/see_all/catalog_see_all_screen.dart': 0,
   'lib/screens/settings/app_theme_page.dart': 1,
   'lib/screens/settings/debrify_tv_settings_page.dart': 0,
   'lib/screens/settings/detail_theme_page.dart': 1,
-  'lib/screens/settings/external_player_settings_page.dart': 18,
+  'lib/screens/settings/external_player_settings_page.dart': 0,
   'lib/screens/settings/filter_settings_page.dart': 2,
   'lib/screens/settings/iptv_hidden_categories_page.dart': 1,
   'lib/screens/settings/iptv_settings_page.dart': 2,
@@ -70,7 +70,7 @@ const Map<String, int> kShapeResidue = {
   'lib/screens/settings/simkl_settings_page.dart': 1,
   'lib/screens/settings/trakt_settings_page.dart': 1,
   'lib/screens/settings/widgets/dynamic_settings_builder.dart': 7,
-  'lib/screens/settings/widgets/settings_widgets.dart': 10,
+  'lib/screens/settings/widgets/settings_widgets.dart': 7,
   'lib/screens/settings_screen.dart': 4,
   'lib/screens/stremio_tv/stremio_tv_filter_page.dart': 0,
   'lib/screens/stremio_tv/stremio_tv_screen.dart': 0,
@@ -93,7 +93,7 @@ const Map<String, int> kShapeResidue = {
   'lib/widgets/iptv/iptv_filters.dart': 4,
   'lib/widgets/iptv/iptv_list_name_dialog.dart': 0,
   'lib/widgets/iptv/iptv_list_picker_dialog.dart': 0,
-  'lib/widgets/iptv/iptv_results_view.dart': 1,
+  'lib/widgets/iptv/iptv_results_view.dart': 0,
   'lib/widgets/iptv/iptv_stage_panel.dart': 2,
   'lib/widgets/mobile_classic_nav.dart': 0,
   'lib/widgets/mobile_floating_nav.dart': 0,
@@ -127,19 +127,19 @@ void main() {
     for (final entry in kShapeResidue.entries) {
       final file = File(entry.key);
       if (!file.existsSync()) {
-        fail('\${entry.key} is in the shape manifest but no longer exists — '
+        fail('${entry.key} is in the shape manifest but no longer exists — '
             'remove its entry if the file was deleted');
       }
       final found = _radius.allMatches(file.readAsStringSync()).length;
       if (found > entry.value) {
-        grew.add('\${entry.key}: \${entry.value} → \$found');
+        grew.add('${entry.key}: ${entry.value} → $found');
       }
     }
     expect(grew, isEmpty,
         reason: 'these files are on the shape tokens; a new bare '
             'BorderRadius.circular in one is a site that will not follow the '
             'theme. Use app.shape.br()/brImg()/brPill, or lower the manifest '
-            'entry if you genuinely removed radii: \$grew');
+            'entry if you genuinely removed radii: $grew');
   });
 
   test('the manifest describes files that are actually swept', () {
@@ -151,7 +151,7 @@ void main() {
       if (!src.contains('app.shape.')) unswept.add(path);
     }
     expect(unswept, isEmpty,
-        reason: 'listed as swept but contains no shape-token call: \$unswept');
+        reason: 'listed as swept but contains no shape-token call: $unswept');
   });
 
   test('the sweep is still substantial', () {
@@ -165,6 +165,6 @@ void main() {
           .length;
     }
     expect(calls, greaterThanOrEqualTo(490),
-        reason: 'the shape sweep converted 500 sites; only \$calls remain');
+        reason: 'the shape sweep converted 500 sites; only $calls remain');
   });
 }

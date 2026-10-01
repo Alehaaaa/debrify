@@ -15124,13 +15124,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                       child: AnimatedOpacity(
                         opacity: hud == null ? 0 : 1,
                         duration: const Duration(milliseconds: 120),
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 24),
-                            child: hud == null
-                                ? const SizedBox.shrink()
-                                : VerticalHud(hud: hud),
+                        // Opposite the finger: brightness is swiped on the
+                        // left, so its HUD sits right; volume is swiped on
+                        // the right, so its HUD sits left.
+                        child: SafeArea(
+                          child: Align(
+                            alignment: hud?.kind == VerticalKind.volume
+                                ? Alignment.centerLeft
+                                : Alignment.centerRight,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                              ),
+                              child: hud == null
+                                  ? const SizedBox.shrink()
+                                  : VerticalHud(hud: hud),
+                            ),
                           ),
                         ),
                       ),

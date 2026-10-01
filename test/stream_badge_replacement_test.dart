@@ -149,9 +149,12 @@ void main() {
           );
           if (layout == 'player') {
             expect(find.text('42 seeders'), findsOneWidget);
-            expect(find.text('▮▮▮'), findsOneWidget);
+            // The current source is marked with a check, announced as playing.
+            expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
             expect(
-              tester.widget<Text>(find.text('▮▮▮')).semanticsLabel,
+              tester
+                  .widget<Icon>(find.byIcon(Icons.check_circle_rounded))
+                  .semanticLabel,
               'Playing',
             );
           } else {

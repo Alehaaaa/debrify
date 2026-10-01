@@ -53,6 +53,7 @@ import 'alldebrid_service.dart';
 import 'debrid_service.dart';
 import 'debrify_tv_channel_add_service.dart';
 import 'download_service.dart';
+import '../models/downloaded_media.dart';
 import 'local_bound_source_service.dart';
 import 'local_playback_resume_resolver.dart';
 import 'main_page_bridge.dart';
@@ -86,7 +87,8 @@ class PlaybackMeta {
   final String? posterUrl;
   final String? year;
   final String? addonId; // originating Stremio addon (resume / next-episode)
-  final StremioMeta? catalogItem; // Exact catalog ID and addon configuration for navigation.
+  final StremioMeta?
+  catalogItem; // Exact catalog ID and addon configuration for navigation.
   final String? stremioAddonId;
   final String? stremioAddonKey;
   final String? stremioCatalogId;
@@ -163,7 +165,9 @@ class PlaybackMeta {
       stremioAddonKey?.trim().isNotEmpty == true &&
       stremioCatalogId?.trim().isNotEmpty == true;
 
-  String? get progressIdentity => CustomSeriesIdentity.isCustom(imdbId) ? imdbId : hasStremioEpisodeIdentity
+  String? get progressIdentity => CustomSeriesIdentity.isCustom(imdbId)
+      ? imdbId
+      : hasStremioEpisodeIdentity
       ? CustomSeriesIdentity(stremioAddonKey!, stremioCatalogId!).id
       : imdbId;
 }
@@ -467,7 +471,7 @@ class TorrentPlaybackService {
         }
         break;
       case 'download':
-        await _download(context, resolved, torrent, provider);
+        await _download(context, resolved, torrent, provider, meta: meta);
         break;
       case 'playlist':
         await _addToPlaylist(context, resolved, torrent, provider, meta: meta);
@@ -1539,9 +1543,9 @@ class TorrentPlaybackService {
     if (!skipBound) {
       late final List<SeriesSource> bound;
       try {
-        bound = (await SeriesSourceService.getSources(imdbId))
-            .where((source) => _bindingMatchesMeta(source, meta))
-            .toList();
+        bound = (await SeriesSourceService.getSources(
+          imdbId,
+        )).where((source) => _bindingMatchesMeta(source, meta)).toList();
       } catch (_) {
         resolving.dismiss();
         rethrow;
@@ -3137,10 +3141,15 @@ class TorrentPlaybackService {
                   : (season: target.season, episode: target.episode);
             }
           : (s, e, direction) => NextEpisodeService.findAdjacentEpisode(
-              imdbId, s, e, direction: direction,
+              imdbId,
+              s,
+              e,
+              direction: direction,
               reportGuideUnavailable: true,
-              preferBuiltIn: meta.addonId == NativeSeriesMetadataService.addon.id,
-              catalogItem: meta.catalogItem, originAddonId: meta.addonId,
+              preferBuiltIn:
+                  meta.addonId == NativeSeriesMetadataService.addon.id,
+              catalogItem: meta.catalogItem,
+              originAddonId: meta.addonId,
             ),
       season: season,
       episode: episode,
@@ -3149,18 +3158,23 @@ class TorrentPlaybackService {
         if (meta.hasStremioEpisodeIdentity && originVideoId == null) return;
         final List<SeriesSource> pins;
         try {
-          pins = (await SeriesSourceService.getSources(imdbId))
-              .where((source) => _bindingMatchesMeta(source, meta))
-              .toList();
+          pins = (await SeriesSourceService.getSources(
+            imdbId,
+          )).where((source) => _bindingMatchesMeta(source, meta)).toList();
         } catch (_) {
           return; // Persistence failure must not prevent ordinary search.
         }
         for (final pin in pins) {
           // Existing pack handling retains precedence for a primary pack.
-          if (!pin.isAddonDirect && !pin.isIptvDirect && !pin.isMediaServer) break;
+          if (!pin.isAddonDirect && !pin.isIptvDirect && !pin.isMediaServer)
+            break;
           try {
             final fresh = pin.isMediaServer
-                ? await MediaServerService.resolvePinned(pin, season: s, episode: e)
+                ? await MediaServerService.resolvePinned(
+                    pin,
+                    season: s,
+                    episode: e,
+                  )
                 : pin.isIptvDirect
                 ? await IptvSourceSearch.resolvePinned(
                     pin,
@@ -3196,9 +3210,9 @@ class TorrentPlaybackService {
       prepareNextDirectEpisode: (s, e, source) async {
         final scope = ProfileRuntime.scope.value;
         if (scope != initialSearchScope) return;
-        final pins = (await SeriesSourceService.getSources(imdbId))
-            .where((pin) => _bindingMatchesMeta(pin, meta))
-            .toList();
+        final pins = (await SeriesSourceService.getSources(
+          imdbId,
+        )).where((pin) => _bindingMatchesMeta(pin, meta)).toList();
         // Preserve primary torrent-pack precedence and prepare only the active
         // preferred direct identity, never a speculative replacement pin.
         if (pins.isEmpty ||
@@ -3224,9 +3238,12 @@ class TorrentPlaybackService {
               : (season: target.season, episode: target.episode);
         } else {
           final target = await NextEpisodeService.findNextEpisode(
-            imdbId, s, e,
+            imdbId,
+            s,
+            e,
             preferBuiltIn: meta.addonId == NativeSeriesMetadataService.addon.id,
-            catalogItem: meta.catalogItem, originAddonId: meta.addonId,
+            catalogItem: meta.catalogItem,
+            originAddonId: meta.addonId,
           );
           next = target == null
               ? null
@@ -3841,9 +3858,10 @@ class TorrentPlaybackService {
         1) {
       return null;
     }
-    final duplicateLegacyName = ordered
-        .where((addon) => addon.legacySourceKey == first.legacySourceKey)
-        .length >
+    final duplicateLegacyName =
+        ordered
+            .where((addon) => addon.legacySourceKey == first.legacySourceKey)
+            .length >
         1;
     if (duplicateLegacyName && !priority.contains(first.sourceKey)) {
       return null;
@@ -3862,7 +3880,8 @@ class TorrentPlaybackService {
     return {
       for (final entry in errors.entries)
         if (entry.key.startsWith('stremio:') ||
-            entry.key.startsWith('mediaserver:')) entry.key: entry.value,
+            entry.key.startsWith('mediaserver:'))
+          entry.key: entry.value,
     };
   }
 
@@ -4039,7 +4058,8 @@ class TorrentPlaybackService {
           (result['addonErrors'] as Map?)?.cast<String, String>() ?? const {},
         );
         addonStatuses.addAll(
-          (result['addonStatuses'] as List?)?.cast<AddonSearchStatus>() ?? const [],
+          (result['addonStatuses'] as List?)?.cast<AddonSearchStatus>() ??
+              const [],
         );
         // Forced/no-provider searches are addon-only; mixed provider searches
         // are a single combined stage. Keep this guard for explicit one-stage
@@ -4210,9 +4230,12 @@ class TorrentPlaybackService {
             .where((entry) => entry.key.startsWith('mediaserver:'))
             .map((entry) => entry.value)
             .toSet();
-        _snack(context, nativeErrors.isEmpty
-            ? '$failed didn\'t respond for "$label" — try again.'
-            : '$failed: ${nativeErrors.join(' ')}');
+        _snack(
+          context,
+          nativeErrors.isEmpty
+              ? '$failed didn\'t respond for "$label" — try again.'
+              : '$failed: ${nativeErrors.join(' ')}',
+        );
       } else {
         // noProvider: addons searched fine and returned nothing directly
         // playable. Torrent engines were skipped (they need a provider), so the
@@ -4927,14 +4950,18 @@ class TorrentPlaybackService {
         );
         try {
           final fresh = source.isMediaServer
-              ? await MediaServerService.resolvePinned(source, season: meta.season, episode: meta.episode)
+              ? await MediaServerService.resolvePinned(
+                  source,
+                  season: meta.season,
+                  episode: meta.episode,
+                )
               : await IptvSourceSearch.resolvePinned(
-            source,
-            title: meta.title ?? label,
-            year: meta.year,
-            season: meta.season,
-            episode: meta.episode,
-          );
+                  source,
+                  title: meta.title ?? label,
+                  year: meta.year,
+                  season: meta.season,
+                  episode: meta.episode,
+                );
           if (cancel.cancelled) return true;
           final freshUrl = fresh?.directUrl;
           if (fresh != null && freshUrl != null && freshUrl.isNotEmpty) {
@@ -4987,7 +5014,9 @@ class TorrentPlaybackService {
                 httpHeaders: fresh.httpHeaders,
               ),
               fresh.displayTitle,
-              provider: source.isMediaServer ? SeriesSource.mediaServerService : SeriesSource.iptvDirectService,
+              provider: source.isMediaServer
+                  ? SeriesSource.mediaServerService
+                  : SeriesSource.iptvDirectService,
               recoveryProvider: preferredProvider,
               startupHasRemainingSavedSources: remainingSources.isNotEmpty,
               meta: meta,
@@ -5537,7 +5566,8 @@ class TorrentPlaybackService {
     try {
       await DirectSourceAuthorization.authorize(torrent);
     } catch (_) {
-      if (context.mounted) _snack(context, 'Connection changed. Search sources again.');
+      if (context.mounted)
+        _snack(context, 'Connection changed. Search sources again.');
       return false;
     }
     if (!context.mounted) return false;
@@ -6113,9 +6143,9 @@ class TorrentPlaybackService {
       );
       return;
     }
-    final bound = (await SeriesSourceService.getSources(imdbId))
-        .where((source) => _bindingMatchesMeta(source, meta))
-        .toList();
+    final bound = (await SeriesSourceService.getSources(
+      imdbId,
+    )).where((source) => _bindingMatchesMeta(source, meta)).toList();
     if (!context.mounted) return;
     if (bound.isNotEmpty && meta.season != null && meta.episode != null) {
       final played = await _playViaBound(
@@ -6169,8 +6199,10 @@ class TorrentPlaybackService {
   }) => VideoPlayerLaunchArgs(
     // External apps receive only the URL, not media-server session headers.
     // Continuous shuffle also needs the in-app episode-fetch/EOF callbacks.
-    disableExternalPlayer: (meta?.initialContinuousShuffle ?? false) ||
-        (httpHeaders?.keys.any((key) => key.toLowerCase() == 'x-emby-token') ?? false),
+    disableExternalPlayer:
+        (meta?.initialContinuousShuffle ?? false) ||
+        (httpHeaders?.keys.any((key) => key.toLowerCase() == 'x-emby-token') ??
+            false),
     initialContinuousShuffle: meta?.initialContinuousShuffle ?? false,
     videoUrl: videoUrl,
     httpHeaders: httpHeaders,
@@ -6197,12 +6229,24 @@ class TorrentPlaybackService {
     contentYear: meta?.year,
     addonId: meta?.addonId,
     suppressTrackerAutoSync: meta?.hasStremioEpisodeIdentity ?? false,
-    traktScrobble: meta?.hasStremioEpisodeIdentity == true ? false : meta?.traktScrobble ?? false,
-    traktProgressPercent: meta?.hasStremioEpisodeIdentity == true ? null : meta?.traktProgressPercent,
-    simklScrobble: meta?.hasStremioEpisodeIdentity == true ? false : meta?.simklScrobble ?? false,
-    simklProgressPercent: meta?.hasStremioEpisodeIdentity == true ? null : meta?.simklProgressPercent,
-    mdblistScrobble: meta?.hasStremioEpisodeIdentity == true ? false : meta?.mdblistScrobble ?? false,
-    mdblistProgressPercent: meta?.hasStremioEpisodeIdentity == true ? null : meta?.mdblistProgressPercent,
+    traktScrobble: meta?.hasStremioEpisodeIdentity == true
+        ? false
+        : meta?.traktScrobble ?? false,
+    traktProgressPercent: meta?.hasStremioEpisodeIdentity == true
+        ? null
+        : meta?.traktProgressPercent,
+    simklScrobble: meta?.hasStremioEpisodeIdentity == true
+        ? false
+        : meta?.simklScrobble ?? false,
+    simklProgressPercent: meta?.hasStremioEpisodeIdentity == true
+        ? null
+        : meta?.simklProgressPercent,
+    mdblistScrobble: meta?.hasStremioEpisodeIdentity == true
+        ? false
+        : meta?.mdblistScrobble ?? false,
+    mdblistProgressPercent: meta?.hasStremioEpisodeIdentity == true
+        ? null
+        : meta?.mdblistProgressPercent,
     resumePolicy: meta?.resumePolicy ?? PlaybackResumePolicy.sourceSpecific,
     // Debrid torrent ids let the player back-fill poster/IMDb onto a saved
     // Playlist-library entry and power the in-player "Fix Metadata" action
@@ -6216,7 +6260,12 @@ class TorrentPlaybackService {
   static VideoPlayerLaunchArgs playerArgsForTesting(
     PlaybackMeta? meta, {
     Map<String, String>? httpHeaders,
-  }) => _playerArgs(videoUrl: 'video', title: 'Title', meta: meta, httpHeaders: httpHeaders);
+  }) => _playerArgs(
+    videoUrl: 'video',
+    title: 'Title',
+    meta: meta,
+    httpHeaders: httpHeaders,
+  );
 
   /// Providers with credentials configured (in this service's precedence
   /// order) plus the user's saved default when it's still configured — the
@@ -6478,7 +6527,8 @@ class TorrentPlaybackService {
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (source.streamType == StreamType.directUrl) {
-      if (MediaServerService.owns(source)) return MediaServerService.bindingFor(source);
+      if (MediaServerService.owns(source))
+        return MediaServerService.bindingFor(source);
       if (IptvSourceSearch.owns(source)) {
         final playlistId = source.iptvPlaylistId;
         final catalogType = source.iptvCatalogType;
@@ -7183,8 +7233,9 @@ class TorrentPlaybackService {
   /// queues the resolved URL.
   static Future<void> downloadDirectStream(
     BuildContext context,
-    Torrent torrent,
-  ) async {
+    Torrent torrent, {
+    PlaybackMeta? meta,
+  }) async {
     if (!supportsDirectStreamDownload(torrent)) {
       if (context.mounted) {
         _snack(context, 'Jellyfin and Emby downloads are not supported yet.');
@@ -7231,6 +7282,7 @@ class TorrentPlaybackService {
       await DownloadService.instance.enqueueDownload(
         url: resolved,
         fileName: torrent.displayTitle,
+        meta: downloadMediaMetadata(meta, fileName: torrent.displayTitle),
         torrentName: torrent.displayTitle,
       );
       if (context.mounted) _snack(context, 'Download queued.');
@@ -7420,8 +7472,9 @@ class TorrentPlaybackService {
     BuildContext context,
     _Resolved r,
     Torrent torrent,
-    String provider,
-  ) async {
+    String provider, {
+    PlaybackMeta? meta,
+  }) async {
     final credentialKey = _credentialKeyForProvider(provider);
     // Multi-file pack: let the user choose which files (parity with the old
     // per-file download dialog), then queue each — unlocking lazy debrid entries
@@ -7439,6 +7492,7 @@ class TorrentPlaybackService {
             credentialKey: credentialKey,
             url: url,
             fileName: e.title,
+            meta: downloadMediaMetadata(meta, fileName: e.relativePath ?? e.title, isPack: true, packName: torrent.displayTitle),
             torrentName: torrent.displayTitle,
           );
           n++;
@@ -7464,6 +7518,7 @@ class TorrentPlaybackService {
             credentialKey: credentialKey,
             url: url,
             fileName: r.playlist!.first.title,
+            meta: downloadMediaMetadata(meta, fileName: r.playlist!.first.title),
             torrentName: torrent.displayTitle,
           );
           queued = true;
@@ -7487,6 +7542,7 @@ class TorrentPlaybackService {
         credentialKey: credentialKey,
         url: url,
         fileName: r.fileName ?? torrent.displayTitle,
+        meta: downloadMediaMetadata(meta, fileName: r.fileName ?? torrent.displayTitle),
         torrentName: torrent.displayTitle,
       );
     } catch (_) {}
@@ -7633,7 +7689,8 @@ class TorrentPlaybackService {
             title: 'Download to device',
             subtitle: 'Grab the file(s) via ${_label(provider)}.',
             pillLabel: 'Download',
-            onTap: () => unawaited(_download(context, r, torrent, provider)),
+            onTap: () =>
+                unawaited(_download(context, r, torrent, provider, meta: meta)),
           ),
         DebridActionItem(
           icon: Icons.playlist_add_rounded,

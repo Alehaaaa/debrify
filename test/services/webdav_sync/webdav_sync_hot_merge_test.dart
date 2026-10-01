@@ -937,9 +937,12 @@ void main() {
           isFalse,
           reason: key,
         );
+        // An imported launch animation is the one appearance value that is
+        // deliberately non-portable (ProfilePreferencePortability lists it):
+        // it never leaves this installation, not even through a backup.
         expect(
           ProfilePreferencePortability.allowsKey(key),
-          isTrue,
+          key != 'imported_launch_animation_v1',
           reason: key,
         );
       }

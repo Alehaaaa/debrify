@@ -6094,6 +6094,7 @@ class IptvResultsViewState extends State<IptvResultsView>
   }) {
     if (channel == null) return const SizedBox.shrink();
     final t = IptvStyleTokens.spotlight;
+    final app = AppThemeScope.of(context);
     final primary = _spotlightPrimaryAction(channel, programme);
     final rawRecord = _spotlightRecordAction(channel);
     final record =
@@ -6122,7 +6123,7 @@ class IptvResultsViewState extends State<IptvResultsView>
                 foregroundColor: t.focusInk,
                 backgroundColor: t.focusFill,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: app.shape.br(10),
                 ),
               ).copyWith(side: _spotlightFocusBorder),
               icon: Icon(primary.icon, size: 19),
@@ -6143,7 +6144,7 @@ class IptvResultsViewState extends State<IptvResultsView>
     }
 
     final buttonShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: app.shape.br(10),
     );
     final compactPadding = const EdgeInsets.symmetric(
       horizontal: 10,
@@ -6296,6 +6297,7 @@ class IptvResultsViewState extends State<IptvResultsView>
     EpgProgramme? programme,
   }) async {
     final t = IptvStyleTokens.spotlight;
+    final app = AppThemeScope.of(context);
     final rawRecord = _spotlightRecordAction(channel);
     final record =
         programme == null ||
@@ -6355,7 +6357,7 @@ class IptvResultsViewState extends State<IptvResultsView>
             backgroundColor: t.panel,
             surfaceTintColor: Colors.transparent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: app.shape.br(20),
               side: BorderSide(color: t.hairline2),
             ),
             title: Row(
@@ -6438,6 +6440,7 @@ class IptvResultsViewState extends State<IptvResultsView>
     required VoidCallback onPressed,
     bool selected = false,
   }) {
+    final app = AppThemeScope.of(context);
     final t = IptvStyleTokens.spotlight;
     return _spotlightActivation(
       onPressed,
@@ -6451,7 +6454,7 @@ class IptvResultsViewState extends State<IptvResultsView>
               backgroundColor: selected ? t.selectedTint : t.focusTint,
               side: BorderSide(color: selected ? t.accent : t.hairline2),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: app.shape.br(10),
               ),
             ).copyWith(
               backgroundColor: WidgetStateProperty.resolveWith(
@@ -6609,6 +6612,7 @@ class IptvResultsViewState extends State<IptvResultsView>
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.68),
       builder: (dialogContext) {
+        final app = AppThemeScope.of(dialogContext);
         void closeThen(VoidCallback action) {
           Navigator.of(dialogContext).pop();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -6621,7 +6625,7 @@ class IptvResultsViewState extends State<IptvResultsView>
             backgroundColor: IptvStyleTokens.spotlight.panel,
             insetPadding: const EdgeInsets.all(16),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: app.shape.br(20),
               side: BorderSide(color: IptvStyleTokens.spotlight.hairline2),
             ),
             child: SizedBox(
@@ -7650,10 +7654,11 @@ class IptvResultsViewState extends State<IptvResultsView>
   }
 
   Widget _buildPreviewStage(IptvChannel? ch, int epoch) {
+    final app = AppThemeScope.of(context);
     return AspectRatio(
       aspectRatio: 16 / 9,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: app.shape.br(8),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -8264,6 +8269,7 @@ class _SpotlightCategoryPickerDialogState
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     final t = IptvStyleTokens.spotlight;
     final size = MediaQuery.sizeOf(context);
     return TvHeldKeyGuard(
@@ -8273,7 +8279,7 @@ class _SpotlightCategoryPickerDialogState
         surfaceTintColor: Colors.transparent,
         insetPadding: const EdgeInsets.all(16),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: app.shape.br(20),
           side: BorderSide(color: t.hairline2),
         ),
         child: SizedBox(

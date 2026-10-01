@@ -1238,7 +1238,7 @@ class _TvProfileItemWidget extends StatelessWidget {
                     : isFocused
                     ? app.shell.navFocus.withValues(alpha: 0.22)
                     : Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
+                borderRadius: app.shape.brPill,
                 border: isFocused && !whiteFocus
                     ? Border.all(color: app.fade(app.core.tx, 0.55), width: 1.5)
                     : null,

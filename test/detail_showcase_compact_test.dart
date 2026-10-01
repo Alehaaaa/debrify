@@ -396,10 +396,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The identity's layers circle (Showcase shipped without ANY route to
-    // the movie source list — the band's cards go to the BINDING manager).
-    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.layers_rounded));
+    // The identity's Download circle opens the movie source list (the
+    // band's cards go to the BINDING manager).
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.download_rounded));
     expect(browsed, 1);
 
     // And the band's labelled entry beside "Pin source".
@@ -424,8 +424,9 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.layers_rounded));
+    // Download opens the season-pack search for a series.
+    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.download_rounded));
     expect(browsed, 1);
 
     await tester.drag(find.byType(DetailShowcase), const Offset(0, -900));

@@ -986,8 +986,8 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     // pushed detail route — the node's own `hasFocus` is the real question.
     // Touch has no focus to gate on; visibility is checked at FIRE time.
     if (widget.dpad && (_row >= 0 || !widget.heroNode.hasFocus)) return;
-    // Keep the handoff cancellable so a focus/route change in this event loop
-    // can still stop the resolve, but add no user-visible dwell.
+    // A short (2 s), cancellable handoff: a focus/route change or a swipe
+    // before it fires still stops the resolve.
     _cadence = Timer(const Duration(seconds: 2), _onArtDone);
   }
 
@@ -1821,7 +1821,12 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
           );
         }
         if (index == widget.sections.length + 1) {
-          return const SizedBox(key: ValueKey('spotlight-tail'), height: 24);
+          // Clears whatever sits over the bottom edge (a translucent tab bar
+          // and the home indicator) once the list is scrolled to the end.
+          return SizedBox(
+            key: const ValueKey('spotlight-tail'),
+            height: 24 + MediaQuery.paddingOf(context).bottom,
+          );
         }
         final i = index - 1;
         return KeyedSubtree(

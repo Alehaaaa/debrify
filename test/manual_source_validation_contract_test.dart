@@ -68,11 +68,13 @@ void main() {
       );
       expect(
         launcher,
-        contains('automaticRecovery && !await recoveryPreflight.allows'),
+        matches(RegExp(r'automaticRecovery &&\s*!await recoveryPreflight\.allows')),
       );
       expect(
         launcher,
-        contains('TorrentPlaybackService.resolveRecoverySource(torrent,'),
+        matches(
+          RegExp(r'TorrentPlaybackService\.resolveRecoverySource\(\s*torrent,'),
+        ),
       );
       expect(launcher, contains(': await resolveSourceToPlaylist(torrent)'));
       final automaticProbe = _between(
@@ -80,7 +82,10 @@ void main() {
         'static Future<List<PlaylistEntry>?> resolveRecoverySource(',
         '/// Builds the [SeriesSourceFetcher]',
       );
-      expect(automaticProbe, contains('_probeCandidates(provider, [source]'));
+      expect(
+        automaticProbe,
+        matches(RegExp(r'_probeCandidates\(\s*provider,\s*\[source\]')),
+      );
       expect(
         automaticProbe,
         contains('tryNextOnFailure: false, maxAttempts: 1'),
@@ -349,7 +354,7 @@ void main() {
     // Direct addons, local files, and debrid/native-cloud packs all need the
     // flag, including when native startup has only one permitted attempt.
     final launches = boundPlayback.split('await _launch(').skip(1).toList();
-    expect(launches, hasLength(3));
+    expect(launches, hasLength(4));
     for (final launch in launches) {
       final arguments = launch.split('onStartupSourcesExhausted:').first;
       final cleanup = _between(
@@ -399,7 +404,7 @@ void main() {
       RegExp(
         r'_recoverAfterBoundStartupFailure\([\s\S]*?preferredProvider: preferredProvider',
       ).allMatches(boundPlayback),
-      hasLength(3),
+      hasLength(4),
     );
     expect(recovery, contains('String? preferredProvider'));
     expect(recovery, contains('preferredProvider: preferredProvider'));
@@ -449,10 +454,12 @@ void main() {
       flutterPlayer,
       contains('final playerRoute = ModalRoute.of(context)'),
     );
-    expect(flutterPlayer, contains('mounted && playerRoute?.isActive == true'));
+    // Waits while the route is still alive but covered, and gives up unless
+    // this exact player route (still mounted, same media) is on top.
+    expect(flutterPlayer, contains('current() && playerRoute?.isActive == true'));
     expect(
       flutterPlayer,
-      contains('mounted && playerRoute?.isCurrent == true'),
+      contains('!mounted || !current() || playerRoute?.isCurrent != true'),
     );
   });
 }

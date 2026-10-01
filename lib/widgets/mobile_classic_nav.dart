@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -47,6 +49,9 @@ class MobileClassicNav extends StatelessWidget {
   final UserProfile? profile;
   final VoidCallback? onProfileTap;
 
+  /// Frosted, see-through bar for pages that run underneath it (iOS).
+  final bool translucent;
+
   const MobileClassicNav({
     super.key,
     required this.currentIndex,
@@ -59,6 +64,7 @@ class MobileClassicNav extends StatelessWidget {
     this.onRemoteControlTap,
     this.profile,
     this.onProfileTap,
+    this.translucent = false,
   });
 
   List<int> get _barSlots => [
@@ -78,10 +84,12 @@ class MobileClassicNav extends StatelessWidget {
     final sheet = _sheetIndices;
     final activeInSheet = sheet.contains(currentIndex);
 
-    return Container(
+    final bar = Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
-        color: app.shell.barBg,
+        color: translucent
+            ? app.shell.barBg.withValues(alpha: 0.72)
+            : app.shell.barBg,
         border: Border(top: BorderSide(color: app.fade(app.core.tx, 0.08))),
       ),
       child: SizedBox(
@@ -114,6 +122,13 @@ class MobileClassicNav extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+    if (!translucent) return bar;
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: bar,
       ),
     );
   }

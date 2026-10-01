@@ -21,6 +21,10 @@ FG = Image.open(ROOT / "assets/icon/foreground.png").convert("RGBA")
 MARK = FG.crop(FG.getbbox())  # tight crop of the logo
 WORDMARK_FONT = ROOT / "assets/fonts/SpaceGrotesk-Bold.ttf"
 INK = (11, 21, 48, 255)
+# The play mark is centered by its bounding box, but its visual weight sits on
+# the left (the stem), so it reads as off-center. Nudge it right by this
+# fraction of the mark's width (about half its center-of-mass offset).
+OPTICAL_DX = 0.04
 
 
 def save(img: Image.Image, rel: str, rgb: bool = False) -> None:
@@ -38,6 +42,17 @@ def paste_center(canvas: Image.Image, im: Image.Image, cx: float, cy: float) -> 
     canvas.alpha_composite(im, (round(cx - im.width / 2), round(cy - im.height / 2)))
 
 
+def paste_mark(canvas: Image.Image, m: Image.Image, cx: float, cy: float) -> None:
+    paste_center(canvas, m, cx + m.width * OPTICAL_DX, cy)
+
+
+def foreground(px: int) -> Image.Image:
+    """Adaptive-icon foreground layer, with the same optical nudge."""
+    shifted = Image.new("RGBA", FG.size, (0, 0, 0, 0))
+    shifted.alpha_composite(FG, (round(MARK.width * OPTICAL_DX), 0))
+    return shifted.resize((px, px), Image.LANCZOS)
+
+
 def background(w: int, h: int) -> Image.Image:
     return BG.resize((w, h), Image.LANCZOS)
 
@@ -45,7 +60,7 @@ def background(w: int, h: int) -> Image.Image:
 def flat(size: int, mark_frac: float = 0.62) -> Image.Image:
     """Full-bleed square; the OS applies its own mask (iOS, Android, web maskable)."""
     c = background(size, size)
-    paste_center(c, mark(round(size * mark_frac)), size / 2, size / 2)
+    paste_mark(c, mark(round(size * mark_frac)), size / 2, size / 2)
     return c
 
 
@@ -68,7 +83,7 @@ def tile(size: int, tile_frac: float = 0.805, shadow: bool = True) -> Image.Imag
     face.paste(background(t, t), (off, off))
     face.putalpha(mask)
     canvas.alpha_composite(face)
-    paste_center(canvas, mark(round(t * 0.62)), S / 2, S / 2)
+    paste_mark(canvas, mark(round(t * 0.62)), S / 2, S / 2)
     return canvas.resize((size, size), Image.LANCZOS)
 
 
@@ -107,7 +122,7 @@ def android() -> None:
     for density, px in {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}.items():
         save(tile(px, tile_frac=0.92, shadow=False), f"{res}/mipmap-{density}/ic_launcher.png")
         # Adaptive foreground (108dp canvas); ic_launcher.xml insets it by 16%.
-        save(FG.resize((px * 9 // 4, px * 9 // 4), Image.LANCZOS), f"{res}/drawable-{density}/ic_launcher_foreground.png")
+        save(foreground(px * 9 // 4), f"{res}/drawable-{density}/ic_launcher_foreground.png")
     # Android TV launcher banner (16:9 at 320x180dp).
     for folder in ("drawable", "drawable-xhdpi", "drawable-xxhdpi", "drawable-xxxhdpi"):
         path = ROOT / res / folder / "banner_debrify.png"
@@ -126,7 +141,7 @@ def tvos() -> None:
                     im = background(w, h)
                 elif layer.name.startswith("Front"):
                     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-                    paste_center(im, mark(round(h * 0.6)), w / 2, h / 2)
+                    paste_mark(im, mark(round(h * 0.6)), w / 2, h / 2)
                 else:
                     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
                 save(im, str(png.relative_to(ROOT)))
