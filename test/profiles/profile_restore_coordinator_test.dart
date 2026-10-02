@@ -264,7 +264,7 @@ void main() {
   });
 
   test(
-    'sync bootstrap excludes appearance but explicit backup restores it',
+    'sync bootstrap carries looks but keeps device-local checkpoints',
     () async {
       final prefs = await ProfilePreferences.instance();
       await prefs.setString('tv_home_style', 'spotlight');
@@ -321,8 +321,8 @@ void main() {
 
       expect(valuesOf(backup)['defaults_generation'], 3);
       expect(valuesOf(sync.package), isNot(contains('defaults_generation')));
-      expect(valuesOf(sync.package), isNot(contains('tv_home_style')));
-      expect(valuesOf(sync.package), isNot(contains('app_theme')));
+      expect(valuesOf(sync.package)['tv_home_style'], 'spotlight');
+      expect(valuesOf(sync.package)['app_theme'], 'aurora');
       expect(valuesOf(sync.package)['default_torrent_provider_v1'], 'torbox');
       expect(valuesOf(sync.package)['tv_sidebar_style'], 'pill');
       expect(valuesOf(sync.package)['desktop_sidebar_style'], 'rail');
@@ -394,10 +394,10 @@ void main() {
         true,
       );
       expect(
-        raw.containsKey(joinedScope.preferenceKey('tv_home_style')),
-        isFalse,
+        raw.getString(joinedScope.preferenceKey('tv_home_style')),
+        'spotlight',
       );
-      expect(raw.containsKey(joinedScope.preferenceKey('app_theme')), isFalse);
+      expect(raw.getString(joinedScope.preferenceKey('app_theme')), 'aurora');
       expect(
         raw.containsKey(joinedScope.preferenceKey('defaults_generation')),
         isFalse,
@@ -2724,6 +2724,108 @@ void main() {
       expect(preferences.getString('theme_mode'), 'old');
     },
   );
+
+  test(
+    'merge restore overwrites the same profile instead of adding a twin',
+    () async {
+      final resources = ConnectionResourceService(
+        registry: registry,
+        cipher: cipher,
+      );
+      final original = await resources.create(
+        context: await ProfileAuthorizationContext.capture(registry),
+        type: ConnectionResourceType.mediaServer,
+        label: 'Jellyfin',
+        publicConfig: {'accountLabel': 'Jellyfin'},
+        secretConfig: {'token': 'server-token', 'kind': 'jellyfin'},
+      );
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('p.$profileId.g.1.theme_mode', 'backup');
+      final package =
+          await ProfilePackageService(
+            registry: registry,
+            resources: resources,
+          ).exportAllProfiles(
+            context: await ProfileAuthorizationContext.capture(registry),
+            includeSecrets: true,
+            includeDatabases: false,
+          );
+      expect(package.profiles.single['sourceProfileId'], profileId);
+
+      // Diverge after the export: these must not survive the restore.
+      await prefs.setString('p.$profileId.g.1.theme_mode', 'changed');
+      await prefs.setString('p.$profileId.g.1.after_export_setting', 'x');
+
+      final report =
+          await ProfileRestoreCoordinator(
+            registry: registry,
+            cipher: cipher,
+          ).restoreDeviceGraph(
+            package: package,
+            authorization: await ProfileAuthorizationContext.capture(registry),
+            mergeMatchingProfiles: true,
+          );
+
+      expect(report.profilesMerged, 1);
+      expect(report.importedProfileIds, <String>[profileId]);
+      final profiles = await registry.listProfiles(includeDisabled: true);
+      expect(profiles.map((profile) => profile.id), <String>[profileId]);
+      expect(await registry.getActiveProfileId(), profileId);
+
+      final profile = (await registry.getProfile(profileId))!;
+      expect(profile.visibleDataGeneration, greaterThan(1));
+      expect(
+        ProfileRuntime.capture().dataGeneration,
+        profile.visibleDataGeneration,
+      );
+      final restored = await ProfilePreferences.instance();
+      expect(restored.getString('theme_mode'), 'backup');
+      expect(restored.getString('after_export_setting'), isNull);
+
+      final owned = (await registry.listAllResourcesIncludingDisabled())
+          .where((resource) => resource.ownerProfileId == profileId)
+          .toList();
+      expect(owned, hasLength(1), reason: 'old connection is replaced');
+      expect(owned.single.id, isNot(original.id));
+      expect(owned.single.label, 'Jellyfin');
+    },
+  );
+
+  test('merge matching prefers source ID, then name and creation time', () {
+    UserProfile profile(String id, String name, int createdAtMs) => UserProfile(
+      id: id,
+      name: name,
+      role: UserProfileRole.member,
+      policy: ProfilePolicy.defaultsFor(UserProfileRole.member),
+      authorizationRevision: 1,
+      lifecycle: UserProfileLifecycle.active,
+      visibleDataGeneration: 1,
+      setupComplete: true,
+      pinResetRequired: false,
+      hasPin: false,
+      lockOnResume: false,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(createdAtMs),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(createdAtMs),
+    );
+    final matches = ProfileRestoreCoordinator.matchExistingProfiles(
+      packageProfiles: <Map<String, dynamic>>[
+        {'name': 'Renamed', 'sourceProfileId': 'a', 'createdAtMs': 1},
+        {'name': 'user 1', 'createdAtMs': 3},
+        {'name': 'User 1', 'createdAtMs': 9},
+        {'name': 'Kid', 'createdAtMs': 4},
+      ],
+      existingProfiles: <UserProfile>[
+        profile('a', 'Original', 1),
+        profile('b', 'User 1', 2),
+        profile('c', ' USER 1 ', 3),
+      ],
+    );
+    expect(matches.map((index, value) => MapEntry(index, value.id)), {
+      0: 'a',
+      1: 'c',
+      2: 'b',
+    });
+  });
 
   test('restore preserves original profile creation order', () async {
     final actor = await ProfileAuthorizationContext.capture(registry);

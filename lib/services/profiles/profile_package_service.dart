@@ -408,6 +408,11 @@ class ProfilePackageService {
       );
       profileRecords.add(<String, dynamic>{
         'backupId': backupId,
+        // Lets a restore onto this same device recognise the profile and
+        // overwrite it instead of adding a twin. WebDAV Sync graphs carry
+        // their own circle identity (and a device-independent digest), so
+        // they never include a local ID.
+        if (profileIdProjection.isEmpty) 'sourceProfileId': profile.id,
         'name': profile.name,
         'avatarKey': profile.avatarKey,
         'role': profile.role.name,

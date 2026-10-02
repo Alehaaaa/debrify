@@ -20,17 +20,11 @@ void main() {
   });
 
   group('the bundles are well-formed', () {
-    test('every setting a Look can change stays outside automatic sync', () {
-      // Navigation styles are the documented exception: they sync on purpose
-      // (see ProfileAppearancePreferences), so a Look that sets one syncs too.
-      const syncedOnPurpose = {
-        'phone_nav_style',
-        'tv_sidebar_style',
-        'desktop_sidebar_style',
-      };
+    test('every setting a Look can change travels with automatic sync', () {
+      // A profile should look the same on every device, so nothing a Look
+      // sets may be on the device-local list.
       for (final key in LookKeys.all) {
-        if (syncedOnPurpose.contains(key.id)) continue;
-        expect(ProfileAppearancePreferences.keys, contains(key.id));
+        expect(ProfileAppearancePreferences.keys, isNot(contains(key.id)));
       }
     });
 

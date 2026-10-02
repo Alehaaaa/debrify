@@ -1147,7 +1147,7 @@ class ProfileBackupFlows {
         ),
         content: Text(
           graphRestore
-              ? 'The profiles and their shared connection graph are staged under new IDs, then made visible together. $graphAuthorityNotice Existing profiles are not overwritten. Profiles keep their PINs when the backup carries them. Media, jobs, paths, and remote pairings are not restored.${databaseNotice.isEmpty ? '' : '\n\n$databaseNotice'}'
+              ? 'The profiles and their shared connection graph are staged, then made visible together. ${completingOnboarding ? '' : "Profiles that already exist here (same profile or same name) are overwritten with the backup's settings, connections and data, keeping their PIN; the rest are added. "}$graphAuthorityNotice Profiles keep their PINs when the backup carries them. Media, jobs, paths, and remote pairings are not restored.${databaseNotice.isEmpty ? '' : '\n\n$databaseNotice'}'
               : 'Destination: ${profile.name}\n\nA complete shadow generation will be verified first. Existing data remains visible if staging fails. Imported accounts become new resources. The destination name, role, policy, PIN, and enabled state stay unchanged; downloads, recordings, jobs, paths, and pairings are not restored.${databaseNotice.isEmpty ? '' : '\n\n$databaseNotice'}',
         ),
         actions: [
@@ -1206,6 +1206,9 @@ class ProfileBackupFlows {
             package: package,
             authorization: authorization,
             databaseFileResolver: databaseFileResolver,
+            // Restoring "User 1" over "User 1" overwrites it instead of adding
+            // a twin. Onboarding keeps its own setup-Admin hand-off.
+            mergeMatchingProfiles: !completingOnboarding,
             beforePublish: syncBackup == null
                 ? null
                 : (profiles, resources, generations) =>
@@ -1231,7 +1234,7 @@ class ProfileBackupFlows {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Imported ${report.profilesImported} profiles, '
+            '${report.profilesMerged == 0 ? 'Imported ${report.profilesImported} profiles' : 'Restored ${report.profilesImported} profiles (${report.profilesMerged} updated in place)'}, '
             '${report.resourcesImported} connections and '
             '${report.grantsImported} grants.'
             '${report.pinResetsRequired == 0 ? '' : ' ${report.pinResetsRequired} profile(s) require a new PIN.'}'

@@ -1036,7 +1036,10 @@ void main() {
         ProfileAppearancePreferences.keys,
         isNot(contains('tv_collection_list_style')),
       );
-      expect(ProfileAppearancePreferences.keys, contains('tv_home_style'));
+      expect(
+        ProfileAppearancePreferences.keys,
+        isNot(contains('tv_home_style')),
+      );
     }
   });
 
@@ -1064,6 +1067,36 @@ void main() {
         ProfileAppearancePreferences.keys,
         isNot(contains('home_hide_card_titles_and_ratings')),
       );
+    }
+  });
+
+  test('themes, looks and palettes sync across devices', () {
+    const values = <String, Object>{
+      'app_theme': 'aurora',
+      'detail_theme': 'aurora',
+      'theme_overrides': '{"accent":"#ff0000"}',
+      'launch_ident_palette': 'sunset',
+      'player_dock_palette': 'ember',
+      'tv_home_style': 'spotlight',
+    };
+    final built = _buildWithPreferences(maps, 'device-a', values, now: 100);
+    final merged = WebDavSyncHotMerge.merge(
+      local: _document(
+        device: 'device-b',
+        scalarTime: 50,
+        scalars: {for (final key in values.keys) key: 'old'},
+      ),
+      peers: [built.document],
+      tombstoneDocuments: const [],
+      nowMs: 200,
+    ).document;
+    final materialized = WebDavSyncHotMerge.materializePreferences(
+      document: merged,
+      identityMaps: maps,
+    );
+    for (final entry in values.entries) {
+      expect(materialized[entry.key], entry.value, reason: entry.key);
+      expect(ProfileAppearancePreferences.keys, isNot(contains(entry.key)));
     }
   });
 
