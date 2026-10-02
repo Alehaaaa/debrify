@@ -869,6 +869,8 @@ void main() {
       find.text('Setting up sync. Keep the app open while this finishes.'),
       findsOneWidget,
     );
+    expect(find.text('Connecting to Family server'), findsOneWidget);
+    expect(find.text('Not connected'), findsNothing);
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.byType(SnackBar), findsNothing);
   });

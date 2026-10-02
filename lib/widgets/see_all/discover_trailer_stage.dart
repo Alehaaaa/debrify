@@ -52,7 +52,7 @@ class DiscoverTrailerStage extends StatefulWidget {
   /// clip — and sits UNDER the host's tint veils and panes in the host's Stack,
   /// so it reads as the stage art coming alive behind the tint. [railRect] is
   /// ignored and the internal loading pill is suppressed (the host shows the
-  /// Home-style TRAILER/AMBIENT chip pair instead, driven by [loading] and
+  /// Home-style TRAILER chip instead, driven by [loading] and
   /// [showing]).
   final bool fullStage;
 
@@ -341,7 +341,7 @@ class _DiscoverTrailerStageState extends State<DiscoverTrailerStage>
                 },
               ),
               // "Trailer" loading pill — pinned to the ambient window's corner.
-              // Full-stage mode drops it: the host's TRAILER/AMBIENT chip pair
+              // Full-stage mode drops it: the host's TRAILER chip
               // owns the status corner.
               if (!widget.fullStage)
                 Positioned.fromRect(

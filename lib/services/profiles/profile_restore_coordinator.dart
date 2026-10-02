@@ -31,6 +31,7 @@ import 'profile_data_generation.dart';
 import 'profile_database_snapshot.dart';
 import 'profile_lifecycle.dart';
 import 'profile_pin_service.dart';
+import 'profile_app_assets_codec.dart';
 import 'profile_portable_files.dart';
 import 'profile_preference_portability.dart';
 import 'home_row_preference_ids.dart';
@@ -299,6 +300,13 @@ class ProfileRestoreCoordinator {
         if (excludedPreferenceKeys.isNotEmpty) {
           SubtitleAppearancePreferences.markSyncedElevation(values);
         }
+        _applyAppAssetSelections(
+          values,
+          await ProfilePortableFiles.restoreAppAssets(
+            sourceRecord[ProfileAppAssetsCodec.field],
+          ),
+          excludedPreferenceKeys: excludedPreferenceKeys,
+        );
         _validatePreferenceOverlay(
           values,
           includeCredentialEngineSettings: true,
@@ -785,10 +793,17 @@ class ProfileRestoreCoordinator {
       values,
       includeCredentialEngineSettings: package.mode != 'sanitizedSettings',
     );
-    // Imported launch packages are device-local and never travel in backups.
-    // Even merge restores must clear the old override instead of retaining it.
+    // The imported launch selection travels with its package in app assets,
+    // never as a preference. Without one (every pre-asset backup included),
+    // even merge restores clear the old override instead of retaining it.
     final restoredPreferenceCount = values.length;
     values[StorageService.importedLaunchAnimationKey] = null;
+    _applyAppAssetSelections(
+      values,
+      await ProfilePortableFiles.restoreAppAssets(
+        profileRecord[ProfileAppAssetsCodec.field],
+      ),
+    );
     final importedSetupComplete = _optionalBool(profileRecord, 'setupComplete');
     final importedLockOnResume = _optionalBool(profileRecord, 'lockOnResume');
     final updateInactivityTimeout = profileRecord.containsKey(
@@ -1439,6 +1454,30 @@ class ProfileRestoreCoordinator {
       if (extension != null)
         HomeCollectionInventory.legacyPrefsKey: (extension as List).join(),
     };
+  }
+
+  /// Custom subtitle fonts and imported launch animations are never portable
+  /// preferences (older builds reject or drop them); their selections ride
+  /// with the restored assets and apply only once the asset is installed.
+  static void _applyAppAssetSelections(
+    Map<String, Object?> values,
+    ProfileAppAssetsRestore restored, {
+    Set<String> excludedPreferenceKeys = const <String>{},
+  }) {
+    final launch = restored.launchAnimationId;
+    if (launch != null &&
+        !excludedPreferenceKeys.contains(
+          StorageService.importedLaunchAnimationKey,
+        )) {
+      values[StorageService.importedLaunchAnimationKey] = launch;
+    }
+    final font = restored.subtitleFontId;
+    if (font != null &&
+        !excludedPreferenceKeys.contains(
+          SubtitleAppearancePreferences.selectedFontKey,
+        )) {
+      values[SubtitleAppearancePreferences.selectedFontKey] = font;
+    }
   }
 
   static Map<String, Object?> _normalizePreferenceValues(
@@ -2110,8 +2149,19 @@ class ProfileRestoreCoordinator {
         }
       }
     }
-    // Imported launch packages are device-local; see [restore].
-    overlay[StorageService.importedLaunchAnimationKey] = null;
+    // The selection travels with its package in app assets; see [restore].
+    if (!excludedPreferenceKeys.contains(
+      StorageService.importedLaunchAnimationKey,
+    )) {
+      overlay[StorageService.importedLaunchAnimationKey] = null;
+    }
+    _applyAppAssetSelections(
+      overlay,
+      await ProfilePortableFiles.restoreAppAssets(
+        sourceRecord[ProfileAppAssetsCodec.field],
+      ),
+      excludedPreferenceKeys: excludedPreferenceKeys,
+    );
     final staged = await generationManager.stage(
       operationId: operationId,
       profileId: profileId,

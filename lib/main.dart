@@ -80,6 +80,7 @@ import 'widgets/app_initializer.dart';
 
 import 'widgets/animated_background.dart';
 import 'services/main_page_bridge.dart';
+import 'services/discover_credits_handoff.dart';
 import 'services/profiles/profile_policy_guard.dart';
 import 'theme/app_surfaces.dart';
 import 'theme/app_theme_controller.dart';
@@ -177,6 +178,12 @@ Future<void> _capImageCache() async {
 // it belongs to — both are shared by the legacy and themed builds.
 
 Future<void> main(List<String> launchArguments) async {
+  // A person's or studio's titles open as a fixed-source Discover page.
+  DiscoverCreditsHandoff.pageBuilder = (request, isTelevision) => SearchScreen(
+    isTelevision: isTelevision,
+    discoverMode: true,
+    discoverCredits: request,
+  );
   try {
     await _mainUnchecked(launchArguments);
   } catch (error, stackTrace) {

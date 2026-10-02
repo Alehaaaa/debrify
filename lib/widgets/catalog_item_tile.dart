@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../models/stremio_addon.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/widgets/parallax_focus.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
@@ -69,6 +70,12 @@ class CatalogItemTile extends StatefulWidget {
   /// tile's existing gold-rim grammar, untouched.
   final bool boardChrome;
 
+  /// The Home Spotlight card's look, for Discover grids: Home's tighter
+  /// corners, its thin white progress bar, its caption gradient (title +
+  /// year · rating at rest, when [showInlineTitle]) and, with a pointer, its
+  /// parallax tilt and glare on hover. TV keeps its focus rise.
+  final bool homeChrome;
+
   const CatalogItemTile({
     super.key,
     required this.item,
@@ -84,6 +91,7 @@ class CatalogItemTile extends StatefulWidget {
     this.showRatingBadge = true,
     this.compactBadgeLayout = false,
     this.boardChrome = false,
+    this.homeChrome = false,
   });
 
   @override
@@ -136,6 +144,11 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     final isMovie = item.type.toLowerCase() == 'movie';
     final supportsWatched = isMovie || item.type.toLowerCase() == 'series';
     final board = widget.boardChrome;
+    final home = widget.homeChrome;
+    // Home's card radius per form factor (see SpotlightBoard's metrics).
+    final homeRadius = widget.isTelevision
+        ? 7.0
+        : (PlatformUtil.isPhone ? 10.0 : 8.0);
     // TVs are low-powered: keep the focus highlight but make it instant
     // (no per-frame tweening of large posters/shadows). Board chrome animates
     // instead — [CardFocusRise] is shaped to be cheap enough for it.
@@ -194,7 +207,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       // Bottom gradient — only when focused — for the inline title. Board
       // chrome skips it: board cards carry no focus wash, and on a stage the
       // focused title is named at full size below the shelf anyway.
-      if (_active && !board)
+      if (_active && !board && !home)
         Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
@@ -265,7 +278,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       // Focused title overlay — appears inside the poster on focus so the
       // chrome below the tile stays calm. Suppressed when the caller shows a
       // persistent title below the poster.
-      if (_active && widget.showInlineTitle)
+      if (home && widget.showInlineTitle)
+        Positioned.fill(child: _HomeCaption(item: item))
+      else if (_active && widget.showInlineTitle)
         Positioned(
           left: 12,
           right: 12,
@@ -311,7 +326,10 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           right: 0,
           bottom: 0,
           child: IgnorePointer(
-            child: _ProgressBar(value: widget.progress!.clamp(0.0, 1.0)),
+            child: _ProgressBar(
+              value: widget.progress!.clamp(0.0, 1.0),
+              home: home,
+            ),
           ),
         ),
     ];
@@ -319,7 +337,26 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     // Board chrome re-hosts those very same layers in the board's rise; the
     // classic scale/shadow/clip below simply isn't built.
     final Widget card;
-    if (board) {
+    if (home && !widget.isTelevision) {
+      // Home's pointer cursor: the parallax tilt + travelling glare, on
+      // hover and keyboard focus alike, clipped to Home's tighter corners.
+      card = ParallaxFocus(
+        forceEnabled: true,
+        focused: _active,
+        radius: BorderRadius.circular(homeRadius),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(homeRadius),
+          child: ThemedArtwork(
+            role: ArtRole.poster,
+            radius: homeRadius,
+            inList: true,
+            builder: (context, blend) =>
+                Stack(fit: StackFit.expand, children: artwork(blend)),
+            overlay: Stack(fit: StackFit.expand, children: chrome()),
+          ),
+        ),
+      );
+    } else if (board) {
       card = CardFocusRise(
         active: _active,
         isTelevision: widget.isTelevision,
@@ -564,25 +601,95 @@ class _GlassChip extends StatelessWidget {
   }
 }
 
-/// Slim "continue watching" progress bar (Netflix-style red fill).
+/// Slim "continue watching" progress bar: Netflix-style red, or Home's
+/// thin white line on a dark track when [home].
 class _ProgressBar extends StatelessWidget {
   final double value;
-  const _ProgressBar({required this.value});
+  final bool home;
+  const _ProgressBar({required this.value, this.home = false});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 4,
+      height: home ? 2 : 4,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(color: Colors.black.withValues(alpha: 0.55)),
+          ColoredBox(
+            color: Colors.black.withValues(alpha: home ? 0.45 : 0.55),
+          ),
           FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: value,
-            child: const ColoredBox(color: Color(0xFFE50914)),
+            child: ColoredBox(
+              color: home ? Colors.white : const Color(0xFFE50914),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Home's card caption: a bottom gradient bed under a centred title and a
+/// year · rating line — the same type and colours as the Spotlight cards.
+class _HomeCaption extends StatelessWidget {
+  final StremioMeta item;
+  const _HomeCaption({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = item.imdbRating;
+    final meta = [
+      if ((item.year ?? '').isNotEmpty) item.year!,
+      if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
+    ].join(' · ');
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0xDB000000), Color(0x00000000)],
+            ),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(7, 26, 7, 7),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.96),
+                    ),
+                  ),
+                  if (meta.isNotEmpty)
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13 * 0.85,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

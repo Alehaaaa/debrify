@@ -195,6 +195,7 @@ class LaunchAnimationLibrary {
     File source, {
     String? animationId,
     int? background,
+    String? preferredLibraryId,
     Future<void> Function()? beforeCommit,
   }) async {
     if (background != null &&
@@ -219,8 +220,12 @@ class LaunchAnimationLibrary {
       loaded.dispose();
       rethrow;
     }
+    if (preferredLibraryId != null &&
+        !RegExp(r'^[a-f0-9]{32}$').hasMatch(preferredLibraryId)) {
+      throw const LaunchImportException('Invalid animation library ID.');
+    }
     final entry = InstalledLaunchAnimation(
-      id: _newId(),
+      id: preferredLibraryId ?? _newId(),
       name: prepared.info.name,
       animationId: prepared.info.id,
       background: loaded.background,
@@ -253,6 +258,7 @@ class LaunchAnimationLibrary {
       ).writeAsString(jsonEncode(imageIndex), flush: true);
       await _lock.synchronized(() async {
         final entries = await _readIndex(root);
+        if (entries.any((candidate) => candidate.id == entry.id)) return;
         await beforeCommit?.call();
         await pending.rename(p.join(root.path, entry.id));
         try {

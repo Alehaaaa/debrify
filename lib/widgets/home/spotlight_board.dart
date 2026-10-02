@@ -6,7 +6,7 @@ import '../recoverable_network_image.dart';
 import '../../models/metadata_preferences.dart';
 import '../metadata_presentation_mixin.dart';
 import 'dart:async';
-import 'dart:math' show max;
+import 'dart:math' show max, min;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +36,7 @@ import '../movie_watched_badge.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/wide_touch_scale.dart';
 import '../../utils/spotlight_interaction_policy.dart';
+import '../optical_logo.dart';
 
 /// What a card is, once a shelf stops being a list of TITLES.
 ///
@@ -324,6 +325,12 @@ class SpotlightBoard extends StatefulWidget {
   /// outlives the title it was resolved for is worse than no video.
   final VoidCallback? onTrailerStop;
 
+  /// Pointer/touch: the hero was scrolled out of view (true) or back (false)
+  /// while its trailer was rolling. The host pauses and resumes the SAME
+  /// player rather than stopping it, so returning continues the trailer.
+  /// Null (or DPAD) keeps the stop-on-scroll behaviour.
+  final ValueChanged<bool>? onTrailerSuspend;
+
   /// The addon behind the hero reel, which is the shelf it was taken from.
   final StremioAddon? heroAddon;
 
@@ -368,6 +375,7 @@ class SpotlightBoard extends StatefulWidget {
     this.pendingShelves = false,
     this.onDwell,
     this.onTrailerStop,
+    this.onTrailerSuspend,
     this.trailer,
     this.trailersEnabled = true,
     this.onAmbient,
@@ -865,15 +873,39 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     final away = _scroll.offset > _heroBandH * 0.35;
     if (away == _scrolledAway) return;
     _scrolledAway = away;
+    final suspend = widget.onTrailerSuspend;
     if (away) {
+      // A rolling trailer is PAUSED, not stopped, off TV: scrolling back up
+      // resumes it where it was. TV keeps releasing its scarce decoder.
+      if (_rolling && suspend != null && !widget.dpad) {
+        _trailerSuspended = true;
+        suspend(true);
+        return;
+      }
       _cadence?.cancel();
       _cadence = null;
       _stopRolling();
     } else {
+      if (_trailerSuspended) {
+        _trailerSuspended = false;
+        suspend?.call(false);
+        return;
+      }
       // Applies its own gates (DPAD hero focus, pref, dwell callback), so
       // this is safe to fire from any scroll back to the top.
       _restartCadence();
     }
+  }
+
+  /// The rolling trailer is paused by [_onBoardScrolled], awaiting a resume.
+  bool _trailerSuspended = false;
+
+  /// Every path that stops or re-arms the trailer ends a suspension, so a
+  /// stale one can never swallow the next scroll-back's restart.
+  void _clearTrailerSuspension() {
+    if (!_trailerSuspended) return;
+    _trailerSuspended = false;
+    widget.onTrailerSuspend?.call(false);
   }
 
   /// Which hero item is showing. Held by ID so a rail re-order does not move
@@ -931,6 +963,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   /// One funnel for leaving the rolling state, so no exit path can forget to
   /// tell the host to tear the video down.
   void _stopRolling() {
+    _clearTrailerSuspension();
     if (!_rolling) return;
     if (mounted) setState(() => _rolling = false);
     widget.onTrailerStop?.call();
@@ -954,6 +987,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     if (hasPreview) {
       _cadence?.cancel();
       _cadence = null;
+      _clearTrailerSuspension();
       if (_rolling && mounted) setState(() => _rolling = false);
       // Also cancels a hero resolve that has not reached its first frame yet.
       widget.onTrailerStop?.call();
@@ -973,6 +1007,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     _cadence = null;
     if (!mounted) return;
     if (_dwelledHeroId != null && _dwelledHeroId == _heroItem?.id) return;
+    _clearTrailerSuspension();
     _rolling = false;
     // The active card owns the one available decoder. A rebuild caused by
     // loading more shelves or resolving hero art must not re-arm the hero
@@ -2869,15 +2904,46 @@ class _LogoOrTitle extends StatelessWidget {
     //
     // Holding the box at full size from the first frame means the art fades
     // into a space already shaped for it and nothing else moves.
-    return SizedBox(
-      width: 235 * scale,
-      height: 60 * scale,
-      child: CachedNetworkImage(
+    //
+    // Inside it, the logo is sized OPTICALLY (see [OpticalLogo]): a fixed
+    // box made long wordmarks width-bound and tiny while square marks filled
+    // it. The slot is capped to the available width so the centred compact
+    // hero never overflows a narrow phone.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slotWidth = min(_logoMaxWidth * scale, constraints.maxWidth);
+        final slotHeight = _logoMaxHeight * scale;
+        return SizedBox(
+          width: slotWidth,
+          height: slotHeight,
+          child: _image(corner, text, slotWidth, slotHeight),
+        );
+      },
+    );
+  }
+
+  static const double _logoMaxWidth = OpticalLogo.defaultMaxWidth;
+  static const double _logoMaxHeight = OpticalLogo.defaultMaxHeight;
+  static const double _logoArea = OpticalLogo.defaultArea;
+
+  Widget _image(
+    Alignment corner,
+    Widget text,
+    double slotWidth,
+    double slotHeight,
+  ) {
+    return CachedNetworkImage(
         imageUrl: url!,
-        fit: BoxFit.contain,
-        alignment: corner,
         cacheManager: DebrifyImageCache.manager,
-        memCacheWidth: 520,
+        // ~2x the widest slot so long logos stay crisp on HiDPI screens.
+        memCacheWidth: 960,
+        imageBuilder: (context, image) => OpticalLogo(
+          image: image,
+          alignment: corner,
+          maxWidth: slotWidth,
+          maxHeight: slotHeight,
+          area: _logoArea * scale * scale,
+        ),
         placeholder: (_, __) => const SizedBox.shrink(),
         // The title has to earn its way into the same slot rather than
         // resizing it — scaleDown only shrinks, so short titles keep their
@@ -2894,7 +2960,6 @@ class _LogoOrTitle extends StatelessWidget {
             child: SizedBox(width: 235 * scale, child: text),
           ),
         ),
-      ),
     );
   }
 }

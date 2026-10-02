@@ -3503,6 +3503,11 @@ class DownloadService {
         ownerProfileId: _activeOwnerProfileId,
         presentExternalJobIds: byId.keys,
       );
+      // Native tasks are device-wide; settle every profile's vanished jobs.
+      await DeviceJobStore.reconcileBackendForAllOwners(
+        backend: 'androidNativeDownload',
+        liveExternalJobIds: byId.keys,
+      );
     }
 
     // 2) History entries claiming active work that native doesn't know about
@@ -3588,6 +3593,16 @@ class DownloadService {
         backend: 'backgroundDownloader',
         ownerProfileId: _activeOwnerProfileId,
         presentExternalJobIds: present,
+      );
+      // The plugin database is device-wide: settle other profiles' jobs that
+      // it no longer runs, so they cannot block deleting those profiles.
+      final live = <String>[
+        for (final record in await FileDownloader().database.allRecords())
+          if (!record.status.isFinalState) record.task.taskId,
+      ];
+      await DeviceJobStore.reconcileBackendForAllOwners(
+        backend: 'backgroundDownloader',
+        liveExternalJobIds: live,
       );
     }
   }

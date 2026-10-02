@@ -49,6 +49,7 @@ import '../theme/app_theme_scope.dart';
 import '../theme/artwork_accent.dart';
 import '../utils/home_rail_metrics.dart';
 import '../utils/platform_util.dart';
+import '../widgets/trailer_status_chip.dart';
 import '../utils/tvos_device.dart';
 import '../models/debrify_tv/channel.dart';
 import '../models/home_collection.dart';
@@ -78,6 +79,9 @@ import '../services/iptv_cw_router.dart';
 import '../services/iptv_media_store.dart';
 import '../services/local_bound_source_service.dart';
 import '../services/main_page_bridge.dart';
+import '../services/discover_credits_handoff.dart';
+import '../services/tmdb_metadata_repository.dart';
+import '../services/imdb_credits_service.dart';
 import '../models/profiles/profile_policy.dart';
 import '../services/profiles/profile_policy_guard.dart';
 import '../services/playlist_player_service.dart';
@@ -234,6 +238,12 @@ class SearchScreen extends StatefulWidget {
   /// reuses this screen's item-open/play handlers and cached CW/Trakt rows.
   final bool discoverMode;
 
+  /// A FIXED-source Discover page (requires [discoverMode]): a person's or
+  /// studio's titles, pushed over a detail page. The page is titled with the
+  /// name instead of offering a Source dropdown, shows a back button, and
+  /// leaves every tab-owned hook to the real Discover tab underneath.
+  final DiscoverCreditsRequest? discoverCredits;
+
   @visibleForTesting
   final TmdbTitleSearch? titleSearch;
 
@@ -245,6 +255,7 @@ class SearchScreen extends StatefulWidget {
     this.isTelevision = false,
     this.searchMode = false,
     this.discoverMode = false,
+    this.discoverCredits,
     this.titleSearch,
     this.suggestedTitleResolver,
   });
@@ -326,6 +337,10 @@ const String _discTmdb = 'tmdb';
 const String _discJellyfin = 'jellyfin';
 const String _discEmby = 'emby';
 const String _discMdblist = 'mdblist';
+
+/// A person's or studio's titles, handed off from a detail page. Transient:
+/// never persisted as the remembered Discover source.
+const String _discCredits = 'credits';
 const String _discAddonPrefix = 'a:';
 
 /// Whether an asynchronously loaded Discover landing source may still update
@@ -1676,6 +1691,10 @@ class _SearchScreenState extends State<SearchScreen>
   /// off. Applied at engine open, so it's also read once per screen life.
   double _heroTrailerVolume = 0;
 
+  /// The stored ambient volume (10–100), kept while muted so unmuting from
+  /// the playing chip restores it.
+  double _heroTrailerConfiguredVolume = 70;
+
   /// Trailers only on the TV Home board's full spotlight — never the Search
   /// tab's compact strip (too small, and results should dominate) or off-TV
   /// (the hero itself isn't rendered there). Low-memory Apple TV generations
@@ -1720,6 +1739,12 @@ class _SearchScreenState extends State<SearchScreen>
   /// MDBList panel, which opens focused on it with the ♥ like toggle.
   MdblistListChoice? _discMdblistList;
 
+  /// The person/studio of a fixed-source page ([SearchScreen.discoverCredits]).
+  DiscoverCreditsRequest? _discCreditsRequest;
+
+  /// A pushed person/studio page rather than the Discover tab.
+  bool get _fixedDiscover => widget.discoverCredits != null;
+
   // The grid tile the DPAD is currently on, mirrored into the two-pane detail
   // rail (TV Discover). A ValueNotifier — not setState — so a focus move only
   // rebuilds the rail, never the grid subtree.
@@ -1743,7 +1768,7 @@ class _SearchScreenState extends State<SearchScreen>
   // title's backdrop behind both panes.
   final ValueNotifier<StremioMeta?> _discShown = ValueNotifier(null);
   // True while trailer frames are on the stage (set by DiscoverTrailerStage) —
-  // drives the AMBIENT chip in the page's status corner.
+  // drives the TRAILER chip in the page's status corner.
   final ValueNotifier<bool> _discTrailerShowing = ValueNotifier(false);
   // Theater: after a few seconds of uninterrupted playback the page commits to
   // the trailer — veils thin to near-clear, rail and grid recede to ~15%. Armed
@@ -1862,7 +1887,11 @@ class _SearchScreenState extends State<SearchScreen>
           ? 'discover'
           : 'home',
     );
-    MainPageBridge.registerTvContentFocusHandler(_tabIndex, _focusContent);
+    // Tab-owned: a pushed person/studio page must not take these from the
+    // Discover tab underneath it (their unregisters are identity-checked).
+    if (!_fixedDiscover) {
+      MainPageBridge.registerTvContentFocusHandler(_tabIndex, _focusContent);
+    }
     if (!widget.searchMode && !widget.discoverMode) {
       StorageService.localCompletionRevision.addListener(
         _onLocalCompletionChanged,
@@ -1896,7 +1925,10 @@ class _SearchScreenState extends State<SearchScreen>
     // Discover tab on the MDBList source, focused on that list. The nav
     // rebuilds this screen fresh on every tab switch, so the payload set right
     // before switchTab(18) is present by the time we mount.
-    if (widget.discoverMode) {
+    if (_fixedDiscover) {
+      _discCreditsRequest = widget.discoverCredits;
+      _discSource = _discCredits;
+    } else if (widget.discoverMode) {
       final pending = MainPageBridge.pendingMdblistListOpen;
       if (pending != null) {
         MainPageBridge.pendingMdblistListOpen = null;
@@ -1950,8 +1982,9 @@ class _SearchScreenState extends State<SearchScreen>
         final enabled = values[0] as bool;
         setState(() {
           _heroTrailerEnabled = enabled;
+          _heroTrailerConfiguredVolume = (values[2] as int).toDouble();
           _heroTrailerVolume = (values[1] as bool)
-              ? (values[2] as int).toDouble()
+              ? _heroTrailerConfiguredVolume
               : 0;
         });
         if (!enabled) return;
@@ -1964,7 +1997,7 @@ class _SearchScreenState extends State<SearchScreen>
     // Discover on TV: relay the trailer takeover to the sidebar chrome-dim so
     // the rail hides when the trailer goes fullscreen. The showing listener
     // arms the theater timer (deep lights-off a few seconds into playback).
-    if (widget.discoverMode) {
+    if (widget.discoverMode && !_fixedDiscover) {
       MainPageBridge.discoverCardSettingsChanged =
           _onDiscoverCardSettingsChanged;
     }
@@ -1975,7 +2008,9 @@ class _SearchScreenState extends State<SearchScreen>
       // the Settings picker fires the bridge. DISCOVER instance only — Home
       // and Search never render this layout and must not take the slot.
       unawaited(_loadDiscoverLayout());
-      MainPageBridge.discoverLayoutChanged = _onDiscoverLayoutChanged;
+      if (!_fixedDiscover) {
+        MainPageBridge.discoverLayoutChanged = _onDiscoverLayoutChanged;
+      }
     }
     MainPageBridge.addIntegrationListener(_onIntegrationsChanged);
     // Playback that ran in a separate ACTIVITY (Android TV native player,
@@ -2190,11 +2225,26 @@ class _SearchScreenState extends State<SearchScreen>
     final enabled = values[0] as bool;
     setState(() {
       _heroTrailerEnabled = enabled;
+      _heroTrailerConfiguredVolume = (values[2] as int).toDouble();
       _heroTrailerVolume = (values[1] as bool)
-          ? (values[2] as int).toDouble()
+          ? _heroTrailerConfiguredVolume
           : 0;
     });
     if (!enabled) _clearHeroTrailer();
+  }
+
+  /// The Spotlight playing chip's speaker: flips ambient trailer sound live
+  /// and persists it to both surfaces, as the Settings page does, so Home
+  /// and the detail backdrop agree whichever key this platform reads.
+  Future<void> _toggleHeroTrailerSound() async {
+    final enabled = _heroTrailerVolume <= 0;
+    setState(() {
+      _heroTrailerVolume = enabled ? _heroTrailerConfiguredVolume : 0;
+    });
+    await Future.wait([
+      for (final surface in AmbientTrailerSurface.values)
+        StorageService.setAmbientTrailerAudioEnabled(surface, enabled),
+    ]);
   }
 
   /// Off-TV Home's Back (via the bridge, tab key 'home'): close the Spotlight
@@ -7603,7 +7653,7 @@ class _SearchScreenState extends State<SearchScreen>
 
   /// Theater mode: after the ambient trailer has been SHOWING frames for a
   /// dwell, the shelf/tabs (and their bottom scrim) recede so the video owns
-  /// the whole screen — logo + AMBIENT chip hold. Any key wakes the lights
+  /// the whole screen — logo + TRAILER chip hold. Any key wakes the lights
   /// (observe-only: the key still does its job), and if playback continues
   /// uninterrupted the dwell re-arms. The shelf is hidden VISUALLY only
   /// (opacity/slide, never unmounted), so focus stays exactly where it was.
@@ -8241,9 +8291,11 @@ class _SearchScreenState extends State<SearchScreen>
       trailersEnabled: _heroTrailerEnabled,
       onDwell: (item) => _scheduleHeroTrailer(item, fromSpotlight: true),
       onTrailerStop: _clearHeroTrailer,
+      onTrailerSuspend: _onHeroTrailerSuspend,
       trailer: _heroTrailerRenderable
           ? _HeroTrailerLayer(
               trailer: _heroTrailer,
+              suspended: _heroTrailerSuspended,
               isTelevision: widget.isTelevision,
               heroHeight: 540,
               // Full bleed on every form factor — a letterboxed 16:9 band
@@ -8256,6 +8308,7 @@ class _SearchScreenState extends State<SearchScreen>
               loading: _heroTrailerLoading,
               onPlayingChanged: _onHeroTrailerPlaying,
               takeover: _heroTrailerTakeover,
+              onSoundToggle: _toggleHeroTrailerSound,
             )
           : null,
       // TV only: the glass stage the publish feeds exists behind the TV
@@ -8667,6 +8720,7 @@ class _SearchScreenState extends State<SearchScreen>
                 loading: _heroTrailerLoading,
                 onPlayingChanged: _onHeroTrailerPlaying,
                 takeover: _heroTrailerTakeover,
+                onSoundToggle: _toggleHeroTrailerSound,
               ),
             // A focused IPTV favourite's live feed, full-bleed in the SAME
             // region — above the catalog trailer layer so it simply wins
@@ -9163,6 +9217,7 @@ class _SearchScreenState extends State<SearchScreen>
                 loading: _heroTrailerLoading,
                 onPlayingChanged: _onHeroTrailerPlaying,
                 takeover: _heroTrailerTakeover,
+                onSoundToggle: _toggleHeroTrailerSound,
               ),
             if (_heroTrailerActive)
               _HeroLiveLayer(
@@ -9574,6 +9629,7 @@ class _SearchScreenState extends State<SearchScreen>
                       loading: _heroTrailerLoading,
                       onPlayingChanged: _onHeroTrailerPlaying,
                       takeover: _heroTrailerTakeover,
+                      onSoundToggle: _toggleHeroTrailerSound,
                     ),
                   if (_heroTrailerActive)
                     _HeroLiveLayer(
@@ -10347,6 +10403,7 @@ class _SearchScreenState extends State<SearchScreen>
                       loading: _heroTrailerLoading,
                       onPlayingChanged: _onHeroTrailerPlaying,
                       takeover: _heroTrailerTakeover,
+                      onSoundToggle: _toggleHeroTrailerSound,
                     ),
                   if (_heroTrailerActive)
                     _HeroLiveLayer(
@@ -10882,6 +10939,7 @@ class _SearchScreenState extends State<SearchScreen>
                         loading: _heroTrailerLoading,
                         onPlayingChanged: _onHeroTrailerPlaying,
                         takeover: _heroTrailerTakeover,
+                        onSoundToggle: _toggleHeroTrailerSound,
                       ),
                     if (_heroTrailerActive)
                       _HeroLiveLayer(
@@ -11730,8 +11788,21 @@ class _SearchScreenState extends State<SearchScreen>
     }
   }
 
+  /// The Spotlight hero was scrolled out of view (true) or back (false) with
+  /// its trailer rolling: pause / resume the same player (see
+  /// [SpotlightBoard.onTrailerSuspend]).
+  bool _heroTrailerSuspended = false;
+
+  void _onHeroTrailerSuspend(bool suspended) {
+    if (!mounted || _heroTrailerSuspended == suspended) return;
+    setState(() => _heroTrailerSuspended = suspended);
+  }
+
   /// Kill any pending/playing hero trailer (hero cleared, board reloading).
   void _clearHeroTrailer() {
+    if (_heroTrailerSuspended && mounted) {
+      setState(() => _heroTrailerSuspended = false);
+    }
     _heroTrailerTimer?.cancel();
     _heroTrailerReq++;
     if (_heroTrailer.value != null) _heroTrailer.value = null;
@@ -18361,7 +18432,8 @@ class _SearchScreenState extends State<SearchScreen>
         discoverLandingLoadIsCurrent(
           capturedRevision: revision,
           currentRevision: _discSourceRevision,
-          hasPendingHandoff: _discMdblistList != null,
+          hasPendingHandoff:
+              _discMdblistList != null || _discCreditsRequest != null,
         )) {
       if (_discSource != landing) setState(() => _discSource = landing);
       unawaited(StorageService.setDiscoverLastSource(landing));
@@ -18389,7 +18461,8 @@ class _SearchScreenState extends State<SearchScreen>
           discoverLandingLoadIsCurrent(
             capturedRevision: revision,
             currentRevision: _discSourceRevision,
-            hasPendingHandoff: _discMdblistList != null,
+            hasPendingHandoff:
+              _discMdblistList != null || _discCreditsRequest != null,
           )) {
         _discSource = landing;
       }
@@ -18398,7 +18471,8 @@ class _SearchScreenState extends State<SearchScreen>
         discoverLandingLoadIsCurrent(
           capturedRevision: revision,
           currentRevision: _discSourceRevision,
-          hasPendingHandoff: _discMdblistList != null,
+          hasPendingHandoff:
+              _discMdblistList != null || _discCreditsRequest != null,
         )) {
       unawaited(StorageService.setDiscoverLastSource(landing));
     }
@@ -18409,15 +18483,83 @@ class _SearchScreenState extends State<SearchScreen>
   /// Scaffold/back header), with the Source dropdown injected as its leading
   /// filter so DPAD walks Source → the panel's own filters → grid. All item
   /// open/play/bound wiring is this screen's existing board handlers.
-  Widget _buildDiscover() => DiscoverBrowsingInput(
-    onActivity: () {
-      if (_discTheater.value) _discTheater.value = false;
-      // Input can leave the same trailer playing (hover or a grid boundary).
-      // Restart its idle dwell even when the playback notifier does not change.
-      _onDiscShowingChanged();
-    },
-    child: _buildDiscoverContent(),
-  );
+  Widget _buildDiscover() {
+    final content = DiscoverBrowsingInput(
+      onActivity: () {
+        if (_discTheater.value) _discTheater.value = false;
+        // Input can leave the same trailer playing (hover or a grid boundary).
+        // Restart its idle dwell even when the playback notifier does not
+        // change.
+        _onDiscShowingChanged();
+      },
+      child: _buildDiscoverContent(),
+    );
+    if (!_fixedDiscover) return content;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildFixedDiscoverHeader(),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  /// A fixed-source page's header: back (it is a pushed page, outside the
+  /// app's navigation) and the person's or studio's name as the title, over
+  /// the source's own filters.
+  Widget _buildFixedDiscoverHeader() {
+    final app = AppThemeScope.of(context);
+    final request = widget.discoverCredits!;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        widget.isTelevision ? 20 : 12,
+        widget.isTelevision ? 16 : 8,
+        24,
+        0,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Back',
+            autofocus: widget.isTelevision,
+            icon: const Icon(Icons.arrow_back_rounded),
+            color: app.core.tx,
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  request.kind == 'person' ? 'PERSON' : 'STUDIO',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.6,
+                    color: app.fade(app.core.tx, 0.55),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  request.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: widget.isTelevision ? 30 : 26,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.4,
+                    color: app.core.tx,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDiscoverContent() {
     final app = AppThemeScope.of(context);
@@ -18442,7 +18584,7 @@ class _SearchScreenState extends State<SearchScreen>
         // fit. Either way, fall back to the full-width panel.
         if (c.maxWidth < 720 || c.maxHeight < 420) {
           // The trailer stage (which drives _discTakeover → sidebar chrome-dim,
-          // and _discTrailerShowing → the AMBIENT chip) is unmounted in this
+          // and _discTrailerShowing → the TRAILER chip) is unmounted in this
           // branch. Clear both post-frame so nothing sticks across the drop.
           if (_discTakeover.value != 0 ||
               _discTrailerShowing.value ||
@@ -18594,21 +18736,11 @@ class _SearchScreenState extends State<SearchScreen>
                       ),
                     ),
             ),
-            // Status corner: the Home hero's chip pair, handing over in place —
-            // equalizer TRAILER pill while resolving/buffering, AMBIENT chip
-            // once frames are up. Anchored bottom-left, in the rail column's
+            // Status corner: the Home hero's TRAILER chip — spinner while
+            // resolving/buffering, wave once frames are up. Anchored bottom-left, in the rail column's
             // permanently-empty zone (the plot is capped at 6 lines, so the
             // identity block never reaches it) — the top-right corner belongs
             // to the filter line, which can wrap two rows on 5-segment sources.
-            Positioned(
-              bottom: 22,
-              left: 24,
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _discTrailerLoading,
-                builder: (_, loading, __) =>
-                    _HeroTrailerLoadingPill(visible: loading),
-              ),
-            ),
             Positioned(
               bottom: 22,
               left: 24,
@@ -18617,7 +18749,7 @@ class _SearchScreenState extends State<SearchScreen>
                 builder: (_, showing, __) => ValueListenableBuilder<bool>(
                   valueListenable: _discTrailerLoading,
                   builder: (_, loading, __) =>
-                      _HeroAmbientChip(visible: showing && !loading),
+                      TrailerStatusChip(loading: loading, playing: showing),
                 ),
               ),
             ),
@@ -18804,18 +18936,8 @@ class _SearchScreenState extends State<SearchScreen>
                   ),
                 ),
         ),
-        // Status corner: the same TRAILER→AMBIENT chip pair the two-pane
-        // shows, moved to the TOP-right — the bottom-left corner belongs to
+        // Status corner: the same TRAILER chip the two-pane shows, moved to the TOP-right — the bottom-left corner belongs to
         // the identity block here.
-        Positioned(
-          top: 16,
-          right: 22,
-          child: ValueListenableBuilder<bool>(
-            valueListenable: _discTrailerLoading,
-            builder: (_, loading, __) =>
-                _HeroTrailerLoadingPill(visible: loading),
-          ),
-        ),
         Positioned(
           top: 16,
           right: 22,
@@ -18824,7 +18946,7 @@ class _SearchScreenState extends State<SearchScreen>
             builder: (_, showing, __) => ValueListenableBuilder<bool>(
               valueListenable: _discTrailerLoading,
               builder: (_, loading, __) =>
-                  _HeroAmbientChip(visible: showing && !loading),
+                  TrailerStatusChip(loading: loading, playing: showing),
             ),
           ),
         ),
@@ -18854,7 +18976,9 @@ class _SearchScreenState extends State<SearchScreen>
       _discSourceRevision++;
       _discSource = source;
     });
-    unawaited(StorageService.setDiscoverLastSource(source));
+    if (source != _discCredits) {
+      unawaited(StorageService.setDiscoverLastSource(source));
+    }
     // The embedded panel reattaches this shared node when the source changes.
     if (widget.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -18906,6 +19030,48 @@ class _SearchScreenState extends State<SearchScreen>
         leading: source,
         isTelevision: widget.isTelevision,
       );
+    }
+
+    final credits = _discCreditsRequest;
+    if (_discSource == _discCredits &&
+        credits != null &&
+        _metadataFeaturePolicy != null) {
+      // TMDB's person/company pages when this build has TMDB, IMDb's credits
+      // otherwise — either way the same embedded browse panel as TMDB below.
+      final tmdbId = credits.tmdbId;
+      final useTmdb =
+          tmdbId != null && tmdbId > 0 && TmdbMetadataRepository.instance.configured;
+      final imdbId = credits.imdbId;
+      final imdbService = credits.kind == 'person'
+          ? (ImdbCreditsService.isNameId(imdbId)
+                ? ImdbCreditBrowseService.person(imdbId!)
+                : null)
+          : (ImdbCreditsService.isCompanyId(imdbId)
+                ? ImdbCreditBrowseService.company(imdbId!)
+                : null);
+      if (useTmdb || imdbService != null) {
+        return MetadataBrowsePage(
+          key: ValueKey('disc_credits_${credits.key}'),
+          title: credits.title,
+          kind: credits.kind,
+          id: useTmdb ? tmdbId : int.parse(imdbId!.substring(2)),
+          type: credits.type,
+          service: useTmdb ? null : imdbService,
+          preferences: _metadataFeaturePolicy!,
+          onOpen: (item) => _openItem(
+            item,
+            item.sourceAddon ?? _addonForContinue(null),
+          ),
+          onItemFocused: _onDiscFocused,
+          isBound: _isBound,
+          isTelevision: widget.isTelevision,
+          embedded: true,
+          // Fixed source: the name is the page title above the filters (see
+          // [_buildFixedDiscoverHeader]), so no Source dropdown leads them.
+          leading: _fixedDiscover ? null : source,
+          leadingNode: _fixedDiscover ? null : _discSourceNode,
+        );
+      }
     }
 
     if (_discSource == _discTmdb && _metadataFeaturePolicy != null) {
@@ -19531,6 +19697,7 @@ class _SearchScreenState extends State<SearchScreen>
                   loading: _heroTrailerLoading,
                   onPlayingChanged: _onHeroTrailerPlaying,
                   takeover: _heroTrailerTakeover,
+                  onSoundToggle: _toggleHeroTrailerSound,
                 ),
               ),
             // A focused IPTV favourite's live feed, painted into the SAME

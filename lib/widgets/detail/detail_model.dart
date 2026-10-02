@@ -105,6 +105,11 @@ class DetailModel {
   /// default keeps independently constructed models immediately usable.
   final bool openingDataReady;
 
+  /// The title's details (synopsis, year, runtime, genres) are still being
+  /// fetched. Layouts show shimmering placeholders for what is missing
+  /// instead of empty space or stale addon text.
+  final bool detailsLoading;
+
   /// Resume state still resolving: the primary button shows a spinner instead
   /// of [primaryLabel] so it never flashes a wrong status ("Start Watching" →
   /// "Resume · S1E7").
@@ -221,6 +226,7 @@ class DetailModel {
     required this.parentsGuide,
     required this.recommendations,
     this.openingDataReady = true,
+    this.detailsLoading = false,
     required this.primaryLabel,
     this.primaryBusy = false,
     required this.sourceCount,

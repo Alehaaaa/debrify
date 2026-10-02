@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import 'profile_database_snapshot.dart';
+import 'profile_app_assets_codec.dart';
 import 'profile_avatar_ingest.dart';
 import 'sanitized_profile_preferences.dart';
 import '../../models/profiles/profile_avatar.dart';
@@ -1078,6 +1079,12 @@ class PortableProfilePackage {
           throw const FormatException('Portable avatar digest mismatch');
         }
       }
+
+      // Device assets ride on an optional profile field for the same reason
+      // as avatarFile; see [ProfileAppAssetsCodec].
+      await ProfileAppAssetsCodec.validate(
+        profile[ProfileAppAssetsCodec.field],
+      );
 
       final databaseSectionId = profile['databasesSection'];
       if (databaseSectionId == null) continue;

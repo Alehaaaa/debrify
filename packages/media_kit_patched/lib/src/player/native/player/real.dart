@@ -69,6 +69,12 @@ void nativeEnsureInitialized({String? libmpv}) {
     final cmd = 'quit'.toNativeUtf8();
     try {
       for (final reference in references) {
+        // Detach the previous isolate's wakeup callback FIRST. It died with
+        // that isolate, and mpv calls it for every event — including the
+        // load/unload hooks it runs while honouring `quit` — which aborts the
+        // VM ("Callback invoked after it has been deleted"). The regular
+        // dispose path does the same before releasing a handle.
+        mpv.mpv_set_wakeup_callback(reference.cast(), nullptr, nullptr);
         mpv.mpv_command_string(reference.cast(), cmd.cast());
       }
     } finally {

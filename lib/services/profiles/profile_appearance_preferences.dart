@@ -12,8 +12,6 @@ abstract final class ProfileAppearancePreferences {
     'defaults_generation',
     'sources_presentation_defaults_copied_v1',
     'subtitle_extreme_bottom_default_adopted_v1',
-    // Device-local launch package; never portable.
-    'imported_launch_animation_v1',
     // Display/performance tuning for this particular screen and GPU.
     'tv_ui_scale_percent',
     'tv_low_res_render',

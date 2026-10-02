@@ -2173,7 +2173,7 @@ class StremioService {
       // Build recommendations directly from the addon entries. Posters /
       // backdrops come from Stremio's MetaHub CDN keyed purely by IMDb id
       // (no metadata addon dependency — the same source the Trakt path
-      // uses); the title and overview come from the entry itself. Unique,
+      // uses); the title comes from the entry itself. Unique,
       // first-seen order, capped, excluding the title itself.
       const maxItems = 24;
       final seen = <String>{};
@@ -2185,7 +2185,6 @@ class StremioService {
           if (t == null || t.imdbId == imdbId) continue;
           if (!seen.add('${t.type}:${t.imdbId}')) continue;
           final name = s.name?.trim();
-          final overview = s.title?.trim();
           recommendations.add(
             StremioMeta(
               id: t.imdbId,
@@ -2196,10 +2195,11 @@ class StremioService {
                   'https://images.metahub.space/poster/medium/${t.imdbId}/img',
               background:
                   'https://images.metahub.space/background/medium/${t.imdbId}/img',
-              description:
-                  (overview != null && overview.isNotEmpty && overview != name)
-                  ? overview
-                  : null,
+              // No description from the stream entry: recommendation addons
+              // fill its title with "📆 Release / 📈 Popularity / 📖
+              // Overview" stat blocks, not a synopsis. Like a Home card, the
+              // item carries its identity and art, and the detail page loads
+              // the real metadata.
             ),
           );
           if (recommendations.length >= maxItems) break outer;

@@ -18,7 +18,10 @@ abstract final class ProfilePreferencePortability {
     bool includeCredentialEngineSettings = false,
   }) {
     if (key == 'remote_home_collections_v2') return true;
-    if (key.isEmpty || (key.length > 256 && !CustomSeriesIdentity.isPortableSourceKey(key))) return false;
+    if (key.isEmpty ||
+        (key.length > 256 && !CustomSeriesIdentity.isPortableSourceKey(key))) {
+      return false;
+    }
     if (key == 'resolved_playback_links_v1') return false;
     final credentialShaped = _credentialPattern.hasMatch(key);
     final portableEngineCredential =
@@ -79,6 +82,8 @@ abstract final class ProfilePreferencePortability {
           : (include: true, value: value);
     }
     if (key == SubtitleAppearancePreferences.selectedFontKey) {
+      // Custom faces travel with their selection in profile-record app
+      // assets, so a receiver never selects a font it has not installed.
       return SubtitleAppearancePreferences.isBuiltInFontId(value)
           ? (include: true, value: value)
           : (include: false, value: null);
@@ -220,6 +225,8 @@ abstract final class ProfilePreferencePortability {
   };
 
   static const Set<String> _nonPortableKeys = <String>{
+    // Travels with its package in profile-record app assets instead. Older
+    // builds reject a package that carries this key as a preference.
     'imported_launch_animation_v1',
     // Registry resources are the sole portable copy of connection material.
     'real_debrid_endpoint',
@@ -237,6 +244,7 @@ abstract final class ProfilePreferencePortability {
     'download_tree_uri_v1',
     'download_tree_display_name_v1',
     'download_dir_path_v1',
+    // Device registry of absolute font paths; fonts travel as file assets.
     'subtitle_custom_fonts',
     'vault_key_source_v1',
 

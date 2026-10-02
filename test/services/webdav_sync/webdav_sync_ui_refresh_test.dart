@@ -65,6 +65,8 @@ void main() {
       'home_disabled_sections_v1',
       'home_hide_catalog_addon_names',
       'home_hide_collection_names',
+      'home_animations_enabled',
+      'home_animation_style',
       'home_hero_trailer_volume',
       'detail_trailer_volume',
       'subtitle_size_index',

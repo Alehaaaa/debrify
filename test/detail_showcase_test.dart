@@ -1,3 +1,4 @@
+import 'package:debrify/services/tmdb_metadata_repository.dart';
 import 'package:debrify/services/metadata_explore_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:debrify/widgets/detail/showcase_availability.dart';
@@ -221,6 +222,10 @@ Future<void> _press(WidgetTester t, LogicalKeyboardKey k) async {
 }
 
 class _ExploreFixture extends MetadataExploreService {
+  // A configured repository: the showcase skips the load entirely in a build
+  // without a TMDB token.
+  _ExploreFixture() : super(repository: TmdbMetadataRepository(token: 'test'));
+
   int calls = 0;
   int failures = 0;
   @override

@@ -919,6 +919,12 @@ class DevicePreferences {
     }
   }
 
+  /// Untyped read for registered keys whose stored type varies.
+  Object? get(String key) {
+    _assertAllowed(key);
+    return _delegate.get(key);
+  }
+
   String? getString(String key) {
     _assertAllowed(key);
     return _delegate.getString(key);

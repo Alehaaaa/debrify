@@ -4292,16 +4292,21 @@ class ProfileRegistry {
     );
   }
 
+  /// Settles open jobs of [backend] that are no longer present. A null
+  /// [ownerProfileId] settles every owner's jobs; only pass null when
+  /// [presentExternalJobIds] comes from a device-wide source of truth.
   Future<void> markMissingJobsTerminal({
     required String backend,
-    required String ownerProfileId,
+    required String? ownerProfileId,
     required Set<String> presentExternalJobIds,
   }) async {
     final rows = await _db.query(
       'job_ownership',
       columns: const <String>['external_job_id'],
-      where: 'backend = ? AND owner_profile_id = ? AND terminal_at_ms IS NULL',
-      whereArgs: <Object>[backend, ownerProfileId],
+      where: ownerProfileId == null
+          ? 'backend = ? AND terminal_at_ms IS NULL'
+          : 'backend = ? AND owner_profile_id = ? AND terminal_at_ms IS NULL',
+      whereArgs: <Object>[backend, ?ownerProfileId],
     );
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final row in rows) {

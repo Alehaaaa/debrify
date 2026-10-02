@@ -50,6 +50,12 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// Bring the trailer to the foreground (fullscreen, unmuted, controls).
   final bool foreground;
 
+  /// Out of view (the host scrolled past it): PAUSE the live player and keep
+  /// it — decoder, buffer and position — so clearing this resumes playback
+  /// in place instead of reopening the stream from the start. Nothing starts
+  /// while suspended.
+  final bool suspended;
+
   /// Fired when the user dismisses the fullscreen trailer (X / tap-scrim). The
   /// parent should flip [foreground] back to false.
   final VoidCallback? onRequestClose;
@@ -142,6 +148,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.audioUrl,
     required this.enabled,
     this.foreground = false,
+    this.suspended = false,
     this.onRequestClose,
     this.onPlayingChanged,
     this.onPlaybackFailed,
@@ -278,6 +285,12 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// buffer window the parent falls back to launching the standalone player.
   bool get canPromote => _engine != null && _videoVisible;
 
+  /// Frames are up and the trailer is in view. A [HeroTrailerBackdrop.suspended]
+  /// trailer fades back to the still (a frozen frame of a compressed stream
+  /// reads as blocky, full-screen) while its player waits, paused, underneath.
+  bool get _showVideo =>
+      _videoVisible && (!widget.suspended || widget.foreground);
+
   /// TV (Android) gets the native ExoPlayer engine — libmpv stutters decoding
   /// the trailer on weak TV SoCs. By default (pref on) it renders in underlay
   /// mode: a native SurfaceView *behind* a translucent Flutter surface, its
@@ -374,6 +387,19 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     }
 
+    // Scrolled out of view / back: pause and resume the SAME player.
+    if (widget.suspended != old.suspended) {
+      if (widget.suspended) {
+        _startTimer?.cancel();
+        _startTimer = null;
+        _engine?.pause();
+      } else if (_engine != null) {
+        if (!_pausedByUser && !_covered && !_appPaused) _engine!.play();
+      } else if (_canPlay && !_covered && !_appPaused) {
+        _scheduleStart();
+      }
+    }
+
     // Ambient volume retarget (the Home hero's takeover swell) — applied to
     // the live engine without any restart. No-op while foregrounded (full
     // volume) or user-muted; _applyVolume handles both.
@@ -429,6 +455,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       // backgrounded — trailer audio would play over other apps. The resume
       // handler reschedules.
       if (!mounted || !_canPlay || _covered || _appPaused) return;
+      if (widget.suspended) return;
       _initPlayer();
     });
   }
@@ -587,6 +614,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       );
       if (_engine != engine) return;
       if (widget.foreground) _applyVolume(foreground: true);
+      // Suspended while the stream was opening: open() plays immediately.
+      if (widget.suspended) unawaited(engine.pause());
     } catch (_) {
       // Bot-blocked / dead stream → stay on the static poster. Guarded: a
       // STALE engine's error (e.g. its open() aborting after a URL switch
@@ -732,7 +761,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // Respect an explicit pause: if the user paused in the player, the ambient
     // backdrop stays paused too (re-tapping Trailer re-promotes and resumes).
     // Only auto-resume the ambient loop when it wasn't paused on purpose.
-    if (!_pausedByUser) _engine?.play();
+    if (!_pausedByUser && !widget.suspended) _engine?.play();
     _syncPlayingNotification();
   }
 
@@ -854,7 +883,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     if (!_canPlay || _appPaused) return;
     if (_engine != null) {
       // Respect an explicit user pause of the foreground trailer.
-      if (!_pausedByUser) _engine!.play();
+      if (!_pausedByUser && !widget.suspended) _engine!.play();
     } else {
       _scheduleStart();
     }
@@ -866,7 +895,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       _appPaused = false;
       if (_covered) return;
       if (_engine != null) {
-        if (!_pausedByUser) _engine!.play();
+        if (!_pausedByUser && !widget.suspended) _engine!.play();
       } else if (mounted && _canPlay) {
         // The start timer may have fired (and skipped) while backgrounded —
         // give the trailer another dwell-delayed start now.
@@ -989,7 +1018,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
                   // Underlay crossfade: the video can't fade in (it isn't
                   // Flutter pixels), so the poster fades OUT over the
                   // already-running surface behind it.
-                  opacity: _videoVisible ? 0 : 1,
+                  opacity: _showVideo ? 0 : 1,
                   duration: const Duration(milliseconds: 650),
                   curve: Curves.easeOut,
                   child: _withHero(_buildStaticBackdrop()),
@@ -1003,7 +1032,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         // would re-parent the live Video widget and flash the texture.
         if (engine != null && !underlay)
           AnimatedOpacity(
-            opacity: _videoVisible ? 1 : 0,
+            opacity: _showVideo ? 1 : 0,
             duration: const Duration(milliseconds: 650),
             curve: Curves.easeOut,
             child: widget.videoBlurSigma <= 0

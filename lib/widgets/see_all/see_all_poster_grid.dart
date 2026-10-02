@@ -520,6 +520,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                           // move like it: the board's rise, the board's poster
                           // fade, and a glide instead of a jump.
                           boardChrome: true,
+                          // Home's card look on Discover pages only.
+                          homeChrome:
+                              DiscoverCardSettingsScope.maybeOf(context) !=
+                              null,
                         ),
                       ),
                     ),
@@ -602,10 +606,14 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                             ? null
                             : () => widget.onItemFocused!(item),
                         progress: widget.progressOf?.call(item),
-                        showInlineTitle: false,
+                        // Home's caption on the poster unless the grid
+                        // already names the title below it.
+                        showInlineTitle: !showTitles,
                         showTypeBadge: showTypeBadge,
                         showRatingBadge: showRatingBadge,
                         compactBadgeLayout: m.childWidth < 142,
+                        // Home's card look on Discover pages only.
+                        homeChrome: discoverSettings != null,
                       ),
                     ),
                     if (showTitles) ...[

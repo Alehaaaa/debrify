@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../utils/platform_util.dart';
+import '../widgets/trailer_status_chip.dart';
 import '../models/stremio_addon.dart';
 import '../models/advanced_search_selection.dart';
 import '../models/playlist_view_mode.dart';
@@ -254,6 +255,18 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   Color _accent = _gold;
 
   ImdbEnrichment? _imdbExtra;
+
+  /// In-flight detail lookups (Cinemeta, IMDb) — drive the placeholders.
+  bool _cinemetaPending = false;
+  bool _imdbPending = false;
+
+  void _setDetailsPending({bool? cinemeta, bool? imdb}) {
+    if (!mounted) return;
+    setState(() {
+      _cinemetaPending = cinemeta ?? _cinemetaPending;
+      _imdbPending = imdb ?? _imdbPending;
+    });
+  }
   ParentsGuideResult? _parentsGuide;
   void _openMetadataRecommendation(StremioMeta item) {
     final onOpen = widget.onRecommendationTap;
@@ -1200,6 +1213,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             item.imdbRating != null ||
             (item.genres?.isNotEmpty ?? false));
     if (alreadyRich) return;
+    _setDetailsPending(cinemeta: true);
     try {
       final full = await enrich(imdbId, item.type);
       if (full == null || !mounted) return;
@@ -1226,7 +1240,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         );
       });
       refreshMetadataPresentation();
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _setDetailsPending(cinemeta: false);
+    }
   }
 
   /// Resolve the trailer's YouTube ID from Cinemeta. Runs independently of
@@ -1526,6 +1543,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         scope == ProfileRuntime.scope.value &&
         revision == MetadataPreferencesService.revision.value;
     final imdbId = _item.effectiveImdbId;
+    _setDetailsPending(imdb: true);
     try {
       final extra = await MetadataDetailsService.instance.enrich(
         _item,
@@ -1533,7 +1551,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             imdbId == null ? null : ImdbEnrichmentService.fetch(imdbId),
       );
       if (mounted && valid()) setState(() => _imdbExtra = extra);
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _setDetailsPending(imdb: false);
+    }
   }
 
   Future<void> _loadParentsGuide() async {
@@ -1654,17 +1675,18 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                 videoBlurSigma: widget.isTelevision || _style == 'showcase'
                     ? 0
                     : 8,
-                // Dropped the moment the body walks past its hero: the
-                // reference's trailer belongs to the key-art frame, and playing
-                // one under a blurred field is a decoder held for nothing. It
-                // also frees the process's single video output for whatever the
-                // user opens next.
-                videoUrl: _trailerAutoplayEnabled && !_bodyDeep
+                videoUrl: _trailerAutoplayEnabled
                     ? _trailerStreams?.playUrl
                     : null,
-                audioUrl: _trailerAutoplayEnabled && !_bodyDeep
+                audioUrl: _trailerAutoplayEnabled
                     ? _trailerStreams?.audioUrl
                     : null,
+                // Paused the moment the body walks past its hero (the
+                // reference's trailer belongs to the key-art frame; playing
+                // under a blurred field is wasted decode) and resumed in place
+                // on the way back up — the player is kept, never reopened.
+                // Opening another page still releases it (route coverage).
+                suspended: _bodyDeep,
                 // Resolution and decoder startup already provide a natural
                 // poster dwell. Do not stack an artificial wait on top of that.
                 startDelay: Duration.zero,
@@ -1822,23 +1844,24 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                 ),
               ),
             ),
-            // Small "trailer playing in background" hint — only while the
-            // ambient trailer is actually playing and not promoted. Tapping it
-            // brings the trailer forward (same as the Trailer button).
-            if (_trailerAmbientPlaying && !_trailerForeground)
+            // The ambient trailer chip — the same one the Home Spotlight
+            // hero shows, in the same top-right corner, moved into the slot
+            // Home's search button occupies (this page has none): spinner
+            // while the backdrop resolves, wave while it plays, speaker on
+            // hover. Hidden once the trailer is promoted to the foreground.
+            if (!_trailerForeground)
               Positioned(
-                left: 0,
-                bottom: 0,
-                child: SafeArea(
-                  child: Padding(
-                    padding: EdgeInsets.all(widget.isTelevision ? 20 : 12),
-                    child: _TrailerPlayingChip(
-                      onTap: _playTrailer,
-                      soundOn: _trailerAmbientSoundOn,
-                      onSoundToggle: _toggleTrailerAmbientSound,
-                      theme: _themedBody ? _theme : null,
-                    ),
-                  ),
+                top: widget.isTelevision
+                    ? 16.0
+                    : MediaQuery.viewPaddingOf(context).top + 16.0,
+                right: widget.isTelevision ? 22.0 : 14.0,
+                child: TrailerStatusChip(
+                  loading: _trailerResolving,
+                  playing: _trailerAmbientPlaying,
+                  soundOn: _trailerAmbientSoundOn,
+                  onSoundToggle: widget.isTelevision
+                      ? null
+                      : _toggleTrailerAmbientSound,
                 ),
               ),
           ],
@@ -1896,6 +1919,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       parentsGuide: _parentsGuide,
       recommendations: _recommendations ?? const [],
       openingDataReady: _showcaseOpeningDataReady,
+      detailsLoading: _cinemetaPending || _imdbPending,
       primaryLabel: _primaryLabel,
       primaryBusy: _primaryBusy,
       sourceCount: widget.boundSourceCount?.call(widget.item) ?? 0,
@@ -4013,90 +4037,6 @@ class _PrimaryButtonState extends State<_PrimaryButton> {
       skipTraversal: true,
       onKeyEvent: (_, event) => _onKey(event),
       child: button,
-    );
-  }
-}
-
-/// Subtle "trailer playing in background" hint pill. An informational hint, not
-/// a primary control (the focusable "Watch Trailer" button is the DPAD way to
-/// promote), so it's pointer/touch-tappable only — `canRequestFocus: false`
-/// keeps it out of DPAD traversal entirely, so it can never steal focus or
-/// strand the remote when it appears/disappears as the trailer plays/pauses.
-class _TrailerPlayingChip extends StatelessWidget {
-  final VoidCallback onTap;
-  final bool soundOn;
-  final VoidCallback onSoundToggle;
-
-  /// Null for Classic.
-  final DetailTheme? theme;
-
-  const _TrailerPlayingChip({
-    required this.onTap,
-    required this.soundOn,
-    required this.onSoundToggle,
-    this.theme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final t = theme;
-    final radius = t?.brBtn ?? BorderRadius.circular(999);
-    return Material(
-      color:
-          t?.ground.withValues(alpha: 0.6) ??
-          Colors.black.withValues(alpha: 0.42),
-      borderRadius: radius,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          borderRadius: radius,
-          border: Border.all(
-            color: t?.hair ?? Colors.white.withValues(alpha: 0.14),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InkWell(
-              borderRadius: radius,
-              canRequestFocus: false,
-              onTap: onTap,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.graphic_eq_rounded,
-                    size: 14,
-                    color: t?.tx ?? Colors.white.withValues(alpha: 0.85),
-                  ),
-                  const SizedBox(width: 7),
-                  Text(
-                    'Trailer playing',
-                    style: TextStyle(
-                      color: t?.tx ?? Colors.white.withValues(alpha: 0.85),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 5),
-            IconButton(
-              tooltip: soundOn
-                  ? 'Mute trailer autoplay'
-                  : 'Unmute trailer autoplay',
-              onPressed: onSoundToggle,
-              icon: Icon(
-                soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-                size: 18,
-                color: t?.tx ?? Colors.white.withValues(alpha: 0.85),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

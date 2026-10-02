@@ -1032,10 +1032,9 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
     if (inspection is! WebDavSyncFolderExisting) {
       throw StateError('The connected sync is no longer available.');
     }
-    await ProfileBackupFlows(context).createSyncVersion(
-      inspection,
-      announce: false,
-    );
+    await ProfileBackupFlows(
+      context,
+    ).createSyncVersion(inspection, announce: false);
     return true;
   }
 
@@ -1406,8 +1405,8 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         SettingsSection(
           title: 'Sync status',
           blurb: active
-              ? 'Your profiles, shared settings and watch progress sync automatically while the app is open. Appearance stays on this device.'
-              : 'Keep your profiles, shared settings and watch progress together across your devices. Appearance stays on each device.',
+              ? 'Your profiles, app settings and watch progress sync automatically while the app is open. Device-specific performance settings stay local.'
+              : 'Keep your profiles, app settings and watch progress together across your devices. Device-specific performance settings stay local.',
           children: [
             ListTile(
               leading: Icon(
@@ -1445,6 +1444,8 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
                           ? 'Logout needs attention'
                           : active
                           ? 'Connected to $connectedName'
+                          : finishingFirstSync
+                          ? 'Connecting to $connectedName'
                           : 'Not connected',
                     ),
                   ),

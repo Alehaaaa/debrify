@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'dart:math' show Random, min;
+import 'dart:ui' as ui;
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,9 +15,11 @@ import '../../services/trakt/trakt_episode_model.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/widgets/parallax_focus.dart';
+import '../../theme/widgets/themed_skeleton.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../../utils/wide_touch_scale.dart';
+import '../optical_logo.dart';
 import '../episodes_panel.dart';
 import '../season_action_region.dart';
 import '../tracker_brand_marks.dart';
@@ -277,11 +283,13 @@ class _HoverState extends State<_Hover> {
 
 /// The scrolled ground: the same artwork as a low-frequency colour field.
 ///
-/// Decoded at 32px and scaled up rather than blurred. A real
+/// Pre-blurred ONCE, small, then scaled up (see [_PreBlurredArt]). A live
 /// `ImageFilter.blur(sigma: 45)` is a full-resolution Gaussian on every
-/// repaint; a 32px decode is the same low-frequency information for
-/// effectively nothing, and it is a still image so it repaints only when the
-/// URL changes.
+/// repaint; the old shortcut — a raw 32px decode stretched with low-quality
+/// sampling — showed its pixels as a blocky, low-res "box blur". An image
+/// that is already blurred has no edges left to block, so it upscales
+/// smoothly, and it is still a single still that repaints only when the URL
+/// changes.
 class ShowcaseAmbient extends StatelessWidget {
   final String? url;
   final bool visible;
@@ -301,21 +309,228 @@ class ShowcaseAmbient extends StatelessWidget {
         children: [
           Transform.scale(
             scale: 1.15,
-            child: CachedNetworkImage(
-              imageUrl: url!,
-              fit: BoxFit.cover,
-              cacheManager: DebrifyImageCache.manager,
-              memCacheWidth: 32,
-              filterQuality: FilterQuality.low,
-              placeholder: (_, __) => ColoredBox(color: bed),
-              errorWidget: (_, __, ___) => ColoredBox(color: bed),
-            ),
+            child: _PreBlurredArt(url: url!, bed: bed),
           ),
           // The field is a BED for white text, not a picture. Under a .55 veil
           // the artwork starts competing with the episode titles sitting on it.
           ColoredBox(color: bed.withValues(alpha: 0.58)),
+          // Fine grain over the soft field: texture that makes it read as
+          // glass (and breaks up gradient banding).
+          const IgnorePointer(child: _FilmGrain()),
         ],
       ),
+    );
+  }
+}
+
+/// Static monochrome film grain, one noise texel per PHYSICAL pixel so it
+/// stays crisp at any size. The tile is generated once per process and
+/// repeated by the shader, so the grain costs one textured quad per frame.
+class _FilmGrain extends StatefulWidget {
+  const _FilmGrain();
+
+  @override
+  State<_FilmGrain> createState() => _FilmGrainState();
+}
+
+class _FilmGrainState extends State<_FilmGrain> {
+  static const int _tile = 128;
+
+  /// Peak grain alpha (0–255). Visible texture, not static.
+  static const int _strength = 24;
+
+  static Future<ui.Image>? _shared;
+
+  ui.Image? _image;
+
+  static Future<ui.Image> _generate() {
+    final random = Random(0x5EED);
+    final pixels = Uint8List(_tile * _tile * 4);
+    for (var i = 0; i < pixels.length; i += 4) {
+      // Light or dark speck at a random strength, premultiplied-safe.
+      final light = random.nextBool();
+      final alpha = random.nextInt(_strength + 1);
+      final value = light ? alpha : 0;
+      pixels[i] = value;
+      pixels[i + 1] = value;
+      pixels[i + 2] = value;
+      pixels[i + 3] = alpha;
+    }
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      pixels,
+      _tile,
+      _tile,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    (_shared ??= _generate()).then((image) {
+      if (mounted) setState(() => _image = image);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _image;
+    if (image == null) return const SizedBox.shrink();
+    return CustomPaint(
+      painter: _GrainPainter(
+        image,
+        MediaQuery.devicePixelRatioOf(context),
+      ),
+      size: Size.infinite,
+    );
+  }
+}
+
+class _GrainPainter extends CustomPainter {
+  final ui.Image image;
+  final double devicePixelRatio;
+
+  _GrainPainter(this.image, this.devicePixelRatio);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final scale = 1 / devicePixelRatio;
+    final paint = Paint()
+      ..filterQuality = FilterQuality.none
+      ..shader = ImageShader(
+        image,
+        TileMode.repeated,
+        TileMode.repeated,
+        Matrix4.diagonal3Values(scale, scale, 1).storage,
+      );
+    canvas.drawRect(Offset.zero & size, paint);
+  }
+
+  @override
+  bool shouldRepaint(_GrainPainter old) =>
+      old.image != image || old.devicePixelRatio != devicePixelRatio;
+}
+
+/// [url] decoded small, gaussian-blurred once into an offscreen image, and
+/// drawn with high-quality sampling. All the blur work happens a single time
+/// per artwork; every frame after that is one textured quad.
+class _PreBlurredArt extends StatefulWidget {
+  final String url;
+  final Color bed;
+
+  const _PreBlurredArt({required this.url, required this.bed});
+
+  @override
+  State<_PreBlurredArt> createState() => _PreBlurredArtState();
+}
+
+class _PreBlurredArtState extends State<_PreBlurredArt> {
+  /// Enough detail for a lightly softened picture, still cheap to blur once.
+  static const int _decodeWidth = 640;
+
+  /// Medium: softly frosted key art, not a colour smear (sigma 3.7 at 640px
+  /// is roughly a full-resolution sigma 11).
+  static const double _sigma = 3.7;
+
+  /// 1.2× saturation (Rec. 709 luma weights).
+  static const List<double> _saturate = <double>[
+    1.1574, -0.1430, -0.0144, 0, 0, //
+    -0.0426, 1.0570, -0.0144, 0, 0, //
+    -0.0426, -0.1430, 1.1856, 0, 0, //
+    0, 0, 0, 1, 0,
+  ];
+
+  ImageStream? _stream;
+  late final ImageStreamListener _listener = ImageStreamListener(
+    _onImage,
+    onError: (_, _) {},
+  );
+  ui.Image? _blurred;
+  int _generation = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_PreBlurredArt old) {
+    super.didUpdateWidget(old);
+    if (old.url != widget.url) _resolve();
+  }
+
+  void _resolve() {
+    final provider = ResizeImage(
+      CachedNetworkImageProvider(
+        widget.url,
+        cacheManager: DebrifyImageCache.manager,
+      ),
+      width: _decodeWidth,
+    );
+    final stream = provider.resolve(createLocalImageConfiguration(context));
+    if (stream.key == _stream?.key) return;
+    _stream?.removeListener(_listener);
+    _stream = stream..addListener(_listener);
+  }
+
+  Future<void> _onImage(ImageInfo info, bool _) async {
+    final generation = ++_generation;
+    final source = info.image;
+    final recorder = ui.PictureRecorder();
+    // Clamp, not decal: edge pixels extend outward instead of the blur
+    // pulling transparent black in from beyond the borders.
+    Canvas(recorder).drawImage(
+      source,
+      Offset.zero,
+      Paint()
+        ..filterQuality = FilterQuality.medium
+        // Frosted glass keeps the colour behind it vivid; blur alone greys it.
+        ..colorFilter = const ColorFilter.matrix(_saturate)
+        ..imageFilter = ui.ImageFilter.blur(
+          sigmaX: _sigma,
+          sigmaY: _sigma,
+          tileMode: TileMode.clamp,
+        ),
+    );
+    final picture = recorder.endRecording();
+    ui.Image? blurred;
+    try {
+      blurred = await picture.toImage(source.width, source.height);
+    } catch (_) {
+      blurred = null;
+    } finally {
+      picture.dispose();
+      info.dispose();
+    }
+    if (blurred == null) return;
+    if (!mounted || generation != _generation) {
+      blurred.dispose();
+      return;
+    }
+    final previous = _blurred;
+    setState(() => _blurred = blurred);
+    previous?.dispose();
+  }
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    _blurred?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final image = _blurred;
+    if (image == null) return ColoredBox(color: widget.bed);
+    return RawImage(
+      image: image,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.high,
     );
   }
 }
@@ -632,8 +847,8 @@ class ShowcaseIdentity extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Chip(label: m.isMovie ? 'Film' : 'Series'),
-          const SizedBox(height: 9),
+          // No Film/Series chip above the logo: the meta line right below
+          // already leads with the type.
           _LogoOrTitle(url: m.logo, name: m.name, centered: true),
           const SizedBox(height: 10),
           _MetaLine(model: m),
@@ -644,6 +859,9 @@ class ShowcaseIdentity extends StatelessWidget {
           ],
           if ((m.synopsis ?? '').isNotEmpty) ...[
             _ExpandableSynopsis(text: m.synopsis!),
+            const SizedBox(height: 10),
+          ] else if (m.detailsLoading) ...[
+            const _TextSkeleton(lines: 2, centered: true),
             const SizedBox(height: 10),
           ],
           _TechLine(model: m),
@@ -688,8 +906,8 @@ class ShowcaseIdentity extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.end,
         mainAxisSize: MainAxisSize.max,
         children: [
-          _Chip(label: m.isMovie ? 'Film' : 'Series'),
-          const SizedBox(height: 9),
+          // No Film/Series chip above the logo: the meta line right below
+          // already leads with the type.
           _LogoOrTitle(url: m.logo, name: m.name),
           const SizedBox(height: 10),
           _MetaLine(model: m),
@@ -707,6 +925,11 @@ class ShowcaseIdentity extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: _t(10.5 * metrics.k, a: 0.74).copyWith(height: 1.42),
               ),
+            )
+          else if (m.detailsLoading)
+            SizedBox(
+              width: 410 * metrics.k,
+              child: const _TextSkeleton(lines: 3),
             ),
           const SizedBox(height: 11),
           _TechLine(model: m),
@@ -769,33 +992,52 @@ class _LogoOrTitle extends StatelessWidget {
     // ConstrainedBox let CachedNetworkImage adopt its placeholder's intrinsic
     // width and then relayout around the decoded logo, which made the wordmark
     // visibly slide into place on slower TVs.
-    return SizedBox(
-      width: 235 * m.k,
-      height: 60 * m.k,
-      child: Align(
-        alignment: alignment,
-        child: (url == null || url!.isEmpty)
-            ? FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: alignment,
-                child: text,
-              )
-            : CachedNetworkImage(
-                imageUrl: url!,
-                width: 235 * m.k,
-                height: 60 * m.k,
-                fit: BoxFit.contain,
-                alignment: alignment,
-                cacheManager: DebrifyImageCache.manager,
-                memCacheWidth: 520,
-                placeholder: (_, __) => const SizedBox.expand(),
-                errorWidget: (_, __, ___) => FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: alignment,
-                  child: text,
-                ),
-              ),
-      ),
+    //
+    // Inside it the logo is sized OPTICALLY, exactly as the Home Spotlight
+    // does ([OpticalLogo]): equal visual weight for long wordmarks and
+    // compact marks alike, instead of a fixed box that left long ones tiny.
+    // Capped to the available width so the centred phone identity never
+    // overflows.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slotWidth = min(
+          OpticalLogo.defaultMaxWidth * m.k,
+          constraints.maxWidth,
+        );
+        final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
+        return SizedBox(
+          width: slotWidth,
+          height: slotHeight,
+          child: Align(
+            alignment: alignment,
+            child: (url == null || url!.isEmpty)
+                ? FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: alignment,
+                    child: text,
+                  )
+                : CachedNetworkImage(
+                    imageUrl: url!,
+                    cacheManager: DebrifyImageCache.manager,
+                    // ~2x the widest slot so long logos stay crisp on HiDPI.
+                    memCacheWidth: 960,
+                    imageBuilder: (context, image) => OpticalLogo(
+                      image: image,
+                      alignment: alignment,
+                      maxWidth: slotWidth,
+                      maxHeight: slotHeight,
+                      area: OpticalLogo.defaultArea * m.k * m.k,
+                    ),
+                    placeholder: (_, __) => const SizedBox.expand(),
+                    errorWidget: (_, __, ___) => FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: alignment,
+                      child: text,
+                    ),
+                  ),
+          ),
+        );
+      },
     );
   }
 }
@@ -839,30 +1081,6 @@ class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
             ).copyWith(letterSpacing: 0.8),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-
-  const _Chip({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    final m = ShowcaseMetrics.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.55),
-        borderRadius: BorderRadius.circular(4 * m.k),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: 7.5 * m.k,
-          vertical: 3.5 * m.k,
-        ),
-        child: Text(label, style: _t(9.5 * m.k, w: FontWeight.w600)),
       ),
     );
   }
@@ -1075,10 +1293,64 @@ class _TechLine extends StatelessWidget {
       if ((model.runtime ?? '').isNotEmpty) model.runtime!,
       if ((model.certificate ?? '').isNotEmpty) model.certificate!,
     ];
-    if (bits.isEmpty) return const SizedBox.shrink();
+    if (bits.isEmpty) {
+      return model.detailsLoading
+          ? _SkeletonBar(width: 130 * ShowcaseMetrics.of(context).k)
+          : const SizedBox.shrink();
+    }
     return Text(
       bits.join('  ·  '),
       style: _t(9.5 * ShowcaseMetrics.of(context).k, a: 0.7),
+    );
+  }
+}
+
+/// One rounded, animated placeholder bar, sized to a line of Showcase text.
+/// The animation is the theme's own wait style ([ThemedSkeleton]) — a
+/// travelling gradient shimmer in the default look.
+class _SkeletonBar extends StatelessWidget {
+  final double? width;
+  const _SkeletonBar({this.width});
+
+  @override
+  Widget build(BuildContext context) {
+    final k = ShowcaseMetrics.of(context).k;
+    return ThemedSkeleton(
+      width: width,
+      height: 11 * k,
+      borderRadius: BorderRadius.circular(6 * k),
+    );
+  }
+}
+
+/// Placeholder lines for a synopsis that is still loading: full-width
+/// lines with a shorter last one, the shape of a real paragraph.
+class _TextSkeleton extends StatelessWidget {
+  final int lines;
+  final bool centered;
+  const _TextSkeleton({required this.lines, this.centered = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final k = ShowcaseMetrics.of(context).k;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final full = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : 360 * k;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: centered
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < lines; i++) ...[
+              if (i > 0) SizedBox(height: 7 * k),
+              _SkeletonBar(width: i == lines - 1 ? full * 0.62 : full),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -1995,7 +2267,9 @@ class ShowcaseCast extends StatelessWidget {
         separatorBuilder: (_, __) => SizedBox(width: m.castGap),
         itemBuilder: (context, i) =>
             _CastTile(member: cast[i], node: nodes[i], size: m.circle,
-              onTap: onPersonOpen != null && (cast[i].tmdbPersonId ?? 0) > 0
+              onTap: onPersonOpen != null &&
+                      ((cast[i].tmdbPersonId ?? 0) > 0 ||
+                          cast[i].imdbPersonId != null)
                   ? () => onPersonOpen!(cast[i]) : null),
       ),
     );

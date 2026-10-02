@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
+import '../../services/discover_credits_handoff.dart';
+import '../../services/imdb_credits_service.dart';
 import '../../services/metadata_explore_service.dart';
 import '../../services/profiles/profile_runtime.dart';
 import 'showcase_availability.dart';
@@ -208,6 +210,10 @@ class _DetailShowcaseState extends State<DetailShowcase> {
   int _exploreGeneration = 0;
   Timer? _exploreRetry;
   bool _exploreFailed = false;
+
+  /// No TMDB in this build: studios come from IMDb (with Wikidata logos) and
+  /// where-to-watch, which only TMDB can supply, is left out.
+  bool _imdbStudios = false;
   final _extraNodes = <String, List<FocusNode>>{};
   final _extraKeys = <String, GlobalKey>{};
 
@@ -216,7 +222,14 @@ class _DetailShowcaseState extends State<DetailShowcase> {
       StorageService.detailPageSectionVisibilityCached;
 
   List<ShowcaseAvailabilityRow> get _extraRows => showcaseAvailabilityRows(
-    _explore, widget.model.metadataPreferences,
+    _explore,
+    _imdbStudios
+        ? widget.model.metadataPreferences?.copyWith(
+            features: widget.model.metadataPreferences!.features.difference({
+              MetadataFeature.availability,
+            }),
+          )
+        : widget.model.metadataPreferences,
     failed: _exploreFailed,
     visibility: _sectionVisibility,
   );
@@ -269,7 +282,57 @@ class _DetailShowcaseState extends State<DetailShowcase> {
       features.remove(MetadataFeature.availability);
     }
     if (features.isEmpty) return;
+    // TMDB's token is baked in at build time. Without it, studios come from
+    // IMDb instead; where-to-watch has no token-free source and is skipped
+    // rather than shown as a "Could not load. Retry" no retry can fix.
+    final service = widget.exploreService ?? MetadataExploreService.instance;
+    _imdbStudios = !service.repository.configured;
+    if (_imdbStudios) {
+      if (features.contains(MetadataFeature.companies)) {
+        _fetchImdbStudios(generation, 0);
+      }
+      return;
+    }
     _fetchExplore(generation, prefs.copyWith(features: features), 0);
+  }
+
+  String? get _itemImdbId {
+    final item = widget.model.item;
+    for (final id in [item.imdbId, item.id]) {
+      if (id != null && RegExp(r'^tt\d{7,9}$').hasMatch(id)) return id;
+    }
+    return null;
+  }
+
+  Future<void> _fetchImdbStudios(int generation, int attempt) async {
+    bool current() => mounted && generation == _exploreGeneration &&
+        _exploreScope == ProfileRuntime.scope.value;
+    final imdbId = _itemImdbId;
+    if (imdbId == null) return;
+    try {
+      final studios = await ImdbCreditsService.instance.companies(imdbId);
+      if (!current()) return;
+      setState(() => _explore = MetadataExploreData(
+        companies: [
+          for (final studio in studios)
+            {
+              'id': studio.number,
+              'name': studio.name,
+              'imdb_id': studio.id,
+              if (studio.logoUrl != null) 'logo_url': studio.logoUrl,
+            },
+        ],
+      ));
+    } catch (_) {
+      if (!current()) return;
+      if (attempt < 2) {
+        _exploreRetry = Timer(Duration(seconds: 1 << attempt), () {
+          if (current()) _fetchImdbStudios(generation, attempt + 1);
+        });
+      } else {
+        setState(() => _exploreFailed = true);
+      }
+    }
   }
 
   Future<void> _fetchExplore(int generation, MetadataPreferences prefs, int attempt) async {
@@ -298,10 +361,27 @@ class _DetailShowcaseState extends State<DetailShowcase> {
         !prefs.features.contains(MetadataFeature.companies)) {
       return;
     }
+    final imdbId = entry.imdbId;
+    final type = widget.model.item.type == 'series' ? 'tv' : 'movie';
+    // The studio's titles open as a fixed-source Discover page (filters,
+    // rail, trailer stage); the plain browse page is only the fallback.
+    if (DiscoverCreditsHandoff.open(context, DiscoverCreditsRequest(
+      kind: 'company',
+      title: entry.name,
+      tmdbId: imdbId == null ? entry.id : null,
+      imdbId: imdbId,
+      type: type,
+    ), isTelevision: widget.model.isTelevision)) {
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MetadataBrowsePage(
       title: entry.name, kind: entry.kind!, id: entry.id,
       type: widget.model.item.type == 'series' ? 'tv' : 'movie',
       preferences: prefs, onOpen: onOpen, isTelevision: widget.model.isTelevision,
+      // Token-free studios browse IMDb's credits for this company.
+      service: ImdbCreditsService.isCompanyId(imdbId)
+          ? ImdbCreditBrowseService.company(imdbId!)
+          : null,
     )));
   }
 
@@ -1316,14 +1396,47 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                         onPersonOpen: m.metadataPreferences?.features.contains(MetadataFeature.people) == true &&
                                 m.onRecommendationTap != null
                             ? (person) {
-                                final id = person.tmdbPersonId;
-                                if (id == null || id <= 0) return;
+                                // TMDB's person page when this build has
+                                // TMDB; otherwise their IMDb credits.
+                                final tmdbId = person.tmdbPersonId;
+                                final useTmdb = tmdbId != null && tmdbId > 0 &&
+                                    (widget.exploreService ??
+                                            MetadataExploreService.instance)
+                                        .repository.configured;
+                                final imdbId = person.imdbPersonId;
+                                if (!useTmdb &&
+                                    !ImdbCreditsService.isNameId(imdbId)) {
+                                  return;
+                                }
+                                // Their titles open as a fixed-source Discover
+                                // page; the plain browse page is the fallback.
+                                if (DiscoverCreditsHandoff.open(
+                                  context,
+                                  DiscoverCreditsRequest(
+                                    kind: 'person',
+                                    title: person.name,
+                                    tmdbId: useTmdb ? tmdbId : null,
+                                    imdbId: imdbId,
+                                    type: m.item.type == 'series'
+                                        ? 'tv'
+                                        : 'movie',
+                                  ),
+                                  isTelevision: m.isTelevision,
+                                )) {
+                                  return;
+                                }
                                 Navigator.of(context).push(MaterialPageRoute<void>(
                                   builder: (_) => MetadataBrowsePage(
-                                    title: person.name, kind: 'person', id: id,
+                                    title: person.name, kind: 'person',
+                                    id: useTmdb
+                                        ? tmdbId
+                                        : int.parse(imdbId!.substring(2)),
                                     preferences: m.metadataPreferences!,
                                     onOpen: m.onRecommendationTap!,
                                     isTelevision: m.isTelevision,
+                                    service: useTmdb
+                                        ? null
+                                        : ImdbCreditBrowseService.person(imdbId!),
                                   ),
                                 ));
                               }

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import '../utils/media_kit_init.dart';
 import '../utils/platform_util.dart';
 import 'video_output_lease.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mk;
@@ -107,6 +109,47 @@ class MediaKitTrailerEngine implements TrailerEngine {
   late final mkv.VideoController _controller;
   bool _disposed = false;
 
+  /// iOS: a muted trailer must not claim the device's audio. mpv's iOS audio
+  /// output activates AVAudioSession with the PLAYBACK category as soon as an
+  /// audio track is selected — at volume 0 too — which pauses other apps'
+  /// music and podcasts. While muted the engine therefore selects NO audio
+  /// track (`aid=no`), so no audio output (and no session) ever starts; the
+  /// track comes back when the user unmutes.
+  static bool get _releaseAudioWhenMuted =>
+      !kIsWeb && Platform.isIOS && !PlatformUtil.isTvOS;
+
+  /// Whether audio is currently deselected for [_releaseAudioWhenMuted].
+  bool _audioReleased = false;
+
+  /// The separate YouTube audio stream, muxed in lazily: only once the
+  /// trailer is audible (adding it would select it and start the output).
+  String? _audioUrl;
+  bool _audioUrlAdded = false;
+
+  Future<void> _setAid(String value) async {
+    final native = _player.platform;
+    if (native is mk.NativePlayer) await native.setProperty('aid', value);
+  }
+
+  /// Selects or deselects audio for the given [volume] (iOS only).
+  Future<void> _syncAudioForVolume(double volume) async {
+    if (!_releaseAudioWhenMuted || _disposed) return;
+    final mute = volume <= 0;
+    if (mute == _audioReleased) return;
+    _audioReleased = mute;
+    if (mute) {
+      await _setAid('no');
+      return;
+    }
+    final audioUrl = _audioUrl;
+    if (audioUrl != null && !_audioUrlAdded) {
+      _audioUrlAdded = true;
+      await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
+    } else {
+      await _setAid('auto');
+    }
+  }
+
   @override
   bool get rendersUnderlay => false;
 
@@ -136,6 +179,16 @@ class MediaKitTrailerEngine implements TrailerEngine {
   }) async {
     // Re-check [_disposed] after every await: a detach (URL switch, toggle off)
     // can land mid-sequence, and media_kit throws on use-after-dispose.
+    _audioUrl = (audioUrl != null && audioUrl.isNotEmpty) ? audioUrl : null;
+    final startMuted = _releaseAudioWhenMuted && volume <= 0;
+    if (startMuted) {
+      // Before loadfile: mpv picks tracks while the file loads, and an
+      // audio output started even briefly would already have taken the
+      // session.
+      _audioReleased = true;
+      await _setAid('no');
+      if (_disposed) return;
+    }
     await _player.setVolume(volume);
     if (_disposed) return;
     await _player.setPlaylistMode(
@@ -147,14 +200,26 @@ class MediaKitTrailerEngine implements TrailerEngine {
       play: true,
     );
     if (_disposed) return;
-    if (audioUrl != null && audioUrl.isNotEmpty) {
-      await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
+    if (_audioReleased) {
+      // Belt and braces: keep audio deselected for the loaded file.
+      await _setAid('no');
+      return;
+    }
+    if (_audioUrl != null) {
+      _audioUrlAdded = true;
+      await _player.setAudioTrack(mk.AudioTrack.uri(_audioUrl!));
     }
   }
 
   @override
   Future<void> setVolume(double volume) async {
-    if (!_disposed) await _player.setVolume(volume);
+    if (_disposed) return;
+    // Unmute: select audio BEFORE raising the volume; mute: drop the level
+    // first, then release the output.
+    if (volume > 0) await _syncAudioForVolume(volume);
+    if (_disposed) return;
+    await _player.setVolume(volume);
+    if (volume <= 0) await _syncAudioForVolume(volume);
   }
 
   @override

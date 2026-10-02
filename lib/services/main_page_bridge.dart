@@ -295,7 +295,6 @@ class MainPageBridge {
   /// Keys mirror MdblistListChoice: id (int), name, ownerName (String?),
   /// itemCount (int), liked (bool), likes (int).
   static Map<String, dynamic>? pendingMdblistListOpen;
-
   // ==========================================================================
   // Back Navigation Handling
   // ==========================================================================

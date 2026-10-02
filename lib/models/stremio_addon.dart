@@ -141,7 +141,53 @@ class StremioAddonCatalog {
 }
 
 /// Represents a meta item (movie/series) from a Stremio catalog
+/// Labels some catalog addons pack into a title's description as
+/// "📆 Release: …", "🌟 Rating: …", "🎬 Genre: …" lines. The app shows those
+/// fields itself, formatted, so the raw lines are noise — and they flash on
+/// the detail page before the real synopsis arrives.
+final RegExp _addonMetadataLine = RegExp(
+  r'^\s*(?:[^\p{L}\p{N}\s]{1,6}\s*)?'
+  r'(?:release(?:d| date)?|first aired|air date|year|rating|ratings|imdb|'
+  r'votes|genres?|runtime|duration|length|cast|stars|starring|directors?|'
+  r'writers?|creators?|country|countries|language|languages|status|'
+  r'seasons?|episodes?|network|studios?|certification|age rating|'
+  r'popularity|trending|rank|score|tagline|budget|revenue|box office)\s*:',
+  caseSensitive: false,
+  unicode: true,
+);
+
+/// "📖 Overview: …" — a label in front of the real synopsis. The label goes;
+/// the text after it (if any) stays.
+final RegExp _synopsisLabel = RegExp(
+  r'^\s*(?:[^\p{L}\p{N}\s]{1,6}\s*)?(?:overview|synopsis|plot|storyline)\s*:\s*',
+  caseSensitive: false,
+  unicode: true,
+);
+
+/// A line with no letters or digits at all (emoji/separator rows).
+final RegExp _decorativeLine = RegExp(r'^[^\p{L}\p{N}]*$', unicode: true);
+
 class StremioMeta {
+  /// [raw] without addon-packed metadata lines (see [_addonMetadataLine]);
+  /// null when nothing but such lines remains.
+  static String? cleanDescription(String? raw) {
+    if (raw == null) return null;
+    final kept = <String>[
+      for (final line in raw.split(RegExp(r'\r?\n')))
+        if (!_addonMetadataLine.hasMatch(line))
+          line.replaceFirst(_synopsisLabel, ''),
+    ];
+    // Trim decorative leftovers at either end; keep paragraph breaks inside.
+    while (kept.isNotEmpty && _decorativeLine.hasMatch(kept.first)) {
+      kept.removeAt(0);
+    }
+    while (kept.isNotEmpty && _decorativeLine.hasMatch(kept.last)) {
+      kept.removeLast();
+    }
+    final text = kept.join('\n').trim();
+    return text.isEmpty ? null : text;
+  }
+
   /// Content ID from the addon (e.g., 'tt1234567', 'tmdb:840464', 'trakt:123')
   final String id;
 
@@ -387,8 +433,9 @@ class StremioMeta {
       name: json['name'] as String? ?? json['title'] as String? ?? 'Unknown',
       poster: json['poster'] as String?,
       background: json['background'] as String? ?? json['fanart'] as String?,
-      description:
-          json['description'] as String? ?? json['overview'] as String?,
+      description: cleanDescription(
+        json['description'] as String? ?? json['overview'] as String?,
+      ),
       year: year,
       imdbRating: rating,
       genres: (json['genres'] as List<dynamic>?)?.cast<String>(),

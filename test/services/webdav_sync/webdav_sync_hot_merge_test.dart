@@ -937,9 +937,8 @@ void main() {
           isFalse,
           reason: key,
         );
-        // An imported launch animation is the one appearance value that is
-        // deliberately non-portable (ProfilePreferencePortability lists it):
-        // it never leaves this installation, not even through a backup.
+        // The imported launch selection travels with its package in
+        // profile-record app assets, never as a portable preference.
         expect(
           ProfilePreferencePortability.allowsKey(key),
           key != 'imported_launch_animation_v1',
@@ -1680,7 +1679,8 @@ void main() {
   });
 
   test('custom pins preserve scope and translate deletion keys', () {
-    String digest(String value) => sha256.convert(utf8.encode(value)).toString();
+    String digest(String value) =>
+        sha256.convert(utf8.encode(value)).toString();
     final maps = WebDavSyncIdentityMaps(
       circleToLocalProfiles: const {'profile-circle': 'profile-local'},
       circleToLocalResources: const {
@@ -1708,7 +1708,8 @@ void main() {
       'series_source_tt123': jsonEncode(pins),
     }, now: 100);
     final restored = WebDavSyncHotMerge.materializePreferences(
-      document: built.document, identityMaps: maps,
+      document: built.document,
+      identityMaps: maps,
     );
     expect(jsonDecode(restored['series_source_tt123'] as String), hasLength(6));
     for (final base in ['hash:same-hash', 'direct:$stream:profile']) {
@@ -1717,46 +1718,111 @@ void main() {
       expect(wire, startsWith('catalog:${digest('origin-circle')}:'));
       expect(maps.seriesBindingToLocal(wire), local);
       final projected = WebDavSyncRecordKey.projectLocalTombstoneKey(
-        WebDavSyncRecordKey.source('tt123', local), maps,
+        WebDavSyncRecordKey.source('tt123', local),
+        maps,
       );
       expect(built.document.watchState.records.containsKey(projected), isTrue);
     }
   });
 
-  test('media-server pins and tombstones share a portable identity across devices', () {
-    final a = WebDavSyncIdentityMaps(circleToLocalProfiles: {'profile-circle': 'profile-a'},
-      circleToLocalResources: {'circle-server': 'server-a'});
-    final b = WebDavSyncIdentityMaps(circleToLocalProfiles: {'profile-circle': 'profile-b'},
-      circleToLocalResources: {'circle-server': 'server-b'});
-    SeriesSource pin(String server, bool movie) => SeriesSource(
-      torrentHash: '', torrentName: 'Example', debridService: 'media_server', boundAt: 100,
-      debridTorrentId: MediaServerSource(serverId: server, contentId: 'tt123',
-        isMovie: movie, variant: movie ? 'version-1' : '1080p').encode());
-    Map<String, Object?> preferences(String server) => {
-      'series_source_tt123': jsonEncode([for (final movie in [true, false]) pin(server, movie).toJson()]),
-    };
-    final first = _buildWithPreferences(a, 'device-a', preferences('server-a'), now: 100);
-    final second = _buildWithPreferences(b, 'device-b', preferences('server-b'), now: 100);
-    expect(first.document.watchState.records.keys.toSet(), second.document.watchState.records.keys.toSet());
-    expect(first.document.watchState.records, hasLength(2));
-    expect(jsonEncode(first.document.toJson()), isNot(contains('server-a')));
-    final restored = WebDavSyncHotMerge.materializePreferences(document: first.document, identityMaps: b);
-    final pins = (jsonDecode(restored['series_source_tt123'] as String) as List)
-        .map((value) => SeriesSource.fromJson(Map<String, dynamic>.from(value as Map))).toList();
-    expect(pins.map((value) => value.bindingKey).toSet(), {pin('server-b', true).bindingKey, pin('server-b', false).bindingKey});
-    final tombstones = <String, WebDavSyncTombstone>{};
-    for (final movie in [true, false]) {
-      final key = WebDavSyncRecordKey.projectLocalTombstoneKey(
-        WebDavSyncRecordKey.source('tt123', pin('server-a', movie).bindingKey), a)!;
-      expect(first.document.watchState.records.containsKey(key), isTrue);
-      expect(b.seriesBindingToLocal(a.seriesBindingToWire(pin('server-a', movie).bindingKey)), pin('server-b', movie).bindingKey);
-      tombstones[key] = WebDavSyncTombstone(key: key, stamp: _stamp(200, 'device-a'), firstPublishedAtMs: 200);
-    }
-    final merged = WebDavSyncHotMerge.merge(local: second.document, peers: [first.document],
-      tombstoneDocuments: [WebDavSyncTombstoneDocument(circleProfileId: 'profile-circle', items: tombstones)],
-      nowMs: 200);
-    expect(merged.document.watchState.records, isEmpty);
-  });
+  test(
+    'media-server pins and tombstones share a portable identity across devices',
+    () {
+      final a = WebDavSyncIdentityMaps(
+        circleToLocalProfiles: {'profile-circle': 'profile-a'},
+        circleToLocalResources: {'circle-server': 'server-a'},
+      );
+      final b = WebDavSyncIdentityMaps(
+        circleToLocalProfiles: {'profile-circle': 'profile-b'},
+        circleToLocalResources: {'circle-server': 'server-b'},
+      );
+      SeriesSource pin(String server, bool movie) => SeriesSource(
+        torrentHash: '',
+        torrentName: 'Example',
+        debridService: 'media_server',
+        boundAt: 100,
+        debridTorrentId: MediaServerSource(
+          serverId: server,
+          contentId: 'tt123',
+          isMovie: movie,
+          variant: movie ? 'version-1' : '1080p',
+        ).encode(),
+      );
+      Map<String, Object?> preferences(String server) => {
+        'series_source_tt123': jsonEncode([
+          for (final movie in [true, false]) pin(server, movie).toJson(),
+        ]),
+      };
+      final first = _buildWithPreferences(
+        a,
+        'device-a',
+        preferences('server-a'),
+        now: 100,
+      );
+      final second = _buildWithPreferences(
+        b,
+        'device-b',
+        preferences('server-b'),
+        now: 100,
+      );
+      expect(
+        first.document.watchState.records.keys.toSet(),
+        second.document.watchState.records.keys.toSet(),
+      );
+      expect(first.document.watchState.records, hasLength(2));
+      expect(jsonEncode(first.document.toJson()), isNot(contains('server-a')));
+      final restored = WebDavSyncHotMerge.materializePreferences(
+        document: first.document,
+        identityMaps: b,
+      );
+      final pins =
+          (jsonDecode(restored['series_source_tt123'] as String) as List)
+              .map(
+                (value) => SeriesSource.fromJson(
+                  Map<String, dynamic>.from(value as Map),
+                ),
+              )
+              .toList();
+      expect(pins.map((value) => value.bindingKey).toSet(), {
+        pin('server-b', true).bindingKey,
+        pin('server-b', false).bindingKey,
+      });
+      final tombstones = <String, WebDavSyncTombstone>{};
+      for (final movie in [true, false]) {
+        final key = WebDavSyncRecordKey.projectLocalTombstoneKey(
+          WebDavSyncRecordKey.source(
+            'tt123',
+            pin('server-a', movie).bindingKey,
+          ),
+          a,
+        )!;
+        expect(first.document.watchState.records.containsKey(key), isTrue);
+        expect(
+          b.seriesBindingToLocal(
+            a.seriesBindingToWire(pin('server-a', movie).bindingKey),
+          ),
+          pin('server-b', movie).bindingKey,
+        );
+        tombstones[key] = WebDavSyncTombstone(
+          key: key,
+          stamp: _stamp(200, 'device-a'),
+          firstPublishedAtMs: 200,
+        );
+      }
+      final merged = WebDavSyncHotMerge.merge(
+        local: second.document,
+        peers: [first.document],
+        tombstoneDocuments: [
+          WebDavSyncTombstoneDocument(
+            circleProfileId: 'profile-circle',
+            items: tombstones,
+          ),
+        ],
+        nowMs: 200,
+      );
+      expect(merged.document.watchState.records, isEmpty);
+    },
+  );
 
   for (final ids in [
     ('server-a', 'server-b', 'circle-server'),
@@ -1787,14 +1853,20 @@ void main() {
         ];
         final preferences = <String, Object?>{
           for (final movie in [true, false])
-            movie ? 'quick_play_movie_rules_v2' : 'quick_play_series_rules_v2':
-                jsonEncode(
-                  QuickPlayRules.debrifyDefault(isMovie: movie)
-                      .copyWith(sourcePriority: priorities)
-                      .toJson(),
-                ),
+            movie
+                ? 'quick_play_movie_rules_v2'
+                : 'quick_play_series_rules_v2': jsonEncode(
+              QuickPlayRules.debrifyDefault(
+                isMovie: movie,
+              ).copyWith(sourcePriority: priorities).toJson(),
+            ),
         };
-        final built = _buildWithPreferences(a, 'device-a', preferences, now: 100);
+        final built = _buildWithPreferences(
+          a,
+          'device-a',
+          preferences,
+          now: 100,
+        );
         a.assertContainsNoLocalIds(built.document.toJson());
         final restored = WebDavSyncHotMerge.materializePreferences(
           document: built.document,
@@ -1806,7 +1878,10 @@ void main() {
             expected,
           );
         }
-        expect(a.toWire(priorities.first), 'mediaserver:${ids.$3.toLowerCase()}');
+        expect(
+          a.toWire(priorities.first),
+          'mediaserver:${ids.$3.toLowerCase()}',
+        );
         expect(b.toLocal(a.toWire(priorities)), expected);
         expect(b.toLocal(a.toWire(ids.$1)), ids.$2);
         final extendedKey = 'mediaserver:${ids.$1.toLowerCase()}-suffix';
