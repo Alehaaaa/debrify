@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/a60e179835da6a5d972436ad9dbcef1b683c193a/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/bc838a27f13a9f5cb876c4f0d02bf89408c6ba68/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610031655",
+          "date": "2026-10-03T17:01:15Z",
+          "localizedDescription": "What's new:\n• Refine detail/trailer visuals and build stability (bc838a27)\n\nBuild 202610031655 from nextup@bc838a2\nhttps://github.com/Alehaaaa/debrify/compare/a60e179...bc838a2",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-15-bc838a2.ipa",
+          "size": 39579904,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610030021",
