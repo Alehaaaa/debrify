@@ -1914,7 +1914,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             Positioned(
               top: widget.isTelevision
                   ? 16.0
-                  : MediaQuery.viewPaddingOf(context).top + 16.0,
+                  : MediaQuery.viewPaddingOf(context).top + 10.0,
               right: widget.isTelevision ? 22.0 : 14.0,
               // Lifts out with the back button rather than blinking off.
               child: IgnorePointer(
@@ -1932,7 +1932,6 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                   loading: _trailerResolving,
                   playing: _trailerAmbientPlaying,
                   soundOn: _trailerAmbientSoundOn,
-                  onOpen: widget.isTelevision ? null : _playTrailer,
                   onSoundToggle: widget.isTelevision
                       ? null
                       : _toggleTrailerAmbientSound,

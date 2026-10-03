@@ -1351,7 +1351,7 @@ class _HeroTrailerLayerState extends State<_HeroTrailerLayer> {
   /// UNDER the status bar and UNDER that button (the clipped "AMBIE…").
   /// Cleared to the button's left, vertically centred on it.
   double _chipTop(BuildContext context) =>
-      widget.isTelevision ? 16.0 : MediaQuery.viewPaddingOf(context).top + 16.0;
+      widget.isTelevision ? 16.0 : MediaQuery.viewPaddingOf(context).top + 10.0;
 
   double get _chipRight => widget.isTelevision
       ? 22.0

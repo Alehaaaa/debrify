@@ -1000,7 +1000,12 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   Widget build(BuildContext context) {
     final engine = _engine;
     final t = _fg.value; // 0 ambient → 1 foreground
-    final videoBlur = lerpDouble(widget.videoBlurSigma, 0, t)!;
+    // Do not animate a full-screen ImageFilter over the live video. Each
+    // intermediate sigma re-rasterizes the texture and can flash while the
+    // detail page is fading away. The decoder stays mounted; promotion simply
+    // drops its ambient blur once, while [_fg] continues to animate the page
+    // chrome and foreground controls around it.
+    final videoBlur = widget.foreground ? 0.0 : widget.videoBlurSigma;
     final underlay = engine?.rendersUnderlay ?? false;
 
     return Stack(

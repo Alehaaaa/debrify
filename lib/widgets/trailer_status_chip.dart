@@ -23,6 +23,10 @@ import '../utils/platform_util.dart';
 /// repaint inside its own RepaintBoundary, and the wave controller only runs
 /// while it is actually drawn, so the hidden chip costs nothing.
 class TrailerStatusChip extends StatefulWidget {
+  /// Matches the Home Spotlight search control, so the two top-corner
+  /// affordances share one deliberate visual weight.
+  static const double controlHeight = 40;
+
   /// Resolving/buffering: the spinner glyph. Wins over [playing].
   final bool loading;
 
@@ -239,7 +243,8 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
         // without the boundary each would dirty the ROUTE's layer.
         child: RepaintBoundary(
           child: Container(
-            padding: const EdgeInsets.fromLTRB(11, 6, 12, 6),
+            height: TrailerStatusChip.controlHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 13),
             decoration: BoxDecoration(
               // Glassy page ink — fade 0.8 pins the legacy 0xCC alpha.
               color: app.fade(app.home.bg, _showButton ? 0.9 : 0.8),
@@ -291,22 +296,27 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
       ),
     );
     if (interactive) {
-      chip = Tooltip(
-        message: widget.onOpen != null
-            ? 'Open trailer'
-            : (_soundOn ? 'Mute trailer' : 'Unmute trailer'),
-        child: Semantics(
-          button: true,
-          label: widget.onOpen != null
+      chip = Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        descendantsAreFocusable: false,
+        child: Tooltip(
+          message: widget.onOpen != null
               ? 'Open trailer'
               : (_soundOn ? 'Mute trailer' : 'Unmute trailer'),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _activate,
-            onLongPress: widget.onOpen != null && widget.onSoundToggle != null
-                ? _toggleSound
-                : null,
-            child: chip,
+          child: Semantics(
+            button: true,
+            label: widget.onOpen != null
+                ? 'Open trailer'
+                : (_soundOn ? 'Mute trailer' : 'Unmute trailer'),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _activate,
+              onLongPress: widget.onOpen != null && widget.onSoundToggle != null
+                  ? _toggleSound
+                  : null,
+              child: chip,
+            ),
           ),
         ),
       );

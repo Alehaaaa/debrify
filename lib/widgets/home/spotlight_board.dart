@@ -507,12 +507,13 @@ class _M {
   /// Landscape title-card width. Sized so a 16:9 card keeps roughly
   /// two-thirds of the poster row's height — at the poster's own width a
   /// wide card is barely half as tall and the whole rail reads shrunken.
-  /// TV shows ~3.4 cards per band, tablet ~2.6, phone ~1.7 with a peek
-  /// (user-tuned 2026-08: the first pass a step smaller read too timid).
+  /// Wide displays show four landscape cards and a hint of the next one,
+  /// rather than leaving a desktop/TV shelf looking sparse at three. Tablet
+  /// and phone keep their touch-friendly proportions.
   double get wideCardW => switch (tier) {
         _Tier.compact => w * 0.66,
         _Tier.mid => w * 0.45,
-        _Tier.wide => w * (625 / 1920),
+        _Tier.wide => w * (400 / 1920),
       };
   double get gap => switch (tier) {
         _Tier.compact => w * 0.025,

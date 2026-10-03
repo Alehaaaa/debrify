@@ -90,9 +90,10 @@ class _AppInitializerState extends State<AppInitializer>
     // the feature would silently do nothing. The controller is a singleton
     // already warmed in `main()` before `runApp`, so it is both correct and
     // synchronous, which is what `initState` needs.
+    final theme = AppThemeController.instance.theme;
     final themed = StorageService.launchIdentPaletteCached == 'theme';
     _palette = themed
-        ? IdentPalette.fromTheme(_ident, AppThemeController.instance.theme)
+        ? IdentPalette.fromTheme(_ident, theme)
         : _ident.palette;
     // NULL unless the user opted in. `_ident.palette` exposes `sweepColors`
     // as its accent/ink, which are the LOADING SWEEP's colours — not the
@@ -130,7 +131,10 @@ class _AppInitializerState extends State<AppInitializer>
     );
     _loadingPainter = LoadingSweepPainter(
       _idleController,
-      colors: _palette.sweep,
+      // The loading status belongs to the app, not the selected splash art.
+      // Its leading comet therefore always uses the active theme accent,
+      // while the trailing ink continues to harmonize with the splash.
+      colors: [theme.core.accent, _palette.ink],
     );
 
     _exitAnimation = Tween<double>(
