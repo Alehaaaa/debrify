@@ -368,10 +368,13 @@ class YoutubeService {
   ///
   /// Per-platform, matched to what each box can actually decode:
   ///
-  ///  * Phones and desktop: **1440.** Trailers are uploaded in 4K, and the
-  ///    1440p rung is VP9 — a much higher bitrate than 1080p AVC. Downscaled
-  ///    into a 1080-class panel that is supersampling: visibly crisper, and
-  ///    every phone this app meets hardware-decodes VP9.
+  ///  * iPhone and iPad: **720.** The ambient surface is a background, not a
+  ///    player. libmpv hands every decoded frame to Flutter through three
+  ///    OpenGL pixel buffers; 1440p made that upload contend with scrolling.
+  ///  * Other phones and desktop: **1440.** Trailers are uploaded in 4K, and
+  ///    the 1440p rung is VP9 — a much higher bitrate than 1080p AVC.
+  ///    Downscaled into a 1080-class panel that is supersampling: visibly
+  ///    crisper, and every phone this app meets hardware-decodes VP9.
   ///  * Apple TV: **1080.** VideoToolbox has no VP9 decode on the A15, so
   ///    anything above 1080 would software-decode in mpv — the one place the
   ///    hard-won trailer pipeline must not be gambled with. It still gets the
@@ -384,7 +387,9 @@ class YoutubeService {
       ? 1080
       : PlatformUtil.isAndroidTvCached
           ? 1080
-          : 1440;
+          : PlatformUtil.isIosMobile
+              ? 720
+              : 1440;
 
   /// Resolve a YouTube [videoId] into playable/downloadable stream URLs.
   ///

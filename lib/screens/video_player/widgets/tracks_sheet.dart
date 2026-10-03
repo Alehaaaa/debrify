@@ -10,6 +10,7 @@ import '../constants/color_constants.dart';
 import '../utils/language_mapping.dart';
 import '../services/subtitle_settings_service.dart';
 import '../services/subtitle_track_utils.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TracksSheetSubtitleSearchResult {
   final List<StremioSubtitle> subtitles;
@@ -165,6 +166,7 @@ class TracksSheet {
 
     subtitleSelectionCorrection?.addListener(reconcileSubtitleSelection);
     await showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

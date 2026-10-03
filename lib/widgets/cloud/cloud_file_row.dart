@@ -237,6 +237,7 @@ class _CloudFileRowState extends State<CloudFileRow> {
     final app = AppThemeScope.of(context);
     final hadFocus = _rowNode.hasFocus;
     final chosen = await showMenu<CloudRowAction>(
+popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: position,
       color: app.cloud.menuSurface,

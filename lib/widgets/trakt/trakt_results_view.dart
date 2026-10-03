@@ -26,6 +26,7 @@ import '../../screens/debrify_tv/widgets/tv_focus_scroll_wrapper.dart';
 import '../../screens/stremio_tv/widgets/stremio_tv_catalog_picker_dialog.dart';
 import '../add_source_picker_dialog.dart';
 import '../../utils/tv_keys.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Trakt list type options
 enum TraktListType {
@@ -1413,6 +1414,7 @@ class TraktResultsViewState extends State<TraktResultsView> {
     }
 
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(

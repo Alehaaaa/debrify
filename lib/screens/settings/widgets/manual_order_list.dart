@@ -9,6 +9,7 @@ import '../../../utils/tv_keys.dart';
 import '../../../utils/tv_reveal.dart';
 import '../../../widgets/tv_text_field.dart';
 import 'settings_widgets.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// One reorderable row: identity plus what the row displays. The [id] is the
 /// focus/selection identity and must be unique and stable across moves.
@@ -297,6 +298,7 @@ class ManualOrderListState extends State<ManualOrderList> {
     final item = items[index];
     final t = AppThemeScope.of(context).settings;
     final action = await showModalBottomSheet<String>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: t.panel,
       builder: (sheetContext) => TvHeldKeyGuard(

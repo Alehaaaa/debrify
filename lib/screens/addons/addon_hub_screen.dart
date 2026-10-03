@@ -26,6 +26,7 @@ import '../../utils/tv_keys.dart';
 import '../../widgets/see_all/see_all_theme.dart';
 import '../../widgets/see_all/stremio_dropdown.dart';
 import '../../widgets/tv_text_field.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation, kPopupMenuAnimation;
 
 /// What the hub is managing: Stremio addons or torrent-engine plugins. They are
 /// different features, so they get their own top-level dropdown instead of being
@@ -1023,6 +1024,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
   void _showOptions(StremioAddon a) {
     final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.seeAll.panel,
       shape: const RoundedRectangleBorder(
@@ -1159,6 +1161,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
       Offset.zero & overlay.size,
     );
     final choice = await showMenu<String>(
+popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: pos,
       color: app.seeAll.panel2,

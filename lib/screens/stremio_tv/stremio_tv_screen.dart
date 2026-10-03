@@ -45,6 +45,7 @@ import 'widgets/stremio_tv_guide_sheet.dart';
 import 'widgets/stremio_tv_local_catalogs_dialog.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Main Stremio TV screen — a TV guide powered by Stremio addon catalogs.
 ///
@@ -1475,6 +1476,7 @@ class _StremioTvScreenState extends State<StremioTvScreen> {
       episode: episode,
     );
     return showModalBottomSheet<_ResolvedSourceChoice?>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

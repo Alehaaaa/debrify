@@ -69,6 +69,7 @@ import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../utils/artwork_url.dart';
 import '../utils/episode_progress_merge.dart';
 import '../utils/tv_keys.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Merged series page (experimental, flag-gated): the detail screen and the
 /// episode drill-down fused into one Stremio-styled screen. Reached only from
@@ -1178,6 +1179,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   @override
   void dispose() {
+    // Never strand the app in immersive mode if the page goes while the
+    // trailer is foregrounded.
+    if (_trailerImmersive) {
+      _trailerImmersive = false;
+      unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
+    }
     _downloads
       ..removeListener(_onDownloadsChanged)
       ..dispose();
@@ -1330,7 +1337,13 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       if (!willAutoplay) return;
       YoutubeResolvedStreams? streams;
       try {
-        streams = await YoutubeService.resolveStreams(ytId);
+        // This is a continuously composited backdrop, not the standalone
+        // player. Keep iOS within its ambient decode/upload budget.
+        streams = await YoutubeService.resolveStreams(
+          ytId,
+          maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
+          preferVp9: !PlatformUtil.isIosMobile,
+        );
       } catch (_) {
         streams = null;
       }
@@ -1370,9 +1383,25 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     }
   }
 
+  /// Phones only: while the trailer owns the screen, the status bar (clock,
+  /// battery) and the home/nav bar get out of its way too — the same
+  /// immersive mode the video player uses — and come back on exit.
+  bool _trailerImmersive = false;
+
+  void _syncTrailerImmersive() {
+    if (widget.isTelevision || PlatformUtil.isDesktop) return;
+    final want = _trailerForeground && mounted;
+    if (want == _trailerImmersive) return;
+    _trailerImmersive = want;
+    unawaited(SystemChrome.setEnabledSystemUIMode(
+      want ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    ));
+  }
+
   void _exitTrailerForeground() {
     if (!_trailerForeground) return;
     setState(() => _trailerForeground = false);
+    _syncTrailerImmersive();
     // TV: the page content was focus-excluded while the trailer was fullscreen,
     // so nothing holds focus now — re-anchor the remote on the primary action.
     if (widget.isTelevision) {
@@ -1396,6 +1425,13 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// reduced motion): resolve fresh and launch the standalone player as before.
   Future<void> _playTrailer() async {
     if (_trailerLoading) return;
+    // The ambient trailer is already on screen — rolling, or paused on a frame
+    // after the user paused and closed it: tapping it (or the chip) means
+    // "this one, bigger" — promote it in place (resuming) without the chooser.
+    if (_backdropKey.currentState?.canPromote ?? false) {
+      await _playSelectedTrailer(null);
+      return;
+    }
     final generation = _trailerGeneration;
     final scope = ProfileRuntime.scope.value;
     final revision = MetadataPreferencesService.revision.value;
@@ -1437,6 +1473,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     if ((chosen == null || chosen == _trailerYtId) &&
         (_backdropKey.currentState?.canPromote ?? false)) {
       setState(() => _trailerForeground = true);
+      _syncTrailerImmersive();
       return;
     }
 
@@ -1530,6 +1567,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       _trailerResolving = false;
       _trailerLoading = false;
     });
+    _syncTrailerImmersive();
     unawaited(_loadTrailer());
   }
 
@@ -1681,6 +1719,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                 audioUrl: _trailerAutoplayEnabled
                     ? _trailerStreams?.audioUrl
                     : null,
+                muxedVideoUrl: _trailerAutoplayEnabled
+                    ? _trailerStreams?.muxedPlaybackFallback
+                    : null,
                 // Paused the moment the body walks past its hero (the
                 // reference's trailer belongs to the key-art frame; playing
                 // under a blurred field is wasted decode) and resumed in place
@@ -1816,12 +1857,32 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                               ),
                             ),
                           ),
-                        SafeArea(child: _buildBody(backdropUrl)),
-                        // Back button.
+                        // iOS detail art, its scrims, and the scroll viewport
+                        // belong behind the translucent system bars. The
+                        // Showcase layout keeps its interactive content clear
+                        // with inset-aware scroll padding; constraining this
+                        // entire body clipped its overlay at both edges.
+                        // Logo, info and actions sink out of the frame as
+                        // the trailer is promoted (and rise back on exit),
+                        // rather than only dissolving in place.
+                        // (The slide itself lives in the layout, on the
+                        // scrolling content only — sliding this whole body
+                        // dragged its backdrop scrims down with it.)
+                        PlatformUtil.isIosMobile
+                            ? _buildBody(backdropUrl)
+                            : SafeArea(child: _buildBody(backdropUrl)),
+                        // Back button — lifts off the top edge with the
+                        // status bar when the trailer is promoted.
                         Positioned(
                           top: 0,
                           left: 0,
-                          child: SafeArea(
+                          child: AnimatedSlide(
+                            offset: _trailerForeground
+                                ? const Offset(0, -1.6)
+                                : Offset.zero,
+                            duration: const Duration(milliseconds: 420),
+                            curve: Curves.easeInOutCubic,
+                            child: SafeArea(
                             child: Padding(
                               padding: EdgeInsets.all(
                                 widget.isTelevision ? 20 : 8,
@@ -1837,6 +1898,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                               ),
                             ),
                           ),
+                          ),
                         ),
                       ],
                     ),
@@ -1849,21 +1911,36 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             // Home's search button occupies (this page has none): spinner
             // while the backdrop resolves, wave while it plays, speaker on
             // hover. Hidden once the trailer is promoted to the foreground.
-            if (!_trailerForeground)
-              Positioned(
-                top: widget.isTelevision
-                    ? 16.0
-                    : MediaQuery.viewPaddingOf(context).top + 16.0,
-                right: widget.isTelevision ? 22.0 : 14.0,
-                child: TrailerStatusChip(
+            Positioned(
+              top: widget.isTelevision
+                  ? 16.0
+                  : MediaQuery.viewPaddingOf(context).top + 16.0,
+              right: widget.isTelevision ? 22.0 : 14.0,
+              // Lifts out with the back button rather than blinking off.
+              child: IgnorePointer(
+                ignoring: _trailerForeground,
+                child: AnimatedSlide(
+                  offset: _trailerForeground
+                      ? const Offset(0, -2.2)
+                      : Offset.zero,
+                  duration: const Duration(milliseconds: 420),
+                  curve: Curves.easeInOutCubic,
+                  child: AnimatedOpacity(
+                    opacity: _trailerForeground ? 0 : 1,
+                    duration: const Duration(milliseconds: 300),
+                    child: TrailerStatusChip(
                   loading: _trailerResolving,
                   playing: _trailerAmbientPlaying,
                   soundOn: _trailerAmbientSoundOn,
+                  onOpen: widget.isTelevision ? null : _playTrailer,
                   onSoundToggle: widget.isTelevision
                       ? null
                       : _toggleTrailerAmbientSound,
+                    ),
+                  ),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -1929,6 +2006,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       hasTrailer: false,
       trailerBusy: _trailerResolving || _trailerLoading,
       trailerPlaying: _trailerAmbientPlaying,
+      trailerForeground: _trailerForeground,
+      trailerPromotable: _trailerAmbientPlaying ||
+          (_backdropKey.currentState?.canPromote ?? false),
       hasTrakt: _traktOnlyMenuOptions.isNotEmpty,
       traktTracked: _traktTracked,
       traktLabel: _traktPillLabel,
@@ -2998,6 +3078,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     final options = _appMenuOptions;
     if (options.isEmpty || widget.onTraktAction == null) return;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       // Same standard sheet chrome as the per-episode ⋮ menu.
       backgroundColor: AppThemeScope.of(context).sheetSurface,
@@ -3030,6 +3111,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _showQuickActionsMenu() {
     if (_traktOnlyMenuOptions.isEmpty || widget.onTraktAction == null) return;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3070,6 +3152,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _showSimklQuickActionsMenu() {
     if (_menuOptionsSimkl.isEmpty || widget.onSimklAction == null) return;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3102,6 +3185,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _showMdblistQuickActionsMenu() {
     if (_menuOptionsMdblist.isEmpty || widget.onMdblistAction == null) return;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3242,6 +3326,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   void _openDetailsSheet() {
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: _bg,
       isScrollControlled: true,

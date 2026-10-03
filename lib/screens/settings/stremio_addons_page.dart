@@ -12,6 +12,7 @@ import '../../services/stremio_service.dart';
 import '../addons_screen.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Page for managing Stremio addons (with Scaffold wrapper)
 class StremioAddonsPage extends StatefulWidget {
@@ -2008,6 +2009,7 @@ class _AddonTileState extends State<_AddonTile> {
 
   void _showOptionsSheet() {
     showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddonOptionsSheet(

@@ -122,37 +122,36 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
   @override
   Widget build(BuildContext context) {
     return SettingsBackground(
-      child: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final surface = settingsSurfaceClassForWidth(constraints.maxWidth);
-            if (surface == SettingsSurfaceClass.compact) {
-              return PopScope<void>(
-                canPop: !_compactDetailOpen,
-                onPopInvokedWithResult: (didPop, _) {
-                  if (!didPop) _closeCompactDetail();
-                },
-                child: AnimatedSwitcher(
-                  duration: MediaQuery.disableAnimationsOf(context)
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child: _compactDetailOpen
-                      ? _buildCompactDetail()
-                      : _buildCompactRoot(),
-                ),
-              );
-            }
-            return _buildWide(surface);
-          },
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final surface = settingsSurfaceClassForWidth(constraints.maxWidth);
+          if (surface == SettingsSurfaceClass.compact) {
+            return PopScope<void>(
+              canPop: !_compactDetailOpen,
+              onPopInvokedWithResult: (didPop, _) {
+                if (!didPop) _closeCompactDetail();
+              },
+              child: AnimatedSwitcher(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 220),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: _compactDetailOpen
+                    ? _buildCompactDetail()
+                    : _buildCompactRoot(),
+              ),
+            );
+          }
+          return _buildWide(surface);
+        },
       ),
     );
   }
 
   Widget _buildWide(SettingsSurfaceClass surface) {
     final app = AppThemeScope.of(context);
+    final insets = MediaQuery.viewPaddingOf(context);
     final railWidth = surface == SettingsSurfaceClass.expanded ? 304.0 : 244.0;
     final railHorizontal = surface == SettingsSurfaceClass.expanded
         ? 24.0
@@ -168,9 +167,9 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
                 railHorizontal,
-                28,
+                28 + insets.top,
                 railHorizontal,
-                24,
+                24 + insets.bottom,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -204,7 +203,7 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
                 Padding(
                   padding: EdgeInsets.fromLTRB(
                     surface == SettingsSurfaceClass.expanded ? 42 : 30,
-                    35,
+                    35 + insets.top,
                     surface == SettingsSurfaceClass.expanded ? 44 : 30,
                     20,
                   ),
@@ -219,7 +218,7 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
                       surface == SettingsSurfaceClass.expanded ? 42 : 30,
                       2,
                       surface == SettingsSurfaceClass.expanded ? 44 : 30,
-                      48,
+                      48 + insets.bottom,
                     ),
                     child: Align(
                       alignment: Alignment.topLeft,
@@ -242,6 +241,7 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
   }
 
   Widget _buildCompactRoot() {
+    final insets = MediaQuery.viewPaddingOf(context);
     final normal = <MapEntry<int, SettingsCategoryDefinition>>[];
     final destructive = <MapEntry<int, SettingsCategoryDefinition>>[];
     for (var i = 0; i < widget.categories.length; i++) {
@@ -250,7 +250,7 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
     }
     return ListView(
       key: const Key('settings-compact-root'),
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 40),
+      padding: EdgeInsets.fromLTRB(18, 24 + insets.top, 18, 40 + insets.bottom),
       children: [
         const SettingsRootHeader(),
         const SizedBox(height: 20),
@@ -305,9 +305,10 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
   Widget _buildCompactDetail() {
     final category = widget.categories[_selected];
     final app = AppThemeScope.of(context);
+    final insets = MediaQuery.viewPaddingOf(context);
     return ListView(
       key: const Key('settings-compact-detail'),
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 42),
+      padding: EdgeInsets.fromLTRB(18, 16 + insets.top, 18, 42 + insets.bottom),
       children: [
         Row(
           children: [

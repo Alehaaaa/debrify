@@ -1269,6 +1269,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     final binding = _bindingFor(t);
     final bound = binding != null;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.home.sheetBg,
       builder: (sheetCtx) => SafeArea(
@@ -1332,6 +1333,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     final external = t.isExternalStream;
     final binding = _bindingFor(t);
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.home.sheetBg,
       builder: (sheetCtx) => SafeArea(

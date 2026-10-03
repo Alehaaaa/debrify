@@ -26,6 +26,7 @@ import 'profiles/profile_credential_facade.dart';
 import 'profiles/profile_runtime.dart';
 import '../models/downloaded_media.dart';
 import 'package:synchronized/synchronized.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class DownloadEntry {
   final Task task;
@@ -352,7 +353,9 @@ class DownloadService {
   Future<List<String>> libraryFolders() async {
     if (Platform.isAndroid) return const [];
     try {
-      return [await _appDownloadsSubdir()];
+      // A library scan is read-only. Resolving its expected location must not
+      // leave an empty Debrify folder in Downloads before the first download.
+      return [await _appDownloadsSubdir(create: false)];
     } catch (_) {
       return const [];
     }
@@ -1301,6 +1304,7 @@ class DownloadService {
         bool dontAskAgain = false;
         proceed =
             await showModalBottomSheet<bool>(
+sheetAnimationStyle: kMenuSheetAnimation,
               context: context,
               isScrollControlled: true,
               backgroundColor: const Color(0xFF0B1220),
@@ -2983,7 +2987,7 @@ class DownloadService {
     throw StateError('Could not allocate a unique generated download name');
   }
 
-  Future<String> _appDownloadsSubdir() async {
+  Future<String> _appDownloadsSubdir({bool create = true}) async {
     // User-chosen download folder (Windows/Linux). Mirrors the Android SAF
     // semantics: the custom root is used as-is (no forced 'Debrify' segment —
     // the user picked the exact folder) and per-item subfolders nest inside
@@ -3014,7 +3018,7 @@ class DownloadService {
           final Directory appDownloadsDir = Directory(
             path.join(downloadsDir.path, 'Debrify'),
           );
-          if (!await appDownloadsDir.exists()) {
+          if (create && !await appDownloadsDir.exists()) {
             await appDownloadsDir.create(recursive: true);
           }
           return appDownloadsDir.path;
@@ -3027,7 +3031,7 @@ class DownloadService {
     // Fallback: Use a stable, app-specific downloads directory under Documents
     final Directory docs = await AppStorage.documents();
     final Directory dlDir = Directory(path.join(docs.path, 'downloads'));
-    if (!await dlDir.exists()) {
+    if (create && !await dlDir.exists()) {
       await dlDir.create(recursive: true);
     }
     return dlDir.path;

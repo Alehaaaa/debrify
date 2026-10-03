@@ -10,6 +10,7 @@ import '../utils/file_utils.dart';
 import '../utils/series_parser.dart';
 import 'series_source_service.dart';
 import 'android_local_source_service.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class LocalBoundSourceService {
   static const String mobileDisabledReason =
@@ -41,6 +42,7 @@ class LocalBoundSourceService {
     }
 
     final mode = await showModalBottomSheet<_LocalPickMode>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF1E293B),

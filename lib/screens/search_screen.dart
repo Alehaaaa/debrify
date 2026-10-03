@@ -176,6 +176,7 @@ import 'torbox/torbox_downloads_screen.dart';
 import 'premiumize/premiumize_files_screen.dart';
 import 'alldebrid/alldebrid_files_screen.dart';
 import 'pikpak/pikpak_files_screen.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 part 'search/search_sources.dart';
 part 'search/search_card_widgets.dart';
@@ -8081,10 +8082,7 @@ class _SearchScreenState extends State<SearchScreen>
           title: isMovies ? 'Watchlist Movies' : 'Watchlist Series',
           nodes: nodes,
           // Same rule as the catalog rows off TV: pure poster cards in
-          // portrait, captions back for landscape backdrops. The subtitle
-          // stays on the card because TV still renders overlay captions
-          // (this flag is non-TV only) — dropping it here would have
-          // changed TV cards too.
+          // portrait, captions back for landscape backdrops.
           captions: _homeLandscapeCards,
           items: [
             for (final item in items)
@@ -8093,7 +8091,9 @@ class _SearchScreenState extends State<SearchScreen>
                 fallbackImage: _homeLandscapeCards ? item.poster : null,
                 title: item.name,
                 rating: item.imdbRating,
-                subtitle: isMovies ? 'MOVIE' : 'SERIES',
+                // No type subtitle: the row title already says Movies /
+                // Series, so a per-card 'MOVIE' / 'SERIES' just pushed the
+                // rating aside with a word every card in the row repeats.
                 shape: _homeLandscapeCards
                     ? SpotlightCardShape.wide
                     : SpotlightCardShape.poster,
@@ -8200,22 +8200,27 @@ class _SearchScreenState extends State<SearchScreen>
     return _firstNonEmpty(item.poster, item.background);
   }
 
-  Widget _buildSearchSpotlightBoard() {
+  Widget _buildSearchSpotlightBoard({Key? key}) {
     final sections = List<CatalogSection>.of(_sections);
     return Column(
       children: [
         // Reserve the status strip so completion never shifts focused cards.
-        if (_catalogSearching || _catalogSearchFailures > 0)
+        if (_catalogQuery.isNotEmpty &&
+            (_catalogSearching || _catalogSearchFailures > 0))
           _buildSearchStatusStrip()
         else
           const SizedBox(height: 16),
         Expanded(child: SpotlightBoard(
-          key: _spotlightKey,
+          key: key ?? _spotlightKey,
           hero: const [], heroNode: _spotlightHeroNode, heroAddon: null,
-          onHeroOpen: _openItem, shelvesOnly: true, dpad: true,
+          onHeroOpen: _openItem, shelvesOnly: true,
+          dpad: widget.isTelevision,
+          // Off TV: the same rich hover/press cards Home's board uses.
+          largeScreenInteractions: !widget.isTelevision,
+          animationsEnabled: false,
           showCardTitlesAndRatings: !_hideHomeCardTitlesAndRatings,
-          forceCardParallax: true,
-          onExitTop: _leaveBoardTop,
+          forceCardParallax: widget.isTelevision,
+          onExitTop: widget.isTelevision ? _leaveBoardTop : null,
           expandFocusedCard: _spotlightFocusDetails,
           trailersEnabled: _heroTrailerEnabled,
           cardTrailerVolume: _heroTrailerVolume,
@@ -8248,6 +8253,41 @@ class _SearchScreenState extends State<SearchScreen>
             if (current >= 0) unawaited(_loadMoreRow(current));
           },
         )),
+      ],
+    );
+  }
+
+  /// Home's Spotlight shelves, hero-less, under the open search sheet.
+  Widget _buildSheetSpotlightRows() {
+    // Snapshot like [_buildSpotlightBoard]: async inserts must not make a
+    // load-more callback page a different catalog than its shelf.
+    final rails = _canvasRails;
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        Expanded(
+          child: SpotlightBoard(
+            key: const ValueKey('sheet-spotlight-rows'),
+            hero: const [],
+            heroNode: _spotlightHeroNode,
+            heroAddon: null,
+            onHeroOpen: _openItem,
+            shelvesOnly: true,
+            dpad: false,
+            largeScreenInteractions: true,
+            sections: _spotlightShelves,
+            showCardTitlesAndRatings: !_hideHomeCardTitlesAndRatings,
+            expandFocusedCard: _spotlightFocusDetails,
+            trailersEnabled: _heroTrailerEnabled,
+            cardTrailerVolume: _heroTrailerVolume,
+            onTrailerStop: _clearHeroTrailer,
+            onLoadMoreRow: (row) {
+              if (row < 0 || row >= rails.length) return;
+              final catalogRow = rails[row].sectionIndex;
+              if (catalogRow != null) unawaited(_loadMoreRow(catalogRow));
+            },
+          ),
+        ),
       ],
     );
   }
@@ -12952,6 +12992,7 @@ class _SearchScreenState extends State<SearchScreen>
     final app = AppThemeScope.of(context);
     final external = t.isExternalStream;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.home.sheetBg,
       builder: (sheetCtx) => SafeArea(
@@ -13755,11 +13796,7 @@ class _SearchScreenState extends State<SearchScreen>
     // Experimental: series route to the merged detail+episodes page. Movies and
     // the flag-off path fall through to the existing CatalogItemDetailScreen.
     if ((item.type == 'series' || item.type == 'movie') && _mergedSeriesPage) {
-      Navigator.of(context)
-          .push(
-            MaterialPageRoute(
-              settings: const RouteSettings(name: kCatalogDetailRouteName),
-              builder: (_) => MergedDetailScreen(
+      Widget buildMergedDetail(BuildContext _) => MergedDetailScreen(
                 item: item,
                 addon: addon,
                 isTelevision: widget.isTelevision,
@@ -13894,9 +13931,13 @@ class _SearchScreenState extends State<SearchScreen>
                     _openItem(rec, rec.sourceAddon ?? addon),
                 metaEnricher: (id, type) =>
                     _stremio.fetchMetaDetails(imdbId: id, type: type),
-              ),
-            ),
-          )
+              );
+      final Route<void> detailRoute = MaterialPageRoute<void>(
+        settings: const RouteSettings(name: kCatalogDetailRouteName),
+        builder: buildMergedDetail,
+      );
+      Navigator.of(context)
+          .push(detailRoute)
           // Playback (or a bind/unbind) may have happened inside the detail
           // flow — _refreshAfterPlayback covers the tracker rows too, and
           // sequences the bound-source pass after the CW reloads.
@@ -16616,18 +16657,17 @@ class _SearchScreenState extends State<SearchScreen>
       );
     }
 
-    // Dedicated TV Search uses a compact toolbar without the balancing spacer.
-    // Other wide surfaces retain their centered search field.
+    // The field sits left-aligned on every wide surface, starting at the
+    // page gutter (user call 2026-10: the old balancing spacer centred it).
     return Padding(
       padding: tv && widget.searchMode
           ? const EdgeInsets.fromLTRB(24, 8, 24, 8)
           : EdgeInsets.fromLTRB(20, tv ? 18 : 14, 20, 10),
       child: Row(
         children: [
-          if (!tv || !widget.searchMode)
-            SizedBox(width: compactModeMenu ? 156 : 252),
           Expanded(
-            child: Center(
+            child: Align(
+              alignment: Alignment.centerLeft,
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 680),
                 child: field,
@@ -16718,7 +16758,7 @@ class _SearchScreenState extends State<SearchScreen>
             // suggestion strip and leaving Catalog search unsubmitted.
             submitOnTvosEndEditing: widget.searchMode,
             textInputAction: TextInputAction.search,
-            textAlign: compactSearch ? TextAlign.start : TextAlign.center,
+            textAlign: TextAlign.start,
             style: TextStyle(color: scheme.onSurface, fontSize: tv ? 16 : 15),
             // Shell-mode LEFT: no caret exists at the shell, so left always
             // escapes to the sidebar (the LEFT-only sidebar policy). While
@@ -19410,8 +19450,30 @@ class _SearchScreenState extends State<SearchScreen>
       );
     }
 
-    if (widget.isTelevision && widget.searchMode) {
+    // Catalog search results use Home's Spotlight rows on every form factor
+    // (TV drives them by DPAD; touch/pointer by scroll and hover), so the
+    // Search tab follows the same card style, sizing and portrait/landscape
+    // setting as Home.
+    if (widget.searchMode) {
       return _buildSearchSpotlightBoard();
+    }
+    // Home's search sheet (Spotlight Home, off TV) used to drop back to the
+    // CLASSIC rails the moment it opened. It now keeps Home's Spotlight rows:
+    // search results while a catalog query is active, otherwise Home's own
+    // shelves (Continue Watching, watchlists, catalogs) without the hero —
+    // the sheet's header owns the top of the screen.
+    if (!widget.isTelevision && _spotlightSelected && _searchSheetOpen) {
+      // Own keys, not [_spotlightKey]: that GlobalKey belongs to Home's full
+      // board, and reusing it here would REPARENT the hero board's state
+      // into a hero-less one when the sheet opens.
+      if (_catalogQuery.isNotEmpty) {
+        return _buildSearchSpotlightBoard(
+          key: const ValueKey('sheet-spotlight-results'),
+        );
+      }
+      if (_spotlightShelves.any((s) => s.items.isNotEmpty)) {
+        return _buildSheetSpotlightRows();
+      }
     }
 
     // STAGE layouts: each owns the whole screen and has its own build path

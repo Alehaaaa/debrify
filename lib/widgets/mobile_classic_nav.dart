@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_theme_scope.dart';
 import '../models/profiles/user_profile.dart';
 import 'profiles/profile_avatar_view.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The "classic" phone navigation — Concept 2 ("Your Five") from
 /// dev/design/mockups/phone_nav_mockup/: a persistent Material-style bottom bar of
@@ -139,6 +140,7 @@ class MobileClassicNav extends StatelessWidget {
     final app = AppThemeScope.of(context);
     final sheet = _sheetIndices;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.shell.navSheetBg,
       shape: const RoundedRectangleBorder(
@@ -282,6 +284,7 @@ class MobileClassicNav extends StatelessWidget {
         if (index != homeIndex) index,
     ];
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.shell.navSheetBg,
       isScrollControlled: true,

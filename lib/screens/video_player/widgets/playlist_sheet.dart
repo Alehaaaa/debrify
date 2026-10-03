@@ -10,6 +10,7 @@ import '../../../services/storage_service.dart';
 import '../../../services/tracking_source_policy.dart';
 import '../../../utils/episode_progress_merge.dart';
 import '../constants/timing_constants.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Modal bottom sheet for browsing and selecting playlist items
 ///
@@ -51,6 +52,7 @@ class PlaylistSheet {
     // wants the full width, so unlike the small pickers this keeps its shape
     // and only adopts the black glass + hairline.
     await showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF101012),
       isScrollControlled: true,

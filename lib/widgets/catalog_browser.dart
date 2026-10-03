@@ -25,6 +25,7 @@ import 'trakt/trakt_menu_helpers.dart';
 import '../services/simkl/simkl_menu_helpers.dart';
 import '../screens/catalog_item_detail_screen.dart';
 import '../screens/episodes_screen.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// A browsable catalog widget that shows content from Stremio addons.
 ///
@@ -1682,6 +1683,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
 
     // Both enabled — show picker
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(

@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
+import 'package:video_player/video_player.dart' as vp;
 
 /// A pluggable trailer playback engine behind `HeroTrailerBackdrop`.
 ///
@@ -76,6 +77,125 @@ abstract class TrailerEngine {
   Widget buildVideo({required BoxFit fit, bool revealed = true});
 }
 
+/// Flutter's maintained platform-view player, used for iOS ambient video.
+/// Unlike a Flutter Texture, the platform view's AVPlayer layer does not make
+/// the whole Flutter scene re-rasterise for each decoded frame.
+class PlatformViewTrailerEngine implements TrailerEngine {
+  PlatformViewTrailerEngine();
+
+  @override
+  bool get rendersUnderlay => false;
+
+  vp.VideoPlayerController? _controller;
+  final _playing = StreamController<bool>.broadcast();
+  final _position = StreamController<Duration>.broadcast();
+  final _duration = StreamController<Duration>.broadcast();
+  final _errors = StreamController<void>.broadcast();
+  final _firstFrame = Completer<void>();
+  bool _disposed = false;
+  bool _detached = false;
+  bool _lastPlaying = false;
+
+  @override
+  Stream<bool> get playingStream => _playing.stream;
+  @override
+  Stream<Duration> get positionStream => _position.stream;
+  @override
+  Stream<Duration> get durationStream => _duration.stream;
+  @override
+  Stream<void> get errorStream => _errors.stream;
+  @override
+  Future<void> get firstFrameRendered => _firstFrame.future;
+
+  void _onValue() {
+    final value = _controller?.value;
+    if (_disposed || _detached || value == null) return;
+    if (value.hasError) {
+      _errors.add(null);
+      return;
+    }
+    if (!value.isInitialized) return;
+    if (!_firstFrame.isCompleted) _firstFrame.complete();
+    if (_lastPlaying != value.isPlaying) {
+      _lastPlaying = value.isPlaying;
+      _playing.add(value.isPlaying);
+    }
+    _position.add(value.position);
+    _duration.add(value.duration);
+  }
+
+  @override
+  Future<void> open({
+    required String videoUrl,
+    String? audioUrl,
+    required double volume,
+    required bool loop,
+    Map<String, String>? httpHeaders,
+  }) async {
+    // This engine is deliberately fed a muxed source. A separate audio stream
+    // would reintroduce a second native audio session behind an ambient view.
+    final controller = vp.VideoPlayerController.networkUrl(
+      Uri.parse(videoUrl),
+      httpHeaders: httpHeaders ?? const {},
+      videoPlayerOptions: vp.VideoPlayerOptions(mixWithOthers: true),
+      viewType: vp.VideoViewType.platformView,
+    );
+    _controller = controller;
+    controller.addListener(_onValue);
+    await controller.initialize();
+    if (_disposed || _detached) return;
+    await controller.setLooping(loop);
+    await controller.setVolume((volume / 100).clamp(0.0, 1.0));
+    await controller.play();
+  }
+
+  @override
+  Future<void> setVolume(double volume) =>
+      _controller?.setVolume((volume / 100).clamp(0.0, 1.0)) ?? Future.value();
+  @override
+  Future<void> seek(Duration position) => _controller?.seekTo(position) ?? Future.value();
+  @override
+  Future<void> play() => _controller?.play() ?? Future.value();
+  @override
+  Future<void> pause() => _controller?.pause() ?? Future.value();
+  @override
+  void detach() => _detached = true;
+  @override
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    final controller = _controller;
+    _controller = null;
+    if (controller != null) {
+      controller.removeListener(_onValue);
+      await controller.dispose();
+    }
+    await _playing.close();
+    await _position.close();
+    await _duration.close();
+    await _errors.close();
+  }
+
+  @override
+  Widget buildVideo({required BoxFit fit, bool revealed = true}) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return const SizedBox.expand();
+    }
+    final size = controller.value.size;
+    return ClipRect(
+      child: FittedBox(
+        fit: fit,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: vp.VideoPlayer(controller),
+        ),
+      ),
+    );
+  }
+}
+
 /// libmpv-backed engine (the original path). Used off-TV.
 class MediaKitTrailerEngine implements TrailerEngine {
   /// Takes the single video-output slot, then builds the engine.
@@ -100,7 +220,15 @@ class MediaKitTrailerEngine implements TrailerEngine {
     // trailer is the first media_kit surface in this session.
     MediaKitInit.ensureInitialized();
     _player = mk.Player();
-    _controller = mkv.VideoController(_player);
+    // iOS routes each frame through three OpenGL-backed Flutter pixel buffers.
+    // A background trailer needs a 16:9 ambient canvas, not a source-sized
+    // 1440p upload every frame. This keeps playback live while scrolling.
+    _controller = mkv.VideoController(
+      _player,
+      configuration: PlatformUtil.isIosMobile
+          ? const mkv.VideoControllerConfiguration(width: 960, height: 540)
+          : const mkv.VideoControllerConfiguration(),
+    );
   }
 
   final VideoOutputLeaseHandle _lease;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/color_constants.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// What a sleep timer is set to.
 enum SleepTimerMode {
@@ -46,6 +47,7 @@ class SleepTimerSheet {
     bool allowEndOfItem = true,
   }) {
     return showModalBottomSheet<SleepTimerSelection>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: VideoPlayerColors.darkBackground,
       // The player runs landscape, where an unconstrained sheet is capped near

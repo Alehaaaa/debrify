@@ -26,6 +26,7 @@ import '../tracker_brand_marks.dart';
 import '../viewport_artwork_scope.dart';
 import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
+import '../../theme/app_motion.dart' show kPopupMenuAnimation;
 
 /// Card metrics as FRACTIONS of the viewport.
 ///
@@ -546,10 +547,15 @@ class ShowcaseBackdropScrim extends StatelessWidget {
   /// TV (the page passes it only when `dpad` is false).
   final bool thinned;
 
+  /// Fade out fast (the trailer was just promoted) instead of the slow
+  /// depth fade.
+  final bool quick;
+
   const ShowcaseBackdropScrim({
     super.key,
     required this.visible,
     this.thinned = false,
+    this.quick = false,
   });
 
   @override
@@ -613,7 +619,7 @@ class ShowcaseBackdropScrim extends StatelessWidget {
                 ));
     return IgnorePointer(
       child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 550),
+        duration: Duration(milliseconds: quick ? 200 : 550),
         opacity: visible ? 1 : 0,
         child: DecoratedBox(decoration: BoxDecoration(gradient: gradient)),
       ),
@@ -819,16 +825,38 @@ class ShowcaseIdentity extends StatelessWidget {
     // synopsis expands in place (MORE), and growing the band is the only
     // honest response; a fixed box would overflow.
     final metrics = ShowcaseMetrics.of(context);
-    if (metrics.compact) {
-      return Container(
-        constraints: BoxConstraints(minHeight: height),
-        alignment: Alignment.bottomCenter,
-        child: _identityColumnCompact(context, m, actions, metrics),
-      );
+    final Widget band = metrics.compact
+        ? Container(
+            constraints: BoxConstraints(minHeight: height),
+            alignment: Alignment.bottomCenter,
+            child: _identityColumnCompact(context, m, actions, metrics),
+          )
+        : SizedBox(
+            height: height,
+            child: _identityColumn(context, m, actions),
+          );
+    // Touch/pointer: the open key-art above the identity is the trailer's
+    // own frame, so tapping it brings the rolling trailer forward on its own
+    // (the same promote the Trailer chip does). Sits BEHIND the identity, so
+    // the logo, text and buttons keep their own taps and only the empty art
+    // answers. Only while the ambient trailer is actually rolling — a tap on
+    // a still should never launch a player the user didn't see coming.
+    // Not gated on `hasTrailer`: that flag only drives the identity's own
+    // Trailer BUTTON, which the detail screen turns off because the corner
+    // chip owns that role. `trailerPlaying` is the real signal.
+    if (m.isTelevision || !(m.trailerPlaying || m.trailerPromotable)) {
+      return band;
     }
-    return SizedBox(
-      height: height,
-      child: _identityColumn(context, m, actions),
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: m.onTrailer,
+          ),
+        ),
+        band,
+      ],
     );
   }
 
@@ -1042,9 +1070,9 @@ class _LogoOrTitle extends StatelessWidget {
   }
 }
 
-/// Two lines + MORE; tapping expands in place (the identity band grows).
-/// Collapse comes back with LESS — a one-way expander leaves a wall of text
-/// parked over the artwork.
+/// A left-aligned, two-line synopsis with an inline MORE affordance. Tapping
+/// expands in place; LESS stays at the end of the expanded copy so the control
+/// never consumes a row on its own.
 class _ExpandableSynopsis extends StatefulWidget {
   final String text;
   const _ExpandableSynopsis({required this.text});
@@ -1056,32 +1084,97 @@ class _ExpandableSynopsis extends StatefulWidget {
 class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
   bool _open = false;
 
+  /// Fits a word-bound prefix plus the inline affordance into two lines. The
+  /// normal TextOverflow ellipsis cannot append a tappable span after its own
+  /// ellipsis, so measure the composed text and choose that prefix ourselves.
+  String _collapsedText({
+    required double width,
+    required TextStyle style,
+    required TextScaler textScaler,
+    required TextDirection textDirection,
+  }) {
+    bool fits(String value) {
+      final painter = TextPainter(
+        text: TextSpan(text: '$value…\u00a0MORE', style: style),
+        textDirection: textDirection,
+        textScaler: textScaler,
+        maxLines: 2,
+      )..layout(maxWidth: width);
+      return !painter.didExceedMaxLines;
+    }
+
+    var low = 0;
+    var high = widget.text.length;
+    var result = '';
+    while (low <= high) {
+      final midpoint = (low + high) ~/ 2;
+      var candidate = widget.text.substring(0, midpoint).trimRight();
+      final wordEnd = candidate.lastIndexOf(RegExp(r'\s'));
+      if (wordEnd > 0) candidate = candidate.substring(0, wordEnd);
+      if (fits(candidate)) {
+        result = candidate;
+        low = midpoint + 1;
+      } else {
+        high = midpoint - 1;
+      }
+    }
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => setState(() => _open = !_open),
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            widget.text,
-            maxLines: _open ? null : 2,
-            textAlign: TextAlign.center,
-            overflow: _open ? null : TextOverflow.ellipsis,
-            style: _t(12.5, a: 0.78).copyWith(height: 1.5),
+    final bodyStyle = _t(12.5, a: 0.78).copyWith(height: 1.5);
+    final actionStyle = _t(
+      10.5,
+      w: FontWeight.w700,
+      a: 0.9,
+    ).copyWith(letterSpacing: 0.8);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final direction = Directionality.of(context);
+        final scaler = MediaQuery.textScalerOf(context);
+        final full = TextPainter(
+          text: TextSpan(text: widget.text, style: bodyStyle),
+          textDirection: direction,
+          textScaler: scaler,
+          maxLines: 2,
+        )..layout(maxWidth: constraints.maxWidth);
+        final truncated = full.didExceedMaxLines;
+        final content = _open
+            ? widget.text
+            : truncated
+            ? _collapsedText(
+                width: constraints.maxWidth,
+                style: bodyStyle,
+                textScaler: scaler,
+                textDirection: direction,
+              )
+            : widget.text;
+        final showsAction = _open || truncated;
+        return Semantics(
+          button: showsAction,
+          label: _open ? 'Show less description' : 'Show full description',
+          child: GestureDetector(
+            onTap: showsAction ? () => setState(() => _open = !_open) : null,
+            behavior: HitTestBehavior.opaque,
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: content, style: bodyStyle),
+                  if (showsAction)
+                    TextSpan(
+                      text: _open ? '\u00a0LESS' : '…\u00a0MORE',
+                      style: actionStyle,
+                    ),
+                ],
+              ),
+              textAlign: TextAlign.left,
+              maxLines: _open ? null : 2,
+              overflow: TextOverflow.clip,
+            ),
           ),
-          const SizedBox(height: 3),
-          Text(
-            _open ? 'LESS' : 'MORE',
-            style: _t(
-              10.5,
-              w: FontWeight.w700,
-              a: 0.9,
-            ).copyWith(letterSpacing: 0.8),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1621,7 +1714,15 @@ class ShowcaseSeasons extends StatelessWidget {
     // The band carries exactly ONE node then, supplied by the layout.
     if (m.compact) {
       return Padding(
-        padding: EdgeInsets.only(left: m.gutter, right: m.gutter, top: 10),
+        // Bottom clearance: the settled episode card below lifts (scale
+        // 1.055 + rise, with spring overshoot) and paints outside its cell
+        // with Clip.none — at a 6px gap its top edge rode up over the pill.
+        padding: EdgeInsets.only(
+          left: m.gutter,
+          right: m.gutter,
+          top: 10,
+          bottom: 16,
+        ),
         child: Align(
           alignment: Alignment.centerLeft,
           child: _SeasonDropdown(view: view, node: nodes.first),
@@ -1677,6 +1778,7 @@ class _SeasonDropdownState extends State<_SeasonDropdown> {
     if (box == null || overlay == null) return;
     final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
     final selected = await showMenu<int>(
+popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: RelativeRect.fromLTRB(
         origin.dx,

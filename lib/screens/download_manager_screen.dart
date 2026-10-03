@@ -16,6 +16,7 @@ import '../services/android_native_downloader.dart';
 import '../services/main_page_bridge.dart';
 import '../widgets/shimmer.dart';
 import '../widgets/tv_text_field.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class DownloadManagerScreen extends StatefulWidget {
   const DownloadManagerScreen({super.key});
@@ -455,6 +456,7 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     }
 
     final res = await showModalBottomSheet<bool>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       useRootNavigator: true,

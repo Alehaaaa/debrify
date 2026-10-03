@@ -16,6 +16,7 @@ import '../../../utils/tv_keys.dart';
 import '../../../models/stremio_tv/stremio_tv_channel.dart';
 import '../../../models/stremio_tv/stremio_tv_now_playing.dart';
 import '../stremio_tv_service.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Imperative handle the screen uses to move D-pad focus onto a dial card
 /// *reliably*, even when that card has been recycled off-screen by the dial's
@@ -557,6 +558,7 @@ class _StremioTvTunerState extends State<StremioTvTuner> {
     final app = AppThemeScope.of(context);
     HapticFeedback.mediumImpact();
     await showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.stremioTv.sheetBg,
       isScrollControlled: true,
@@ -645,6 +647,7 @@ class _StremioTvTunerState extends State<StremioTvTuner> {
     Timer? sheetTick;
     final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.stremioTv.sheetBg,
       isScrollControlled: true,
@@ -1848,6 +1851,7 @@ class _StageDescription extends StatelessWidget {
     // surface's theme boundary.
     final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.stremioTv.sheetBg,
       isScrollControlled: true,

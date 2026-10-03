@@ -40,6 +40,7 @@ import '../services/watched_action_coordinator.dart';
 import '../services/season_watched_service.dart';
 import 'season_action_region.dart';
 import '../utils/series_rewatch.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The episode drill-down engine + UI, extracted out of `EpisodesScreen` so it
 /// can be hosted both as a standalone route (the existing `EpisodesScreen`
@@ -1921,7 +1922,8 @@ class EpisodesPanelState extends State<EpisodesPanel> {
     return SeasonActionRegion(
       onOptions: _isDirectSource ? null : () => _showSeasonOptions(_selectedSeasonNumber),
       onTap: () async {
-        final number = await showModalBottomSheet<int>(context: context,
+        final number = await showModalBottomSheet<int>(
+sheetAnimationStyle: kMenuSheetAnimation,context: context,
           builder: (ctx) => TvHeldKeyGuard(child: SafeArea(child: ListView(
             shrinkWrap: true, children: [for (final season in _episodeSeasons)
               ListTile(title: Text('Season ${season.number}'),
@@ -2268,7 +2270,8 @@ class EpisodesPanelState extends State<EpisodesPanel> {
         _seasonRetries.pending(id, number, provider)];
       final targets = [for (var i = 0; i < providers.length; i++)
         retryTargets[i] ?? (statuses[i] == null ? null : !statuses[i]!)];
-      final choice = await showModalBottomSheet<TrackingSource>(context: context,
+      final choice = await showModalBottomSheet<TrackingSource>(
+sheetAnimationStyle: kMenuSheetAnimation,context: context,
         isScrollControlled: true,
         showDragHandle: true, builder: (ctx) => TvHeldKeyGuard(child: SafeArea(child:
           ConstrainedBox(
@@ -2443,6 +2446,7 @@ class EpisodesPanelState extends State<EpisodesPanel> {
     final key = '${episode.season}-${episode.number}';
     final watched = (_episodeWatchProgress[key] ?? 0) >= 100;
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,

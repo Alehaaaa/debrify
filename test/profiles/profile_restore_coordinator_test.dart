@@ -508,6 +508,29 @@ void main() {
     },
   );
 
+  test('restore carries forward an existing string-list preference', () async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setStringList('explicitly_watched_series_v1', const <String>[
+      'tt1234567',
+    ]);
+
+    await ProfileRestoreCoordinator(
+      registry: registry,
+      cipher: cipher,
+    ).restore(
+      package: await _singleProfilePackage(setupComplete: null),
+      destinationProfileId: profileId,
+      authorization: await ProfileAuthorizationContext.capture(registry),
+    );
+
+    expect(
+      (await ProfilePreferences.instance()).getStringList(
+        'explicitly_watched_series_v1',
+      ),
+      const <String>['tt1234567'],
+    );
+  });
+
   test(
     'oversized backup collections stay out of legacy preferences and restore in full',
     () async {

@@ -1292,6 +1292,15 @@ class _DetailShowcaseState extends State<DetailShowcase> {
     double viewport,
   ) {
     _viewportH = viewport;
+    // The detail route is edge-to-edge on iOS. Keep the scroll content clear
+    // of the system bars without shrinking the backdrop and scrim viewport.
+    final systemInsets = PlatformUtil.isIosMobile
+        ? MediaQuery.viewPaddingOf(context)
+        : EdgeInsets.zero;
+    // The ListView starts below the status inset, so its hero must use the
+    // corresponding safe content height. Using the full edge-to-edge viewport
+    // here pushes the title and action row down by the home-indicator inset.
+    final contentViewport = viewport - systemInsets.vertical;
     final opening = _usesTvOpeningGate && !_openingReady;
     if (opening) _openingView = view;
     return Stack(
@@ -1304,7 +1313,10 @@ class _DetailShowcaseState extends State<DetailShowcase> {
         // disagree with what [_publishDepth] told the parent.
         ShowcaseAmbient(url: m.backdrop, visible: _effectiveDeep),
         ShowcaseBackdropScrim(
-          visible: !_effectiveDeep,
+          // Gone the moment the trailer is promoted: the video should play
+          // clean, not under a shadow that lags the content's fade.
+          visible: !_effectiveDeep && !m.trailerForeground,
+          quick: m.trailerForeground,
           // Rolling trailer → bed pulled in tight, video clear. Off-TV only:
           // the TV scrims are the shipped, panel-tuned ones.
           thinned: !widget.dpad && m.trailerPlaying,
@@ -1327,15 +1339,30 @@ class _DetailShowcaseState extends State<DetailShowcase> {
               opacity: opening ? (1 / 255) : 1,
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
-              child: ListView(
-                controller: _scroll,
-                padding: EdgeInsets.zero,
-                // DPAD moves focus before it scrolls. Keep the original broad
-                // mount window so the next target has a live node and anchor;
-                // the opaque opening plane hides these bands while they warm.
-                scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
-                children: [
-                  ShowcaseIdentity(
+              child: AnimatedSlide(
+                // The promoted trailer takes the screen: the identity and
+                // bands sink out of its way. Only the scrolling content —
+                // the backdrop scrims above stay put and simply fade with
+                // the page.
+                offset: widget.model.trailerForeground
+                    ? const Offset(0, 0.12)
+                    : Offset.zero,
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeInOutCubic,
+                child: ListView(
+                  controller: _scroll,
+                  padding: EdgeInsets.only(
+                    top: systemInsets.top,
+                    // This makes the final cards scroll fully above the home
+                    // indicator rather than ending beneath it.
+                    bottom: systemInsets.bottom,
+                  ),
+                  // DPAD moves focus before it scrolls. Keep the original broad
+                  // mount window so the next target has a live node and anchor;
+                  // the opaque opening plane hides these bands while they warm.
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
+                  children: [
+                    ShowcaseIdentity(
                     key: _identityKey,
                     model: m,
                     primaryNode: m.focus.primaryEntry,
@@ -1345,9 +1372,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       'showcase-act',
                     ),
                     onFocused: () => _setBand('identity'),
-                    height: _heroHeight(view, viewport),
+                    height: _heroHeight(view, contentViewport),
                   ),
-                  if (view != null && view.seasons.length > 1)
+                    if (view != null && view.seasons.length > 1)
                     _band(
                       'seasons',
                       ShowcaseSeasons(
@@ -1360,7 +1387,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                         ),
                       ),
                     ),
-                  if (view != null && view.episodes.isNotEmpty)
+                    if (view != null && view.episodes.isNotEmpty)
                     _band('episodes', _episodes(view))
                   else if (view != null && view.loading)
                     // The same slot as the rail it stands in for, so the swap from
@@ -1536,8 +1563,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                     'details',
                     ShowcaseDetails(rows: m.detailRows, awards: m.awards),
                   ),
-                  const SizedBox(height: 40),
-                ],
+                    const SizedBox(height: 40),
+                  ],
+              ),
               ),
             ),
           ),

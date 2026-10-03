@@ -17,6 +17,7 @@ import '../widgets/trakt_calendar_day_sheet.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
 import '../widgets/calendar_display_preferences.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TraktCalendarScreen extends StatefulWidget {
   const TraktCalendarScreen({super.key});
@@ -355,6 +356,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
 
   void _openDaySheet(DateTime day, List<TraktCalendarEntry> entries) {
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).calendar.sheetBg,
       shape: const RoundedRectangleBorder(

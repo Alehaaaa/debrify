@@ -44,6 +44,9 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// high-res YouTube path. Null when [videoUrl] is already muxed.
   final String? audioUrl;
 
+  /// Single-file source used by the iOS platform-view ambient renderer.
+  final String? muxedVideoUrl;
+
   /// Master switch (the settings toggle). When false the trailer never loads.
   final bool enabled;
 
@@ -146,6 +149,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     required this.imageUrl,
     required this.videoUrl,
     this.audioUrl,
+    this.muxedVideoUrl,
     required this.enabled,
     this.foreground = false,
     this.suspended = false,
@@ -305,6 +309,10 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   Future<TrailerEngine> _createEngine() async {
     final factory = widget.engineFactory;
     if (factory != null) return await factory();
+    if (!kIsWeb && PlatformUtil.isIosMobile &&
+        (widget.muxedVideoUrl?.isNotEmpty ?? false)) {
+      return PlatformViewTrailerEngine();
+    }
     final useExo =
         !kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached;
     if (useExo) {
@@ -462,7 +470,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   Future<void> _initPlayer() async {
     if (_engine != null) return;
-    final url = widget.videoUrl;
+    final usePlatformView = !kIsWeb && PlatformUtil.isIosMobile &&
+        (widget.muxedVideoUrl?.isNotEmpty ?? false);
+    final url = usePlatformView ? widget.muxedVideoUrl : widget.videoUrl;
     if (url == null || url.isEmpty) return;
 
     // Creation can now WAIT (for the video-output slot), so everything that
@@ -607,7 +617,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         // YouTube rarely serves a muxed stream anymore, so [url] is usually
         // video-only — mux the separate audio track in for sound (the same
         // path the main player uses for high-res YouTube).
-        audioUrl: widget.audioUrl,
+        audioUrl: usePlatformView ? null : widget.audioUrl,
         volume: _userMuted ? 0 : widget.ambientVolume,
         loop: widget.repeat && !widget.live,
         httpHeaders: widget.httpHeaders,
@@ -726,11 +736,18 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   // ── Foreground promotion ────────────────────────────────────────────────────
 
   void _enterForeground() {
-    // Every promotion starts audible (the user tapped Trailer to watch it) and
-    // with chrome shown (it auto-hides shortly after).
-    setState(() => _userMuted = false);
+    // Every promotion starts audible (the user tapped the trailer to watch it).
+    // Off TV it starts CLEAN: the tap that promoted it was a request for the
+    // picture, so the HUD waits for a second tap (the tap surface below
+    // reveals it). TV keeps the brief reveal — a remote user has no other cue
+    // that OK now controls playback.
+    _controlsTimer?.cancel();
+    setState(() {
+      _userMuted = false;
+      _controlsVisible = false;
+    });
     _pausedByUser = false;
-    _showControlsTemporarily();
+    if (PlatformUtil.isTelevision) _showControlsTemporarily();
     _fg.forward();
     _applyVolume(foreground: true);
     _engine?.play();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -35,11 +36,16 @@ class TrailerStatusChip extends StatefulWidget {
   /// that cannot change the sound).
   final VoidCallback? onSoundToggle;
 
+  /// Opens the ambient trailer in its foreground player. When provided, a tap
+  /// prioritises opening; a long press still exposes [onSoundToggle].
+  final VoidCallback? onOpen;
+
   const TrailerStatusChip({
     required this.loading,
     required this.playing,
     this.soundOn = false,
     this.onSoundToggle,
+    this.onOpen,
   });
 
   @override
@@ -53,12 +59,22 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
   // context (debug assertion crash).
   late final AnimationController _wave;
   bool _hovered = false;
+  // The player/host can take a frame to reflect a volume update. Keep the
+  // pill responsive by painting the requested state immediately, then yield
+  // back to the host once it confirms the new value.
+  bool? _pendingSoundOn;
+  bool _showTapIcon = false;
+  Timer? _tapIconTimer;
+
+  bool get _soundOn => _pendingSoundOn ?? widget.soundOn;
 
   bool get _visible => widget.loading || widget.playing;
   bool get _playingNow => widget.playing && !widget.loading;
-  bool get _interactive => widget.onSoundToggle != null && _playingNow;
+  bool get _interactive =>
+      _playingNow && (widget.onSoundToggle != null || widget.onOpen != null);
   bool get _hoverReveal => PlatformUtil.isDesktop;
-  bool get _showButton => _interactive && _hoverReveal && _hovered;
+  bool get _showButton =>
+      _interactive && ((_hoverReveal && _hovered) || _showTapIcon);
 
   /// The wave rolls whenever it is the visible glyph (still on TV).
   bool get _waveRuns =>
@@ -82,14 +98,18 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
       duration: const Duration(milliseconds: 1100),
     );
     _syncWave();
-    if (widget.onSoundToggle != null) _portal.show();
+    if (widget.onSoundToggle != null || widget.onOpen != null) _portal.show();
   }
 
   @override
   void didUpdateWidget(TrailerStatusChip old) {
     super.didUpdateWidget(old);
+    if (old.soundOn != widget.soundOn) _pendingSoundOn = null;
     if (!_interactive) _hovered = false;
-    if (widget.onSoundToggle != null && !_portal.isShowing) _portal.show();
+    if ((widget.onSoundToggle != null || widget.onOpen != null) &&
+        !_portal.isShowing) {
+      _portal.show();
+    }
     _syncWave();
   }
 
@@ -107,8 +127,35 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
     _syncWave();
   }
 
+  void _toggleSound() {
+    final callback = widget.onSoundToggle;
+    if (callback == null) return;
+    _tapIconTimer?.cancel();
+    setState(() {
+      _pendingSoundOn = !_soundOn;
+      _showTapIcon = true;
+    });
+    _syncWave();
+    _tapIconTimer = Timer(const Duration(milliseconds: 600), () {
+      if (!mounted) return;
+      setState(() => _showTapIcon = false);
+      _syncWave();
+    });
+    callback();
+  }
+
+  void _activate() {
+    final open = widget.onOpen;
+    if (open != null) {
+      open();
+      return;
+    }
+    _toggleSound();
+  }
+
   @override
   void dispose() {
+    _tapIconTimer?.cancel();
     _wave.dispose();
     super.dispose();
   }
@@ -146,8 +193,8 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
     }
     if (_showButton) {
       return Icon(
-        widget.soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-        key: ValueKey<String>('sound-${widget.soundOn}'),
+        _soundOn ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+        key: ValueKey<String>('sound-$_soundOn'),
         size: 14,
         color: app.fade(app.core.tx, 0.9),
       );
@@ -210,7 +257,7 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
                   height: 14,
                   child: Center(
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
+                      duration: Duration.zero,
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
                       transitionBuilder: (child, animation) => FadeTransition(
@@ -245,20 +292,29 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
     );
     if (interactive) {
       chip = Tooltip(
-        message: widget.soundOn ? 'Mute trailer' : 'Unmute trailer',
+        message: widget.onOpen != null
+            ? 'Open trailer'
+            : (_soundOn ? 'Mute trailer' : 'Unmute trailer'),
         child: Semantics(
           button: true,
-          label: widget.soundOn ? 'Mute trailer' : 'Unmute trailer',
+          label: widget.onOpen != null
+              ? 'Open trailer'
+              : (_soundOn ? 'Mute trailer' : 'Unmute trailer'),
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: widget.onSoundToggle,
+            onTap: _activate,
+            onLongPress: widget.onOpen != null && widget.onSoundToggle != null
+                ? _toggleSound
+                : null,
             child: chip,
           ),
         ),
       );
     }
     // Status-only (TV, Discover): plain, pointer-transparent, in place.
-    if (widget.onSoundToggle == null) return IgnorePointer(child: chip);
+    if (widget.onSoundToggle == null && widget.onOpen == null) {
+      return IgnorePointer(child: chip);
+    }
     final live = IgnorePointer(
       ignoring: !interactive,
       child: MouseRegion(

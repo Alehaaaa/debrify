@@ -8,6 +8,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'dock_style.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// One tool control: icon, optional label, minimum [DockMetrics.target] tall.
 class DockChip extends StatelessWidget {
@@ -272,6 +273,7 @@ class DockOverflowSheet extends StatelessWidget {
     final landscape =
         MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
     return showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0x9E040610),

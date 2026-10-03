@@ -454,16 +454,17 @@ void main() {
     expect(find.text('⌕  Season packs', skipOffstage: false), findsNothing);
   });
 
-  testWidgets('the compact identity is centered with a MORE expander',
+  testWidgets('the compact identity has an inline MORE expander',
       (tester) async {
     _surface(tester, _phone);
     await tester.pumpWidget(_host(_model(), dpad: false, size: _phone));
     await tester.pumpAndSettle();
 
-    expect(find.text('MORE'), findsOneWidget);
-    await tester.tap(find.text('MORE'));
+    final more = find.textContaining('MORE', findRichText: true);
+    expect(more, findsOneWidget);
+    await tester.tap(more);
     await tester.pumpAndSettle();
-    expect(find.text('LESS'), findsOneWidget,
+    expect(find.textContaining('LESS', findRichText: true), findsOneWidget,
         reason: 'the synopsis expands in place and can be re-collapsed');
   });
 

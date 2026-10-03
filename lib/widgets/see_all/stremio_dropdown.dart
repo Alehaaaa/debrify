@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
 import '../tv_text_field.dart';
+import '../../theme/app_motion.dart' show kPopupMenuAnimation;
 
 /// One row in a [StremioDropdown] — a selectable option, or a section header
 /// when [isHeader] is set.
@@ -227,6 +228,7 @@ class _StremioDropdownState<T extends Object>
     final hasSections = widget.options.any((o) => o.isHeader);
     final app = AppThemeScope.of(context);
     final result = await showMenu<T>(
+popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: pos,
       color: app.seeAll.panel2,

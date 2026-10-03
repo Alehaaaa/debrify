@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme_scope.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Lays out a See-All screen's filter dropdowns responsively.
 ///
@@ -108,6 +109,7 @@ class _SeeAllFilterBarState extends State<SeeAllFilterBar> {
   Future<void> _openSheet() async {
     final app = AppThemeScope.of(context);
     await showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.seeAll.panel,
       isScrollControlled: true,

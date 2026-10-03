@@ -42,6 +42,7 @@ import 'iptv_settings_two_pane.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_looks.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The narrow (phone / small-window) layout's destinations. The wide layout
 /// keeps its rail + pane; this is the phone-native equivalent — a hub page of
@@ -1480,6 +1481,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
     if (index < 0) return;
 
     final action = await showModalBottomSheet<String>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: t.panel,
       shape: const RoundedRectangleBorder(

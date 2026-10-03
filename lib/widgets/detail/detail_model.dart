@@ -134,6 +134,16 @@ class DetailModel {
   final bool trailerBusy;
   final bool trailerPlaying;
 
+  /// The ambient trailer is loaded and on screen — playing OR paused on a
+  /// frame — so it can be promoted in place. Wider than [trailerPlaying]: a
+  /// trailer the user paused and closed still sits there and must still
+  /// answer a tap.
+  final bool trailerPromotable;
+
+  /// The trailer has been promoted to fill the screen. Layouts move their
+  /// identity/content out of its way (the screen also fades the page).
+  final bool trailerForeground;
+
   // ── Tracker pills ────────────────────────────────────────────────────────
   final bool hasTrakt;
   final bool traktTracked;
@@ -234,6 +244,8 @@ class DetailModel {
     required this.hasTrailer,
     required this.trailerBusy,
     required this.trailerPlaying,
+    this.trailerPromotable = false,
+    this.trailerForeground = false,
     required this.hasTrakt,
     required this.traktTracked,
     required this.traktLabel,

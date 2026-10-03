@@ -7,6 +7,7 @@ import '../theme/app_theme_scope.dart';
 import '../theme/widgets/glass_surface.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/tv_keys.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Portrait playlist card optimized for grid layouts on desktop/tablet/mobile.
 ///
@@ -78,6 +79,7 @@ class _PlaylistGridCardState extends State<PlaylistGridCard> {
     final provider = widget.item['provider'] as String?;
 
     showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,

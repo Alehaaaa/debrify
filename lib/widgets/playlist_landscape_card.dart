@@ -6,6 +6,7 @@ import '../theme/app_surface.dart';
 import '../theme/widgets/glass_surface.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/tv_keys.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Landscape playlist card optimized for Android TV horizontal scrolling.
 ///
@@ -150,6 +151,7 @@ class _PlaylistLandscapeCardState extends State<PlaylistLandscapeCard> {
     final provider = widget.item['provider'] as String?;
 
     showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,

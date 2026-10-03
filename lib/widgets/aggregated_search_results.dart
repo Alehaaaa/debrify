@@ -25,6 +25,7 @@ import 'catalog_item_tile.dart';
 import 'trakt/trakt_menu_helpers.dart';
 import '../services/simkl/simkl_menu_helpers.dart';
 import '../screens/catalog_item_detail_screen.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Displays aggregated search results from all catalog sources
 ///
@@ -1050,6 +1051,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
 
     // Both enabled — show picker
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(

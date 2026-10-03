@@ -140,6 +140,7 @@ import '../widgets/remote/remote_role_picker_screen.dart';
 import '../theme/app_looks.dart';
 import '../theme/app_theme_scope.dart';
 import '../models/tv_hero_artwork_quality.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 @visibleForTesting
 bool shouldApplyPendingCredentialOverride({
@@ -6308,6 +6309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : await StorageService.getDownloadDirPath();
     if (!mounted) return;
     await showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).settings.sheetBg,
       shape: const RoundedRectangleBorder(
@@ -6843,6 +6845,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : null;
 
     await showModalBottomSheet(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: theme.colorScheme.surface,

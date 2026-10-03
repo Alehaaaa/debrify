@@ -11,6 +11,7 @@ import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Shared identity + action vocabulary for the alternate detail layouts.
 ///
@@ -963,6 +964,7 @@ Future<void> showDetailSeasonPicker({
   required DetailTheme theme,
 }) {
   return showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     backgroundColor: theme.pane,
     showDragHandle: true,

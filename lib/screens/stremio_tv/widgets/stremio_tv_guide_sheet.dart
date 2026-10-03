@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../models/stremio_addon.dart';
 import '../../../models/stremio_tv/stremio_tv_channel.dart';
 import '../../../models/stremio_tv/stremio_tv_now_playing.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Bottom sheet showing a mini channel guide — current + upcoming items
 /// with start/end times, poster thumbnails, and metadata.
@@ -28,6 +29,7 @@ class StremioTvGuideSheet extends StatelessWidget {
     required List<StremioTvNowPlaying> schedule,
   }) {
     return showModalBottomSheet<int>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

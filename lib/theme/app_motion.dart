@@ -288,3 +288,21 @@ class AppMotion {
     );
   }
 }
+
+/// Open/close timing for every menu-style sheet (`showModalBottomSheet`).
+///
+/// Flutter's default is 250ms in / 200ms out on a long decelerate, which reads
+/// as sluggish for a menu the user summoned on purpose — and on a weak TV box
+/// it is also 250ms of full-height sheet compositing per open. A menu should
+/// be there by the time the thumb lifts.
+const AnimationStyle kMenuSheetAnimation = AnimationStyle(
+  duration: Duration(milliseconds: 170),
+  reverseDuration: Duration(milliseconds: 130),
+);
+
+/// Open/close timing for anchored popup menus (`showMenu`). Flutter's default
+/// is 300ms; a small anchored list needs far less to read as "opening".
+const AnimationStyle kPopupMenuAnimation = AnimationStyle(
+  duration: Duration(milliseconds: 140),
+  reverseDuration: Duration(milliseconds: 100),
+);

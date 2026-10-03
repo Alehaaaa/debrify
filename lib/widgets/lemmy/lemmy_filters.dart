@@ -4,6 +4,7 @@ import '../../services/lemmy_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/tv_keys.dart';
 import '../tv_text_field.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Popular Lemmy video communities for suggestions (handle@instance).
 /// Users can type any "community@instance" handle in the picker.
@@ -155,6 +156,7 @@ class _CommunityDropdownState extends State<_CommunityDropdown> {
 
   Future<void> _showCommunityPicker() async {
     final result = await showModalBottomSheet<String>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       builder: (context) => _CommunityPickerSheet(
@@ -273,6 +275,7 @@ class _SortDropdownState extends State<_SortDropdown> {
 
   Future<void> _showSortPicker() async {
     final result = await showModalBottomSheet<LemmySort>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       builder: (context) => _SortPickerSheet(
         currentSort: widget.selectedSort,
@@ -374,6 +377,7 @@ class _TimeFilterDropdownState extends State<_TimeFilterDropdown> {
 
   Future<void> _showTimePicker() async {
     final result = await showModalBottomSheet<LemmyTimeFilter>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       builder: (context) => _TimePickerSheet(
         currentFilter: widget.selectedTimeFilter,
