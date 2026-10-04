@@ -166,7 +166,6 @@ import '../widgets/see_all/discover_shelf_scope.dart';
 import '../widgets/see_all/discover_trailer_stage.dart';
 import '../widgets/trakt/trakt_menu_helpers.dart';
 import '../services/simkl/simkl_menu_helpers.dart';
-import 'catalog_item_detail_screen.dart';
 import 'merged_series_detail_screen.dart';
 import 'settings/tv_home_style_page.dart'
     show effectiveOffTvHomeStyle, shouldUseOffTvSpotlightShell;
@@ -819,7 +818,6 @@ class _SearchScreenState extends State<SearchScreen>
 
   /// Experimental flag: route series taps to the merged detail+episodes page.
   /// Loaded once on init; movies and the flag-off path keep the existing flow.
-  bool _mergedSeriesPage = false;
 
   /// imdbId → number of pinned (bound) sources — drives the board tile badge,
   /// detail Sources tint, and the Episodes "Source(s)" button count.
@@ -2146,7 +2144,6 @@ class _SearchScreenState extends State<SearchScreen>
     _refreshTraktAuthState();
     _refreshSimklAuthState();
     _refreshMdblistAuthState();
-    _loadMergedSeriesFlag();
     // (The keyword restore itself ran earlier — before _loadHomeDefaultView —
     // see the ordering comment there.) A restored search carries its own
     // filters, so don't overwrite them with the saved defaults.
@@ -5616,11 +5613,8 @@ class _SearchScreenState extends State<SearchScreen>
     final imdbId = data['imdbId'] as String?;
     if (imdbId == null || imdbId.isEmpty) return;
     // This can run before the board's async flags settle (they're kicked off
-    // fire-and-forget in initState). Await the two that shape the detail so we
-    // don't open the wrong thing: the merged-page flag (merged vs legacy screen
-    // — only the merged one honours initialSeason/Episode, i.e. the scroll) and
-    // Trakt auth (status chips + menu). Both are fast local reads, no network.
-    await _loadMergedSeriesFlag();
+    // fire-and-forget in initState). Await Trakt auth, which shapes the detail
+    // (status chips + menu); it's a fast local read, no network.
     await _refreshTraktAuthState();
     if (!mounted) return;
     final type = (data['type'] as String?) == 'movie' ? 'movie' : 'series';
@@ -13680,14 +13674,6 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   // ── Playback / detail delegation ───────────────────────────────────────────
 
-  /// Load the experimental merged-series-page flag once on init.
-  Future<void> _loadMergedSeriesFlag() async {
-    final on = await StorageService.getMergedSeriesPageEnabled();
-    if (mounted && on != _mergedSeriesPage) {
-      setState(() => _mergedSeriesPage = on);
-    }
-  }
-
   Future<StremioAddon?> _progressOriginAddon(StremioMeta item, StremioAddon fallback) async {
     final custom = CustomSeriesIdentity.parse(item.imdbId);
     if (custom == null) return fallback;
@@ -13798,7 +13784,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
         ),
     ];
     // Static (status-unknown) strip — the fallback for the merged page until its
-    // status loads, and the only strip the legacy CatalogItemDetailScreen uses.
+    // status loads.
     final options = buildMenuOptions(null);
 
     // Simkl's own strip — built and rendered entirely separately from Trakt's
@@ -13829,9 +13815,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
         );
     final mdblistOptions = buildMdblistOptions(null);
 
-    // Experimental: series route to the merged detail+episodes page. Movies and
-    // the flag-off path fall through to the existing CatalogItemDetailScreen.
-    if ((item.type == 'series' || item.type == 'movie') && _mergedSeriesPage) {
+    // Every catalog title opens the merged detail page: a series with its
+    // episodes, anything else as a single title.
+    {
       Widget buildMergedDetail(BuildContext _) => MergedDetailScreen(
                 item: item,
                 addon: addon,
@@ -13880,6 +13866,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                         isMdblistSource: isMdblistSource,
                       )
                     : null,
+                onLoaderArt: (art) => _adoptDetailPlayArt(item, art),
                 onDownload: (season, episode) => _downloadFromDetail(
                   item,
                   addon,
@@ -13992,110 +13979,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               MainPageBridge.switchTab?.call(returnToTabOnClose);
             }
           });
-      return;
     }
-
-    Navigator.of(context)
-        .push(
-          MaterialPageRoute(
-            settings: const RouteSettings(name: kCatalogDetailRouteName),
-            builder: (_) => CatalogItemDetailScreen(
-              // Keep the originating addon with the locally-saved My
-              // Watchlist row so reopening it can route to the same source.
-              item: StorageService.withMyWatchlistSource(item, addon),
-              isTelevision: widget.isTelevision,
-              // Hide "Play" when PikPak is the only provider — no quick-play.
-              showQuickPlay: !_pikpakOnly,
-              // Gold-tint the Sources button when a source is already pinned.
-              hasBoundSource: _isBound(item),
-              resumeInfoLoader: () => _resolveResumeInfo(
-                item,
-                addon,
-                isTraktSource: isTraktSource,
-                isMdblistSource: isMdblistSource,
-              ),
-              // preferTraktResume: this screen's resumeInfoLoader is the same
-              // Trakt-authoritative _resolveResumeInfo the merged page uses, so
-              // Play must honour the Trakt position too or the button label and
-              // playback diverge (button "Resume · S3E4" vs local S01E01).
-              onPlay: () => _onCatalogPlay(
-                item,
-                addon,
-                isTraktSource: isTraktSource,
-                isMdblistSource: isMdblistSource,
-                preferTraktResume: true,
-              ),
-              onRewatch: () => _onCatalogPlay(item, addon,
-                isTraktSource: isTraktSource, isMdblistSource: isMdblistSource,
-                startFromBeginning: true),
-              // Enriched backdrop/logo/meta for the Marquee play loader —
-              // the catalog row that opened this page rarely has any of it.
-              onLoaderArt: (art) => _adoptDetailPlayArt(item, art),
-              onBrowse: () => _onCatalogBrowse(
-                item,
-                addon,
-                isTraktSource: isTraktSource,
-                isMdblistSource: isMdblistSource,
-              ),
-              onDownload: item.type == 'movie'
-                  ? () => _downloadFromDetail(item, addon)
-                  : null,
-              onBrowsePrimaryEpisodeSources: item.type == 'series'
-                  ? () => _onCatalogPlay(
-                      item,
-                      addon,
-                      isTraktSource: isTraktSource,
-                      isMdblistSource: isMdblistSource,
-                      skipEpisodeFallback: true,
-                      preferTraktResume: true,
-                      browseSourcesOnly: true,
-                    )
-                  : null,
-              traktMenuOptions: options,
-              onTraktAction: (a) => _handleDetailQuickAction(
-                item,
-                addon,
-                a,
-                inCw: inCw,
-                imdb: imdb,
-              ),
-              simklMenuOptions: simklOptions,
-              onSimklAction: (a) => _handleDetailSimklQuickAction(item, a),
-              mdblistMenuOptions: mdblistOptions,
-              onMdblistAction: (a) => _handleDetailMdblistQuickAction(item, a),
-              // Live Simkl status — relabels Play → "Rewatch" for a completed
-              // movie (matches the merged detail page's simklStatusLoader).
-              simklStatusLoader: (_isSimklAuthenticated && imdb != null)
-                  ? () => SimklService.instance.fetchTitleStatus(imdb, contentType: item.type)
-                  : null,
-              // "More Like This" rail + sparse-item meta backfill, matching the
-              // catalog detail flow.
-              recommendationsLoader: imdb != null && MediaIdentity.isImdb(imdb)
-                  ? () => _stremio.getRecommendations(
-                      imdbId: imdb,
-                      type: item.type,
-                    )
-                  : null,
-              // Native TMDB titles can navigate even without IMDb recommendations.
-              onRecommendationTap: (rec) =>
-                  _openItem(rec, rec.sourceAddon ?? addon),
-              metaEnricher: (id, type) =>
-                  _stremio.fetchMetaDetails(imdbId: id, type: type),
-            ),
-          ),
-        )
-        // A bind/unbind may have happened inside the detail flow; playback may
-        // also have changed Continue Watching progress (local AND tracker rows
-        // — see _refreshAfterPlayback).
-        .then((_) {
-          unawaited(_refreshAfterPlayback());
-          _refreshTraktAuthState();
-          _refreshSimklAuthState();
-          _refreshMdblistAuthState();
-          if (returnToTabOnClose != null) {
-            MainPageBridge.switchTab?.call(returnToTabOnClose);
-          }
-        });
   }
 
   /// Dispatch a detail-screen quick action. Reuses the shared

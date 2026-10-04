@@ -13,6 +13,8 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../models/play_loader_art.dart';
 import 'package:flutter/services.dart';
 
 import '../utils/platform_util.dart';
@@ -202,6 +204,10 @@ class MergedDetailScreen extends StatefulWidget {
   /// button's old behavior (the source list / season packs).
   final Future<void> Function(int? season, int? episode)? onDownload;
 
+  /// Receives this page's best artwork (logo, backdrop, rating) for the play
+  /// loader, which otherwise only has what the catalog row carried.
+  final ValueChanged<PlayLoaderArt>? onLoaderArt;
+
   const MergedDetailScreen({
     super.key,
     required this.item,
@@ -243,6 +249,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.seasonsLoader,
     this.episodeFilter,
     this.onDownload,
+    this.onLoaderArt,
     this.onPlayEpisode,
     this.watchProgressLoader,
   });
@@ -848,6 +855,18 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   bool _rewatchPending = false;
 
+  /// Publishes the current best artwork for the play loader. Cheap and
+  /// idempotent — the host keeps the latest.
+  void _emitLoaderArt() {
+    final sink = widget.onLoaderArt;
+    if (sink == null) return;
+    final art = PlayLoaderArt.fromMeta(
+      _item,
+      certificate: _imdbExtra?.certificate,
+    );
+    if (!art.isEmpty) sink(art);
+  }
+
   Future<void> _rewatchTitle() async {
     final restart = widget.onRewatch;
     if (restart == null) return;
@@ -1444,6 +1463,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         );
       });
       refreshMetadataPresentation();
+      _emitLoaderArt();
       _scheduleOfflineSave();
     } catch (_) {
     } finally {
@@ -1858,7 +1878,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// Compact-height screens (TV ~540 logical px): shrink type + spacing.
   bool get _tight => MediaQuery.of(context).size.height < 640;
 
-  bool get _isMovie => _item.type == 'movie';
+  /// Anything that isn't a series (movies, channels, other addon types) is a
+  /// single title: one Play, no episode list.
+  bool get _isMovie => _item.type != 'series';
 
   /// The reference plays its detail-page preview CRYSTAL CLEAR — no wash, no
   /// glow, no blur. True while the Showcase ambient trailer is actually
