@@ -2944,7 +2944,11 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         // control both shows and changes the relationship).
         if (_traktOnlyMenuOptions.isNotEmpty && widget.onTraktAction != null)
           _TrackerPill(
-            mark: TraktMark(size: 21, opacity: _traktTracked ? 1 : 0.55),
+            mark: TraktMark(
+              size: 21,
+              dark: !_traktTracked,
+              color: Colors.white,
+            ),
             brand: 'TRAKT',
             state: _traktPillLabel,
             rating: _traktStatus?.rating,
@@ -2957,7 +2961,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         // so nothing here touches the button above.
         if (_menuOptionsSimkl.isNotEmpty && widget.onSimklAction != null)
           _TrackerPill(
-            mark: SimklMark(size: 21, opacity: _simklTracked ? 1 : 0.55),
+            mark: SimklMark(
+              size: 21,
+              color: _simklTracked ? kSimklCyan : Colors.white,
+            ),
             brand: 'SIMKL',
             state: _simklPillLabel,
             rating: _simklStatus?.rating,

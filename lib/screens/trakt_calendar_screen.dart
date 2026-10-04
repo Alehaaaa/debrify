@@ -17,6 +17,8 @@ import '../widgets/trakt_calendar_day_sheet.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
 import '../widgets/calendar_display_preferences.dart';
+import 'settings/widgets/settings_widgets.dart'
+    show SettingsSection, SettingsSectionLabel;
 import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TraktCalendarScreen extends StatefulWidget {
@@ -459,7 +461,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
     return Center(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: isWide ? 1040 : 1180),
+        constraints: const BoxConstraints(maxWidth: 820),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             isWide ? 28 : 16,
@@ -469,7 +471,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           ),
           child: Column(
             children: [
-              _buildHeaderSurface(days, isWide, app),
+              _buildPageHeader(days, app),
               const SizedBox(height: 16),
               Expanded(
                 child: AnimatedSwitcher(
@@ -712,220 +714,135 @@ sheetAnimationStyle: kMenuSheetAnimation,
     );
   }
 
-  Widget _buildHeaderSurface(List<_AiringDay> days, bool isWide, AppTheme app) {
-    final isCompact = MediaQuery.of(context).size.width < 560;
+  /// Settings-style page header (phone and desktop): no card, just a
+  /// month title you step through with chevrons, a dim summary line, and
+  /// the secondary controls tucked into icon buttons.
+  Widget _buildPageHeader(List<_AiringDay> days, AppTheme app) {
+    final t = app.settings;
     final monthLabel = '${_monthName(_selectedMonth)} $_selectedYear';
     final summary = days.isEmpty
-        ? 'No upcoming episodes found for this month.'
-        : '${days.length} airing day${days.length == 1 ? '' : 's'} · $_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
+        ? 'No episodes airing'
+        : '${days.length} airing day${days.length == 1 ? '' : 's'} · '
+              '$_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
 
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-        isWide ? 22 : (isCompact ? 14 : 16),
-        isWide ? 20 : (isCompact ? 14 : 16),
-        isWide ? 22 : (isCompact ? 14 : 16),
-        isWide ? 18 : (isCompact ? 14 : 16),
-      ),
-      decoration: BoxDecoration(
-        borderRadius: app.shape.br(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF211017), Color(0xFF110A0F), Color(0xFF07090F)],
-        ),
-        border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
-        boxShadow: [
-          BoxShadow(
-            color: app.fade(app.calendar.accent, 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    void step(int delta) {
+      final next = DateTime(_selectedYear, _selectedMonth + delta, 1);
+      _selectMonth(year: next.year, month: next.month);
+    }
+
+    Widget chevron(IconData icon, String tip, VoidCallback onPressed) =>
+        IconButton(
+          tooltip: tip,
+          onPressed: onPressed,
+          visualDensity: VisualDensity.compact,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          icon: Icon(icon, size: 22, color: t.dim),
+        );
+
+    final multiSource = _authenticatedSourceCount >= 2;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 4, 0, 4),
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              borderRadius: app.shape.brPill,
-              color: app.fade(app.calendar.accent, 0.14),
-            ),
-            child: Text(
-              'YOUR ${_sourceName.toUpperCase()} SCHEDULE',
-              style: TextStyle(
-                color: const Color(0xFFFFC4C8),
-                fontSize: isCompact ? 10 : 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.6,
-              ),
-            ),
-          ),
-          SizedBox(height: isCompact ? 10 : 12),
-          Text(
-            monthLabel,
-            style: TextStyle(
-              fontSize: isCompact ? 22 : 30,
-              fontWeight: FontWeight.w900,
-              height: 1.0,
-            ),
-          ),
-          SizedBox(height: isCompact ? 6 : 8),
-          if (!isCompact) ...[
-            Text(
-              'Pick a year and month, then browse only the days that actually have episodes airing. No grid, no jitter, just the schedule.',
-              style: TextStyle(
-                color: app.core.tx.withValues(alpha: 0.72),
-                fontSize: 14,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 16),
-          ] else ...[
-            Text(
-              'Only days with actual episodes are shown.',
-              style: TextStyle(
-                color: app.core.tx.withValues(alpha: 0.68),
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_buildSourceSelector(dense: isCompact)
-              case final sourceField?) ...[
-            sourceField,
-            SizedBox(height: isCompact ? 10 : 12),
-          ],
-          if (isCompact)
-            Row(
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: _SelectorField(
-                    label: 'Year',
-                    value: _selectedYear,
-                    focusNode: _yearFocusNode,
-                    dense: true,
-                    items: [
-                      for (final year in _yearOptions)
-                        DropdownMenuItem<int>(
-                          value: year,
-                          child: Text('$year'),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _selectMonth(year: value);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _SelectorField(
-                    label: 'Month',
-                    value: _selectedMonth,
-                    focusNode: _monthFocusNode,
-                    dense: true,
-                    items: [
-                      for (int i = 1; i <= 12; i++)
-                        DropdownMenuItem<int>(
-                          value: i,
-                          child: Text(_monthName(i)),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _selectMonth(month: value, focusFirstDay: true);
-                    },
-                  ),
-                ),
-              ],
-            )
-          else
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                SizedBox(
-                  width: isWide ? 170 : 160,
-                  child: _SelectorField(
-                    label: 'Year',
-                    value: _selectedYear,
-                    focusNode: _yearFocusNode,
-                    items: [
-                      for (final year in _yearOptions)
-                        DropdownMenuItem<int>(
-                          value: year,
-                          child: Text('$year'),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _selectMonth(year: value);
-                    },
-                  ),
-                ),
-                SizedBox(
-                  width: isWide ? 210 : 190,
-                  child: _SelectorField(
-                    label: 'Month',
-                    value: _selectedMonth,
-                    focusNode: _monthFocusNode,
-                    items: [
-                      for (int i = 1; i <= 12; i++)
-                        DropdownMenuItem<int>(
-                          value: i,
-                          child: Text(_monthName(i)),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _selectMonth(month: value, focusFirstDay: true);
-                    },
-                  ),
-                ),
-              ],
-            ),
-          SizedBox(height: isCompact ? 10 : 12),
-          _buildDisplayControls(dense: isCompact),
-          SizedBox(height: isCompact ? 10 : 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isCompact ? 12 : 14,
-                  vertical: isCompact ? 8 : 10,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: app.shape.brPill,
-                  color: app.fade(app.calendar.accent, 0.14),
-                  border: Border.all(
-                    color: app.fade(app.calendar.accent, 0.22),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                Row(
                   children: [
-                    Icon(
-                      Icons.bolt_rounded,
-                      size: isCompact ? 14 : 16,
-                      color: const Color(0xFFFFB3B8),
-                    ),
-                    SizedBox(width: isCompact ? 6 : 8),
                     Flexible(
                       child: Text(
-                        summary,
+                        monthLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: isCompact ? 11 : 12,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          height: 1.15,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
+                    const SizedBox(width: 4),
+                    chevron(
+                      Icons.chevron_left_rounded,
+                      'Previous month',
+                      () => step(-1),
+                    ),
+                    chevron(
+                      Icons.chevron_right_rounded,
+                      'Next month',
+                      () => step(1),
+                    ),
                   ],
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  multiSource ? '$_sourceName · $summary' : summary,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: t.dim),
+                ),
+              ],
+            ),
+          ),
+          if (multiSource)
+            PopupMenuButton<String>(
+              tooltip: 'Source',
+              initialValue: _source,
+              icon: Icon(Icons.swap_horiz_rounded, size: 21, color: t.dim),
+              color: const Color(0xFF12182B),
+              onSelected: _onSourceChanged,
+              itemBuilder: (_) => [
+                if (_traktAuthed)
+                  CheckedPopupMenuItem(
+                    value: _sourceTrakt,
+                    checked: _source == _sourceTrakt,
+                    child: const Text('Trakt'),
+                  ),
+                if (_simklAuthed)
+                  CheckedPopupMenuItem(
+                    value: _sourceSimkl,
+                    checked: _source == _sourceSimkl,
+                    child: const Text('Simkl'),
+                  ),
+                if (_mdblistAuthed)
+                  CheckedPopupMenuItem(
+                    value: _sourceMdblist,
+                    checked: _source == _sourceMdblist,
+                    child: const Text('MDBList'),
+                  ),
+              ],
+            ),
+          if (_isCurrentMonth)
+            IconButton(
+              tooltip: _showEarlierDays ? 'From today' : 'Show earlier days',
+              onPressed: () =>
+                  setState(() => _showEarlierDays = !_showEarlierDays),
+              icon: Icon(
+                _showEarlierDays ? Icons.today : Icons.history,
+                size: 21,
+                color: _showEarlierDays ? app.calendar.accent : t.dim,
               ),
+            ),
+          PopupMenuButton<CalendarTimeFormat>(
+            tooltip: 'Time format',
+            initialValue: _timeFormat,
+            icon: Icon(Icons.schedule_rounded, size: 21, color: t.dim),
+            color: const Color(0xFF12182B),
+            onSelected: (value) async {
+              setState(() => _timeFormat = value);
+              await _displayPreferences?.setString(_timeFormatKey, value.name);
+            },
+            itemBuilder: (_) => [
+              for (final format in CalendarTimeFormat.values)
+                CheckedPopupMenuItem(
+                  value: format,
+                  checked: format == _timeFormat,
+                  child: Text(format.label),
+                ),
             ],
           ),
         ],
@@ -972,7 +889,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
       ),
       padding: EdgeInsets.zero,
       itemCount: days.length,
-      separatorBuilder: (_, __) => SizedBox(height: _isTelevision ? 8 : 12),
+      separatorBuilder: (_, __) =>
+          SizedBox(height: _isTelevision ? 8 : 22),
       itemBuilder: (context, index) {
         final airingDay = days[index];
         return _AiringDayCard(
@@ -985,6 +903,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           isTelevision: _isTelevision,
           focusNode: _focusNodeForDay(airingDay.day),
           onOpen: () => _openDaySheet(airingDay.day, airingDay.entries),
+          onEpisodeOpen: _handleEpisodeSelected,
           onArrowUp: index == 0
               ? () => _monthFocusNode.requestFocus()
               : () => _focusNodeForDay(days[index - 1].day).requestFocus(),
@@ -1065,9 +984,10 @@ class _SelectorField<T> extends StatelessWidget {
           borderRadius: const BorderRadius.all(Radius.circular(18)),
           borderSide: BorderSide(color: app.calendar.accent, width: 2),
         ),
+        isDense: dense,
         contentPadding: EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: dense ? 12 : 16,
+          horizontal: dense ? 12 : 14,
+          vertical: dense ? 11 : 16,
         ),
       ),
       iconEnabledColor: Colors.white70,
@@ -1100,6 +1020,7 @@ class _AiringDayCard extends StatelessWidget {
     required this.onOpen,
     required this.onArrowUp,
     required this.onArrowDown,
+    this.onEpisodeOpen,
     this.isTelevision = false,
   });
 
@@ -1114,6 +1035,10 @@ class _AiringDayCard extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onArrowUp;
   final VoidCallback? onArrowDown;
+
+  /// Opens one episode's detail page. Each grouped row uses it so a tap
+  /// goes to that episode instead of through the day sheet.
+  final ValueChanged<TraktCalendarEntry>? onEpisodeOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -1155,11 +1080,14 @@ class _AiringDayCard extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final isFocused = Focus.of(context).hasFocus;
+          if (!isTelevision) {
+            return _buildGroupLayout(accent, isFocused);
+          }
           return AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOutCubic,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(isTelevision ? 16 : 26),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: isFocused
                     ? const Color(0xFFE85A63)
@@ -1189,15 +1117,11 @@ class _AiringDayCard extends StatelessWidget {
               ],
             ),
             child: InkWell(
-              borderRadius: BorderRadius.circular(isTelevision ? 16 : 26),
+              borderRadius: BorderRadius.circular(16),
               onTap: onOpen,
               child: Padding(
-                padding: EdgeInsets.all(isTelevision ? 10 : (isWide ? 18 : 14)),
-                child: isTelevision
-                    ? _buildTvLayout(accent)
-                    : isWide
-                    ? _buildWideLayout(accent)
-                    : _buildCompactLayout(accent),
+                padding: const EdgeInsets.all(10),
+                child: _buildTvLayout(accent),
               ),
             ),
           );
@@ -1206,161 +1130,106 @@ class _AiringDayCard extends StatelessWidget {
     );
   }
 
-  Widget _buildWideLayout(Color accent) {
+  /// Phone + desktop layout, built like a settings group: a small caps date
+  /// label above one grouped panel whose rows are the episodes, split by
+  /// hairline rules — no card-in-card nesting.
+  Widget _buildGroupLayout(Color accent, bool isFocused) {
+    const shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const shortMonths = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final relative = _relativeLabel(day);
+    final dateLabel =
+        '${shortDays[day.weekday - 1]} ${day.day} ${shortMonths[day.month - 1]}';
+    final shown = entries.take(3).toList();
+    final count = '${entries.length} episode${entries.length == 1 ? '' : 's'}';
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _DayHeaderStrip(
-          app: app,
-          posterUrl: entries.first.posterUrl,
-          accent: accent,
-          compact: true,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+        Row(
+          children: [
+            SettingsSectionLabel(dateLabel),
+            if (relative != null)
+              SettingsSectionLabel('  ·  $relative', color: accent),
+            const Spacer(),
+            SettingsSectionLabel(count),
+          ],
+        ),
+        DecoratedBox(
+          // Keyboard focus (hardware keyboard on phones) still needs a
+          // visible cursor; it rides on the group instead of a card.
+          position: DecorationPosition.foreground,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isFocused ? app.calendar.accent : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: SettingsSection(
+            title: '',
             children: [
-              _DateBadge(
-                day: day,
-                accent: accent,
-                badgeGround: app.calendar.badgeGround,
-                compact: true,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatHeadline(day),
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                      ),
+              for (final entry in shown)
+                _GroupEpisodeRow(
+                  entry: entry,
+                  app: app,
+                  palette: app.calendar.accentPalette,
+                  onTap: onEpisodeOpen == null
+                      ? onOpen
+                      : () => onEpisodeOpen!(entry),
+                ),
+              if (entries.length > 3)
+                InkWell(
+                  onTap: onOpen,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 11,
                     ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    child: Row(
                       children: [
-                        _CountPill(count: entries.length, accent: accent),
                         Text(
-                          entries.length == 1
-                              ? 'One episode scheduled'
-                              : '${entries.length} episodes scheduled',
+                          '${entries.length - 3} more episode'
+                          '${entries.length - 3 == 1 ? '' : 's'}',
                           style: TextStyle(
-                            // Inside _DayHeaderStrip, whose ground IS
-                            // calendar.panel — so this ink may follow the
-                            // theme. The rows below sit on hardcoded darks
-                            // and deliberately do not.
-                            color: app.fade(app.core.tx, 0.62),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: app.settings.dim,
                           ),
+                        ),
+                        const Spacer(),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: app.settings.dim2,
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
-        const SizedBox(height: 12),
-        for (final entry in entries.take(3))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _EpisodeRow(
-              entry: entry,
-              app: app,
-              palette: app.calendar.accentPalette,
-              rowGround: app.calendar.row,
-              rowLine: app.calendar.line,
-              roomy: true,
-            ),
-          ),
-        if (entries.length > 3)
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Text(
-              '+${entries.length - 3} more episodes',
-              style: TextStyle(
-                color: app.fade(app.core.tx, 0.58),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  Widget _buildCompactLayout(Color accent) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _DayHeaderStrip(
-          app: app,
-          posterUrl: entries.first.posterUrl,
-          accent: accent,
-          compact: true,
-          child: Row(
-            children: [
-              _DateBadge(
-                day: day,
-                accent: accent,
-                badgeGround: app.calendar.badgeGround,
-                compact: true,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _formatHeadline(day),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    _CountPill(count: entries.length, accent: accent),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              _PosterThumb(
-                posterUrl: entries.first.posterUrl,
-                width: 44,
-                height: 62,
-                radius: 14,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        for (final entry in entries.take(3))
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _EpisodeRow(
-              entry: entry,
-              app: app,
-              palette: app.calendar.accentPalette,
-              rowGround: app.calendar.row,
-              rowLine: app.calendar.line,
-            ),
-          ),
-        if (entries.length > 3)
-          Text(
-            '+${entries.length - 3} more episodes',
-            style: TextStyle(
-              color: app.fade(app.core.tx, 0.58),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-      ],
-    );
+  /// "Today" / "Tomorrow" / "In 3 days" / "Yesterday" — null for days far
+  /// enough out that the date alone says it.
+  static String? _relativeLabel(DateTime day) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    // Rounded hours, not inDays: a DST change makes one local day 23h long.
+    final diff =
+        (DateTime(day.year, day.month, day.day).difference(today).inHours / 24)
+            .round();
+    if (diff == 0) return 'Today';
+    if (diff == 1) return 'Tomorrow';
+    if (diff == -1) return 'Yesterday';
+    if (diff > 1 && diff <= 6) return 'In $diff days';
+    if (diff < -1 && diff >= -6) return '${-diff} days ago';
+    return null;
   }
 
   Widget _buildTvLayout(Color accent) {
@@ -1407,7 +1276,6 @@ class _AiringDayCard extends StatelessWidget {
                     palette: app.calendar.accentPalette,
                     rowGround: app.calendar.row,
                     rowLine: app.calendar.line,
-                    compact: true,
                   ),
                 ),
               if (entries.length > 3)
@@ -1579,8 +1447,6 @@ class _EpisodeRow extends StatelessWidget {
     required this.palette,
     required this.rowGround,
     required this.rowLine,
-    this.roomy = false,
-    this.compact = false,
   });
 
   final TraktCalendarEntry entry;
@@ -1599,8 +1465,6 @@ class _EpisodeRow extends StatelessWidget {
   /// the other and a light theme puts deep ink on a dark row.
   final Color rowGround;
   final Color rowLine;
-  final bool roomy;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -1616,8 +1480,7 @@ class _EpisodeRow extends StatelessWidget {
         ? code
         : '$code · ${entry.episodeTitle}';
 
-    if (compact) {
-      return Container(
+    return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
           borderRadius: app.shape.br(10),
@@ -1680,82 +1543,89 @@ class _EpisodeRow extends StatelessWidget {
           ],
         ),
       );
-    }
+  }
+}
 
-    return Container(
-      padding: EdgeInsets.all(roomy ? 12 : 10),
-      decoration: BoxDecoration(
-        borderRadius: app.shape.br(16),
-        color: rowGround,
-        border: Border.all(color: rowLine),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PosterThumb(
-            posterUrl: entry.posterUrl,
-            width: roomy ? 46 : 38,
-            height: roomy ? 64 : 54,
-            radius: roomy ? 12 : 10,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        entry.showTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: roomy ? 15 : 14,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: app.shape.brPill,
-                        color: accent.withValues(alpha: 0.14),
-                        border: Border.all(
-                          color: accent.withValues(alpha: 0.22),
-                        ),
-                      ),
-                      child: Text(
-                        time,
-                        style: TextStyle(
-                          color: accent,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  detail,
-                  maxLines: roomy ? 2 : 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: app.fade(app.core.tx, 0.68),
-                    fontSize: roomy ? 12.5 : 12,
-                    height: 1.25,
-                  ),
-                ),
-              ],
+/// One episode as a settings-style row: poster where a settings tile has
+/// its icon, show title + dim "S06E04 · Episode" subtitle, and the air time
+/// as the trailing element in the show's accent.
+class _GroupEpisodeRow extends StatelessWidget {
+  const _GroupEpisodeRow({
+    required this.entry,
+    required this.app,
+    required this.palette,
+    required this.onTap,
+  });
+
+  final TraktCalendarEntry entry;
+
+  /// Threaded from the list build, like the other per-row widgets here.
+  final AppTheme app;
+  final List<Color> palette;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = app.settings;
+    final accent = _AiringDayCard._accentFor(entry.showTitle, palette);
+    final time = CalendarTimeFormatScope.formatTime(
+      context,
+      entry.firstAiredLocal,
+    );
+    final code =
+        'S${entry.seasonNumber.toString().padLeft(2, '0')}'
+        'E${entry.episodeNumber.toString().padLeft(2, '0')}';
+    final title = entry.episodeTitle?.trim();
+    final subtitle = title == null || title.isEmpty ? code : '$code · $title';
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+        child: Row(
+          children: [
+            _PosterThumb(
+              posterUrl: entry.posterUrl,
+              width: 34,
+              height: 48,
+              radius: 7,
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.showTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: t.dim),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              time,
+              style: TextStyle(
+                color: accent,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1802,123 +1672,6 @@ class _PosterThumb extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => placeholder,
             ),
-    );
-  }
-}
-
-class _DayHeaderStrip extends StatelessWidget {
-  const _DayHeaderStrip({
-    required this.app,
-    required this.posterUrl,
-    required this.accent,
-    required this.child,
-    this.compact = false,
-  });
-
-  /// Handed down from the card, which is itself built inside the day list.
-  final AppTheme app;
-  final String? posterUrl;
-  final Color accent;
-  final Widget child;
-  final bool compact;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: app.shape.brImg(22),
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: posterUrl == null
-                ? DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          accent.withValues(alpha: 0.14),
-                          const Color(0xFF12131A),
-                        ],
-                      ),
-                    ),
-                  )
-                : Image.network(
-                    posterUrl!,
-                    fit: BoxFit.cover,
-                    alignment: Alignment.topCenter,
-                    errorBuilder: (_, __, ___) => DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            accent.withValues(alpha: 0.14),
-                            const Color(0xFF12131A),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: compact ? 0.26 : 0.18),
-                    const Color(0xFF10131C).withValues(alpha: 0.78),
-                    const Color(0xFF10131C),
-                  ],
-                  stops: const [0.0, 0.52, 1.0],
-                ),
-              ),
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    app.calendar.panel,
-                    app.fade(app.calendar.panel, 0.82),
-                    app.fade(app.calendar.panel, 0.48),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: Container(
-              height: 2,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    accent.withValues(alpha: 0.0),
-                    accent.withValues(alpha: 0.7),
-                    accent.withValues(alpha: 0.0),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(compact ? 10 : 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: app.core.tx.withValues(alpha: 0.04)),
-              borderRadius: app.shape.br(22),
-            ),
-            child: child,
-          ),
-        ],
-      ),
     );
   }
 }

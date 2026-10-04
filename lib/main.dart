@@ -1665,13 +1665,26 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.desktopSidebarStyleChanged = () {
-      if (mounted) unawaited(_loadPhoneNavPrefs());
+      if (!mounted) return;
+      // The picker has already updated this process mirror. Apply it in this
+      // frame so a rail/pill swap never waits for a preferences round-trip.
+      setState(() {
+        _desktopSidebarStyle = StorageService.desktopSidebarStyleCached;
+      });
+      unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.sidebarConfigurationChanged = () {
       if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.navPrefsChanged = () {
-      if (mounted) unawaited(_loadPhoneNavPrefs());
+      if (!mounted) return;
+      // Swap floating ↔ classic chrome immediately; the later read supplies
+      // the bar-slot picks and any related preference updates.
+      setState(() {
+        _phoneNavStyle = MainPageBridge.phoneNavStyleCached;
+        _phoneNavLoaded = true;
+      });
+      unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.reloadProfilePolicy = () {
       if (mounted) unawaited(_loadProfilePolicy());
@@ -4027,13 +4040,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                               StorageService.setPhoneNavBarIndices(picks),
                             );
                           },
-                          onRemoteControlTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RemoteRolePickerScreen(),
-                              ),
-                            );
-                          },
+                          onRemoteControlTap:
+                              _allowsProfileFeature(
+                                ProfileFeature.remoteControl,
+                              )
+                              ? () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const RemoteRolePickerScreen(),
+                                    ),
+                                  );
+                                }
+                              : null,
                           profile: _profilePolicy,
                           onProfileTap: _profilePolicy == null
                               ? null
@@ -4169,13 +4188,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                             final actualIndex = nonTvIndices[relativeIndex];
                             _onItemTapped(actualIndex);
                           },
-                          onRemoteControlTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RemoteRolePickerScreen(),
-                              ),
-                            );
-                          },
+                          onRemoteControlTap:
+                              _allowsProfileFeature(
+                                ProfileFeature.remoteControl,
+                              )
+                              ? () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const RemoteRolePickerScreen(),
+                                    ),
+                                  );
+                                }
+                              : null,
                           profile: _profilePolicy,
                           onProfileTap: _profilePolicy == null
                               ? null

@@ -1012,10 +1012,10 @@ Widget _heroEdgeFeather(Alignment begin, Alignment end, Color c, double frac) {
 /// Any hero change tears the trailer down (the host nulls the listenable → the
 /// video unmounts and the region fades out). A trailer that stops for content
 /// playback drops on its own via [HeroTrailerBackdrop.onPlayingChanged](false).
-/// The Spotlight shell's floating search button — a frosted circle over the
-/// hero, mirroring the approved mock. Deliberately plain Material ink-free
-/// (the board underneath is a photograph; a splash reads as damage).
-class _SpotlightSearchButton extends StatelessWidget {
+/// The Spotlight shell's floating search button. Its dark glass and border
+/// deliberately match the nearby Trailer status control; hover brightens the
+/// glass without using a splash over the hero artwork.
+class _SpotlightSearchButton extends StatefulWidget {
   final VoidCallback onTap;
   const _SpotlightSearchButton({required this.onTap});
 
@@ -1026,24 +1026,45 @@ class _SpotlightSearchButton extends StatelessWidget {
   static const double diameter = 40;
 
   @override
+  State<_SpotlightSearchButton> createState() => _SpotlightSearchButtonState();
+}
+
+class _SpotlightSearchButtonState extends State<_SpotlightSearchButton> {
+  bool _hovered = false;
+
+  void _setHovered(bool hovered) {
+    if (_hovered != hovered) setState(() => _hovered = hovered);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            width: diameter,
-            height: diameter,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0x8C1E1E20),
-              border: Border.all(color: const Color(0x1FFFFFFF)),
-            ),
-            child: const Icon(
-              Icons.search_rounded,
-              size: 20,
-              color: Colors.white,
+    final app = AppThemeScope.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: ClipOval(
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              curve: Curves.easeOutCubic,
+              width: _SpotlightSearchButton.diameter,
+              height: _SpotlightSearchButton.diameter,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: app.fade(app.home.bg, _hovered ? 0.9 : 0.8),
+                border: Border.all(
+                  color: app.fade(app.core.tx, _hovered ? 0.28 : 0.16),
+                ),
+              ),
+              child: Icon(
+                Icons.search_rounded,
+                size: 20,
+                color: app.fade(app.core.tx, _hovered ? 1 : 0.88),
+              ),
             ),
           ),
         ),
@@ -1854,7 +1875,7 @@ class _HeroTitleArtState extends State<_HeroTitleArt> {
     // Poppins (rounded geometric) for the display title, airier and lighter
     // than Inter-w800/-1 tracking — closer to Stremio's hero. Body/metadata
     // stay on the Inter theme.
-    style: GoogleFonts.poppins(
+    style: TextStyle(fontFamily: 'Poppins', 
       fontSize: widget.compact
           ? (widget.isTelevision ? 24 : 20)
           : (widget.isTelevision ? 38 : 26),

@@ -1016,7 +1016,8 @@ class _ModeToggle extends StatelessWidget {
 
   List<_Mode> get _modes => [
     _Mode.catalog,
-    if (ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch))
+    if (_kKeywordSearchEnabled &&
+        ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch))
       _Mode.keyword,
     if (listsAvailable) _Mode.lists,
   ];
@@ -1072,7 +1073,6 @@ class _ModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final modes = _modes;
     if (modes.length <= 1) {
       return const SizedBox.shrink();
@@ -1118,19 +1118,35 @@ class _ModeToggle extends StatelessWidget {
       if (modes.contains(_Mode.keyword)) keyword,
       if (modes.contains(_Mode.lists)) lists,
     ];
-    return Container(
-      height: isTelevision ? 54 : 48,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: app.shape.br(14),
-        border: Border.all(color: app.fade(app.core.tx, 0.08)),
-      ),
-      child: Row(
-        mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
-        children: fullWidth
-            ? [for (final segment in segments) Expanded(child: segment)]
-            : segments,
+    // Frosted glass, level with the search field: a quiet track with the
+    // selected segment lifted as a brighter pane rather than a solid block.
+    final radius = app.shape.br(16);
+    return ClipRRect(
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: Container(
+          height: isTelevision ? 54 : 52,
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                app.fade(app.core.tx, 0.08),
+                app.fade(app.core.tx, 0.04),
+              ],
+            ),
+            border: Border.all(color: app.fade(app.core.tx, 0.10)),
+          ),
+          child: Row(
+            mainAxisSize: fullWidth ? MainAxisSize.max : MainAxisSize.min,
+            children: fullWidth
+                ? [for (final segment in segments) Expanded(child: segment)]
+                : segments,
+          ),
+        ),
       ),
     );
   }
@@ -1151,11 +1167,20 @@ class _ModeToggle extends StatelessWidget {
 
     Widget content(bool focused) => AnimatedContainer(
       duration: const Duration(milliseconds: 150),
-      padding: EdgeInsets.symmetric(horizontal: isTelevision ? 16 : 12),
+      padding: EdgeInsets.symmetric(horizontal: isTelevision ? 18 : 14),
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: on ? app.home.chromeAccent : Colors.transparent,
-        borderRadius: app.shape.br(10),
+        color: on ? app.fade(app.core.tx, 0.14) : Colors.transparent,
+        borderRadius: app.shape.br(11),
+        boxShadow: on
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
         // A white ring shows the remote's DPAD position. Drawn whenever the
         // segment is focused — including the selected one, since focus lands
         // there first (its accent fill alone wouldn't signal focus moved).
@@ -1176,19 +1201,19 @@ class _ModeToggle extends StatelessWidget {
             // selected segment was a white label on a white bar. inkOn
             // returns white on legacy's #7B5CFF (4.36, over the threshold),
             // so this is a no-op today.
+            // The selected pane is neutral glass, so the accent reads on the
+            // glyph alone; text stays the theme's own ink for contrast.
             color: on
-                ? app.inkOn(app.home.chromeAccent)
-                : Theme.of(context).colorScheme.onSurfaceVariant,
+                ? app.home.chromeAccent
+                : app.fade(app.core.tx, 0.55),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 7),
           Text(
             label,
             style: TextStyle(
               fontSize: isTelevision ? 14 : 13,
-              fontWeight: FontWeight.w700,
-              color: on
-                  ? app.inkOn(app.home.chromeAccent)
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
+              fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+              color: on ? app.core.tx : app.fade(app.core.tx, 0.6),
             ),
           ),
         ],

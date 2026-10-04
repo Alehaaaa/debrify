@@ -279,6 +279,15 @@ class ProfileArtRegistry {
   static void _ember(Canvas canvas, Size size, double t) {
     _fill(canvas, size, const <Color>[Color(0xFF2B0F14), Color(0xFF160A10)]);
     final pulse = 0.5 + 0.5 * math.sin(t * 2 * math.pi);
+    // Keep a visible ember at avatar sizes too. The soft blooms alone look
+    // like a flat maroon disk while a navigation drawer is animating in.
+    canvas.drawCircle(
+      Offset(size.width * 0.5, size.height * 0.56),
+      size.width * 0.12,
+      Paint()
+        ..blendMode = BlendMode.screen
+        ..color = const Color(0xFFE2563D).withValues(alpha: 0.72),
+    );
     _bloom(
       canvas,
       size,
@@ -286,11 +295,13 @@ class ProfileArtRegistry {
       size.width * (0.46 + pulse * 0.14),
       const Color(0xFFE2563D),
     );
+    // The warm highlight sits inside the ember as its hot core. Offset up and
+    // to the right it read as a stray light dot at avatar sizes.
     _bloom(
       canvas,
       size,
-      Offset(size.width * 0.62, size.height * 0.34),
-      size.width * 0.34,
+      Offset(size.width * 0.5, size.height * 0.56),
+      size.width * 0.2,
       const Color(0xFFF4B860),
     );
   }

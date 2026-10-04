@@ -743,9 +743,13 @@ class TvSidebarNavState extends State<TvSidebarNav>
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                app.fade(app.core.tx, 0.10 * t),
-                                paneMid.withValues(alpha: 0.36 * t),
-                                paneDeep.withValues(alpha: 0.46 * t),
+                                // Android TV deliberately skips a live blur,
+                                // so the glass has to read through its tint:
+                                // retain enough of the board's art/light for
+                                // depth instead of covering it in navy.
+                                app.fade(app.core.tx, 0.16 * t),
+                                paneMid.withValues(alpha: 0.22 * t),
+                                paneDeep.withValues(alpha: 0.30 * t),
                               ],
                               stops: const [0.0, 0.40, 1.0],
                             ),
@@ -753,8 +757,9 @@ class TvSidebarNavState extends State<TvSidebarNav>
                         ),
                       ),
                       Positioned.fill(child: inner ?? const SizedBox.shrink()),
-                      // Specular streak OVER the content — the gloss. Capped
-                      // at 10% white so labels stay legible beneath it.
+                      // Specular streak OVER the content — the gloss. It is
+                      // deliberately stronger than the old 10% wash so this
+                      // no-blur TV material still reads as frosted glass.
                       Positioned.fill(
                         child: IgnorePointer(
                           child: DecoratedBox(
@@ -764,8 +769,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
                                 end: Alignment.bottomRight,
                                 colors: [
                                   app.fade(app.core.tx, 0.0),
-                                  app.fade(app.core.tx, 0.10 * t),
-                                  app.fade(app.core.tx, 0.02 * t),
+                                  app.fade(app.core.tx, 0.16 * t),
+                                  app.fade(app.core.tx, 0.035 * t),
                                   app.fade(app.core.tx, 0.0),
                                 ],
                                 stops: const [0.30, 0.42, 0.55, 0.62],
@@ -780,7 +785,7 @@ class TvSidebarNavState extends State<TvSidebarNav>
                         right: 0,
                         top: 20,
                         bottom: 20,
-                        width: 1.5,
+                        width: 2,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -790,9 +795,9 @@ class TvSidebarNavState extends State<TvSidebarNav>
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   app.shell.navFocus.withValues(
-                                    alpha: 0.70 * t,
+                                    alpha: 0.82 * t,
                                   ),
-                                  _kRimCyan.withValues(alpha: 0.40 * t),
+                                  _kRimCyan.withValues(alpha: 0.55 * t),
                                   app.shell.navFocus.withValues(
                                     alpha: 0.15 * t,
                                   ),
@@ -1124,7 +1129,11 @@ class TvSidebarNavState extends State<TvSidebarNav>
               clipBehavior: Clip.antiAlias,
               child: Padding(
                 padding: const EdgeInsets.all(5),
-                child: Image.asset('assets/app_icon.png', fit: BoxFit.contain),
+                child: Image(
+                  image: const ExactAssetImage('assets/app_icon.png'),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                ),
               ),
             ),
             const SizedBox(width: 9),
@@ -1159,11 +1168,13 @@ class TvSidebarNavState extends State<TvSidebarNav>
             SizedBox(
               width: TvSidebarNav.collapsedWidth,
               child: Center(
-                child: Image.asset(
-                  'assets/app_icon.png',
+                child: Image(
+                  image: const ExactAssetImage('assets/app_icon.png'),
                   width: 26,
                   height: 26,
                   fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) =>
+                      const SizedBox(width: 26, height: 26),
                 ),
               ),
             ),

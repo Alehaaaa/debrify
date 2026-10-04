@@ -768,10 +768,23 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     for (final cancel in _cancelHeroWarmups.toList()) { cancel(); }
   }
 
-  int get _heroDecodeWidth => widget.dpad
-      ? 1400
-      : (MediaQuery.devicePixelRatioOf(context) * MediaQuery.sizeOf(context).width)
-          .round().clamp(720, 1920);
+  /// Decode width for the hero art, in physical pixels. The art is a 16:9
+  /// backdrop drawn with BoxFit.cover, so what it must fill is the panel's
+  /// width OR its height × 16/9, whichever is larger. Sizing by screen width
+  /// alone starved the tall phone hero: on a 412dp-wide, 2.6× phone the art
+  /// decoded at ~1080px and was then cropped and stretched ~2.5× to fill the
+  /// band's height, which is what read as low resolution.
+  int get _heroDecodeWidth {
+    if (widget.dpad) return 1400;
+    final size = MediaQuery.sizeOf(context);
+    final heroHeight = _heroBandH > 0
+        ? _heroBandH
+        : size.height * _heroFractionCompact;
+    final coverWidth = max(size.width, heroHeight * 16 / 9);
+    return (MediaQuery.devicePixelRatioOf(context) * coverWidth)
+        .round()
+        .clamp(720, 2560);
+  }
 
   Duration get _heroImageFadeIn =>
       (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
@@ -2200,7 +2213,10 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
                           imageUrl: posterUrl,
                           fit: BoxFit.cover,
                           cacheManager: DebrifyImageCache.manager,
-                          memCacheWidth: 900,
+                          // The tall compact band crops a 2:3 poster far
+                          // less than a backdrop, but 900 was still under a
+                          // 1080-class phone's physical width.
+                          memCacheWidth: 1280,
                           placeholder: (_, __) => ColoredBox(color: ground),
                           errorWidget: (_, __, ___) =>
                               ColoredBox(color: ground),

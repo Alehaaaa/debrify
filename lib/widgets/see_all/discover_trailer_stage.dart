@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../services/youtube_service.dart';
@@ -432,7 +431,7 @@ class _TakeoverInfo extends StatelessWidget {
       item.name.toUpperCase(),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: GoogleFonts.poppins(
+      style: TextStyle(fontFamily: 'Poppins', 
         fontSize: 46,
         fontWeight: FontWeight.w800,
         height: 0.98,

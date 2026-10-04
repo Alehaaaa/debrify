@@ -777,7 +777,11 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasTrakt && model.onTraktMenu != null)
         DetailTrackerPill(
-          mark: TraktMark(size: 19, opacity: model.traktTracked ? 1 : 0.55),
+          mark: TraktMark(
+            size: 19,
+            dark: !model.traktTracked,
+            color: Colors.white,
+          ),
           brand: 'TRAKT',
           state: model.traktLabel,
           rating: model.traktRating,
@@ -788,7 +792,10 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasSimkl && model.onSimklMenu != null)
         DetailTrackerPill(
-          mark: SimklMark(size: 19, opacity: model.simklTracked ? 1 : 0.55),
+          mark: SimklMark(
+            size: 19,
+            color: model.simklTracked ? kSimklCyan : Colors.white,
+          ),
           brand: 'SIMKL',
           state: model.simklLabel,
           rating: model.simklRating,

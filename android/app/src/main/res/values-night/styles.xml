@@ -11,6 +11,8 @@
          
          This Theme is only used starting with V2 of Flutter's Android embedding. -->
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
-        <item name="android:windowBackground">?android:colorBackground</item>
+        <!-- Keep the post-launch native frame on the same logo-free surface
+             while Flutter paints the selected launch ident. -->
+        <item name="android:windowBackground">@color/splash_background</item>
     </style>
 </resources>

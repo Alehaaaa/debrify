@@ -42,7 +42,6 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import '../models/custom_series_identity.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../models/advanced_search_selection.dart';
 import '../theme/app_theme_scope.dart';
@@ -266,6 +265,14 @@ class SearchScreen extends StatefulWidget {
 }
 
 enum _Mode { catalog, keyword, lists }
+
+/// Keyword mode is a plain torrent lookup, not media-aware. Hidden from the
+/// search header (and never restored) until it earns its place again.
+const bool _kKeywordSearchEnabled = false;
+
+/// The catalog "Sources" picker under the search field. Hidden for now; the
+/// saved source selection still applies.
+const bool _kCatalogSourcesEnabled = false;
 
 /// Completed Home data; interactive resources belong to each screen instance.
 typedef _HomePreservedState = ({
@@ -2383,7 +2390,8 @@ class _SearchScreenState extends State<SearchScreen>
     }
     // The keyword surface is per-profile; a snapshot saved under a profile
     // that had it must not restore into one that doesn't.
-    if (!ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch)) {
+    if (!_kKeywordSearchEnabled ||
+        !ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch)) {
       return false;
     }
     _mode = _Mode.keyword;
@@ -2984,7 +2992,8 @@ class _SearchScreenState extends State<SearchScreen>
     final saved = await StorageService.getHomeDefaultSourceType();
     if (!mounted || widget.searchMode || widget.discoverMode) return;
     final mode =
-        saved == 'keyword' &&
+        _kKeywordSearchEnabled &&
+            saved == 'keyword' &&
             ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch)
         ? _Mode.keyword
         : _Mode.catalog;
@@ -6868,6 +6877,7 @@ class _SearchScreenState extends State<SearchScreen>
   /// Focus the Catalog/Keyword/Lists toggle, landing on the segment for the
   /// current mode so its highlight lines up with where the remote cursor sits.
   void _focusModeToggle() {
+    if (!_modeToggleVisible) return;
     if (_useCompactModeMenu) {
       _modeDropdownNode.requestFocus();
       return;
@@ -6878,6 +6888,13 @@ class _SearchScreenState extends State<SearchScreen>
       _Mode.lists => _modeListsNode,
     }).requestFocus();
   }
+
+  /// Whether the header carries a mode selector at all: with Keyword hidden
+  /// it only appears when Lists is available alongside Catalog.
+  bool get _modeToggleVisible =>
+      (_kKeywordSearchEnabled &&
+          ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch)) ||
+      (kMdblistEnabled && _isMdblistAuthenticated);
 
   /// Three labelled segments need more room than the two-mode selector did.
   /// Collapse to one dropdown only when the available header width cannot
@@ -6919,6 +6936,7 @@ class _SearchScreenState extends State<SearchScreen>
   /// Catalog-mode twin of [_kwSourcesButtonVisible]: the Sources button shown
   /// on the empty catalog prompt (Search tab, no query yet, not mid-search).
   bool get _catalogSourcesButtonVisible =>
+      _kCatalogSourcesEnabled &&
       _mode == _Mode.catalog &&
       widget.searchMode &&
       _catalogQuery.isEmpty &&
@@ -13614,7 +13632,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
     // Belt for every entry point at once: the keyword surface is gated per
     // profile (catalog search never is).
     if (mode == _Mode.keyword &&
-        !ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch)) {
+        (!_kKeywordSearchEnabled ||
+            !ProfilePolicyGuard.allowsSync(ProfileFeature.keywordSearch))) {
       return;
     }
     if (_mode == mode) return;
@@ -16484,7 +16503,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   children: [
                     _buildHeader(),
                     _buildUnifiedCatalogSourcesBar(),
-                    Expanded(child: _buildBody()),
+                    Expanded(child: _buildAnimatedBody()),
                   ],
                 ),
               ),
@@ -16513,24 +16532,17 @@ sheetAnimationStyle: kMenuSheetAnimation,
       return SafeArea(
         child: Column(
           children: [
-            // Close affordance: only on the blank catalog prompt — with any
-            // query or keyword state active, Back (hardware or gesture) is
-            // the way out, and it resets atomically via _closeSearchSheet.
-            if (!_sheetForced && _searchController.text.isEmpty)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 8, top: 4),
-                  child: IconButton(
-                    icon: const Icon(Icons.close_rounded),
-                    tooltip: 'Hide search',
-                    onPressed: _closeSearchSheet,
-                  ),
-                ),
-              ),
-            _buildHeader(),
+            // Close affordance lives in the header row: only on the blank
+            // catalog prompt — with any query or keyword state active, Back
+            // (hardware or gesture) is the way out, and it resets atomically
+            // via _closeSearchSheet.
+            _buildHeader(
+              onClose: !_sheetForced && _searchController.text.isEmpty
+                  ? _closeSearchSheet
+                  : null,
+            ),
             _buildUnifiedCatalogSourcesBar(),
-            Expanded(child: _buildBody()),
+            Expanded(child: _buildAnimatedBody()),
           ],
         ),
       );
@@ -16590,7 +16602,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// hides. TV keeps it in the dedicated Search tab's prompt instead, so this
   /// renders nothing there.
   Widget _buildUnifiedCatalogSourcesBar() {
-    if (widget.isTelevision || widget.searchMode) {
+    if (!_kCatalogSourcesEnabled || widget.isTelevision || widget.searchMode) {
       return const SizedBox.shrink();
     }
     final show = _catalogSourcesBarShown && _mode == _Mode.catalog;
@@ -16615,16 +16627,17 @@ sheetAnimationStyle: kMenuSheetAnimation,
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader({VoidCallback? onClose}) {
     final tv = widget.isTelevision;
     // On narrow phones the search box + mode selector crowd each other in one
     // row, so stack the selector underneath. When even the stacked three labels
     // cannot fit, [_ModeToggle] becomes a single dropdown.
     final hasLists = kMdblistEnabled && _isMdblistAuthenticated;
-    // Reserve the three-mode layout whenever the integration is compiled in,
-    // even before the async auth check lands. This avoids a one-frame inline →
-    // stacked jump for connected users on medium-width windows.
-    final narrowBreakpoint = kMdblistEnabled ? 900.0 : 620.0;
+    final showToggle = _modeToggleVisible;
+    // Reserve the wider layout whenever a selector can appear, so connected
+    // users on medium-width windows don't see a one-frame inline → stacked
+    // jump when the async auth check lands.
+    final narrowBreakpoint = showToggle || kMdblistEnabled ? 900.0 : 620.0;
     final narrow = !tv && MediaQuery.of(context).size.width < narrowBreakpoint;
     final compactModeMenu = _useCompactModeMenu;
 
@@ -16646,13 +16659,28 @@ sheetAnimationStyle: kMenuSheetAnimation,
       onLeaveToField: _focusSearchFieldAtEnd,
       onLeaveToContent: _focusContent,
     );
+    final close = onClose == null
+        ? null
+        : _GlassIconButton(
+            icon: Icons.close_rounded,
+            tooltip: 'Hide search',
+            onPressed: onClose,
+          );
 
     if (narrow) {
       return Padding(
-        padding: EdgeInsets.fromLTRB(16, tv ? 16 : 12, 16, 8),
+        padding: EdgeInsets.fromLTRB(16, tv ? 16 : 12, 16, 10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [field, const SizedBox(height: 10), toggle],
+          children: [
+            Row(
+              children: [
+                Expanded(child: field),
+                if (close != null) ...[const SizedBox(width: 10), close],
+              ],
+            ),
+            if (showToggle) ...[const SizedBox(height: 10), toggle],
+          ],
         ),
       );
     }
@@ -16662,20 +16690,20 @@ sheetAnimationStyle: kMenuSheetAnimation,
     return Padding(
       padding: tv && widget.searchMode
           ? const EdgeInsets.fromLTRB(24, 8, 24, 8)
-          : EdgeInsets.fromLTRB(20, tv ? 18 : 14, 20, 10),
+          : EdgeInsets.fromLTRB(24, tv ? 18 : 16, 24, 12),
       child: Row(
         children: [
           Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 680),
+                constraints: const BoxConstraints(maxWidth: 720),
                 child: field,
               ),
             ),
           ),
-          const SizedBox(width: 12),
-          toggle,
+          if (showToggle) ...[const SizedBox(width: 12), toggle],
+          if (close != null) ...[const SizedBox(width: 12), close],
         ],
       ),
     );
@@ -16685,9 +16713,18 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// pill, centered text, a search glyph on the right that becomes a clear ✕).
   Widget _buildSearchField(bool tv) {
     final app = AppThemeScope.of(context);
-    final scheme = Theme.of(context).colorScheme;
     final compactSearch = tv && widget.searchMode;
-    final radius = app.shape.br(compactSearch ? 12 : 26);
+    final radius = app.shape.br(compactSearch ? 12 : 16);
+    return _GlassSearchSurface(
+      focusNode: _searchFocusNode,
+      radius: radius,
+      child: _buildSearchFieldInner(tv, compactSearch),
+    );
+  }
+
+  Widget _buildSearchFieldInner(bool tv, bool compactSearch) {
+    final app = AppThemeScope.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
@@ -16789,38 +16826,47 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 _Mode.keyword => 'Search torrents by keyword',
                 _Mode.lists => 'Search MDBList lists',
               },
-              hintStyle: TextStyle(color: app.fade(app.core.tx, 0.32)),
-              suffixIcon: hasText
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.close_rounded,
-                        color: app.fade(app.core.tx, 0.55),
-                      ),
-                      onPressed: _clearQuery,
-                    )
-                  : Icon(
-                      Icons.search_rounded,
-                      color: app.fade(app.core.tx, 0.4),
-                    ),
-              border: OutlineInputBorder(
-                borderRadius: radius,
-                borderSide: BorderSide.none,
+              hintStyle: TextStyle(
+                color: app.fade(app.core.tx, 0.4),
+                fontWeight: FontWeight.w400,
               ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: radius,
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: radius,
-                borderSide: BorderSide(
-                  color: app.fade(app.home.chromeAccent, 0.6),
+              // The glass surface owns fill, border and focus glow; the
+              // field itself is bare text between a leading glyph and an
+              // optional clear button.
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 10),
+                child: Icon(
+                  Icons.search_rounded,
+                  size: 20,
+                  color: app.fade(app.core.tx, 0.55),
                 ),
               ),
-              filled: true,
-              fillColor: app.fade(app.core.tx, 0.06),
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: compactSearch ? 10 : (tv ? 16 : 14),
+              prefixIconConstraints: const BoxConstraints(minWidth: 0),
+              suffixIcon: hasText
+                  ? Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: IconButton(
+                        tooltip: 'Clear',
+                        visualDensity: VisualDensity.compact,
+                        icon: Icon(
+                          Icons.cancel_rounded,
+                          size: 18,
+                          color: app.fade(app.core.tx, 0.45),
+                        ),
+                        onPressed: _clearQuery,
+                      ),
+                    )
+                  : null,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
+              isDense: true,
+              contentPadding: EdgeInsets.fromLTRB(
+                0,
+                compactSearch ? 12 : (tv ? 18 : 16),
+                16,
+                compactSearch ? 12 : (tv ? 18 : 16),
               ),
             ),
           );
@@ -16858,7 +16904,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     // that the board renders and late rows append beneath it (a slim progress
     // strip in _buildBoard signals the search is still running).
     if (_catalogSearching && _sections.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const _HomeGlassLoading(label: 'Finding titles');
     }
     // Dedicated Search tab: blank prompt until there's a query (no hero/board).
     if (widget.searchMode && _catalogQuery.isEmpty) {
@@ -16932,7 +16978,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   Widget _buildListsSearch() {
     if (_listsSearching) {
-      return const Center(child: CircularProgressIndicator());
+      return const _HomeGlassLoading(label: 'Finding lists');
     }
     if (_listsError != null) {
       return _message(
@@ -17101,50 +17147,52 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   /// Empty state for the dedicated Search tab before the user types.
   Widget _buildSearchPrompt() {
-    final app = AppThemeScope.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.search_rounded,
-              size: 54,
-              color: app.fade(app.core.tx, 0.22),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Search movies & shows',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: app.fade(app.core.tx, 0.8),
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            // Only reached in Catalog mode — _buildBody routes Keyword mode to
-            // _buildKeyword (which has its own empty state) before it gets here.
-            Text(
-              'Type a title to search your catalogs, or switch to Keyword to '
-              'search torrents directly.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: app.fade(app.core.tx, 0.5),
-                fontSize: 13.5,
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Pick which searchable addons the catalog search queries. Mirrors
-            // the keyword tab's Sources button; DPAD reaches it via the search
-            // field's Down (see _catalogSourcesButtonVisible).
-            _catalogSourcesButton(),
-          ],
-        ),
-      ),
+    return _HomeGlassState(
+      icon: Icons.search_rounded,
+      title: 'Search movies & shows',
+      body: _kKeywordSearchEnabled
+          ? 'Type a title to search your catalogs, or switch to Keyword to '
+                'search torrents directly.'
+          : 'Type a title to search your catalogs, or paste a link.',
+      action: _kCatalogSourcesEnabled ? _catalogSourcesButton() : null,
     );
+  }
+
+  /// Keeps Search and Home on one visual cadence: loading, blank and results
+  /// exchange in place instead of flashing a full-screen Material state.
+  Widget _buildAnimatedBody() => AnimatedSwitcher(
+    duration: const Duration(milliseconds: 180),
+    reverseDuration: const Duration(milliseconds: 120),
+    switchInCurve: Curves.easeOutCubic,
+    switchOutCurve: Curves.easeInCubic,
+    transitionBuilder: (child, animation) => FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.015),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    ),
+    // Keyed on WHICH surface is showing, never on the query: the board owns
+    // `_boardScroll` (and its focus nodes), so a board → board key change
+    // made the cross-fade mount two boards at once — "ScrollController
+    // attached to multiple scroll views". Query and result updates within one
+    // surface now rebuild in place; only real surface swaps animate.
+    child: KeyedSubtree(
+      key: ValueKey<String>(_bodySurfaceKey),
+      child: _buildBody(),
+    ),
+  );
+
+  /// Mirrors the branch order of [_buildBody].
+  String get _bodySurfaceKey {
+    if (_mode == _Mode.keyword) return 'keyword';
+    if (_mode == _Mode.lists) return 'lists';
+    if (_catalogSearching && _sections.isEmpty) return 'loading';
+    if (widget.searchMode && _catalogQuery.isEmpty) return 'prompt';
+    return 'board';
   }
 
   /// "Sources" button for catalog search — opens a dialog to enable/disable
@@ -19936,7 +19984,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               item.name.toUpperCase(),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
+              style: TextStyle(fontFamily: 'Poppins', 
                 fontSize: 46,
                 fontWeight: FontWeight.w800,
                 height: 0.98,
@@ -20467,7 +20515,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// source riding beside it as a small [RowTagPill]. The "See All" link is a
   /// mouse/tap affordance shown on desktop only — TV keeps the rail
   /// chrome-free and paginates as the user scrolls.
-  TextStyle _railTitleStyle({required double fontSize}) => GoogleFonts.poppins(
+  TextStyle _railTitleStyle({required double fontSize}) => TextStyle(fontFamily: 'Poppins', 
     fontSize: fontSize, fontWeight: FontWeight.w600, letterSpacing: 0,
     color: AppThemeScope.of(context).fade(AppThemeScope.of(context).core.tx, 0.92),
   );
@@ -21153,46 +21201,293 @@ sheetAnimationStyle: kMenuSheetAnimation,
     String body, {
     VoidCallback? onRetry,
   }) {
-    final scheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 48, color: scheme.onSurfaceVariant),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: scheme.onSurface,
-              ),
+    return _HomeGlassState(
+      icon: icon,
+      title: title,
+      body: body,
+      action: onRetry == null
+          ? null
+          : OutlinedButton.icon(
+              autofocus: widget.isTelevision,
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Try again'),
             ),
-            const SizedBox(height: 8),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, color: scheme.onSurfaceVariant),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: 16),
-              FilledButton.icon(
-                autofocus: widget.isTelevision,
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Try again'),
-              ),
-            ],
-          ],
-        ),
-      ),
     );
   }
 
 }
 
+/// Quiet, frosted state surface shared by Search and Discover's embedded
+/// browse failures. It keeps the board visible behind feedback instead of
+/// replacing it with an opaque Material empty page.
+class _HomeGlassState extends StatelessWidget {
+  const _HomeGlassState({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.action,
+  });
+
+  final IconData icon;
+  final String title;
+  final String body;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ClipRRect(
+          borderRadius: app.shape.br(24),
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+            child: Container(
+              width: 380,
+              padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
+              decoration: BoxDecoration(
+                color: app.fade(app.home.bg, 0.72),
+                borderRadius: app.shape.br(24),
+                border: Border.all(color: app.fade(app.core.tx, 0.16)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: app.fade(app.home.chromeAccent, 0.18),
+                      border: Border.all(
+                        color: app.fade(app.home.chromeAccent, 0.34),
+                      ),
+                    ),
+                    child: Icon(icon, size: 25, color: app.core.tx),
+                  ),
+                  const SizedBox(height: 17),
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: app.core.tx,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    body,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: app.fade(app.core.tx, 0.62),
+                      fontSize: 13.5,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (action != null) ...[
+                    const SizedBox(height: 20),
+                    Theme(
+                      data: Theme.of(context).copyWith(
+                        outlinedButtonTheme: OutlinedButtonThemeData(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: app.core.tx,
+                            side: BorderSide(
+                              color: app.fade(app.core.tx, 0.28),
+                            ),
+                          ),
+                        ),
+                      ),
+                      child: action!,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeGlassLoading extends StatelessWidget {
+  const _HomeGlassLoading({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => _HomeGlassState(
+    icon: Icons.auto_awesome_rounded,
+    title: label,
+    body: 'Gathering your libraries and keeping the Home board in place.',
+    action: const SizedBox(
+      width: 22,
+      height: 22,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+  );
+}
+
 /// The Stremio-style spotlight. Reflects the currently focused board title —
 /// backdrop bleeding in from the right behind a left/bottom scrim, with title,
 /// meta line and a short synopsis.
+
+/// Frosted-glass shell for the search field: blurred backdrop, a faint top-lit
+/// gradient and a hairline edge that warms to the accent while focused.
+class _GlassSearchSurface extends StatefulWidget {
+  const _GlassSearchSurface({
+    required this.focusNode,
+    required this.radius,
+    required this.child,
+  });
+
+  final FocusNode focusNode;
+  final BorderRadius radius;
+  final Widget child;
+
+  @override
+  State<_GlassSearchSurface> createState() => _GlassSearchSurfaceState();
+}
+
+class _GlassSearchSurfaceState extends State<_GlassSearchSurface> {
+  bool _hover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.focusNode.addListener(_onFocusChanged);
+  }
+
+  @override
+  void didUpdateWidget(_GlassSearchSurface old) {
+    super.didUpdateWidget(old);
+    if (old.focusNode != widget.focusNode) {
+      old.focusNode.removeListener(_onFocusChanged);
+      widget.focusNode.addListener(_onFocusChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.focusNode.removeListener(_onFocusChanged);
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final focused = widget.focusNode.hasFocus;
+    final accent = app.home.chromeAccent;
+    const duration = Duration(milliseconds: 180);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit: (_) => setState(() => _hover = false),
+      child: AnimatedContainer(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        decoration: BoxDecoration(
+          borderRadius: widget.radius,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.24),
+              blurRadius: 28,
+              offset: const Offset(0, 12),
+            ),
+            BoxShadow(
+              color: app.fade(accent, focused ? 0.20 : 0.0),
+              blurRadius: 22,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: widget.radius,
+          child: BackdropFilter(
+            filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: AnimatedContainer(
+              duration: duration,
+              curve: Curves.easeOutCubic,
+              decoration: BoxDecoration(
+                borderRadius: widget.radius,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    app.fade(
+                      app.core.tx,
+                      focused ? 0.12 : (_hover ? 0.10 : 0.08),
+                    ),
+                    app.fade(app.core.tx, focused ? 0.06 : 0.04),
+                  ],
+                ),
+                border: Border.all(
+                  color: focused
+                      ? app.fade(accent, 0.55)
+                      : app.fade(app.core.tx, _hover ? 0.16 : 0.10),
+                ),
+              ),
+              child: widget.child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Square glass button that sits level with the search field (Hide search).
+class _GlassIconButton extends StatelessWidget {
+  const _GlassIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final radius = app.shape.br(16);
+    return Tooltip(
+      message: tooltip,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Material(
+            type: MaterialType.transparency,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                color: app.fade(app.core.tx, 0.07),
+                border: Border.all(color: app.fade(app.core.tx, 0.10)),
+              ),
+              child: InkWell(
+                onTap: onPressed,
+                borderRadius: radius,
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: Icon(
+                    icon,
+                    size: 20,
+                    color: app.fade(app.core.tx, 0.75),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

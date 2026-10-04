@@ -4006,21 +4006,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
       // Player Settings
-      leaf(
-        'Playback',
-        'Default Player',
-        'Which player plays videos',
-        const [
-          'default player',
-          'debrify player',
-          'external',
-          'external player',
-          'built-in',
-          'system app chooser',
-          'deovr',
-        ],
-        onTap: () => _openPlaybackSection(PlaybackSettingsSection.player),
-      ),
+      leaf('Playback', 'Default Player', 'Which player plays videos', const [
+        'default player',
+        'debrify player',
+        'external',
+        'external player',
+        'built-in',
+        'system app chooser',
+        'deovr',
+      ], onTap: () => _openPlaybackSection(PlaybackSettingsSection.player)),
       leaf(
         'Playback',
         'Default Subtitle language',
@@ -5138,9 +5132,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
     );
     if (chosen == null || chosen == current || !mounted) return;
+    // The shell reads this synchronously to choose its bottom chrome. Publish
+    // before writing so the visible navigation swaps in the current frame.
+    MainPageBridge.phoneNavStyleCached = chosen;
+    MainPageBridge.navPrefsChanged?.call();
     await StorageService.setPhoneNavStyle(chosen);
     if (!mounted) return;
     setState(() => _phoneNavStyle = chosen);
+    // The immediate notification above updates visible chrome; this second
+    // one reconciles the async preference read after the write commits.
     MainPageBridge.navPrefsChanged?.call();
   }
 
@@ -6309,7 +6309,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : await StorageService.getDownloadDirPath();
     if (!mounted) return;
     await showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).settings.sheetBg,
       shape: const RoundedRectangleBorder(
@@ -6845,7 +6845,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
         : null;
 
     await showModalBottomSheet(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: theme.colorScheme.surface,
@@ -7113,6 +7113,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     setState(() {
       _desktopSidebarStyle = style;
     });
+    MainPageBridge.desktopSidebarStyleChanged?.call();
   }
 
   Future<String?> _chooseSidebarStyle({

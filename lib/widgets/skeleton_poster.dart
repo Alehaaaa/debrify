@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'see_all/discover_shelf_scope.dart';
 import 'see_all/discover_card_settings_scope.dart';
@@ -237,7 +236,7 @@ class BrandLoadingStage extends StatelessWidget {
             'DEBRIFY',
             // Poppins — the same display face the hero titles wear, so the
             // brand and the content read as one voice.
-            style: GoogleFonts.poppins(
+            style: TextStyle(fontFamily: 'Poppins', 
               fontSize: tv ? 34 : 26,
               fontWeight: FontWeight.w600,
               letterSpacing: tv ? 10 : 7,

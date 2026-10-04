@@ -17,37 +17,37 @@ void main() {
     required ValueChanged<int> onTap,
     VoidCallback? onBehindTap,
     int index = 0,
-  }) =>
-      MaterialApp(
-        home: AppThemeScope(
-          theme: AppThemes.legacy,
-          child: Stack(
-            children: [
-              // Stands in for the page: proves pointers pass the closed layer.
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onBehindTap,
-                ),
-              ),
-              Positioned.fill(
-                child: DesktopPillNav(
-                  currentIndex: index,
-                  entries: const [
-                    DesktopNavEntry(Icons.home, 'Home', 'main'),
-                    DesktopNavEntry(Icons.explore, 'Discover', 'main'),
-                    DesktopNavEntry(Icons.tv, 'IPTV', 'live'),
-                  ],
-                  onTap: onTap,
-                ),
-              ),
-            ],
+  }) => MaterialApp(
+    home: AppThemeScope(
+      theme: AppThemes.legacy,
+      child: Stack(
+        children: [
+          // Stands in for the page: proves pointers pass the closed layer.
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onBehindTap,
+            ),
           ),
-        ),
-      );
+          Positioned.fill(
+            child: DesktopPillNav(
+              currentIndex: index,
+              entries: const [
+                DesktopNavEntry(Icons.home, 'Home', 'main'),
+                DesktopNavEntry(Icons.explore, 'Discover', 'main'),
+                DesktopNavEntry(Icons.tv, 'IPTV', 'live'),
+              ],
+              onTap: onTap,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
-  testWidgets('capsule shows the current tab and opens the panel',
-      (tester) async {
+  testWidgets('capsule shows the current tab and opens the panel', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(onTap: (_) {}));
     await tester.pumpAndSettle();
 
@@ -61,8 +61,9 @@ void main() {
     expect(find.text('IPTV'), findsOneWidget);
   });
 
-  testWidgets('picking an entry reports its index and closes the panel',
-      (tester) async {
+  testWidgets('picking an entry reports its index and closes the panel', (
+    tester,
+  ) async {
     int? picked;
     await tester.pumpWidget(host(onTap: (i) => picked = i));
     await tester.pumpAndSettle();
@@ -92,7 +93,9 @@ void main() {
     // Scrim path.
     await tester.tap(find.byKey(DesktopPillNav.pillKey));
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(700, 300)); // page area = scrim when open
+    // The menu now rises above the bottom-right pill, so use the clear top
+    // page area for the scrim rather than the old left-drawer location.
+    await tester.tapAt(const Offset(300, 80));
     await tester.pumpAndSettle();
     expect(
       tester
@@ -132,21 +135,21 @@ void main() {
     await tester.pumpAndSettle();
 
     // Anywhere that is not the capsule belongs to the page.
-    await tester.tapAt(const Offset(700, 300));
+    await tester.tapAt(const Offset(300, 80));
     expect(behindTaps, 1);
 
     // While OPEN the scrim owns that same point.
     await tester.tap(find.byKey(DesktopPillNav.pillKey));
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(700, 300)); // closes the panel
+    await tester.tapAt(const Offset(300, 80)); // closes the panel
     // Mid-fade the scrim must STILL block — a quick second click during the
     // 200ms close animation must not reach the page.
     await tester.pump(const Duration(milliseconds: 60));
-    await tester.tapAt(const Offset(700, 300));
+    await tester.tapAt(const Offset(300, 80));
     expect(behindTaps, 1);
     // Once the fade lands, the page owns its pointers again.
     await tester.pumpAndSettle();
-    await tester.tapAt(const Offset(700, 300));
+    await tester.tapAt(const Offset(300, 80));
     expect(behindTaps, 2);
   });
 }

@@ -736,9 +736,16 @@ class ShowcaseIdentity extends StatelessWidget {
         _Circle.mark(
           node: next(),
           mark: m.hasTrakt
-              ? const TraktMark()
+              ? TraktMark(
+                  size: 16,
+                  dark: !m.traktTracked,
+                  color: Colors.white,
+                )
               : m.hasSimkl
-              ? const SimklMark()
+              ? SimklMark(
+                  size: 16,
+                  color: m.simklTracked ? kSimklCyan : Colors.white,
+                )
               : const MdblistMark(),
           label: m.hasTrakt ? 'Trakt' : (m.hasSimkl ? 'Simkl' : 'MDBList'),
           onTap: m.onTrackers!,
@@ -752,7 +759,10 @@ class ShowcaseIdentity extends StatelessWidget {
         _Circle.mark(
           node: next(),
           mark: m.hasTrakt && m.hasSimkl
-              ? const SimklMark()
+              ? SimklMark(
+                  size: 16,
+                  color: m.simklTracked ? kSimklCyan : Colors.white,
+                )
               : const MdblistMark(),
           label: m.hasTrakt && m.hasSimkl ? 'Simkl' : 'MDBList',
           onTap: m.onTrackersSecondary!,
@@ -911,8 +921,19 @@ class ShowcaseIdentity extends StatelessWidget {
                   onTap: m.onPrimary,
                   onLongPress: m.onPrimaryLongPress,
                   onFocused: onFocused,
+                  solidAtRest: !m.isTelevision && m.trailerPlaying,
                 ),
-              ...actions,
+              // The secondary buttons travel as ONE unit: they sit beside
+              // Play when the whole set fits, and otherwise drop under it
+              // together, never splitting one or two off onto Play's line.
+              if (actions.isNotEmpty)
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: actions,
+                ),
             ],
           ),
         ],
@@ -973,6 +994,7 @@ class ShowcaseIdentity extends StatelessWidget {
                   onTap: m.onPrimary,
                   onLongPress: m.onPrimaryLongPress,
                   onFocused: onFocused,
+                  solidAtRest: !m.isTelevision && m.trailerPlaying,
                 ),
               for (final a in actions) ...[const SizedBox(width: 7), a],
             ],
@@ -1205,22 +1227,6 @@ class _MetaLine extends StatelessWidget {
         if (m.rating != null) ...[
           const SizedBox(width: 7),
           _RatingBox(value: m.rating!),
-        ],
-        if (m.hasTrakt) ...[
-          const SizedBox(width: 8),
-          _TrackerMark(
-            letter: 'T',
-            on: m.traktTracked,
-            tint: const Color(0xFFED1C24),
-          ),
-        ],
-        if (m.hasSimkl) ...[
-          const SizedBox(width: 5),
-          _TrackerMark(
-            letter: 'S',
-            on: m.simklTracked,
-            tint: const Color(0xFF0B87C4),
-          ),
         ],
         if (m.hasMdblist) ...[
           const SizedBox(width: 5),
@@ -1466,7 +1472,12 @@ class _Primary extends StatefulWidget {
     required this.onLongPress,
     required this.onFocused,
     this.busy = false,
+    this.solidAtRest = false,
   });
+
+  /// Stay solid white without focus. Off TV a playing trailer pulls focus
+  /// away, and the ghost state then read as the button switching off.
+  final bool solidAtRest;
 
   @override
   State<_Primary> createState() => _PrimaryState();
@@ -1527,8 +1538,8 @@ class _PrimaryState extends State<_Primary> {
           // no focus state to flip through on touch).
           final m = ShowcaseMetrics.of(context);
           final compact = m.compact;
-          final solid = _f || compact;
-          return AnimatedContainer(
+          final solid = _f || compact || widget.solidAtRest;
+          final pill = AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             height: compact ? 44 : 30 * m.k,
             padding: EdgeInsets.symmetric(horizontal: compact ? 24 : 17 * m.k),
@@ -1574,6 +1585,15 @@ class _PrimaryState extends State<_Primary> {
                     ],
                   ),
           );
+          // The centring alignment makes the pill fill whatever width it is
+          // offered, and the phone's Wrap offers the whole column, so it ran
+          // edge to edge. Cap it at a comfortable thumb-sized pill instead.
+          return compact
+              ? ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 168, maxWidth: 220),
+                  child: pill,
+                )
+              : pill;
         },
       ),
     ),
