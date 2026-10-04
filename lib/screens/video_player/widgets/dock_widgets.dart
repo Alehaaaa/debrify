@@ -5,10 +5,121 @@
 /// See `dev/design/plans/PLAYER_DOCK_STYLES_PLAN.md` §3.
 library;
 
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import 'dock_style.dart';
 import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
+
+/// Frosted glass in the dock's palette: the video blurred behind a dark,
+/// accent-tinted body with a soft top sheen and a hairline rim. One
+/// [BackdropFilter] per surface — the panel, never per chip — keeps it cheap.
+class DockGlass extends StatelessWidget {
+  final Widget child;
+  final DockPalette palette;
+  final BorderRadius radius;
+  final EdgeInsetsGeometry padding;
+  final double blur;
+
+  const DockGlass({
+    super.key,
+    required this.child,
+    required this.palette,
+    required this.radius,
+    this.padding = EdgeInsets.zero,
+    this.blur = 24,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x40000000),
+            blurRadius: 32,
+            spreadRadius: -6,
+            offset: Offset(0, 14),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              color: palette.glassTint,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [palette.glassSheen, const Color(0x00FFFFFF)],
+                  stops: const [0.0, 0.6],
+                ),
+                border: Border.all(color: palette.glassEdge),
+              ),
+              child: Padding(padding: padding, child: child),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A round frosted button for the dock's corners (back, picture in picture).
+class DockGlassIconButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final DockMetrics metrics;
+  final DockPalette palette;
+
+  const DockGlassIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    required this.metrics,
+    required this.palette,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = metrics.target;
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 600),
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: DockGlass(
+          palette: palette,
+          radius: BorderRadius.circular(size),
+          blur: 18,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onPressed,
+              customBorder: const CircleBorder(),
+              child: SizedBox.square(
+                dimension: size,
+                child: Icon(icon, color: palette.ink, size: metrics.icon),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 /// One tool control: icon, optional label, minimum [DockMetrics.target] tall.
 class DockChip extends StatelessWidget {
@@ -88,7 +199,7 @@ class DockChip extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onPressed,
-            borderRadius: BorderRadius.circular(metrics.radius),
+            borderRadius: BorderRadius.circular(metrics.target),
             child: Container(
               constraints: BoxConstraints(
                 minHeight: metrics.target,
@@ -102,7 +213,7 @@ class DockChip extends StatelessWidget {
                 color: active
                     ? (tint?.withValues(alpha: 0.22) ?? palette.activeFill)
                     : palette.chipFill,
-                borderRadius: BorderRadius.circular(metrics.radius),
+                borderRadius: BorderRadius.circular(metrics.target),
                 border: Border.all(
                   color: active
                       ? (tint?.withValues(alpha: 0.55) ?? palette.activeEdge)
@@ -273,7 +384,7 @@ class DockOverflowSheet extends StatelessWidget {
     final landscape =
         MediaQuery.sizeOf(context).width > MediaQuery.sizeOf(context).height;
     return showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       barrierColor: const Color(0x9E040610),
@@ -511,13 +622,12 @@ class GradientSliderTrackShape extends SliderTrackShape
     canvas.drawRRect(
       RRect.fromRectAndRadius(played, radius),
       Paint()
-        ..shader =
-            LinearGradient(
-              // The hot end always sits at the leading (played) edge.
-              begin: ltr ? Alignment.centerLeft : Alignment.centerRight,
-              end: ltr ? Alignment.centerRight : Alignment.centerLeft,
-              colors: [deep, hot],
-            ).createShader(played),
+        ..shader = LinearGradient(
+          // The hot end always sits at the leading (played) edge.
+          begin: ltr ? Alignment.centerLeft : Alignment.centerRight,
+          end: ltr ? Alignment.centerRight : Alignment.centerLeft,
+          colors: [deep, hot],
+        ).createShader(played),
     );
   }
 }

@@ -235,6 +235,17 @@ class DockPalette {
   /// design: the dock stays dark over footage whatever the accent.
   final Color scrim;
 
+  /// Frosted-glass tokens, derived from the accent so the glass carries the
+  /// palette's hue without a new constant per palette: a dark body tinted
+  /// with [deep], a light sheen, and a rim lit by [hot].
+  Color get glassTint => Color.alphaBlend(
+    deep.withValues(alpha: 0.20),
+    const Color(0xFF080A14),
+  ).withValues(alpha: 0.52);
+  Color get glassSheen => const Color(0x1FFFFFFF);
+  Color get glassEdge =>
+      Color.lerp(hot, const Color(0xFFFFFFFF), 0.55)!.withValues(alpha: 0.22);
+
   const DockPalette({
     required this.hot,
     required this.deep,

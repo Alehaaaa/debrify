@@ -312,15 +312,9 @@ class StyledDock extends StatelessWidget {
     final tools = _tools();
     return Stack(
       children: [
-        // The wide dock carries identity in its centre zone, so a top bar
-        // title there would render the same string twice — which is exactly
-        // the duplication this redesign set out to remove.
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: _topBar(context, showTitle: !_centreIdentityVisible),
-        ),
+        // Identity always lives up top, with room to breathe; the bottom
+        // glass is only for controls.
+        Positioned(top: 0, left: 0, right: 0, child: _topBar(context)),
         Positioned(
           bottom: 0,
           left: 0,
@@ -337,81 +331,110 @@ class StyledDock extends StatelessWidget {
     );
   }
 
-  /// True only when the wide centre zone is actually on screen to carry the
-  /// title. `hideOptions` removes the whole controls row, so without this the
-  /// identity vanished from both places at once.
-  bool get _centreIdentityVisible =>
-      arrangement == DockArrangement.wide &&
-      !hideOptions &&
-      (title.isNotEmpty || (subtitle?.isNotEmpty ?? false));
+  /// The title line and the line under it. A "Show — Episode" title splits
+  /// so the show reads as the headline and the episode joins the detail
+  /// line ("Episode name · Season 2, Episode 4").
+  ({String headline, String? detail}) get _identity {
+    final split = title.indexOf(' — ');
+    final headline = split < 0 ? title : title.substring(0, split);
+    final episode = split < 0 ? null : title.substring(split + 3);
+    final detail = [
+      if (episode != null && episode.isNotEmpty) episode,
+      if (subtitle != null && subtitle!.isNotEmpty) subtitle!,
+    ].join('  ·  ');
+    return (headline: headline, detail: detail.isEmpty ? null : detail);
+  }
 
-  Widget _topBar(BuildContext context, {bool showTitle = true}) {
+  Widget _topBar(BuildContext context) {
+    final identity = _identity;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: metrics.padX * 1.8,
-        vertical: metrics.padY,
+      padding: EdgeInsets.fromLTRB(
+        metrics.padX * 1.8,
+        metrics.padY * 1.6,
+        metrics.padX * 1.8,
+        metrics.padY * 4,
       ),
-      decoration: BoxDecoration(
+      // A soft shade, not a band: enough for white type over bright frames.
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [palette.scrim, const Color(0x00040610)],
+          colors: [Color(0xB3000000), Color(0x00000000)],
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!hideBackButton)
-              IconButton(
-                icon: Icon(Icons.arrow_back_rounded, color: palette.ink),
-                iconSize: metrics.icon,
+            if (!hideBackButton) ...[
+              DockGlassIconButton(
+                icon: Icons.arrow_back_rounded,
                 tooltip: 'Back',
                 onPressed: onBack,
+                metrics: metrics,
+                palette: palette,
               ),
-            SizedBox(width: metrics.gap),
+              SizedBox(width: metrics.gap * 1.5),
+            ],
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showTitle && title.isNotEmpty)
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.ink,
-                        fontSize: metrics.label * 1.25,
-                        fontWeight: FontWeight.w700,
+              child: Padding(
+                // Optically centre a one-line title on the round buttons.
+                padding: EdgeInsets.only(top: metrics.padY * 0.4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (identity.headline.isNotEmpty)
+                      Text(
+                        identity.headline,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.ink,
+                          fontSize: metrics.label * 1.7,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.4,
+                          height: 1.15,
+                          shadows: const [
+                            Shadow(color: Color(0x66000000), blurRadius: 12),
+                          ],
+                        ),
                       ),
-                    ),
-                  if (showTitle && subtitle != null && subtitle!.isNotEmpty)
-                    Text(
-                      subtitle!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: palette.inkDim,
-                        fontSize: metrics.label,
+                    if (identity.detail != null) ...[
+                      SizedBox(height: metrics.gap * 0.5),
+                      Text(
+                        identity.detail!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: palette.inkDim,
+                          fontSize: metrics.label * 1.05,
+                          fontWeight: FontWeight.w500,
+                          height: 1.3,
+                          shadows: const [
+                            Shadow(color: Color(0x66000000), blurRadius: 10),
+                          ],
+                        ),
                       ),
-                    ),
-                ],
+                    ],
+                  ],
+                ),
               ),
             ),
             // PiP lives here, not in the tools row: legacy keeps it reachable
             // independently of `hideOptions`, and burying it in the tools row
             // would lose it whenever options are hidden.
-            if (showPipButton && onPip != null)
-              IconButton(
-                icon: Icon(
-                  Icons.picture_in_picture_alt_rounded,
-                  color: palette.ink,
-                ),
-                iconSize: metrics.icon,
+            if (showPipButton && onPip != null) ...[
+              SizedBox(width: metrics.gap * 1.5),
+              DockGlassIconButton(
+                icon: Icons.picture_in_picture_alt_rounded,
                 tooltip: 'Picture in picture',
-                onPressed: onPip,
+                onPressed: onPip!,
+                metrics: metrics,
+                palette: palette,
               ),
+            ],
           ],
         ),
       ),
@@ -419,13 +442,30 @@ class StyledDock extends StatelessWidget {
   }
 
   Widget _bottomUnit(BuildContext context, List<_Tool> tools) {
+    // Margin plus glass padding add up to the 1.8 × padX the rows were
+    // budgeted for, so the glass costs the controls no width.
+    final inset = metrics.padX * 0.8;
+    Widget glass(Widget child) => Padding(
+      padding: EdgeInsets.fromLTRB(inset, 0, inset, metrics.padY * 1.2),
+      child: DockGlass(
+        palette: palette,
+        radius: BorderRadius.circular(metrics.radius * 2.2),
+        padding: EdgeInsets.fromLTRB(
+          metrics.padX,
+          metrics.padY * 0.6,
+          metrics.padX,
+          metrics.padY,
+        ),
+        child: child,
+      ),
+    );
     return Container(
-      decoration: BoxDecoration(
+      // A light shade under the glass so it never floats on pure white.
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [palette.scrim, const Color(0x00040610)],
-          stops: const [0.12, 1.0],
+          colors: [Color(0x99000000), Color(0x00000000)],
         ),
       ),
       child: SafeArea(
@@ -442,42 +482,22 @@ class StyledDock extends StatelessWidget {
                       child: infoPanel!,
                     ),
             if (!hideOptions)
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // The wide bar is genuinely edge-to-edge, so it is mounted
-                  // OUTSIDE the dock's horizontal padding rather than trying
-                  // to cancel it (negative padding is not a thing).
-                  if (arrangement == DockArrangement.wide && !hideSeekbar)
-                    Padding(
-                      padding: EdgeInsets.only(top: metrics.padY),
-                      child: _scrubber(context, bleed: true),
-                    ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      metrics.padX * 1.8,
-                      arrangement == DockArrangement.wide ? 0 : metrics.padY,
-                      metrics.padX * 1.8,
-                      metrics.padY * 1.5,
-                    ),
-                    child: switch (arrangement) {
+              glass(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (arrangement == DockArrangement.wide && !hideSeekbar)
+                      _scrubber(context, bleed: true),
+                    switch (arrangement) {
                       DockArrangement.narrow => _narrow(context, tools),
                       DockArrangement.regular => _twoTier(context, tools),
                       DockArrangement.wide => _wide(context, tools),
                     },
-                  ),
-                ],
+                  ],
+                ),
               )
             else if (!hideSeekbar)
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  metrics.padX * 1.8,
-                  metrics.padY,
-                  metrics.padX * 1.8,
-                  metrics.padY * 1.5,
-                ),
-                child: _scrubber(context),
-              ),
+              glass(_scrubber(context)),
           ],
         ),
       ),
@@ -729,9 +749,35 @@ class StyledDock extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // The title keeps at least half the bar; the tools get the rest.
+        // The tools get what transport and time leave (the volume bar is
+        // the one thing on the left that shrinks), and scroll past that.
+        final scaledLabel = MediaQuery.textScalerOf(
+          context,
+        ).scale(metrics.label);
+        final transportW =
+            metrics.target * 1.32 +
+            (hasPrevious && onPrevious != null
+                ? metrics.target + metrics.gap * 1.5
+                : 0) +
+            (hasNext && onNext != null ? metrics.target + metrics.gap * 1.5 : 0);
+        // The widest readout this session can show, measured, not guessed.
+        final timePainter = TextPainter(
+          text: TextSpan(
+            text: '88:88:88  /  88:88:88',
+            style: TextStyle(
+              fontSize: scaledLabel,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 1,
+        )..layout();
+        final timeW = timePainter.width;
+        timePainter.dispose();
+        // Transport, the gap before the time, and the gap before the tools.
+        final leftNeed = transportW + timeW + metrics.gap * 2.5 + 2;
         final cap = constraints.maxWidth.isFinite
-            ? constraints.maxWidth * 0.5
+            ? math.max(chipW, constraints.maxWidth - leftNeed)
             : need;
         final Widget toolsZone;
         if (chips.isEmpty) {
@@ -760,17 +806,23 @@ class StyledDock extends StatelessWidget {
             ),
           );
         }
+        // The left zone takes what the tools leave; inside it only the
+        // volume bar gives way, so transport and time never get cut.
         return Row(
           children: [
-            ..._transport(),
-            if (onVolumeChanged != null) ...[
-              SizedBox(width: metrics.gap),
-              _volume(context),
-            ],
-            SizedBox(width: metrics.gap),
-            _timeReadout(),
-            SizedBox(width: metrics.gap * 1.5),
-            Expanded(child: _nowPlaying()),
+            Expanded(
+              child: Row(
+                children: [
+                  ..._transport(),
+                  if (onVolumeChanged != null) ...[
+                    SizedBox(width: metrics.gap),
+                    Flexible(child: _volume(context)),
+                  ],
+                  SizedBox(width: metrics.gap),
+                  _timeReadout(),
+                ],
+              ),
+            ),
             if (chips.isNotEmpty) SizedBox(width: metrics.gap * 1.5),
             toolsZone,
           ],
@@ -794,26 +846,28 @@ class StyledDock extends StatelessWidget {
           size: metrics.icon,
           color: palette.ink,
         ),
-        SizedBox(
-          width: metrics.target * 2.4,
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              trackHeight: metrics.trackHeight * 0.75,
-              activeTrackColor: palette.ink,
-              inactiveTrackColor: palette.inactiveTrack,
-              thumbColor: palette.ink,
-              thumbShape: RoundSliderThumbShape(
-                enabledThumbRadius: metrics.knob * 0.35,
+        Flexible(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: metrics.target * 2.4),
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: metrics.trackHeight * 0.75,
+                activeTrackColor: palette.ink,
+                inactiveTrackColor: palette.inactiveTrack,
+                thumbColor: palette.ink,
+                thumbShape: RoundSliderThumbShape(
+                  enabledThumbRadius: metrics.knob * 0.35,
+                ),
+                overlayShape: RoundSliderOverlayShape(
+                  overlayRadius: metrics.knob * 0.7,
+                ),
               ),
-              overlayShape: RoundSliderOverlayShape(
-                overlayRadius: metrics.knob * 0.7,
+              child: Slider(
+                min: 0,
+                max: 1,
+                value: volume.clamp(0.0, 1.0),
+                onChanged: onVolumeChanged,
               ),
-            ),
-            child: Slider(
-              min: 0,
-              max: 1,
-              value: volume.clamp(0.0, 1.0),
-              onChanged: onVolumeChanged,
             ),
           ),
         ),
@@ -833,39 +887,6 @@ class StyledDock extends StatelessWidget {
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
-    );
-  }
-
-  /// Centre zone. Carries the subtitle too — the design puts the stream's
-  /// identity here, which is why the wide dock does not repeat the title in a
-  /// top bar the way the narrow arrangements do.
-  Widget _nowPlaying() {
-    final hasSubtitle = subtitle?.isNotEmpty ?? false;
-    if (title.isEmpty && !hasSubtitle) return const SizedBox.shrink();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (title.isNotEmpty)
-          Text(
-            title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: palette.ink,
-              fontSize: metrics.label * 1.05,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        if (hasSubtitle)
-          Text(
-            subtitle!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: palette.inkDim, fontSize: metrics.label),
-          ),
-      ],
     );
   }
 

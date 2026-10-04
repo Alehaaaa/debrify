@@ -1509,6 +1509,18 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   // Aspect / speed
   AspectMode _aspectMode = AspectMode.contain;
+
+  // ---- Pinch framing --------------------------------------------------------
+  // Pinch out fills the screen (crops the black bars), pinch in shows the
+  // whole picture again. The switch animates as a zoom of the fitted video,
+  // then settles on the real AspectMode (cover / contain) at scale 1, so the
+  // persisted framing and the subtitles end up exactly as a menu pick would.
+  late final AnimationController _framingZoom = AnimationController.unbounded(
+    vsync: this,
+    value: 1,
+  );
+  bool _pinching = false;
+  bool _pinchFired = false;
   double _playbackSpeed = 1.0;
 
   // ── Sleep timer ───────────────────────────────────────────────────────────
@@ -11884,6 +11896,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   @override
   void dispose() {
     MediaSessionService.instance.detach(this);
+    _framingZoom.dispose();
     _lockButtonTimer?.cancel();
     _lockButtonVisible.dispose();
     _stremioTvStartupWatch?.dispose();
@@ -13719,6 +13732,110 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     });
   }
 
+  void _onScaleStart(ScaleStartDetails details) {
+    _pinching = details.pointerCount >= 2;
+    _pinchFired = false;
+    if (_pinching) return;
+    _onPanStart(
+      DragStartDetails(
+        globalPosition: details.focalPoint,
+        localPosition: details.localFocalPoint,
+      ),
+    );
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details) {
+    if (details.pointerCount >= 2 && !_pinching) {
+      // A second finger joined a drag: it's a pinch now, drop the drag HUDs.
+      _pinching = true;
+      _panIgnore = true;
+      _mode = GestureMode.none;
+      _seekHud.value = null;
+      _verticalHud.value = null;
+    }
+    if (_pinching) {
+      if (!_pinchFired && (details.scale > 1.12 || details.scale < 0.88)) {
+        _pinchFired = true;
+        unawaited(_animateFraming(fill: details.scale > 1));
+      }
+      return;
+    }
+    _onPanUpdate(
+      DragUpdateDetails(
+        globalPosition: details.focalPoint,
+        localPosition: details.localFocalPoint,
+        delta: details.focalPointDelta,
+      ),
+    );
+  }
+
+  void _onScaleEnd(ScaleEndDetails details) {
+    if (_pinching) {
+      _pinching = false;
+      return;
+    }
+    _onPanEnd(DragEndDetails(velocity: details.velocity));
+  }
+
+  /// How much a fitted picture must grow to fill [box] (crop its bars).
+  double _fillScale(Size box) {
+    final w = _player.state.width;
+    final h = _player.state.height;
+    if (w == null || h == null || w <= 0 || h <= 0 || box.isEmpty) return 1;
+    final video = w / h;
+    final screen = box.width / box.height;
+    return video > screen ? video / screen : screen / video;
+  }
+
+  /// Pinch out → fill the screen; pinch in → show the whole picture.
+  Future<void> _animateFraming({required bool fill}) async {
+    if (!_isReady) return;
+    final target = fill ? AspectMode.cover : AspectMode.contain;
+    _showFramingHud(fill);
+    if (_aspectMode == target) return;
+    unawaited(HapticFeedback.selectionClick());
+    final box = (context.findRenderObject() as RenderBox?)?.size ?? Size.zero;
+    final scale = _fillScale(box);
+    final smooth =
+        scale > 1.01 &&
+        (_aspectMode == AspectMode.contain || _aspectMode == AspectMode.cover);
+    if (!smooth) {
+      _setAspectModeDirect(target);
+      return;
+    }
+    const duration = Duration(milliseconds: 280);
+    if (fill) {
+      await _framingZoom.animateTo(
+        scale,
+        duration: duration,
+        curve: Curves.easeOutCubic,
+      );
+      if (!mounted) return;
+      // Same frame: the cover fit at scale 1 looks exactly like the zoom.
+      _framingZoom.value = 1;
+      _setAspectModeDirect(AspectMode.cover);
+    } else {
+      // Contain at the fill scale looks exactly like cover; zoom back out.
+      _framingZoom.value = scale;
+      _setAspectModeDirect(AspectMode.contain);
+      await _framingZoom.animateTo(
+        1,
+        duration: duration,
+        curve: Curves.easeOutCubic,
+      );
+    }
+  }
+
+  void _showFramingHud(bool fill) {
+    _aspectRatioHud.value = AspectRatioHudState(
+      aspectRatio: fill ? 'Fill screen' : 'Fit to screen',
+      icon: fill ? Icons.fullscreen_rounded : Icons.fit_screen_rounded,
+    );
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) _aspectRatioHud.value = null;
+    });
+  }
+
   void _onPanStart(DragStartDetails details) async {
     // If controls are visible, ignore pans that begin within top/bottom bars so buttons and slider work unaffected
     _panIgnore = false;
@@ -15284,20 +15401,32 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // Video texture (media_kit renderer)
+                // Video texture (media_kit renderer). Always under the
+                // framing transform (scale 1 at rest) so a pinch animates
+                // without remounting the texture.
                 if (isReady && !_isTransitioning)
-                  _getCustomAspectRatio() != null
-                      ? _buildCustomAspectRatioVideo()
-                      : mkv.Video(
-                          key: ValueKey(
-                            'video_elevation_${_subtitleSettings?.elevationIndex ?? 0}',
-                          ),
-                          controller: _videoController,
-                          pauseUponEnteringBackgroundMode: !Platform.isIOS,
-                          controls: null,
-                          fit: _currentFit(),
-                          subtitleViewConfiguration: _buildSubtitleViewConfig(),
-                        )
+                  ClipRect(
+                    child: AnimatedBuilder(
+                      animation: _framingZoom,
+                      builder: (context, video) => Transform.scale(
+                        scale: _framingZoom.value,
+                        child: video,
+                      ),
+                      child: _getCustomAspectRatio() != null
+                          ? _buildCustomAspectRatioVideo()
+                          : mkv.Video(
+                              key: ValueKey(
+                                'video_elevation_${_subtitleSettings?.elevationIndex ?? 0}',
+                              ),
+                              controller: _videoController,
+                              pauseUponEnteringBackgroundMode: !Platform.isIOS,
+                              controls: null,
+                              fit: _currentFit(),
+                              subtitleViewConfiguration:
+                                  _buildSubtitleViewConfig(),
+                            ),
+                    ),
+                  )
                 else if (_isTransitioning)
                   // Black screen during transitions to hide previous frame
                   Container(color: Colors.black)
@@ -15559,9 +15688,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                     onDoubleTapDown: _handleDoubleTap,
                     onLongPressStart: _onLongPressStart,
                     onLongPressEnd: _onLongPressEnd,
-                    onPanStart: _onPanStart,
-                    onPanUpdate: _onPanUpdate,
-                    onPanEnd: _onPanEnd,
+                    // Scale, not pan: one finger still drives the drag
+                    // gestures (seek / volume / brightness), two pinch.
+                    onScaleStart: _onScaleStart,
+                    onScaleUpdate: _onScaleUpdate,
+                    onScaleEnd: _onScaleEnd,
                   ),
                 // Above the gesture layer: startup hides normal controls, but
                 // leaving the player must remain available while links resolve.
