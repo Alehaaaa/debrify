@@ -38,6 +38,18 @@ class _SourcesScreen extends StatefulWidget {
   /// episode long-press, where no play intent was expressed.
   final bool forcePlayOnTap;
 
+  /// The user reached this list from a Download button: a tap downloads the
+  /// source (no "Play / Download / Playlist?" question), and a short hint
+  /// says so.
+  final bool forceDownloadOnTap;
+
+  /// Episodes to keep when a downloaded source turns out to be a pack.
+  final Set<int>? wantedEpisodes;
+
+  /// A friendly note at the top of the list — e.g. why automatic download
+  /// sent the user here.
+  final SourcesNotice? notice;
+
   final Future<Map<String, dynamic>> Function(SearchBatchCallback onBatch)?
   searchOverride;
 
@@ -48,6 +60,9 @@ class _SourcesScreen extends StatefulWidget {
     this.bindMode = false,
     this.keywordSeed,
     this.forcePlayOnTap = false,
+    this.forceDownloadOnTap = false,
+    this.wantedEpisodes,
+    this.notice,
     this.searchOverride,
   });
 
@@ -438,6 +453,8 @@ class _SourcesScreenState extends State<_SourcesScreen> {
 
   /// Opens with the filters the user last searched with.
   Future<void> _loadSavedFilters() async {
+    // Sent here because nothing matched them: open with everything instead.
+    if (widget.notice?.showAll ?? false) return;
     try {
       final saved = await SavedSourceFilters.load();
       if (mounted && _filters.isEmpty) _filters = saved;
@@ -1137,6 +1154,8 @@ class _SourcesScreenState extends State<_SourcesScreen> {
         context,
         t,
         forcePlay: widget.forcePlayOnTap,
+        forceDownload: widget.forceDownloadOnTap,
+        wantedEpisodes: widget.wantedEpisodes,
         meta: widget.meta,
         // The rendered list — [_visible] equals [_torrents] with the redesign
         // off, but is the source-filtered/sorted list when on, so the index and
@@ -2362,9 +2381,80 @@ sheetAnimationStyle: kMenuSheetAnimation,
           ),
         ),
         if (!_filters.isEmpty) _activeFilterPills(accent, dim),
+        if (widget.notice != null && !_noticeDismissed)
+          _noticeCard(widget.notice!, accent, dim)
+        else if (widget.forceDownloadOnTap)
+          _downloadHint(dim),
       ],
     );
   }
+
+  bool _noticeDismissed = false;
+
+  Widget _noticeCard(SourcesNotice notice, Color accent, Color dim) {
+    final app = AppThemeScope.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+      decoration: BoxDecoration(
+        color: app.fade(accent, 0.12),
+        border: Border.all(color: app.fade(accent, 0.35)),
+        borderRadius: app.shape.br(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(notice.icon, color: accent, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  notice.title,
+                  style: TextStyle(
+                    color: app.core.tx,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  notice.message,
+                  style: TextStyle(color: dim, fontSize: 12.5, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Dismiss',
+            visualDensity: VisualDensity.compact,
+            icon: Icon(Icons.close_rounded, size: 18, color: dim),
+            onPressed: () => setState(() => _noticeDismissed = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _downloadHint(Color dim) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 2),
+    child: Row(
+      children: [
+        Icon(Icons.download_rounded, size: 16, color: dim),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            'Tap a source to download it.',
+            style: TextStyle(color: dim, fontSize: 12.5),
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _tbChip(Color border, Color fg, Widget child) {
     final app = AppThemeScope.of(context);
@@ -3858,4 +3948,22 @@ class _DiscoverGridDim extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A note shown above a source list, written for people rather than logs.
+class SourcesNotice {
+  const SourcesNotice({
+    required this.title,
+    required this.message,
+    this.icon = Icons.lightbulb_outline_rounded,
+    this.showAll = false,
+  });
+
+  final String title;
+  final String message;
+  final IconData icon;
+
+  /// Open with every source instead of the saved filters (which the note is
+  /// about). The saved filters themselves are left alone.
+  final bool showAll;
 }

@@ -55,6 +55,9 @@ import 'debrid_service.dart';
 import 'debrify_tv_channel_add_service.dart';
 import 'download_service.dart';
 import '../models/downloaded_media.dart';
+import '../screens/downloads_screen.dart' show openDownloadsForTitle;
+import '../utils/pack_selection.dart';
+import 'downloaded_media_service.dart';
 import 'local_bound_source_service.dart';
 import 'local_playback_resume_resolver.dart';
 import 'main_page_bridge.dart';
@@ -259,6 +262,12 @@ class TorrentPlaybackService {
     BuildContext context,
     Torrent torrent, {
     bool forcePlay = false,
+    // The user came to download (the Download button's source list): skip
+    // the post-torrent action and download what they picked.
+    bool forceDownload = false,
+    // Episodes to keep from a pack when downloading; null keeps the picker's
+    // own default (everything not on the device yet).
+    Set<int>? wantedEpisodes,
     PlaybackMeta? meta,
     List<Torrent>? sources,
     int sourceIndex = 0,
@@ -308,6 +317,13 @@ class TorrentPlaybackService {
       return;
     }
     if (!context.mounted) return;
+    if (forceDownload &&
+        (torrent.streamType == StreamType.directUrl ||
+            torrent.streamType == StreamType.externalUrl) &&
+        (torrent.directUrl?.isNotEmpty ?? false)) {
+      await downloadDirectStream(context, torrent, meta: meta);
+      return;
+    }
     // Direct-URL addon streams bypass debrid entirely. Content metadata and
     // the in-player Sources switcher ride along (matching Home's
     // _playDirectStream) so series streams get Continue Watching, subtitles,
@@ -398,7 +414,11 @@ class TorrentPlaybackService {
       _snack(context, 'This result has no magnet or infohash to play.');
       return;
     }
-    final action = forcePlay ? 'play' : await _postAction(provider);
+    final action = forcePlay
+        ? 'play'
+        : forceDownload
+        ? 'download'
+        : await _postAction(provider);
     if (!context.mounted) return;
 
     final rootNav = Navigator.of(context, rootNavigator: true);
@@ -437,6 +457,18 @@ class TorrentPlaybackService {
     if (!context.mounted) return;
 
     if (notCached != null) {
+      if (action == 'download') {
+        await _offerDownloadWhenReady(
+          context,
+          notCached,
+          provider,
+          magnet,
+          torrent,
+          meta: meta,
+          wantedEpisodes: wantedEpisodes,
+        );
+        return;
+      }
       await _handleNotCached(context, notCached, provider, magnet);
       return;
     }
@@ -473,7 +505,14 @@ class TorrentPlaybackService {
         }
         break;
       case 'download':
-        await _download(context, resolved, torrent, provider, meta: meta);
+        await _download(
+          context,
+          resolved,
+          torrent,
+          provider,
+          meta: meta,
+          wantedEpisodes: wantedEpisodes,
+        );
         break;
       case 'playlist':
         await _addToPlaylist(context, resolved, torrent, provider, meta: meta);
@@ -7287,9 +7326,11 @@ class TorrentPlaybackService {
         meta: downloadMediaMetadata(meta, fileName: torrent.displayTitle),
         torrentName: torrent.displayTitle,
       );
-      if (context.mounted) _snack(context, 'Download queued.');
+      if (context.mounted) _queuedSnack(context, meta, 'Download started.');
     } catch (_) {
-      if (context.mounted) _snack(context, 'Failed to queue download.');
+      if (context.mounted) {
+        _snack(context, 'Could not start the download. Try another source.');
+      }
     }
   }
 
@@ -7367,13 +7408,18 @@ class TorrentPlaybackService {
   /// running total, and returns the chosen entries — or null if cancelled.
   static Future<List<PlaylistEntry>?> _showDownloadPicker(
     BuildContext context,
-    List<PlaylistEntry> entries,
-  ) {
+    List<PlaylistEntry> entries, {
+    Set<int>? preselected,
+    Set<int> onDevice = const {},
+  }) {
     return showDialog<List<PlaylistEntry>>(
       context: context,
       builder: (dialogCtx) {
         final scheme = Theme.of(dialogCtx).colorScheme;
-        final selected = {...entries}; // default: all selected
+        // Default: what's worth downloading (no extras, nothing already here).
+        final selected = preselected == null
+            ? {...entries}
+            : {for (final i in preselected) entries[i]};
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             final totalBytes = selected.fold<int>(
@@ -7407,7 +7453,7 @@ class TorrentPlaybackService {
                       child: ListView(
                         shrinkWrap: true,
                         children: [
-                          for (final e in entries)
+                          for (final (i, e) in entries.indexed)
                             CheckboxListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
@@ -7422,6 +7468,15 @@ class TorrentPlaybackService {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                               ),
+                              subtitle: onDevice.contains(i)
+                                  ? Text(
+                                      'Already on this device',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        color: scheme.primary,
+                                      ),
+                                    )
+                                  : null,
                               secondary: Text(
                                 (e.sizeBytes ?? 0) > 0
                                     ? Formatters.formatFileSize(e.sizeBytes!)
@@ -7472,29 +7527,38 @@ class TorrentPlaybackService {
 
   /// The Download button's automatic path: search the title's sources, keep
   /// the ones matching the user's saved source filters, and download the best
-  /// that resolves — a movie's file, or for a series the best pack of
-  /// [season] (all of its files). Returns false when nothing matched or
-  /// resolved, so the caller can hand the user the manual list instead.
-  static Future<bool> downloadBestFromSelection(
+  /// that resolves.
+  ///
+  /// - a movie: its file;
+  /// - a series with [episode]: that episode and the [count] - 1 after it in
+  ///   the same season (a pack that has several of them covers them at once);
+  /// - a series without [episode]: the best pack of [season].
+  ///
+  /// When it can't, [AutoDownloadResult.miss] says why so the caller can open
+  /// the source list with a friendly explanation.
+  static Future<AutoDownloadResult> downloadBestFromSelection(
     BuildContext context, {
     required String imdbId,
     required bool isMovie,
     int? season,
+    int? episode,
+    int count = 1,
     required PlaybackMeta meta,
   }) async {
+    const done = AutoDownloadResult.done();
     final label = meta.title ?? '';
     if (!ProfilePolicyGuard.allowsSync(ProfileFeature.downloads)) {
-      _snack(context, 'Downloads are disabled for this profile.');
-      return true;
+      _snack(context, 'Downloads are turned off for this profile.');
+      return done;
     }
     if (!imdbId.startsWith('tt') || (!isMovie && season == null)) {
-      return false;
+      return const AutoDownloadResult(AutoDownloadMiss.nothingFound);
     }
     final provider = await _pickProvider(context);
-    if (!context.mounted || provider == _cancelled) return true;
+    if (!context.mounted || provider == _cancelled) return done;
     if (provider == null) {
-      _snack(context, 'No debrid provider configured. Add one in Settings.');
-      return true;
+      _snack(context, 'Add a debrid service in Settings to download.');
+      return done;
     }
     var cancelled = false;
     final overlay = _showPipeline(
@@ -7516,96 +7580,148 @@ class TorrentPlaybackService {
       var filters = await SavedSourceFilters.load();
       // Pack sizes are per-episode, so the size facet is movie-only.
       if (!isMovie) filters = filters.copyWith(sizes: const <SizeBucket>{});
-      if (cancelled) return true;
-      final List<Torrent> found;
-      if (isMovie) {
-        found = await searchCuratedSources(
-          imdbId: imdbId,
-          label: label,
-          year: meta.year,
-          isMovie: true,
-          provider: provider,
-          rules: rules,
-          originMeta: meta,
-          isCancelled: () => cancelled,
-          onResults: (n) =>
-              overlay.setStage(PlayLoadStage.searching, sourceCount: n),
-        );
-      } else {
-        found =
-            await searchSeriesPackSources(
-              imdbId: imdbId,
-              label: label,
-              season: season!,
-              provider: provider,
-              ladder: FilterLadder(filters),
-              rules: rules,
-              isCancelled: () => cancelled,
-              onCacheCheck: () => overlay.setStage(PlayLoadStage.cacheCheck),
-            ) ??
-            const <Torrent>[];
-      }
-      if (cancelled) return true;
-      if (!context.mounted) return true;
-      final matching = TorrentFilterMatcher.apply(found, filters);
-      final torrents = orderCandidatesForRules(
-        matching.where((t) => t.streamType == StreamType.torrent).toList(),
-        rules: rules,
-      );
-      final direct = matching
-          .where(
-            (t) =>
-                (t.streamType == StreamType.directUrl ||
-                    t.streamType == StreamType.externalUrl) &&
-                (t.directUrl?.isNotEmpty ?? false) &&
-                supportsDirectStreamDownload(t),
-          )
-          .toList();
-      if (torrents.isNotEmpty) {
-        overlay.setStage(PlayLoadStage.preparing);
-        final (resolved, winner) = await _probeCandidates(
-          provider,
-          torrents,
-          rules: rules,
-          isCancelled: () => cancelled,
-          // A download is worth a few probes; PikPak still stops at one.
-          minAttempts: 3,
-        );
-        if (cancelled) return true;
-        if (!context.mounted) return true;
-        if (resolved != null && winner != null) {
-          closeOverlay();
-          await _download(
-            context,
-            resolved,
-            winner,
-            provider,
-            meta: meta,
-            pickFiles: false,
+      final summary = FilterLadder(filters).filterSummary();
+
+      // One search + resolve + download. Null on success, else why not.
+      Future<AutoDownloadMiss?> one({
+        int? ep,
+        Set<int>? wanted,
+        required PlaybackMeta itemMeta,
+      }) async {
+        final List<Torrent> found;
+        if (isMovie || ep != null) {
+          found = await searchCuratedSources(
+            imdbId: imdbId,
+            label: label,
+            year: meta.year,
+            isMovie: isMovie,
+            season: season,
+            episode: ep,
+            provider: provider,
+            rules: rules,
+            originMeta: itemMeta,
+            isCancelled: () => cancelled,
+            onResults: (n) =>
+                overlay.setStage(PlayLoadStage.searching, sourceCount: n),
           );
-          return true;
+        } else {
+          found =
+              await searchSeriesPackSources(
+                imdbId: imdbId,
+                label: label,
+                season: season!,
+                provider: provider,
+                ladder: FilterLadder(filters),
+                rules: rules,
+                isCancelled: () => cancelled,
+                onCacheCheck: () =>
+                    overlay.setStage(PlayLoadStage.cacheCheck),
+              ) ??
+              const <Torrent>[];
+        }
+        if (cancelled || !context.mounted) return null;
+        if (found.isEmpty) return AutoDownloadMiss.nothingFound;
+        final matching = TorrentFilterMatcher.apply(found, filters);
+        if (matching.isEmpty) return AutoDownloadMiss.noFilterMatch;
+        final torrents = orderCandidatesForRules(
+          matching.where((t) => t.streamType == StreamType.torrent).toList(),
+          rules: rules,
+        );
+        if (torrents.isNotEmpty) {
+          overlay.setStage(PlayLoadStage.preparing);
+          final (resolved, winner) = await _probeCandidates(
+            provider,
+            torrents,
+            season: ep == null ? null : season,
+            episode: ep,
+            rules: rules,
+            isCancelled: () => cancelled,
+            // A download is worth a few probes; PikPak still stops at one.
+            minAttempts: 3,
+          );
+          if (cancelled || !context.mounted) return null;
+          if (resolved != null && winner != null) {
+            closeOverlay();
+            await _download(
+              context,
+              resolved,
+              winner,
+              provider,
+              meta: itemMeta,
+              pickFiles: false,
+              wantedEpisodes: wanted,
+            );
+            return null;
+          }
+        }
+        final direct = matching.where(
+          (t) =>
+              (t.streamType == StreamType.directUrl ||
+                  t.streamType == StreamType.externalUrl) &&
+              (t.directUrl?.isNotEmpty ?? false) &&
+              supportsDirectStreamDownload(t),
+        );
+        if (direct.isNotEmpty) {
+          closeOverlay();
+          await downloadDirectStream(context, direct.first, meta: itemMeta);
+          return null;
+        }
+        return AutoDownloadMiss.notReady;
+      }
+
+      if (isMovie || episode == null) {
+        final miss = await one(itemMeta: meta);
+        closeOverlay();
+        return miss == null
+            ? done
+            : AutoDownloadResult(miss, filterSummary: summary);
+      }
+
+      // Episodes: the first search usually finds a pack that has several;
+      // only the ones still missing afterwards get their own search.
+      final wanted = {for (var i = 0; i < count; i++) episode + i};
+      AutoDownloadMiss? firstMiss;
+      var downloadedAny = false;
+      for (final ep in wanted.toList()..sort()) {
+        if (cancelled || !context.mounted) break;
+        final here = await _episodesOnDevice(meta);
+        if (here.contains((season: season!, episode: ep))) continue;
+        final remaining = {
+          for (final w in wanted)
+            if (w >= ep && !here.contains((season: season, episode: w))) w,
+        };
+        final miss = await one(
+          ep: ep,
+          wanted: remaining,
+          itemMeta: PlaybackMeta(
+            imdbId: meta.imdbId,
+            contentType: meta.contentType,
+            title: meta.title,
+            posterUrl: meta.posterUrl,
+            year: meta.year,
+            catalogItem: meta.catalogItem,
+            season: season,
+            episode: ep,
+          ),
+        );
+        if (miss == null) {
+          downloadedAny = true;
+        } else {
+          firstMiss ??= miss;
+          // Later episodes rarely fare better once the first had nothing.
+          if (!downloadedAny) break;
         }
       }
-      if (direct.isNotEmpty) {
-        closeOverlay();
-        await downloadDirectStream(context, direct.first, meta: meta);
-        return true;
-      }
       closeOverlay();
-      if (context.mounted) {
-        _snack(
-          context,
-          matching.isEmpty
-              ? 'No source matches your saved filters. Pick one yourself.'
-              : 'No matching source is ready to download. Pick one yourself.',
-        );
-      }
-      return false;
+      if (downloadedAny || firstMiss == null) return done;
+      return AutoDownloadResult(firstMiss, filterSummary: summary);
     } catch (e) {
       closeOverlay();
-      if (cancelled) return true;
-      if (context.mounted) _snack(context, 'Search failed: $e');
-      return true;
+      if (cancelled) return done;
+      if (context.mounted) {
+        _snack(context, 'The search didn\'t work this time. Try again.');
+      }
+      return done;
     } finally {
       closeOverlay();
     }
@@ -7617,8 +7733,9 @@ class TorrentPlaybackService {
     Torrent torrent,
     String provider, {
     PlaybackMeta? meta,
-    // Off for auto-download: a pack queues all of its files without asking.
+    // Off for auto-download: a pack queues its default files without asking.
     bool pickFiles = true,
+    Set<int>? wantedEpisodes,
   }) async {
     final credentialKey = _credentialKeyForProvider(provider);
     // Multi-file pack: let the user choose which files (parity with the old
@@ -7626,9 +7743,44 @@ class TorrentPlaybackService {
     // on demand (RD/TorBox/AllDebrid resolve only the start file up front;
     // Premiumize resolves all).
     if (r.playlist != null && r.playlist!.length > 1) {
+      final entries = r.playlist!;
+      final onDevice = await _episodesOnDevice(meta);
+      final files = <PackFile>[
+        for (final e in entries)
+          (name: e.relativePath ?? e.title, sizeBytes: e.sizeBytes),
+      ];
+      final defaults = defaultPackSelection(
+        files,
+        onDevice: onDevice,
+        wanted: wantedEpisodes,
+        season: wantedEpisodes == null ? null : meta?.season,
+        packName: torrent.displayTitle,
+      );
+      final here = <int>{
+        for (final (i, f) in files.indexed)
+          if (detectDownloadedEpisode(f.name, packName: torrent.displayTitle)
+              case (season: final int s, episode: final int e)
+              when onDevice.contains((season: s, episode: e)))
+            i,
+      };
+      if (!context.mounted) return;
+      if (!pickFiles && defaults.isEmpty) {
+        _snack(
+          context,
+          here.isNotEmpty
+              ? 'Those episodes are already on this device.'
+              : 'Nothing in this source matches what you asked for.',
+        );
+        return;
+      }
       final chosen = pickFiles
-          ? await _showDownloadPicker(context, r.playlist!)
-          : r.playlist!;
+          ? await _showDownloadPicker(
+              context,
+              entries,
+              preselected: defaults,
+              onDevice: here,
+            )
+          : [for (final i in defaults) entries[i]];
       if (chosen == null || chosen.isEmpty) return; // cancelled
       var n = 0;
       for (final e in chosen) {
@@ -7646,12 +7798,11 @@ class TorrentPlaybackService {
         } catch (_) {}
       }
       if (context.mounted) {
-        _snack(
-          context,
-          n > 0
-              ? 'Queued $n file(s) for download.'
-              : 'Could not queue downloads.',
-        );
+        if (n > 0) {
+          _queuedSnack(context, meta, n == 1 ? 'Download started.' : 'Downloading $n episodes.');
+        } else {
+          _snack(context, 'Could not start the download. Try another source.');
+        }
       }
       return;
     }
@@ -7672,10 +7823,11 @@ class TorrentPlaybackService {
         } catch (_) {}
       }
       if (context.mounted) {
-        _snack(
-          context,
-          queued ? 'Download queued.' : 'Could not queue download.',
-        );
+        if (queued) {
+          _queuedSnack(context, meta, 'Download started.');
+        } else {
+          _snack(context, 'Could not start the download. Try another source.');
+        }
       }
       return;
     }
@@ -7692,8 +7844,33 @@ class TorrentPlaybackService {
         meta: downloadMediaMetadata(meta, fileName: r.fileName ?? torrent.displayTitle),
         torrentName: torrent.displayTitle,
       );
-    } catch (_) {}
-    if (context.mounted) _snack(context, 'Download queued.');
+    } catch (_) {
+      if (context.mounted) {
+        _snack(context, 'Could not start the download. Try another source.');
+      }
+      return;
+    }
+    if (context.mounted) _queuedSnack(context, meta, 'Download started.');
+  }
+
+  /// Episodes of [meta]'s title already downloaded or downloading here.
+  static Future<Set<({int season, int episode})>> _episodesOnDevice(
+    PlaybackMeta? meta,
+  ) async {
+    final id = meta?.imdbId ?? meta?.catalogItem?.id;
+    if (id == null || meta?.contentType != 'series') return const {};
+    try {
+      final all = await DownloadedMediaService.load(includeTransfers: true);
+      return {
+        for (final d in all)
+          if (d.media?.id == id &&
+              d.media?.season != null &&
+              d.media?.episode != null)
+            (season: d.media!.season!, episode: d.media!.episode!),
+      };
+    } catch (_) {
+      return const {};
+    }
   }
 
   static Future<void> _addToPlaylist(
@@ -8916,6 +9093,282 @@ class TorrentPlaybackService {
     }
   }
 
+  // ── Download when ready ────────────────────────────────────────────────────
+  //
+  // A download picked from a torrent the debrid provider doesn't have yet:
+  // instead of an error, offer to let the provider fetch it and start the
+  // download on its own once it's ready. Jobs persist (per profile) and are
+  // re-checked every minute while the app runs, for up to two days.
+
+  static GlobalKey<NavigatorState>? _navigatorKey;
+  static Timer? _readyTimer;
+  static bool _checkingReady = false;
+  static const Duration _readyInterval = Duration(minutes: 1);
+  static const Duration _readyGiveUp = Duration(hours: 48);
+
+  /// Called once at startup with the app's navigator: resumes waiting jobs.
+  static void resumeDownloadsWhenReady(GlobalKey<NavigatorState> key) {
+    _navigatorKey = key;
+    unawaited(_scheduleReadyChecks());
+  }
+
+  static Future<void> _offerDownloadWhenReady(
+    BuildContext context,
+    Object marker,
+    String provider,
+    String magnet,
+    Torrent torrent, {
+    PlaybackMeta? meta,
+    Set<int>? wantedEpisodes,
+  }) async {
+    final label = _label(provider);
+    final wait = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.hourglass_top_rounded),
+        title: const Text('Not ready yet'),
+        content: Text(
+          '$label doesn\'t have this one ready. It can fetch it first — '
+          'usually a few minutes — and the download will start on its own '
+          'when it\'s done.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Pick another'),
+          ),
+          FilledButton(
+            autofocus: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Download when ready'),
+          ),
+        ],
+      ),
+    );
+    if (wait != true) {
+      // Leave nothing behind on the account for a source the user declined.
+      await cleanupFailedAutomaticAcquisition(marker);
+      return;
+    }
+    try {
+      if (provider == 'torbox') {
+        final apiKey = (await StorageService.getTorboxApiKey()) ?? '';
+        await TorboxService.createTorrent(
+          apiKey: apiKey,
+          magnet: magnet,
+          addOnlyIfCached: false,
+        );
+      } else if (provider == 'premiumize') {
+        final apiKey = (await StorageService.getPremiumizeApiKey()) ?? '';
+        await PremiumizeService.createTransfer(apiKey, magnet);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        _snack(context, 'Could not reach $label. Try again in a moment.');
+      }
+      return;
+    }
+    await _addReadyJob({
+      'provider': provider,
+      'magnet': magnet,
+      'torrent': torrent.toJson(),
+      if (marker is TorrentNotCachedException) 'rdTorrentId': marker.torrentId,
+      if (wantedEpisodes != null) 'wanted': wantedEpisodes.toList(),
+      'meta': {
+        'id': meta?.imdbId ?? meta?.catalogItem?.id,
+        'type': meta?.contentType,
+        'title': meta?.title ?? meta?.catalogItem?.name,
+        'poster': meta?.posterUrl,
+        'year': meta?.year,
+        'season': meta?.season,
+        'episode': meta?.episode,
+      },
+      'addedAt': DateTime.now().toIso8601String(),
+    });
+    if (context.mounted) {
+      _snack(
+        context,
+        'Got it — the download starts as soon as $label has it ready.',
+      );
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> _readyJobs() async {
+    try {
+      final raw = await StorageService.getPendingDebridDownloads();
+      if (raw == null) return [];
+      return [
+        for (final job in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(job as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<void> _saveReadyJobs(List<Map<String, dynamic>> jobs) =>
+      StorageService.setPendingDebridDownloads(
+        jobs.isEmpty ? null : jsonEncode(jobs),
+      );
+
+  static Future<void> _addReadyJob(Map<String, dynamic> job) async {
+    final jobs = await _readyJobs()
+      ..removeWhere((j) => j['magnet'] == job['magnet']);
+    jobs.add(job);
+    await _saveReadyJobs(jobs);
+    await _scheduleReadyChecks();
+  }
+
+  static Future<void> _scheduleReadyChecks() async {
+    final jobs = await _readyJobs();
+    if (jobs.isEmpty) {
+      _readyTimer?.cancel();
+      _readyTimer = null;
+      return;
+    }
+    _readyTimer ??= Timer.periodic(
+      _readyInterval,
+      (_) => unawaited(_checkReadyJobs()),
+    );
+  }
+
+  static Future<void> _checkReadyJobs() async {
+    if (_checkingReady) return;
+    _checkingReady = true;
+    try {
+      final jobs = await _readyJobs();
+      final keep = <Map<String, dynamic>>[];
+      for (final job in jobs) {
+        final outcome = await _tryReadyJob(job);
+        if (outcome == null) keep.add(job);
+      }
+      await _saveReadyJobs(keep);
+      if (keep.isEmpty) {
+        _readyTimer?.cancel();
+        _readyTimer = null;
+      }
+    } finally {
+      _checkingReady = false;
+    }
+  }
+
+  /// null = still waiting; true = downloading now; false = given up.
+  static Future<bool?> _tryReadyJob(Map<String, dynamic> job) async {
+    final provider = job['provider'] as String? ?? '';
+    final magnet = job['magnet'] as String? ?? '';
+    final title = (job['meta'] as Map?)?['title'] as String?;
+    final added = DateTime.tryParse(job['addedAt'] as String? ?? '');
+    if (added != null && DateTime.now().difference(added) > _readyGiveUp) {
+      _notifyReady('${title ?? 'A download'} took too long on '
+          '${_label(provider)} and was cancelled.');
+      return false;
+    }
+    final Torrent torrent;
+    try {
+      torrent = Torrent.fromJson(
+        Map<String, dynamic>.from(job['torrent'] as Map),
+      );
+    } catch (_) {
+      return false;
+    }
+    final rdId = job['rdTorrentId'] as String?;
+    if (provider == 'debrid' && rdId != null) {
+      // Re-adding on RD makes a new entry each time, so ask about the one
+      // already fetching instead.
+      try {
+        final apiKey = (await StorageService.getApiKey()) ?? '';
+        final info = await DebridService.getTorrentInfo(apiKey, rdId);
+        final status = info['status']?.toString() ?? '';
+        if (const {'magnet_error', 'error', 'virus', 'dead'}.contains(status)) {
+          _notifyReady('${title ?? 'A download'} failed on Real-Debrid.');
+          return false;
+        }
+        if (status != 'downloaded') return null;
+      } catch (_) {
+        return null;
+      }
+    }
+    _Resolved resolved;
+    try {
+      resolved = await _add(provider, magnet, torrent);
+    } on TorrentNotCachedException catch (e) {
+      // Only reachable without a tracked RD id; drop the duplicate it made.
+      if (e.torrentId != rdId) await cleanupFailedAutomaticAcquisition(e);
+      return null;
+    } on AllDebridTorrentNotReadyException {
+      return null;
+    } on _TorboxNotCached {
+      return null;
+    } on _PremiumizeNotCached {
+      return null;
+    } catch (_) {
+      return null;
+    }
+    if (provider == 'debrid' &&
+        rdId != null &&
+        resolved.rdTorrentId != null &&
+        resolved.rdTorrentId != rdId) {
+      // The ready copy resolved; the one we waited on is now a duplicate.
+      try {
+        final apiKey = (await StorageService.getApiKey()) ?? '';
+        await DebridService.deleteTorrent(apiKey, rdId);
+      } catch (_) {}
+    }
+    final context = _navigatorKey?.currentContext;
+    if (context == null || !context.mounted) return null;
+    final m = Map<String, dynamic>.from(job['meta'] as Map? ?? const {});
+    final meta = PlaybackMeta(
+      imdbId: m['id'] as String?,
+      contentType: m['type'] as String?,
+      title: m['title'] as String?,
+      posterUrl: m['poster'] as String?,
+      year: m['year'] as String?,
+      season: (m['season'] as num?)?.toInt(),
+      episode: (m['episode'] as num?)?.toInt(),
+    );
+    final wanted = (job['wanted'] as List?)
+        ?.map((e) => (e as num).toInt())
+        .toSet();
+    await _download(
+      context,
+      resolved,
+      torrent,
+      provider,
+      meta: meta,
+      pickFiles: false,
+      wantedEpisodes: wanted,
+    );
+    return true;
+  }
+
+  static void _notifyReady(String message) {
+    final context = _navigatorKey?.currentContext;
+    if (context != null && context.mounted) _snack(context, message);
+  }
+
+  /// "Download started" with a way to watch it: View opens the title's
+  /// download page (or the Downloads tab for a file with no catalog title).
+  static void _queuedSnack(
+    BuildContext context,
+    PlaybackMeta? meta,
+    String message,
+  ) {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final id = meta?.imdbId ?? meta?.catalogItem?.id;
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'View',
+          onPressed: () => unawaited(openDownloadsForTitle(navigator.context, id)),
+        ),
+      ),
+    );
+  }
+
   static void _snack(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
@@ -9029,4 +9482,29 @@ class _TorboxNotCached implements Exception {
 
 class _PremiumizeNotCached implements Exception {
   const _PremiumizeNotCached();
+}
+
+/// Why automatic download couldn't pick something.
+enum AutoDownloadMiss {
+  /// Sources exist, but none match the saved filters.
+  noFilterMatch,
+
+  /// Matching sources exist, but none is ready on the debrid service.
+  notReady,
+
+  /// The search found nothing at all.
+  nothingFound,
+}
+
+class AutoDownloadResult {
+  const AutoDownloadResult(this.miss, {this.filterSummary = ''});
+  const AutoDownloadResult.done() : miss = null, filterSummary = '';
+
+  /// Null when something is downloading (or the user cancelled).
+  final AutoDownloadMiss? miss;
+
+  /// The saved filters, readable ("1080p · H.265"); empty when none.
+  final String filterSummary;
+
+  bool get done => miss == null;
 }

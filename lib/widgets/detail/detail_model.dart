@@ -173,6 +173,12 @@ class DetailModel {
 
   /// Drives the Download button's label and icon.
   final DownloadedTitleState downloadState;
+
+  /// 0..1 while the title is downloading (drives the button's ring).
+  final double? downloadProgress;
+
+  String get downloadLabel =>
+      downloadButtonLabel(downloadState, downloadProgress);
   final VoidCallback onTrailer;
   final VoidCallback? onSelectSource;
   final VoidCallback? onAppMenu;
@@ -263,6 +269,7 @@ class DetailModel {
     this.onPrimaryLongPress,
     required this.onBrowse,
     this.downloadState = DownloadedTitleState.none,
+    this.downloadProgress,
     required this.onTrailer,
     required this.onSelectSource,
     required this.onAppMenu,
@@ -293,7 +300,8 @@ class DetailModel {
   );
   String? get logo => item.logo;
   String? get poster => item.poster;
-  String? get backdrop => MetadataDetailsService.backdrop(item, metadataPreferences);
+  String? get backdrop =>
+      MetadataDetailsService.backdrop(item, metadataPreferences);
 
   List<String> get genres => MetadataDetailsService.informationGenres(
     item,

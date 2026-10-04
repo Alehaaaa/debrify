@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/storage_service.dart';
+import '../../widgets/detail/download_choice_sheet.dart' show kNextEpisodesCount;
 import 'filter_settings_page.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -17,6 +18,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   bool _loading = true;
   bool _alwaysAsk = true;
   String _mode = 'manual';
+  String _seriesScope = 'nextEpisodes';
 
   @override
   void initState() {
@@ -27,10 +29,12 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   Future<void> _load() async {
     final alwaysAsk = await StorageService.getDownloadButtonAlwaysAsk();
     final mode = await StorageService.getDownloadButtonMode();
+    final seriesScope = await StorageService.getDownloadSeriesScope();
     if (!mounted) return;
     setState(() {
       _alwaysAsk = alwaysAsk;
       _mode = mode;
+      _seriesScope = seriesScope;
       _loading = false;
     });
   }
@@ -84,6 +88,40 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                         onChanged: (value) {
                           setState(() => _mode = value);
                           StorageService.setDownloadButtonMode(value);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                SettingsSection(
+                  title: 'For series',
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: SettingsSelectDropdown(
+                        value: _seriesScope,
+                        options: [
+                          const SettingsSelectOption(
+                            'episode',
+                            'This episode',
+                            'The episode Play would open.',
+                          ),
+                          SettingsSelectOption(
+                            'nextEpisodes',
+                            'Next $kNextEpisodesCount episodes',
+                            'Starting with the one Play would open — good '
+                                'for a trip.',
+                          ),
+                          const SettingsSelectOption(
+                            'season',
+                            'Whole season',
+                            'Every episode of the season.',
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() => _seriesScope = value);
+                          StorageService.setDownloadSeriesScope(value);
                         },
                       ),
                     ),

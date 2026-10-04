@@ -48,7 +48,6 @@ import '../theme/app_theme_scope.dart';
 import '../theme/artwork_accent.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/hero_trailer_backdrop.dart';
-import '../widgets/detail/download_choice_sheet.dart';
 import '../widgets/episodes_panel.dart';
 import '../widgets/horizontal_mouse_wheel.dart';
 import '../widgets/home/home_theme.dart';
@@ -198,11 +197,10 @@ class MergedDetailScreen extends StatefulWidget {
   /// episodes it accepts (the Downloads page: only what's on the device).
   final bool Function(int season, int episode)? episodeFilter;
 
-  /// The Download button's automatic path: downloads the best source matching
-  /// the saved source filters (for a series, a pack of the given season).
-  /// Returns false when nothing was downloadable. Null keeps the button's
-  /// manual-only behavior.
-  final Future<bool> Function(int? season)? onAutoDownload;
+  /// The Download button: the host asks how (and for a series how much) to
+  /// download, starting from the episode Play would open. Null keeps the
+  /// button's old behavior (the source list / season packs).
+  final Future<void> Function(int? season, int? episode)? onDownload;
 
   const MergedDetailScreen({
     super.key,
@@ -244,7 +242,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.heroTag,
     this.seasonsLoader,
     this.episodeFilter,
-    this.onAutoDownload,
+    this.onDownload,
     this.onPlayEpisode,
     this.watchProgressLoader,
   });
@@ -823,32 +821,29 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// Not downloaded: the movie's source list or the series' season-pack
   /// search, where a source can be downloaded. Otherwise: the download page.
   VoidCallback? get _downloadAction {
-    if (_downloads.state != DownloadedTitleState.none) {
+    final download = widget.onDownload;
+    // A downloaded movie has nothing more to get; a series can always get
+    // more episodes (its sheet links to the ones already here).
+    if (_downloads.state != DownloadedTitleState.none &&
+        (_isMovie || download == null)) {
       return () => unawaited(_downloads.open(context));
     }
-    final VoidCallback? manual;
-    if (_isMovie) {
-      manual = widget.onBrowse;
-    } else if (widget.onTraktAction != null &&
+    if (download != null) {
+      return () => unawaited(
+        download(
+          _isMovie ? null : (_resumeSeason ?? 1),
+          _isMovie ? null : (_resumeEpisode ?? 1),
+        ),
+      );
+    }
+    if (_isMovie) return widget.onBrowse;
+    if (widget.onTraktAction != null &&
         _appMenuOptions.any(
           (o) => o.action == TraktItemMenuAction.searchPacks,
         )) {
-      manual = () => widget.onTraktAction!(TraktItemMenuAction.searchPacks);
-    } else {
-      manual = null;
+      return () => widget.onTraktAction!(TraktItemMenuAction.searchPacks);
     }
-    final auto = widget.onAutoDownload;
-    if (manual == null || auto == null) return manual;
-    // Asks auto-or-manual (or does the remembered one) first.
-    return () => unawaited(
-      runDownloadButton(
-        context,
-        title: _item.name,
-        isTelevision: widget.isTelevision,
-        auto: () => auto(_isMovie ? null : (_resumeSeason ?? 1)),
-        manual: manual!,
-      ),
-    );
+    return null;
   }
 
   bool _rewatchPending = false;
@@ -2248,6 +2243,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       // host that didn't offer the action.
       onBrowse: _downloadAction,
       downloadState: _downloads.state,
+      downloadProgress: _downloads.progress,
       onTrailer: _playTrailer,
       onSelectSource: widget.onSelectSource == null
           ? null

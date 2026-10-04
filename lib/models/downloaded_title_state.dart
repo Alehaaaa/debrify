@@ -16,3 +16,9 @@ extension DownloadedTitleStateLabel on DownloadedTitleState {
     DownloadedTitleState.downloaded => Icons.offline_pin_rounded,
   };
 }
+
+/// A Download button's label, with the percentage while it downloads.
+String downloadButtonLabel(DownloadedTitleState state, double? progress) =>
+    state == DownloadedTitleState.downloading && progress != null
+    ? 'Downloading ${(progress * 100).floor()}%'
+    : state.label;

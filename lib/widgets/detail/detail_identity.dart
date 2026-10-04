@@ -187,6 +187,9 @@ class DetailGhostButton extends StatefulWidget {
   final bool busy;
   final FocusNode? focusNode;
 
+  /// 0..1: a progress ring replaces the icon (a download in flight).
+  final double? progress;
+
   const DetailGhostButton({
     super.key,
     required this.label,
@@ -194,6 +197,7 @@ class DetailGhostButton extends StatefulWidget {
     required this.onTap,
     this.busy = false,
     this.focusNode,
+    this.progress,
   });
 
   @override
@@ -236,7 +240,18 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
                     ),
                   )
                 else
-                  Icon(widget.icon, color: t.ghostText, size: 16),
+                  if (widget.progress != null)
+                    SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        value: widget.progress,
+                        strokeWidth: 2.2,
+                        color: t.ghostText,
+                        backgroundColor: t.ghostText.withValues(alpha: 0.25),
+                      ),
+                    )
+                  else
+                    Icon(widget.icon, color: t.ghostText, size: 16),
                 const SizedBox(width: 7),
                 Text(
                   widget.label,
@@ -744,9 +759,10 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.onBrowse != null)
         DetailGhostButton(
-          label: model.downloadState.label,
+          label: model.downloadLabel,
           icon: model.downloadState.icon,
           onTap: model.onBrowse!,
+          progress: model.downloadProgress,
         ),
       if (model.onToggleMyWatchlist != null)
         DetailGhostButton(

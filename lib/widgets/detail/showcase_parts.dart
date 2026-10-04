@@ -799,7 +799,7 @@ class ShowcaseIdentity extends StatelessWidget {
         _Circle(
           node: next(),
           icon: m.downloadState.icon,
-          label: m.downloadState.label,
+          label: m.downloadLabel,
           onTap: m.onBrowse!,
         ),
       );

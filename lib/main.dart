@@ -1,3 +1,4 @@
+import 'services/torrent_playback_service.dart';
 import 'services/webdav_sync/webdav_log_upload.dart';
 import 'services/cache_scratch_cleanup.dart';
 import 'services/debrify_image_cache.dart';
@@ -803,6 +804,8 @@ Future<void> _continueApplicationStartup() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(_prewarmIptvCatalogDb());
     IptvCatalogRefreshService.instance.start();
+    // Downloads waiting on a debrid provider pick up where they left off.
+    TorrentPlaybackService.resumeDownloadsWhenReady(_navigatorKey);
   });
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {

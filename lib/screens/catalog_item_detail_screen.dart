@@ -29,7 +29,6 @@ import '../services/mdblist/mdblist_service.dart';
 import '../widgets/rewatch_progress_dialog.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/detail/detail_primary_sources.dart';
-import '../widgets/detail/download_choice_sheet.dart';
 import '../widgets/parents_guide_section.dart';
 import '../widgets/movie_watched_badge.dart';
 import '../widgets/shimmer.dart';
@@ -76,10 +75,9 @@ class CatalogItemDetailScreen extends StatefulWidget {
   /// [onBrowse] directly because that already is their Sources action.
   final Future<void> Function()? onBrowsePrimaryEpisodeSources;
 
-  /// A movie's Download button, automatic path: downloads the best source
-  /// matching the saved source filters; false when nothing was downloadable.
-  /// Null keeps the button opening the source list.
-  final Future<bool> Function()? onAutoDownload;
+  /// A movie's Download button: the host asks how to download. Null keeps
+  /// the button opening the source list.
+  final Future<void> Function()? onDownload;
 
   /// False for detail surfaces whose [onBrowse] is not a source browser (for
   /// example Stremio TV channel details, where both buttons play the channel).
@@ -128,7 +126,7 @@ class CatalogItemDetailScreen extends StatefulWidget {
     this.onRewatch,
     required this.onBrowse,
     this.onBrowsePrimaryEpisodeSources,
-    this.onAutoDownload,
+    this.onDownload,
     this.enablePrimarySourcesHold = true,
     this.onLoaderArt,
     this.resumeInfoLoader,
@@ -1848,18 +1846,11 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
             ? widget.onBrowse
             : _downloads.state != DownloadedTitleState.none
             ? () => unawaited(_downloads.open(context))
-            : widget.onAutoDownload == null
+            : widget.onDownload == null
             ? widget.onBrowse
-            : () => unawaited(
-                runDownloadButton(
-                  context,
-                  title: item.name,
-                  isTelevision: widget.isTelevision,
-                  auto: widget.onAutoDownload!,
-                  manual: widget.onBrowse,
-                ),
-              ),
+            : () => unawaited(widget.onDownload!()),
         downloadState: _downloads.state,
+        downloadProgress: _downloads.progress,
         inMyWatchlist: _inMyWatchlist,
         onToggleMyWatchlist: _supportsMyWatchlist ? _toggleMyWatchlist : null,
       ),
@@ -2607,6 +2598,7 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback? onPlayLongPress;
   final VoidCallback onBrowse;
   final DownloadedTitleState downloadState;
+  final double? downloadProgress;
   final bool inMyWatchlist;
   final VoidCallback? onToggleMyWatchlist;
 
@@ -2629,6 +2621,7 @@ class _ActionRow extends StatelessWidget {
     this.onPlayLongPress,
     required this.onBrowse,
     this.downloadState = DownloadedTitleState.none,
+    this.downloadProgress,
     required this.inMyWatchlist,
     required this.onToggleMyWatchlist,
     this.onArrowUp,
@@ -2636,7 +2629,9 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final browseLabel = isSeries ? 'Episodes' : downloadState.label;
+    final browseLabel = isSeries
+        ? 'Episodes'
+        : downloadButtonLabel(downloadState, downloadProgress);
     final browseIcon = isSeries ? Icons.list_alt_rounded : downloadState.icon;
     final gap = compact ? 8.0 : 10.0;
 

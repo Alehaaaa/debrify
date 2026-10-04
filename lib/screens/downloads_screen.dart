@@ -7,6 +7,7 @@ import '../services/debrify_image_cache.dart';
 import '../services/discover_prefs.dart';
 import '../services/download_service.dart';
 import '../services/downloaded_media_service.dart';
+import '../services/main_page_bridge.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
@@ -317,6 +318,26 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       ),
     );
   }
+}
+
+/// Where "View" goes after queuing a download: the title's download page
+/// when it is catalog-linked, otherwise the Downloads tab.
+Future<void> openDownloadsForTitle(BuildContext context, String? id) async {
+  if (id != null && id.isNotEmpty) {
+    try {
+      final all = await DownloadedMediaService.load(includeTransfers: true);
+      final items = all.where((e) => e.media?.id == id).toList();
+      if (items.isNotEmpty && context.mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DownloadedTitleScreen(items: items),
+          ),
+        );
+        return;
+      }
+    } catch (_) {}
+  }
+  MainPageBridge.switchTab?.call(MainTab.downloads);
 }
 
 Future<void> openDownloadManager(BuildContext context) =>

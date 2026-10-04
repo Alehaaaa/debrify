@@ -94,6 +94,7 @@ import '../services/episode_tracker_snapshot_revision.dart';
 import '../services/local_series_completion_service.dart';
 import '../services/source_priority.dart';
 import '../services/saved_source_filters.dart';
+import '../widgets/detail/download_choice_sheet.dart';
 import '../utils/filter_ladder.dart' show FilterLadder;
 import '../services/storage_service.dart';
 import '../services/tv_hero_artwork_quality_controller.dart';
@@ -170,6 +171,8 @@ import 'merged_series_detail_screen.dart';
 import 'settings/tv_home_style_page.dart'
     show effectiveOffTvHomeStyle, shouldUseOffTvSpotlightShell;
 import 'debrid_downloads_screen.dart';
+import 'downloads_screen.dart' show openDownloadsForTitle;
+import '../services/downloaded_media_service.dart';
 import 'episodes_screen.dart';
 import 'stremio_tv/stremio_tv_service.dart';
 import 'stremio_tv/widgets/stremio_tv_catalog_picker_dialog.dart';
@@ -13877,8 +13880,12 @@ sheetAnimationStyle: kMenuSheetAnimation,
                         isMdblistSource: isMdblistSource,
                       )
                     : null,
-                onAutoDownload: (season) =>
-                    _autoDownload(item, addon, season: season),
+                onDownload: (season, episode) => _downloadFromDetail(
+                  item,
+                  addon,
+                  season: season,
+                  episode: episode,
+                ),
                 onItemSelected: (selection) => _browseSelection(
                   selection, metadataAddonId: addon.id, catalogItem: item.withSourceAddon(addon),
                 ),
@@ -14030,8 +14037,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 isTraktSource: isTraktSource,
                 isMdblistSource: isMdblistSource,
               ),
-              onAutoDownload: item.type == 'movie'
-                  ? () => _autoDownload(item, addon)
+              onDownload: item.type == 'movie'
+                  ? () => _downloadFromDetail(item, addon)
                   : null,
               onBrowsePrimaryEpisodeSources: item.type == 'series'
                   ? () => _onCatalogPlay(
@@ -16074,35 +16081,91 @@ sheetAnimationStyle: kMenuSheetAnimation,
     }
   }
 
-  /// A detail page's Download button, automatic path: the best source that
-  /// matches the saved source filters — the movie, or a pack of [season].
-  Future<bool> _autoDownload(
+  /// A detail page's Download button: asks how (and for a series how much)
+  /// to download, then downloads automatically or opens the source list in
+  /// download mode. [season]/[episode] are where Play would start.
+  Future<void> _downloadFromDetail(
     StremioMeta item,
     StremioAddon addon, {
     int? season,
-  }) {
+    int? episode,
+  }) async {
     final isMovie = item.type != 'series';
-    final sel = isMovie
+    final id = item.progressId ?? item.id;
+    final series = isMovie
+        ? null
+        : (season: season ?? 1, episode: episode ?? 1);
+    var hasDownloads = false;
+    try {
+      hasDownloads = (await DownloadedMediaService.load(
+        includeTransfers: true,
+      )).any((e) => e.media?.id == id);
+    } catch (_) {}
+    if (!mounted) return;
+
+    AdvancedSearchSelection selectionFor(DownloadScope? scope) => isMovie
         ? _movieSelection(item)
         : AdvancedSearchSelection(
-            imdbId: item.progressId ?? item.id,
+            imdbId: id,
             isSeries: true,
             title: item.name,
             year: item.year,
-            season: season,
+            season: series!.season,
+            episode: scope == DownloadScope.episode ? series.episode : null,
             contentType: item.type,
             posterUrl: item.poster,
           );
-    return TorrentPlaybackService.downloadBestFromSelection(
+
+    Set<int>? wantedFor(DownloadScope? scope) => switch (scope) {
+      DownloadScope.episode => {series!.episode},
+      DownloadScope.nextEpisodes => {
+        for (var i = 0; i < kNextEpisodesCount; i++) series!.episode + i,
+      },
+      _ => null,
+    };
+
+    await runDownloadButton(
       context,
-      imdbId: sel.imdbId,
-      isMovie: isMovie,
-      season: season,
-      meta: _metaFor(
-        sel,
-        addonId: addon.id,
-        catalogItem: item.withSourceAddon(addon),
-      ),
+      title: item.name,
+      isTelevision: widget.isTelevision,
+      series: series,
+      onViewDownloads: hasDownloads
+          ? () => unawaited(openDownloadsForTitle(context, id))
+          : null,
+      auto: (scope) {
+        final sel = selectionFor(scope);
+        return TorrentPlaybackService.downloadBestFromSelection(
+          context,
+          imdbId: sel.imdbId,
+          isMovie: isMovie,
+          season: series?.season,
+          episode: scope == DownloadScope.season ? null : series?.episode,
+          count: scope == DownloadScope.nextEpisodes ? kNextEpisodesCount : 1,
+          meta: _metaFor(
+            sel,
+            addonId: addon.id,
+            catalogItem: item.withSourceAddon(addon),
+          ),
+        );
+      },
+      manual: (scope, why) {
+        final note = why == null ? null : downloadMissNote(why);
+        _browseSelection(
+          selectionFor(scope),
+          forceDownloadOnTap: true,
+          wantedEpisodes: wantedFor(scope),
+          notice: note == null
+              ? null
+              : SourcesNotice(
+                  title: note.title,
+                  message: note.message,
+                  icon: note.icon,
+                  showAll: note.showAll,
+                ),
+          metadataAddonId: addon.id,
+          catalogItem: item.withSourceAddon(addon),
+        );
+      },
     );
   }
 
@@ -16472,6 +16535,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
     // Set only by the Play-button hand-off: the press already said "play", so
     // the row the user picks must not re-ask via the post-torrent action.
     bool forcePlayOnTap = false,
+    bool forceDownloadOnTap = false,
+    Set<int>? wantedEpisodes,
+    SourcesNotice? notice,
     String? metadataAddonId,
     StremioMeta? catalogItem,
   }) {
@@ -16496,6 +16562,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 meta: meta,
                 isTelevision: widget.isTelevision,
                 forcePlayOnTap: forcePlayOnTap,
+                forceDownloadOnTap: forceDownloadOnTap,
+                wantedEpisodes: wantedEpisodes,
+                notice: notice,
               ),
             ),
           ),

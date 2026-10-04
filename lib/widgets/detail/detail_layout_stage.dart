@@ -230,7 +230,7 @@ class _DetailStageState extends State<DetailStage> {
             if (hasSources) ...[
               const SizedBox(width: 20),
               _TabButton(
-                label: m.downloadState.label,
+                label: m.downloadLabel,
                 active: false,
                 focusNode: _sourcesNode,
                 trapLeft: tabs.isEmpty,

@@ -16,7 +16,36 @@ class DownloadedTitleWatcher extends ChangeNotifier {
     _moves = DownloadService.instance.moveProgressStream.listen((e) {
       if (e.done || e.failed) _load();
     });
+    _progressSub = DownloadService.instance.progressStream.listen((e) {
+      if (e.progress < 0 ||
+          !_items.any((i) => i.record.taskId == e.task.taskId)) {
+        return;
+      }
+      final before = progress;
+      _live[e.task.taskId] = e.progress;
+      // Whole percents only: the button doesn't need every byte.
+      if (((before ?? 0) * 100).floor() != ((progress ?? 0) * 100).floor()) {
+        notifyListeners();
+      }
+    });
     _load();
+  }
+
+  StreamSubscription? _progressSub;
+  final Map<String, double> _live = {};
+
+  /// 0..1 across this title's files while any is still arriving, else null.
+  double? get progress {
+    if (_items.isEmpty || _items.every((e) => e.isReady)) return null;
+    final total = _items.fold<double>(
+      0,
+      (sum, e) =>
+          sum +
+          (e.isReady
+              ? 1
+              : (_live[e.record.taskId] ?? e.record.progress).clamp(0.0, 1.0)),
+    );
+    return total / _items.length;
   }
 
   String _id;
@@ -77,6 +106,7 @@ class DownloadedTitleWatcher extends ChangeNotifier {
     _disposed = true;
     _status?.cancel();
     _moves?.cancel();
+    _progressSub?.cancel();
     super.dispose();
   }
 }

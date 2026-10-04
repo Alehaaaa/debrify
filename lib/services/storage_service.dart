@@ -596,6 +596,9 @@ class StorageService {
   static const String _quickPlaySeriesRulesKey = 'quick_play_series_rules_v2';
   static const String _playButtonModeKey = 'play_button_mode';
   static const String _downloadButtonModeKey = 'download_button_mode_v1';
+  static const String _downloadSeriesScopeKey = 'download_series_scope_v1';
+  static const String _pendingDebridDownloadsKey =
+      'pending_debrid_downloads_v1';
   static const String _downloadButtonAlwaysAskKey =
       'download_button_always_ask_v1';
 
@@ -9058,6 +9061,34 @@ class StorageService {
   static Future<void> setDownloadButtonMode(String value) async {
     final prefs = await ProfilePreferences.instance();
     await prefs.setString(_downloadButtonModeKey, value);
+  }
+
+  /// Downloads waiting for a debrid provider to finish fetching the torrent
+  /// (see TorrentPlaybackService's "download when ready"). JSON list.
+  static Future<String?> getPendingDebridDownloads() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_pendingDebridDownloadsKey);
+  }
+
+  static Future<void> setPendingDebridDownloads(String? json) async {
+    final prefs = await ProfilePreferences.instance();
+    if (json == null) {
+      await prefs.remove(_pendingDebridDownloadsKey);
+    } else {
+      await prefs.setString(_pendingDebridDownloadsKey, json);
+    }
+  }
+
+  /// How much of a series its Download button gets: `episode`,
+  /// `nextEpisodes` (the default) or `season`.
+  static Future<String> getDownloadSeriesScope() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_downloadSeriesScopeKey) ?? 'nextEpisodes';
+  }
+
+  static Future<void> setDownloadSeriesScope(String value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_downloadSeriesScopeKey, value);
   }
 
   /// Whether the Download button asks auto-or-manual each time. On by default.
