@@ -27,6 +27,56 @@ abstract final class DownloadFeedback {
     );
   }
 
+  /// A quiet "working on it" note with a spinner and, when given, Cancel.
+  /// Close it with the returned controller; a later message replaces it.
+  static ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? working(
+    BuildContext context,
+    String message, {
+    VoidCallback? onCancel,
+  }) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return null;
+    messenger.hideCurrentSnackBar();
+    return messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(minutes: 2),
+        content: Row(
+          children: [
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(message, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+          ],
+        ),
+        action: onCancel == null
+            ? null
+            : SnackBarAction(label: 'Cancel', onPressed: onCancel),
+      ),
+    );
+  }
+
+  /// A note with one way forward, e.g. "Choose source".
+  static void offer(
+    BuildContext context,
+    String message, {
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 8),
+          action: SnackBarAction(label: actionLabel, onPressed: onAction),
+        ),
+      );
+  }
+
   static void failed(
     BuildContext context, [
     String message = 'Could not start the download. Try another source.',

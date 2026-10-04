@@ -586,9 +586,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   Timer? _hideTimer;
 
   // ---- Touch lock -----------------------------------------------------------
-  // Phones and tablets: a padlock at the right edge, mid-height. Locked, the
-  // HUD and every gesture are off; a tap shows just the padlock (it fades after
-  // a few seconds) and tapping it unlocks — the VLC / Netflix pattern.
+  // Phones and tablets: a padlock in the HUD's top bar. Locked, the HUD and
+  // every gesture are off; a tap shows just the padlock at the right edge (it
+  // fades after a few seconds) and tapping it unlocks — the VLC / Netflix
+  // pattern.
   bool _touchLocked = false;
   final ValueNotifier<bool> _lockButtonVisible = ValueNotifier<bool>(false);
   Timer? _lockButtonTimer;
@@ -13458,32 +13459,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
   }
 
-  /// Top of the player stack: unlocked, the padlock rides with the HUD;
-  /// locked, a layer that swallows every touch and shows only the padlock.
+  /// Top of the player stack while locked: a layer that swallows every
+  /// touch and shows only the padlock (unlocked, the lock button sits in the
+  /// HUD's top bar).
   Widget _buildTouchLockLayer() {
-    if (!_touchLocked) {
-      return ValueListenableBuilder<bool>(
-        valueListenable: _controlsVisible,
-        builder: (context, visible, _) => Positioned(
-          right: 0,
-          top: 0,
-          bottom: 0,
-          child: SafeArea(
-            left: false,
-            child: Center(
-              child: AnimatedOpacity(
-                opacity: visible ? 1 : 0,
-                duration: const Duration(milliseconds: 150),
-                child: IgnorePointer(
-                  ignoring: !visible,
-                  child: _TouchLockButton(locked: false, onTap: _lockTouch),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }
     return Positioned.fill(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -15963,6 +15942,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                       ? _showSourceSheetOverlay
                                       : null,
                                   showPipButton: PipService.isOwner(this),
+                                  onLock: _supportsTouchLock
+                                      ? _lockTouch
+                                      : null,
                                   onPip: PipService.isOwner(this)
                                       ? _enterPip
                                       : null,
@@ -16220,8 +16202,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                 // Subtitle sync overlay
                 if (_showSyncOverlay && !inPip) _buildSyncOverlay(),
                 // Touch lock: last, so when locked it sits above everything.
-                if (_supportsTouchLock && isReady && !inPip)
-                  _buildTouchLockLayer(),
+                if (_touchLocked && isReady && !inPip) _buildTouchLockLayer(),
               ],
             ),
             builder: (context, controlsVisible, child) {

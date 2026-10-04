@@ -80,7 +80,7 @@ void main() {
     expect(sourceCalls, isEmpty);
   });
 
-  testWidgets('automatic finding nothing opens the sources with the reason', (
+  testWidgets('automatic finding nothing offers the sources, with the reason', (
     tester,
   ) async {
     await const DownloadPreferences(
@@ -93,6 +93,11 @@ void main() {
     );
     await pumpButton(tester, movie);
     await tester.tap(find.text('Download'));
+    await tester.pumpAndSettle();
+    // Not pulled into the list: told why, with a way there.
+    expect(sourceCalls, isEmpty);
+    expect(find.text('No match for your filters'), findsOneWidget);
+    await tester.tap(find.text('Choose source'));
     await tester.pumpAndSettle();
     final notice = sourceCalls.single.$2!;
     expect(notice.message, contains('1080p · H.265'));

@@ -63,6 +63,9 @@ class Controls extends StatelessWidget {
   final bool showPipButton;
   final VoidCallback? onPip;
 
+  /// Touch lock (phones and tablets); null hides the button.
+  final VoidCallback? onLock;
+
   /// Record control for live IPTV (libmpv `stream-record`). Shown only when a
   /// live channel is playing on a native (libmpv) backend.
   final bool hasRecord;
@@ -165,6 +168,7 @@ class Controls extends StatelessWidget {
     this.onShowStremioSources,
     this.showPipButton = false,
     this.onPip,
+    this.onLock,
     this.hasRecord = false,
     this.isRecording = false,
     this.onRecord,
@@ -282,6 +286,7 @@ class Controls extends StatelessWidget {
       onToggleStartOverTimeline: onToggleStartOverTimeline,
       startOverTimelineVisible: startOverTimelineVisible,
       onPip: onPip,
+      onLock: onLock,
       hasNext: hasNext,
       hasPrevious: hasPrevious,
       hasNextChannel: hasNextChannel,
@@ -452,6 +457,15 @@ class Controls extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (onLock != null)
+                    IconButton(
+                      icon: const Icon(
+                        Icons.lock_open_rounded,
+                        color: Colors.white,
+                      ),
+                      tooltip: 'Lock screen',
+                      onPressed: onLock,
+                    ),
                   // Picture-in-picture (Android phone); otherwise empty space
                   // to balance the back button when it's visible.
                   if (showPipButton && onPip != null)

@@ -423,8 +423,21 @@ class TorrentPlaybackService {
     };
     if (!context.mounted) return;
 
+    // A download is background work: a quiet note instead of the full-screen
+    // loader, and it carries on even if the user leaves this page.
+    final background = action == 'download';
     final rootNav = Navigator.of(context, rootNavigator: true);
-    _showLoading(context, provider, torrent.displayTitle);
+    final working = background
+        ? DownloadFeedback.working(context, 'Preparing the download…')
+        : null;
+    if (!background) _showLoading(context, provider, torrent.displayTitle);
+    void closeLoading() {
+      if (background) {
+        working?.close();
+      } else if (rootNav.canPop()) {
+        rootNav.pop();
+      }
+    }
     _Resolved? resolved;
     Object? notCached;
     try {
@@ -438,7 +451,7 @@ class TorrentPlaybackService {
     } on _PremiumizeNotCached catch (e) {
       notCached = e;
     } on _PikPakStillProcessing {
-      if (rootNav.canPop()) rootNav.pop();
+      closeLoading();
       if (context.mounted) {
         _snack(
           context,
@@ -447,16 +460,20 @@ class TorrentPlaybackService {
       }
       return;
     } on _PikPakFailed {
-      if (rootNav.canPop()) rootNav.pop();
+      closeLoading();
       if (context.mounted) _snack(context, 'Download failed on PikPak.');
       return;
     } catch (e) {
-      if (rootNav.canPop()) rootNav.pop();
+      closeLoading();
       if (context.mounted) _snack(context, 'Could not resolve source: $e');
       return;
     }
-    if (rootNav.canPop()) rootNav.pop();
-    if (!context.mounted) return;
+    closeLoading();
+    if (!context.mounted) {
+      final app = background ? TorrentDownloads.appContext : null;
+      if (app == null) return;
+      context = app;
+    }
 
     if (notCached != null) {
       if (action == 'download') {

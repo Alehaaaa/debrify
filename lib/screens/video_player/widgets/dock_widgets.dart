@@ -230,13 +230,11 @@ class DockChip extends StatelessWidget {
   }
 }
 
-/// A circular transport control. The [primary] variant is painted as a lit
-/// object rather than a filled circle — a linear accent gradient, a radial
-/// hot-spot, a specular hairline along the top edge, and a two-layer glow cast
-/// onto the scrim. Hue alone does not read as premium.
-///
-/// The two gradients need two layers: a single [BoxDecoration] carries one
-/// gradient and cannot composite a linear ramp with a radial highlight.
+/// A round transport control floating on the picture. Frosted glass — the
+/// video blurred behind a light veil — rather than a filled disc; the
+/// [primary] one (play / pause) is larger and wears a ring of the palette's
+/// accent, swept hot → deep → hot, with a soft halo, so the colour reads as
+/// light on glass instead of paint.
 class DockTransportButton extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -257,31 +255,67 @@ class DockTransportButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double size = primary ? metrics.target * 1.32 : metrics.target;
-    final double iconSize = primary ? metrics.icon * 1.5 : metrics.icon * 1.15;
+    final double size = primary ? metrics.target * 1.75 : metrics.target * 1.2;
+    final double ring = primary ? 2.5 * metrics.k : 0;
+    final double iconSize = size * (primary ? 0.46 : 0.5);
 
-    Widget child = Icon(
-      icon,
-      size: iconSize,
-      // aurum and ice both need dark ink here; hardcoding white would ship an
-      // invisible glyph on either.
-      color: primary ? palette.onPrimary : palette.ink,
-    );
-
-    if (primary) {
-      child = DecoratedBox(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            center: const Alignment(-0.44, -0.76),
-            radius: 1.15,
-            colors: [palette.specular, const Color(0x00FFFFFF)],
-            stops: const [0.0, 0.52],
+    final glass = ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: primary ? 0.12 : 0.10),
+            border: primary
+                ? null
+                : Border.all(color: Colors.white.withValues(alpha: 0.22)),
+          ),
+          child: DecoratedBox(
+            // A sheen from the top-left: glass catching light.
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                center: Alignment(-0.5, -0.7),
+                radius: 1.1,
+                colors: [Color(0x38FFFFFF), Color(0x00FFFFFF)],
+                stops: [0.0, 0.6],
+              ),
+            ),
+            child: Center(
+              child: Icon(
+                icon,
+                size: iconSize,
+                color: palette.ink,
+                shadows: const [
+                  Shadow(color: Color(0x59000000), blurRadius: 8),
+                ],
+              ),
+            ),
           ),
         ),
-        child: Center(child: child),
-      );
-    }
+      ),
+    );
+
+    // The ring is painted OVER the glass as a stroke, never as a disc under
+    // it — the blur would otherwise pull the accent into the whole button.
+    final face = primary
+        ? Stack(
+            fit: StackFit.expand,
+            children: [
+              Padding(padding: EdgeInsets.all(ring), child: glass),
+              IgnorePointer(
+                child: CustomPaint(
+                  painter: _AccentRingPainter(
+                    hot: palette.hot,
+                    deep: palette.deep,
+                    glow: palette.glow,
+                    width: ring,
+                  ),
+                ),
+              ),
+            ],
+          )
+        : glass;
 
     return Tooltip(
       message: label,
@@ -289,53 +323,74 @@ class DockTransportButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: label,
-        child: Material(
-          color: Colors.transparent,
-          shape: const CircleBorder(),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onPressed,
-            customBorder: const CircleBorder(),
-            child: Ink(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: primary
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [palette.hot, palette.deep],
-                      )
-                    : null,
-                color: primary ? null : palette.chipFill,
-                border: primary
-                    ? Border.all(color: palette.specular, width: 1)
-                    : null,
-                boxShadow: primary
-                    ? [
-                        BoxShadow(
-                          color: palette.glow,
-                          blurRadius: 18 * metrics.k,
-                          spreadRadius: -5 * metrics.k,
-                          offset: Offset(0, 5 * metrics.k),
-                        ),
-                        BoxShadow(
-                          color: palette.glow,
-                          blurRadius: 34 * metrics.k,
-                          spreadRadius: -14 * metrics.k,
-                          offset: Offset(0, 12 * metrics.k),
-                        ),
-                      ]
-                    : null,
+        child: SizedBox.square(
+          dimension: size,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              face,
+              Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: onPressed,
+                  customBorder: const CircleBorder(),
+                ),
               ),
-              child: Center(child: child),
-            ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+/// The play button's accent ring: a soft glow just outside it and a crisp
+/// sweep of the palette (hot → deep → hot) on the edge.
+class _AccentRingPainter extends CustomPainter {
+  const _AccentRingPainter({
+    required this.hot,
+    required this.deep,
+    required this.glow,
+    required this.width,
+  });
+
+  final Color hot;
+  final Color deep;
+  final Color glow;
+  final double width;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2 - width / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+    canvas.drawCircle(
+      center,
+      radius + width,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width * 2.5
+        ..color = glow.withValues(alpha: 0.32)
+        ..maskFilter = MaskFilter.blur(BlurStyle.outer, width * 3),
+    );
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = width
+        ..shader = SweepGradient(colors: [hot, deep, hot]).createShader(rect),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_AccentRingPainter old) =>
+      old.hot != hot ||
+      old.deep != deep ||
+      old.glow != glow ||
+      old.width != width;
 }
 
 /// One entry in the overflow sheet.

@@ -6,6 +6,7 @@ import '../../models/sources_notice.dart';
 import '../../widgets/detail/download_choice_sheet.dart';
 import '../../utils/filter_ladder.dart';
 import '../saved_source_filters.dart';
+import 'download_feedback.dart';
 import 'download_outcome.dart';
 import 'download_preferences.dart';
 import 'download_request.dart';
@@ -18,9 +19,9 @@ import 'download_request.dart';
 ///    otherwise the remembered [DownloadPreferences] answer;
 /// 2. automatic: [auto] downloads the best source matching the saved
 ///    filters;
-/// 3. manual — or automatic that found nothing — [openSources] shows the
-///    source list in download mode, with a note saying why when automatic
-///    came back empty.
+/// 3. manual: [openSources] shows the source list in download mode;
+///    automatic that found nothing says why and offers that list (with the
+///    explanation on top) instead of opening it unasked.
 abstract final class DownloadCoordinator {
   static Future<void> start(
     BuildContext context, {
@@ -52,12 +53,20 @@ abstract final class DownloadCoordinator {
     }
     if (!context.mounted) return;
     final scope = request.isSeries ? prefs.seriesScope : null;
-    SourcesNotice? notice;
-    if (prefs.choice == DownloadChoice.auto) {
-      final outcome = await auto(scope);
-      if (outcome.done || !context.mounted) return;
-      notice = outcome.notice;
+    if (prefs.choice == DownloadChoice.manual) {
+      await openSources(scope, null);
+      return;
     }
-    await openSources(scope, notice);
+    // Automatic runs in the background; when it comes back empty the user
+    // is told why and offered the list — never pulled into it mid-browse.
+    final outcome = await auto(scope);
+    final notice = outcome.notice;
+    if (outcome.done || notice == null || !context.mounted) return;
+    DownloadFeedback.offer(
+      context,
+      notice.title,
+      actionLabel: 'Choose source',
+      onAction: () => openSources(scope, notice),
+    );
   }
 }

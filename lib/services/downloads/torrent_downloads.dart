@@ -315,20 +315,23 @@ abstract final class TorrentDownloads {
       );
       return done;
     }
+    // In the background: a quiet note with Cancel, never a full-screen
+    // loader — the user keeps browsing (or watching) while this runs, and it
+    // finishes even if they leave the page that started it.
     var cancelled = false;
-    final overlay = TorrentPlaybackService._showPipeline(
+    final working = DownloadFeedback.working(
       context,
-      provider: provider,
-      meta: meta,
-      title: label,
+      label.isEmpty ? 'Finding a source…' : 'Finding a source for $label…',
       onCancel: () => cancelled = true,
     );
-    var overlayUp = true;
+    var workingUp = true;
     void closeOverlay() {
-      if (!overlayUp) return;
-      overlayUp = false;
-      overlay.dismiss();
+      if (!workingUp) return;
+      workingUp = false;
+      working?.close();
     }
+
+    BuildContext? live() => context.mounted ? context : appContext;
 
     try {
       final rules = await StorageService.getQuickPlayRules(isMovie: isMovie);
@@ -356,8 +359,6 @@ abstract final class TorrentDownloads {
             rules: rules,
             originMeta: itemMeta,
             isCancelled: () => cancelled,
-            onResults: (n) =>
-                overlay.setStage(PlayLoadStage.searching, sourceCount: n),
           );
         } else {
           found =
@@ -369,11 +370,10 @@ abstract final class TorrentDownloads {
                 ladder: FilterLadder(filters),
                 rules: rules,
                 isCancelled: () => cancelled,
-                onCacheCheck: () => overlay.setStage(PlayLoadStage.cacheCheck),
               ) ??
               const <Torrent>[];
         }
-        if (cancelled || !context.mounted) return null;
+        if (cancelled || live() == null) return null;
         if (found.isEmpty) return DownloadMiss.nothingFound;
         final matching = TorrentFilterMatcher.apply(found, filters);
         if (matching.isEmpty) return DownloadMiss.noFilterMatch;
@@ -382,7 +382,6 @@ abstract final class TorrentDownloads {
           rules: rules,
         );
         if (torrents.isNotEmpty) {
-          overlay.setStage(PlayLoadStage.preparing);
           final (
             resolved,
             winner,
@@ -396,11 +395,13 @@ abstract final class TorrentDownloads {
             // A download is worth a few probes; PikPak still stops at one.
             minAttempts: 3,
           );
-          if (cancelled || !context.mounted) return null;
+          if (cancelled) return null;
+          final target = live();
+          if (target == null) return null;
           if (resolved != null && winner != null) {
             closeOverlay();
             await _download(
-              context,
+              target,
               resolved,
               winner,
               provider,
@@ -418,9 +419,10 @@ abstract final class TorrentDownloads {
               (t.directUrl?.isNotEmpty ?? false) &&
               supportsDirectStreamDownload(t),
         );
-        if (direct.isNotEmpty) {
+        final target = live();
+        if (direct.isNotEmpty && target != null) {
           closeOverlay();
-          await downloadDirectStream(context, direct.first, meta: itemMeta);
+          await downloadDirectStream(target, direct.first, meta: itemMeta);
           return null;
         }
         return DownloadMiss.notReady;
@@ -440,7 +442,7 @@ abstract final class TorrentDownloads {
       DownloadMiss? firstMiss;
       var downloadedAny = false;
       for (final ep in wanted.toList()..sort()) {
-        if (cancelled || !context.mounted) break;
+        if (cancelled || live() == null) break;
         final here = await _episodesOnDevice(meta);
         if (here.contains((season: season!, episode: ep))) continue;
         final remaining = {
@@ -475,9 +477,10 @@ abstract final class TorrentDownloads {
     } catch (e) {
       closeOverlay();
       if (cancelled) return done;
-      if (context.mounted) {
+      final target = live();
+      if (target != null) {
         DownloadFeedback.info(
-          context,
+          target,
           'The search didn\'t work this time. Try again.',
         );
       }
@@ -655,6 +658,12 @@ abstract final class TorrentDownloads {
   // re-checked every minute while the app runs, for up to two days.
 
   static GlobalKey<NavigatorState>? _navigatorKey;
+
+  /// The app's root context, for work that outlives the page that started it.
+  static BuildContext? get appContext {
+    final context = _navigatorKey?.currentContext;
+    return context != null && context.mounted ? context : null;
+  }
   static Timer? _readyTimer;
   static bool _checkingReady = false;
   static const Duration _readyInterval = Duration(minutes: 1);
