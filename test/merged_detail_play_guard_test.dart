@@ -395,4 +395,53 @@ void main() {
     await tester.pump();
     expect(launches, 2);
   });
+
+  testWidgets('episodeFilter lists only the episodes it accepts', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            AppThemeScope(theme: AppThemes.legacy, child: child!),
+        home: MergedDetailScreen(
+          item: const StremioMeta(
+            id: 'downloaded-series',
+            type: 'series',
+            name: 'Downloaded Series',
+          ),
+          addon: StremioAddon(
+            id: 'direct-test',
+            name: 'Direct Test',
+            manifestUrl: '',
+            baseUrl: '',
+          ),
+          onResume: (_) async {},
+          resumeInfoLoader: () async =>
+              (started: false, season: null, episode: null),
+          seasonsLoader: () async => [
+            TraktSeason(
+              number: 1,
+              episodeCount: 3,
+              episodes: [
+                TraktEpisode(season: 1, number: 1, title: 'Pilot'),
+                TraktEpisode(season: 1, number: 2, title: 'Second Act'),
+                TraktEpisode(season: 1, number: 3, title: 'Finale'),
+              ],
+            ),
+          ],
+          watchProgressLoader: () async => const {},
+          onPlayEpisode: (_) async {},
+          episodeFilter: (season, episode) => season == 1 && episode == 2,
+        ),
+      ),
+    );
+    for (var frame = 0; frame < 8; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.textContaining('Second Act'), findsWidgets);
+    expect(find.textContaining('Pilot'), findsNothing);
+    expect(find.textContaining('Finale'), findsNothing);
+  });
 }

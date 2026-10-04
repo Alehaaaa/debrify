@@ -3,6 +3,8 @@ import 'metadata_presentation_mixin.dart';
 import 'dart:async';
 
 import 'recoverable_network_image.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -42,6 +44,13 @@ class CatalogItemTile extends StatefulWidget {
   /// Optional watch progress (0..1). When > 0 a slim bar is pinned to the
   /// bottom of the poster — used by the Trakt "continue watching" grid.
   final double? progress;
+
+  /// Optional download progress (0..1) for a title still arriving on the
+  /// device: the poster starts dimmed and a clockwise sweep from 12 o'clock
+  /// reveals it, with the percentage on top. [downloadStatus] (Paused,
+  /// Queued, Failed) replaces the percentage's caption when set.
+  final double? downloadProgress;
+  final String? downloadStatus;
 
   /// When true (default) the title + year fade in over the poster on focus.
   /// Set false when the caller renders a persistent title below the poster
@@ -88,6 +97,8 @@ class CatalogItemTile extends StatefulWidget {
     this.onLongPress,
     this.onFocused,
     this.progress,
+    this.downloadProgress,
+    this.downloadStatus,
     this.showInlineTitle = true,
     this.showTypeBadge = true,
     this.showRatingBadge = true,
@@ -211,6 +222,16 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     // Everything painted ON the poster: the focus wash, the badges, the
     // inline title and the progress bar. Never framed, never graded.
     List<Widget> chrome() => <Widget>[
+      // Download sweep: under the badges, over the art.
+      if (widget.downloadProgress != null)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: _DownloadSweep(
+              value: widget.downloadProgress!.clamp(0.0, 1.0),
+              status: widget.downloadStatus,
+            ),
+          ),
+        ),
       // Bottom gradient — only when focused — for the inline title. Board
       // chrome skips it: board cards carry no focus wash, and on a stage the
       // focused title is named at full size below the shelf anyway.
@@ -636,6 +657,77 @@ class _ProgressBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A download's progress over its poster: a hard-edged clockwise sweep from
+/// 12 o'clock uncovers the art from under a dark scrim, and the percentage
+/// sits in the middle. At 100% the poster is fully clear.
+class _DownloadSweep extends StatelessWidget {
+  final double value;
+  final String? status;
+  const _DownloadSweep({required this.value, this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    const shadows = [Shadow(color: Colors.black54, blurRadius: 8)];
+    return CustomPaint(
+      painter: _DownloadSweepPainter(value),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${(value * 100).floor()}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                shadows: shadows,
+              ),
+            ),
+            if (status != null)
+              Text(
+                status!,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  shadows: shadows,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadSweepPainter extends CustomPainter {
+  final double value;
+  const _DownloadSweepPainter(this.value);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (value >= 1) return;
+    // The scrim is the wedge the sweep hasn't reached yet. Its radius only
+    // has to clear the corners; the clip keeps it on the poster.
+    final center = size.center(Offset.zero);
+    final radius = size.longestSide;
+    const top = -math.pi / 2;
+    final swept = 2 * math.pi * value;
+    canvas.clipRect(Offset.zero & size);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      top + swept,
+      2 * math.pi - swept,
+      true,
+      Paint()..color = Colors.black.withValues(alpha: 0.62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DownloadSweepPainter old) => old.value != value;
 }
 
 /// Home's card caption: a bottom gradient bed under a centred title and a

@@ -127,6 +127,11 @@ class SeeAllPosterGrid extends StatefulWidget {
   /// Optional resume progress (0..1) per item — draws the red bar.
   final double? Function(StremioMeta item)? progressOf;
 
+  /// Optional download state per item — draws the radial download sweep
+  /// over the poster (see [CatalogItemTile.downloadProgress]).
+  final ({double value, String? status})? Function(StremioMeta item)?
+  downloadOf;
+
   /// Optional "has a pinned source" flag per item — draws the bookmark badge.
   final bool Function(StremioMeta item)? isBound;
 
@@ -156,6 +161,7 @@ class SeeAllPosterGrid extends StatefulWidget {
     this.showTypeBadge = true,
     this.showRatingBadge = true,
     this.progressOf,
+    this.downloadOf,
     this.isBound,
     this.onExitTop,
     this.onExitLeft,
@@ -509,6 +515,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                             widget.onItemFocused?.call(item);
                           },
                           progress: widget.progressOf?.call(item),
+                          downloadProgress: widget.downloadOf
+                              ?.call(item)
+                              ?.value,
+                          downloadStatus: widget.downloadOf?.call(item)?.status,
                           showInlineTitle: false,
                           showTypeBadge: showTypeBadge,
                           showRatingBadge: showRatingBadge,
@@ -606,6 +616,8 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                             ? null
                             : () => widget.onItemFocused!(item),
                         progress: widget.progressOf?.call(item),
+                        downloadProgress: widget.downloadOf?.call(item)?.value,
+                        downloadStatus: widget.downloadOf?.call(item)?.status,
                         // Home's caption on the poster unless the grid
                         // already names the title below it.
                         showInlineTitle: !showTitles,

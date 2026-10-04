@@ -193,6 +193,10 @@ class MergedDetailScreen extends StatefulWidget {
   final Future<void> Function(TraktEpisode episode)? onPlayEpisode;
   final Future<Map<String, double>> Function()? watchProgressLoader;
 
+  /// Forwarded to [EpisodesPanel.episodeFilter] — limits the list to the
+  /// episodes it accepts (the Downloads page: only what's on the device).
+  final bool Function(int season, int episode)? episodeFilter;
+
   const MergedDetailScreen({
     super.key,
     required this.item,
@@ -232,6 +236,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.metaEnricher,
     this.heroTag,
     this.seasonsLoader,
+    this.episodeFilter,
     this.onPlayEpisode,
     this.watchProgressLoader,
   });
@@ -3475,6 +3480,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
       seasonsLoader: widget.seasonsLoader,
       onPlayEpisode: widget.onPlayEpisode == null ? null : _playDirectEpisode,
       watchProgressLoader: widget.watchProgressLoader,
+      episodeFilter: widget.episodeFilter,
       onNextEpisodeChanged: _onNextEpisodeChanged,
       onSeriesCompletedChanged: (completed) {
         if (mounted && completed != _seriesCompleted) {

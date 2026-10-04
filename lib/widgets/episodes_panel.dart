@@ -229,6 +229,11 @@ class EpisodesPanel extends StatefulWidget {
   /// watch-progress map, replacing the IMDb-keyed local/Trakt/Simkl merge.
   final Future<Map<String, double>> Function()? watchProgressLoader;
 
+  /// Narrows the list to the episodes this returns true for (seasons left
+  /// empty are dropped) — the Downloads page shows only what's on the device.
+  /// The full list still feeds the completion inventory and season actions.
+  final bool Function(int season, int episode)? episodeFilter;
+
   /// Publishes the merged next-to-watch coordinate and whether it represents
   /// real playback (rather than the default first episode) to the detail hero.
   /// [mutation] marks emissions caused by an explicit in-page user action
@@ -267,6 +272,7 @@ class EpisodesPanel extends StatefulWidget {
     this.seasonsLoader,
     this.onPlayEpisode,
     this.watchProgressLoader,
+    this.episodeFilter,
     this.onNextEpisodeChanged,
     this.onSeriesCompletedChanged,
     this.contentBuilder,
@@ -1025,6 +1031,27 @@ class EpisodesPanelState extends State<EpisodesPanel> {
     return [];
   }
 
+  /// [seasons] narrowed by [EpisodesPanel.episodeFilter], when there is one.
+  List<TraktSeason> _visibleSeasons(List<TraktSeason> seasons) {
+    final keep = widget.episodeFilter;
+    if (keep == null) return seasons;
+    final visible = <TraktSeason>[];
+    for (final season in seasons) {
+      final episodes = season.episodes
+          .where((e) => keep(season.number, e.number))
+          .toList();
+      if (episodes.isEmpty) continue;
+      visible.add(
+        TraktSeason(
+          number: season.number,
+          episodeCount: episodes.length,
+          episodes: episodes,
+        ),
+      );
+    }
+    return visible;
+  }
+
   /// Group raw Stremio addon meta `videos` into seasons, sorted by season then
   /// episode with Specials (season 0) last. Returns an empty list when there is
   /// nothing usable (null/empty input).
@@ -1170,8 +1197,23 @@ class EpisodesPanelState extends State<EpisodesPanel> {
           ? null
           : _fetchTvmazeThumbMap(show.effectiveImdbId);
 
-      final seasons = await seasonsFuture;
+      final allSeasons = await seasonsFuture;
       if (!mounted || generation != _episodeModeGeneration) return;
+
+      final imdbId = show.progressId;
+      if (!_isDirectSource &&
+          imdbId != null &&
+          imdbId.isNotEmpty &&
+          allSeasons.isNotEmpty) {
+        unawaited(
+          LocalSeriesCompletionService.instance.recordEpisodeInventory(
+            imdbId: imdbId,
+            seriesTitle: show.name,
+            seasons: allSeasons,
+          ),
+        );
+      }
+      final seasons = _visibleSeasons(allSeasons);
 
       if (seasons.isEmpty) {
         setState(() {
@@ -1179,17 +1221,6 @@ class EpisodesPanelState extends State<EpisodesPanel> {
           _episodesUnavailable = true;
         });
         return;
-      }
-
-      final imdbId = show.progressId;
-      if (!_isDirectSource && imdbId != null && imdbId.isNotEmpty) {
-        unawaited(
-          LocalSeriesCompletionService.instance.recordEpisodeInventory(
-            imdbId: imdbId,
-            seriesTitle: show.name,
-            seasons: seasons,
-          ),
-        );
       }
 
       // Resolve where to land (season + episode to auto-switch and scroll to),
@@ -2249,7 +2280,10 @@ sheetAnimationStyle: kMenuSheetAnimation,context: context,
       final providers = [TrackingSource.local, TrackingSource.trakt, TrackingSource.simkl, TrackingSource.mdblist];
       final names = ['locally', 'on Trakt', 'on Simkl', 'on MDBList'];
       var season = _episodeSeasons.where((s) => s.number == number).firstOrNull;
-      if (season == null || season.episodes.isEmpty) {
+      // A filtered list holds only some of the season; act on all of it.
+      if (season == null ||
+          season.episodes.isEmpty ||
+          widget.episodeFilter != null) {
         final seasons = await _fetchSeasons(show);
         season = seasons.where((s) => s.number == number).firstOrNull;
       }

@@ -113,11 +113,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   )),
       ) /
       items.length;
-  String _statusLabel(List<LocalDownload> items) {
+
+  /// What a still-arriving title's poster says under its percentage; null
+  /// while it's actively downloading (the sweep says that on its own).
+  String? _statusLabel(List<LocalDownload> items) {
     final pending = items.where((e) => !e.isReady).toList();
-    if (pending.isEmpty) return '';
     if (pending.any((e) => e.record.status == TaskStatus.running)) {
-      return 'Downloading ${(_groupProgress(items) * 100).round()}%';
+      return null;
     }
     if (pending.any((e) => e.record.status == TaskStatus.failed)) {
       return 'Download failed';
@@ -148,9 +150,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         StremioMeta(
           id: entry.key,
           type: entry.value.first.media?.type ?? 'movie',
-          name: _statusLabel(entry.value).isEmpty
-              ? entry.value.first.title
-              : '${entry.value.first.title} · ${_statusLabel(entry.value)}',
+          name: entry.value.first.title,
           poster: entry.value.first.media?.poster,
           year: entry.value.first.media?.year,
         ),
@@ -297,9 +297,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           loadingMore: false,
                           exhausted: true,
                           onLoadMore: () {},
-                          progressOf: (item) =>
+                          downloadOf: (item) =>
                               groups[item.id]!.any((e) => !e.isReady)
-                              ? _groupProgress(groups[item.id]!)
+                              ? (
+                                  value: _groupProgress(groups[item.id]!),
+                                  status: _statusLabel(groups[item.id]!),
+                                )
                               : null,
                           onOpen: (item) async {
                             await openDownloadedItem(context, groups[item.id]!);
@@ -408,6 +411,12 @@ Future<void> openDownloadedItem(
         // from the copy kept for the download when offline.
         metaEnricher: (id, type) =>
             StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+        // Only the episodes on the device, not the whole series.
+        episodeFilter: media.type == 'series'
+            ? (season, episode) => ready.any(
+                (e) => e.media?.season == season && e.media?.episode == episode,
+              )
+            : null,
         initialSeason: ready.first.media?.season,
         initialEpisode: ready.first.media?.episode,
         onResume: (_) => playFallback(routeContext),

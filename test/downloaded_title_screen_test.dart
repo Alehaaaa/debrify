@@ -45,8 +45,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SeeAllPosterGrid), findsOneWidget);
     final tile = tester.widget<CatalogItemTile>(find.byType(CatalogItemTile));
-    expect(tile.item.name, 'Downloading Movie · Downloading 40%');
-    expect(tile.progress, .4);
+    // Progress rides the poster's sweep, not the title.
+    expect(tile.item.name, 'Downloading Movie');
+    expect(tile.progress, isNull);
+    expect(tile.downloadProgress, .4);
+    expect(tile.downloadStatus, isNull);
+    expect(find.text('40%'), findsOneWidget);
     await tester.tap(find.byType(CatalogItemTile));
     await tester.pumpAndSettle();
     expect(find.text('Downloading'), findsOneWidget);
