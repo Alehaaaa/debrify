@@ -30,18 +30,11 @@ class _SourcesScreen extends StatefulWidget {
   /// still supplies the pin target (imdbId / movie-vs-series).
   final String? keywordSeed;
 
-  /// The user reached this list by pressing PLAY (see the "Play button opens"
-  /// modes), so picking a row is a play instruction that has already been
-  /// given — tapping one starts playback instead of running the post-torrent
-  /// action, which would otherwise ask "Play / Download / Playlist?" for a
-  /// choice the user made two taps ago. False for the Sources button and the
-  /// episode long-press, where no play intent was expressed.
-  final bool forcePlayOnTap;
-
-  /// The user reached this list from a Download button: a tap downloads the
-  /// source (no "Play / Download / Playlist?" question), and a short hint
-  /// says so.
-  final bool forceDownloadOnTap;
+  /// Why the user is here. Reached from Play or Download, a tap does that
+  /// straight away instead of asking "Play / Download / Playlist?" for a
+  /// choice made two taps ago; from the Sources button or an episode
+  /// long-press ([SourceIntent.browse]) it runs the post-torrent action.
+  final SourceIntent intent;
 
   /// Episodes to keep when a downloaded source turns out to be a pack.
   final Set<int>? wantedEpisodes;
@@ -59,8 +52,7 @@ class _SourcesScreen extends StatefulWidget {
     required this.isTelevision,
     this.bindMode = false,
     this.keywordSeed,
-    this.forcePlayOnTap = false,
-    this.forceDownloadOnTap = false,
+    this.intent = SourceIntent.browse,
     this.wantedEpisodes,
     this.notice,
     this.searchOverride,
@@ -1153,8 +1145,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
       TorrentPlaybackService.activateTorrent(
         context,
         t,
-        forcePlay: widget.forcePlayOnTap,
-        forceDownload: widget.forceDownloadOnTap,
+        intent: widget.intent,
         wantedEpisodes: widget.wantedEpisodes,
         meta: widget.meta,
         // The rendered list — [_visible] equals [_torrents] with the redesign
@@ -1423,7 +1414,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               },
             ),
             if (ProfilePolicyGuard.allowsSync(ProfileFeature.downloads) &&
-                TorrentPlaybackService.supportsDirectStreamDownload(t))
+                TorrentDownloads.supportsDirectStreamDownload(t))
               ListTile(
                 leading: const Icon(
                   Icons.download_rounded,
@@ -1438,7 +1429,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   DialogTapGuard.markKeyAction();
                   Navigator.of(sheetCtx).pop();
                   unawaited(
-                    TorrentPlaybackService.downloadDirectStream(context, t, meta: widget.meta),
+                    TorrentDownloads.downloadDirectStream(context, t, meta: widget.meta),
                   );
                 },
               ),
@@ -2383,7 +2374,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
         if (!_filters.isEmpty) _activeFilterPills(accent, dim),
         if (widget.notice != null && !_noticeDismissed)
           _noticeCard(widget.notice!, accent, dim)
-        else if (widget.forceDownloadOnTap)
+        else if (widget.intent == SourceIntent.download)
           _downloadHint(dim),
       ],
     );
@@ -3948,22 +3939,4 @@ class _DiscoverGridDim extends StatelessWidget {
       ),
     );
   }
-}
-
-/// A note shown above a source list, written for people rather than logs.
-class SourcesNotice {
-  const SourcesNotice({
-    required this.title,
-    required this.message,
-    this.icon = Icons.lightbulb_outline_rounded,
-    this.showAll = false,
-  });
-
-  final String title;
-  final String message;
-  final IconData icon;
-
-  /// Open with every source instead of the saved filters (which the note is
-  /// about). The saved filters themselves are left alone.
-  final bool showAll;
 }

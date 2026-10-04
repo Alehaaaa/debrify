@@ -2264,8 +2264,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       // that row actually being in the menu so the button never mounts for a
       // host that didn't offer the action.
       onBrowse: _downloadAction,
-      downloadState: _downloads.state,
-      downloadProgress: _downloads.progress,
+      download: _downloads.summary,
       onTrailer: _playTrailer,
       onSelectSource: widget.onSelectSource == null
           ? null

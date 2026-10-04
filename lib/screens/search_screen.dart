@@ -93,8 +93,12 @@ import '../services/next_episode_service.dart';
 import '../services/episode_tracker_snapshot_revision.dart';
 import '../services/local_series_completion_service.dart';
 import '../services/source_priority.dart';
+import '../models/source_intent.dart';
 import '../services/saved_source_filters.dart';
-import '../widgets/detail/download_choice_sheet.dart';
+import '../models/sources_notice.dart';
+import '../services/downloads/download_coordinator.dart';
+import '../services/downloads/download_feedback.dart';
+import '../services/downloads/download_request.dart';
 import '../utils/filter_ladder.dart' show FilterLadder;
 import '../services/storage_service.dart';
 import '../services/tv_hero_artwork_quality_controller.dart';
@@ -170,7 +174,6 @@ import 'merged_series_detail_screen.dart';
 import 'settings/tv_home_style_page.dart'
     show effectiveOffTvHomeStyle, shouldUseOffTvSpotlightShell;
 import 'debrid_downloads_screen.dart';
-import 'downloads_screen.dart' show openDownloadsForTitle;
 import '../services/downloaded_media_service.dart';
 import 'episodes_screen.dart';
 import 'stremio_tv/stremio_tv_service.dart';
@@ -13056,7 +13059,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               },
             ),
             if (ProfilePolicyGuard.allowsSync(ProfileFeature.downloads) &&
-                TorrentPlaybackService.supportsDirectStreamDownload(t))
+                TorrentDownloads.supportsDirectStreamDownload(t))
               ListTile(
                 leading: const Icon(
                   Icons.download_rounded,
@@ -13067,7 +13070,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   DialogTapGuard.markKeyAction();
                   Navigator.of(sheetCtx).pop();
                   unawaited(
-                    TorrentPlaybackService.downloadDirectStream(context, t),
+                    TorrentDownloads.downloadDirectStream(context, t),
                   );
                 },
               ),
@@ -15965,20 +15968,23 @@ sheetAnimationStyle: kMenuSheetAnimation,
     }
   }
 
-  /// A detail page's Download button: asks how (and for a series how much)
-  /// to download, then downloads automatically or opens the source list in
-  /// download mode. [season]/[episode] are where Play would start.
+  /// A detail page's Download button, via [DownloadCoordinator].
+  /// [season]/[episode] are where Play would start.
   Future<void> _downloadFromDetail(
     StremioMeta item,
     StremioAddon addon, {
     int? season,
     int? episode,
   }) async {
-    final isMovie = item.type != 'series';
     final id = item.progressId ?? item.id;
-    final series = isMovie
-        ? null
-        : (season: season ?? 1, episode: episode ?? 1);
+    final request = item.type == 'series'
+        ? DownloadRequest.series(
+            id: id,
+            title: item.name,
+            season: season ?? 1,
+            episode: episode ?? 1,
+          )
+        : DownloadRequest.title(id: id, title: item.name);
     var hasDownloads = false;
     try {
       hasDownloads = (await DownloadedMediaService.load(
@@ -15987,69 +15993,46 @@ sheetAnimationStyle: kMenuSheetAnimation,
     } catch (_) {}
     if (!mounted) return;
 
-    AdvancedSearchSelection selectionFor(DownloadScope? scope) => isMovie
-        ? _movieSelection(item)
-        : AdvancedSearchSelection(
+    AdvancedSearchSelection selectionFor(DownloadScope? scope) =>
+        request.isSeries
+        ? AdvancedSearchSelection(
             imdbId: id,
             isSeries: true,
             title: item.name,
             year: item.year,
-            season: series!.season,
-            episode: scope == DownloadScope.episode ? series.episode : null,
+            season: request.season,
+            episode: scope == DownloadScope.episode ? request.episode : null,
             contentType: item.type,
             posterUrl: item.poster,
-          );
+          )
+        : _movieSelection(item);
+    final catalogItem = item.withSourceAddon(addon);
 
-    Set<int>? wantedFor(DownloadScope? scope) => switch (scope) {
-      DownloadScope.episode => {series!.episode},
-      DownloadScope.nextEpisodes => {
-        for (var i = 0; i < kNextEpisodesCount; i++) series!.episode + i,
-      },
-      _ => null,
-    };
-
-    await runDownloadButton(
+    await DownloadCoordinator.start(
       context,
-      title: item.name,
+      request: request,
       isTelevision: widget.isTelevision,
-      series: series,
       onViewDownloads: hasDownloads
-          ? () => unawaited(openDownloadsForTitle(context, id))
+          ? () => unawaited(DownloadFeedback.openTitle(context, id))
           : null,
-      auto: (scope) {
-        final sel = selectionFor(scope);
-        return TorrentPlaybackService.downloadBestFromSelection(
-          context,
-          imdbId: sel.imdbId,
-          isMovie: isMovie,
-          season: series?.season,
-          episode: scope == DownloadScope.season ? null : series?.episode,
-          count: scope == DownloadScope.nextEpisodes ? kNextEpisodesCount : 1,
-          meta: _metaFor(
-            sel,
-            addonId: addon.id,
-            catalogItem: item.withSourceAddon(addon),
-          ),
-        );
-      },
-      manual: (scope, why) {
-        final note = why == null ? null : downloadMissNote(why);
-        _browseSelection(
+      auto: (scope) => TorrentDownloads.downloadBest(
+        context,
+        request: request,
+        scope: scope,
+        meta: _metaFor(
           selectionFor(scope),
-          forceDownloadOnTap: true,
-          wantedEpisodes: wantedFor(scope),
-          notice: note == null
-              ? null
-              : SourcesNotice(
-                  title: note.title,
-                  message: note.message,
-                  icon: note.icon,
-                  showAll: note.showAll,
-                ),
-          metadataAddonId: addon.id,
-          catalogItem: item.withSourceAddon(addon),
-        );
-      },
+          addonId: addon.id,
+          catalogItem: catalogItem,
+        ),
+      ),
+      openSources: (scope, notice) => _browseSelection(
+        selectionFor(scope),
+        intent: SourceIntent.download,
+        wantedEpisodes: request.wantedEpisodes(scope),
+        notice: notice,
+        metadataAddonId: addon.id,
+        catalogItem: catalogItem,
+      ),
     );
   }
 
@@ -16389,7 +16372,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
         // going to play, so the manual list opens on that episode — no next-up
         // resolution here, and no way for the list to disagree with the button.
         openSourcePicker: () => _browseSelection(
-          sel, forcePlayOnTap: true, metadataAddonId: addonId, catalogItem: catalogItem,
+          sel, intent: SourceIntent.play, metadataAddonId: addonId, catalogItem: catalogItem,
         ),
       );
     } finally {
@@ -16416,10 +16399,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// each tap plays with the full source list + content metadata.
   void _browseSelection(
     AdvancedSearchSelection sel, {
-    // Set only by the Play-button hand-off: the press already said "play", so
-    // the row the user picks must not re-ask via the post-torrent action.
-    bool forcePlayOnTap = false,
-    bool forceDownloadOnTap = false,
+    // Play and Download hand-offs already said what to do, so the row the
+    // user picks must not re-ask via the post-torrent action.
+    SourceIntent intent = SourceIntent.browse,
     Set<int>? wantedEpisodes,
     SourcesNotice? notice,
     String? metadataAddonId,
@@ -16445,8 +16427,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 selection: sel,
                 meta: meta,
                 isTelevision: widget.isTelevision,
-                forcePlayOnTap: forcePlayOnTap,
-                forceDownloadOnTap: forceDownloadOnTap,
+                intent: intent,
                 wantedEpisodes: wantedEpisodes,
                 notice: notice,
               ),

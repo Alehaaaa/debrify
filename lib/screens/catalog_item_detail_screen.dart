@@ -28,6 +28,7 @@ import '../services/movie_completion_service.dart';
 import '../services/mdblist/mdblist_service.dart';
 import '../widgets/rewatch_progress_dialog.dart';
 import '../widgets/detail/theme/detail_theme.dart';
+import '../services/downloads/title_download_summary.dart';
 import '../widgets/detail/detail_primary_sources.dart';
 import '../widgets/parents_guide_section.dart';
 import '../widgets/movie_watched_badge.dart';
@@ -1849,8 +1850,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
             : widget.onDownload == null
             ? widget.onBrowse
             : () => unawaited(widget.onDownload!()),
-        downloadState: _downloads.state,
-        downloadProgress: _downloads.progress,
+        download: _downloads.summary,
         inMyWatchlist: _inMyWatchlist,
         onToggleMyWatchlist: _supportsMyWatchlist ? _toggleMyWatchlist : null,
       ),
@@ -2597,8 +2597,7 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback? onPlayLongPress;
   final VoidCallback onBrowse;
-  final DownloadedTitleState downloadState;
-  final double? downloadProgress;
+  final TitleDownloadSummary download;
   final bool inMyWatchlist;
   final VoidCallback? onToggleMyWatchlist;
 
@@ -2620,8 +2619,7 @@ class _ActionRow extends StatelessWidget {
     required this.onPlay,
     this.onPlayLongPress,
     required this.onBrowse,
-    this.downloadState = DownloadedTitleState.none,
-    this.downloadProgress,
+    this.download = TitleDownloadSummary.none,
     required this.inMyWatchlist,
     required this.onToggleMyWatchlist,
     this.onArrowUp,
@@ -2631,8 +2629,8 @@ class _ActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final browseLabel = isSeries
         ? 'Episodes'
-        : downloadButtonLabel(downloadState, downloadProgress);
-    final browseIcon = isSeries ? Icons.list_alt_rounded : downloadState.icon;
+        : download.buttonLabel;
+    final browseIcon = isSeries ? Icons.list_alt_rounded : download.state.icon;
     final gap = compact ? 8.0 : 10.0;
 
     final browse = _PrimaryButton(

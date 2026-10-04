@@ -805,7 +805,7 @@ Future<void> _continueApplicationStartup() async {
     unawaited(_prewarmIptvCatalogDb());
     IptvCatalogRefreshService.instance.start();
     // Downloads waiting on a debrid provider pick up where they left off.
-    TorrentPlaybackService.resumeDownloadsWhenReady(_navigatorKey);
+    TorrentDownloads.resumeDownloadsWhenReady(_navigatorKey);
   });
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {

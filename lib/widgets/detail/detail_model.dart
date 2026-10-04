@@ -6,6 +6,7 @@ import '../../models/metadata_preferences.dart';
 import '../../services/metadata_details_service.dart';
 import '../../services/imdb_enrichment_service.dart';
 import '../../services/imdb_parents_guide_service.dart';
+import '../../services/downloads/title_download_summary.dart';
 import '../../services/series_source_service.dart';
 import 'detail_style.dart';
 
@@ -172,13 +173,12 @@ class DetailModel {
   final VoidCallback? onBrowse;
 
   /// Drives the Download button's label and icon.
-  final DownloadedTitleState downloadState;
+  /// Where this title's downloads stand (drives the Download button).
+  final TitleDownloadSummary download;
 
-  /// 0..1 while the title is downloading (drives the button's ring).
-  final double? downloadProgress;
-
-  String get downloadLabel =>
-      downloadButtonLabel(downloadState, downloadProgress);
+  DownloadedTitleState get downloadState => download.state;
+  double? get downloadProgress => download.progress;
+  String get downloadLabel => download.buttonLabel;
   final VoidCallback onTrailer;
   final VoidCallback? onSelectSource;
   final VoidCallback? onAppMenu;
@@ -268,8 +268,7 @@ class DetailModel {
     required this.onPrimary,
     this.onPrimaryLongPress,
     required this.onBrowse,
-    this.downloadState = DownloadedTitleState.none,
-    this.downloadProgress,
+    this.download = TitleDownloadSummary.none,
     required this.onTrailer,
     required this.onSelectSource,
     required this.onAppMenu,

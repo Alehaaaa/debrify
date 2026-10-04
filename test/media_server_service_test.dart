@@ -1057,7 +1057,7 @@ void main() {
         return (await search()).first;
       }))!;
       expect(
-        TorrentPlaybackService.supportsDirectStreamDownload(source),
+        TorrentDownloads.supportsDirectStreamDownload(source),
         isFalse,
       );
       final ordinary = Torrent.fromJson({
@@ -1065,7 +1065,7 @@ void main() {
         'source': 'stremio:example',
       });
       expect(
-        TorrentPlaybackService.supportsDirectStreamDownload(ordinary),
+        TorrentDownloads.supportsDirectStreamDownload(ordinary),
         isTrue,
       );
       late BuildContext pageContext;
@@ -1082,7 +1082,7 @@ void main() {
         ),
       );
       final requestsBefore = requestCount;
-      await TorrentPlaybackService.downloadDirectStream(pageContext, source);
+      await TorrentDownloads.downloadDirectStream(pageContext, source);
       await tester.pump();
       expect(
         find.text('Jellyfin and Emby downloads are not supported yet.'),

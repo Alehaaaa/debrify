@@ -32,7 +32,12 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   (`_searchProwlarr*`, Torznab), `models/indexer_manager_config.dart`,
   `screens/settings/indexer_managers_settings_page.dart`.
 - Scraper "engine" system (YAML-config, **not** a code-plugin runtime): `services/engine/*`.
-- **Filters**: `models/torrent_filter_state.dart` (QualityTier/RipSource/AudioLanguage/SizeBucket dims),
+- **Source intent**: `models/source_intent.dart` (`browse`/`play`/`download`) is the one fact that decides
+  what tapping a source does — carried by the Sources screen (`screens/search/search_sources.dart`),
+  `_browseSelection` and `TorrentPlaybackService.activateTorrent`.
+- **Filters**: `models/torrent_filter_state.dart` (Quality/RipSource/AudioLanguage/Size/DynamicRange/Codec),
+  persisted once in `services/saved_source_filters.dart` — Sources, keyword search, Quick Play's
+  `utils/filter_ladder.dart` and auto-download all read and write the same values;
   format/HDR tag detection already exists in `utils/format_tag_detector.dart` +
   `utils/torrent_coverage_detector.dart` + `utils/{movie,series}_parser.dart`. Result row UI:
   `widgets/torrent_result_row.dart`; source picker: `screens/video_player/widgets/source_sheet.dart`.
@@ -49,6 +54,18 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   `premiumize/premiumize_files,alldebrid/alldebrid_files}_screen.dart`, `screens/cloud_screen.dart`.
 - WebDAV: `services/webdav_service.dart` (read/browse only — no upload yet).
 
+## Downloads to device
+- `services/downloads/` is the download system: `download_request.dart` (what + `DownloadScope`),
+  `download_preferences.dart` (the Download button's remembered answers, also Settings → Downloads),
+  `download_coordinator.dart` (the button flow: ask → auto → sources), `download_outcome.dart` (why
+  auto missed + the user-facing note), `download_feedback.dart` (every download message, "View"),
+  `title_download_summary.dart` (state/progress/label for the poster sweep and the detail button),
+  `torrent_downloads.dart` (a `part` of `torrent_playback_service.dart`: `downloadBest`, pack picker
+  defaults via `utils/pack_selection.dart`, direct streams, "download when ready").
+- UI: `widgets/detail/download_choice_sheet.dart`, `screens/downloads_screen.dart`,
+  `screens/settings/download_settings_page.dart`; queue/storage: `services/download_service.dart`,
+  `services/downloaded_media_service.dart`.
+
 ## Players
 - In-app player: `screens/video_player_screen.dart` 🔴 (subtitles via media_kit
   `subtitleViewConfiguration`; `_restoreTrackPreferences`/`_applyDefault*Language`; per-key D-pad
@@ -58,6 +75,10 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   `services/android_tv_player_bridge.dart`, native Kotlin
   `android/app/src/main/kotlin/com/debrify/app/{MainActivity.kt,tv/AndroidTvTorrentPlayerActivity.kt}`.
 - External players: `services/external_player_service.dart`, `models/*_external_player.dart`.
+- OS media controls (headset/media keys/lock screen): `services/media_session_service.dart` (+
+  `media_session_mpris.dart` on Linux) over `debrify/media_session`, native in
+  `android/.../media/MediaSessionBridge.kt`, `ios/Runner/AppDelegate.swift`,
+  `macos/Runner/MainFlutterWindow.swift`, `windows/runner/media_session_win.cpp`.
 
 ## IPTV
 - Playlist/M3U/Xtream: `services/iptv_service.dart` (`parseContent`), `utils/m3u_parser.dart`
@@ -86,8 +107,9 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   `widgets/trakt/trakt_results_view.dart`.
 
 ## Detail screens & trailers
-- `screens/merged_series_detail_screen.dart` (default-on), legacy `screens/catalog_item_detail_screen.dart`
-  (no trailer), `widgets/episodes_panel.dart`, `widgets/series_browser.dart`.
+- `screens/merged_series_detail_screen.dart` — the detail page for every catalog title (a series with
+  episodes, anything else as a single title); `screens/catalog_item_detail_screen.dart` remains only for
+  Stremio TV's channel info, `widgets/episodes_panel.dart`, `widgets/series_browser.dart`.
 - Offline copy of downloaded titles' detail pages (meta, episodes, IMDb details, parents guide,
   recommendations, artwork): `services/offline_title_store.dart`; fed by `stremio_service.dart`
   (`fetchMetaDetails`/`fetchSeriesMeta` fallbacks), `merged_series_detail_screen.dart` (`_restoreOffline`,

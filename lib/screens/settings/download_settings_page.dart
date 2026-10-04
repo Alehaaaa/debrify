@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
-import '../../services/storage_service.dart';
-import '../../widgets/detail/download_choice_sheet.dart' show kNextEpisodesCount;
+import '../../services/downloads/download_preferences.dart';
+import '../../services/downloads/download_request.dart';
 import 'filter_settings_page.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -16,9 +18,7 @@ class DownloadSettingsPage extends StatefulWidget {
 
 class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   bool _loading = true;
-  bool _alwaysAsk = true;
-  String _mode = 'manual';
-  String _seriesScope = 'nextEpisodes';
+  DownloadPreferences _prefs = const DownloadPreferences();
 
   @override
   void initState() {
@@ -27,16 +27,17 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
   }
 
   Future<void> _load() async {
-    final alwaysAsk = await StorageService.getDownloadButtonAlwaysAsk();
-    final mode = await StorageService.getDownloadButtonMode();
-    final seriesScope = await StorageService.getDownloadSeriesScope();
+    final prefs = await DownloadPreferences.load();
     if (!mounted) return;
     setState(() {
-      _alwaysAsk = alwaysAsk;
-      _mode = mode;
-      _seriesScope = seriesScope;
+      _prefs = prefs;
       _loading = false;
     });
+  }
+
+  void _update(DownloadPreferences next) {
+    setState(() => _prefs = next);
+    unawaited(next.save());
   }
 
   @override
@@ -55,22 +56,20 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                       icon: Icons.help_outline_rounded,
                       title: 'Always ask',
                       subtitle: 'Choose automatic or manual every time',
-                      value: _alwaysAsk,
-                      onChanged: (value) {
-                        setState(() => _alwaysAsk = value);
-                        StorageService.setDownloadButtonAlwaysAsk(value);
-                      },
+                      value: _prefs.alwaysAsk,
+                      onChanged: (value) =>
+                          _update(_prefs.copyWith(alwaysAsk: value)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 18),
                 SettingsSection(
-                  title: _alwaysAsk ? 'Last choice' : 'Download',
+                  title: _prefs.alwaysAsk ? 'Last choice' : 'Download',
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: SettingsSelectDropdown(
-                        value: _mode,
+                        value: _prefs.choice.name,
                         options: const [
                           SettingsSelectOption(
                             'auto',
@@ -85,10 +84,11 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                             'Opens the source list so you pick one.',
                           ),
                         ],
-                        onChanged: (value) {
-                          setState(() => _mode = value);
-                          StorageService.setDownloadButtonMode(value);
-                        },
+                        onChanged: (value) => _update(
+                          _prefs.copyWith(
+                            choice: DownloadChoice.values.byName(value),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -100,7 +100,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                     Padding(
                       padding: const EdgeInsets.all(16),
                       child: SettingsSelectDropdown(
-                        value: _seriesScope,
+                        value: _prefs.seriesScope.name,
                         options: [
                           const SettingsSelectOption(
                             'episode',
@@ -119,10 +119,11 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                             'Every episode of the season.',
                           ),
                         ],
-                        onChanged: (value) {
-                          setState(() => _seriesScope = value);
-                          StorageService.setDownloadSeriesScope(value);
-                        },
+                        onChanged: (value) => _update(
+                          _prefs.copyWith(
+                            seriesScope: DownloadScope.values.byName(value),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -144,7 +145,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                 ),
                 const SizedBox(height: 18),
                 SettingsInfoBanner(
-                  text: _alwaysAsk
+                  text: _prefs.alwaysAsk
                       ? 'The Download button asks each time. Turn off '
                             '"Always ask" in its sheet or here to make the '
                             'choice above the default.'

@@ -7,7 +7,7 @@ import '../services/debrify_image_cache.dart';
 import '../services/discover_prefs.dart';
 import '../services/download_service.dart';
 import '../services/downloaded_media_service.dart';
-import '../services/main_page_bridge.dart';
+import '../services/downloads/title_download_summary.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
@@ -101,35 +101,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     _refresh();
   }
 
-  double _groupProgress(List<LocalDownload> items) =>
-      items.fold<double>(
-        0,
-        (value, item) =>
-            value +
-            (item.isReady
-                ? 1
-                : (_progress[item.record.taskId] ?? item.record.progress).clamp(
-                    0,
-                    1,
-                  )),
-      ) /
-      items.length;
-
-  /// What a still-arriving title's poster says under its percentage; null
-  /// while it's actively downloading (the sweep says that on its own).
-  String? _statusLabel(List<LocalDownload> items) {
-    final pending = items.where((e) => !e.isReady).toList();
-    if (pending.any((e) => e.record.status == TaskStatus.running)) {
-      return null;
-    }
-    if (pending.any((e) => e.record.status == TaskStatus.failed)) {
-      return 'Download failed';
-    }
-    if (pending.every((e) => e.record.status == TaskStatus.paused)) {
-      return 'Paused';
-    }
-    return 'Queued';
-  }
+  TitleDownloadSummary _summary(List<LocalDownload> items) =>
+      TitleDownloadSummary.of(items, live: _progress);
 
   @override
   Widget build(BuildContext context) {
@@ -298,13 +271,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           loadingMore: false,
                           exhausted: true,
                           onLoadMore: () {},
-                          downloadOf: (item) =>
-                              groups[item.id]!.any((e) => !e.isReady)
-                              ? (
-                                  value: _groupProgress(groups[item.id]!),
-                                  status: _statusLabel(groups[item.id]!),
-                                )
-                              : null,
+                          downloadOf: (item) {
+                            final summary = _summary(groups[item.id]!);
+                            return summary.inFlight
+                                ? (
+                                    value: summary.progress!,
+                                    status: summary.status,
+                                  )
+                                : null;
+                          },
                           onOpen: (item) async {
                             await openDownloadedItem(context, groups[item.id]!);
                             _refresh();
@@ -318,26 +293,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       ),
     );
   }
-}
-
-/// Where "View" goes after queuing a download: the title's download page
-/// when it is catalog-linked, otherwise the Downloads tab.
-Future<void> openDownloadsForTitle(BuildContext context, String? id) async {
-  if (id != null && id.isNotEmpty) {
-    try {
-      final all = await DownloadedMediaService.load(includeTransfers: true);
-      final items = all.where((e) => e.media?.id == id).toList();
-      if (items.isNotEmpty && context.mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => DownloadedTitleScreen(items: items),
-          ),
-        );
-        return;
-      }
-    } catch (_) {}
-  }
-  MainPageBridge.switchTab?.call(MainTab.downloads);
 }
 
 Future<void> openDownloadManager(BuildContext context) =>

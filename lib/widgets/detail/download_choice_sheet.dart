@@ -1,143 +1,27 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
-import '../../services/saved_source_filters.dart';
-import '../../services/storage_service.dart';
-import '../../services/torrent_playback_service.dart'
-    show AutoDownloadMiss, AutoDownloadResult;
+import '../../services/downloads/download_preferences.dart';
+import '../../services/downloads/download_request.dart';
 import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 import '../../theme/app_theme_scope.dart';
-import '../../utils/filter_ladder.dart';
 import '../../utils/tv_keys.dart';
 
-/// What a title's Download button does: download the best source matching
-/// the saved source filters, or open the source list to pick one.
-enum DownloadChoice { auto, manual }
-
-/// How much of a series to download.
-enum DownloadScope { episode, nextEpisodes, season }
-
-/// "Next episodes" downloads this many, starting at the one Play would open.
-const int kNextEpisodesCount = 3;
-
-/// The episode a series' Download button starts from.
-typedef DownloadSeriesTarget = ({int season, int episode});
-
-/// Runs a title's Download button. With "Always ask" on (the default) a sheet
-/// asks how — and, for a series, how much — to download, and can turn asking
-/// off; otherwise the last choices run straight away. Both are also settings
-/// (Settings → Downloads).
-///
-/// When [auto] can't find anything, [manual] runs with its reason so the
-/// source list can explain itself instead of the press dead-ending.
-Future<void> runDownloadButton(
+/// The Download button's sheet: how much (for a series), how (automatic or
+/// pick a source), and whether to keep asking. Returns the answer as the
+/// [DownloadPreferences] to use — and remember — or null when dismissed.
+/// Pure UI: [DownloadCoordinator] decides when it shows and acts on it.
+Future<DownloadPreferences?> showDownloadChoiceSheet(
   BuildContext context, {
-  required String title,
-  required bool isTelevision,
-  DownloadSeriesTarget? series,
-  VoidCallback? onViewDownloads,
-  required Future<AutoDownloadResult> Function(DownloadScope? scope) auto,
-  required FutureOr<void> Function(DownloadScope? scope, AutoDownloadResult? why)
-  manual,
-}) async {
-  final alwaysAsk = await StorageService.getDownloadButtonAlwaysAsk();
-  var choice = await StorageService.getDownloadButtonMode() == 'auto'
-      ? DownloadChoice.auto
-      : DownloadChoice.manual;
-  DownloadScope? scope = series == null
-      ? null
-      : DownloadScope.values.asNameMap()[await StorageService
-                .getDownloadSeriesScope()] ??
-            DownloadScope.nextEpisodes;
-  if (alwaysAsk) {
-    if (!context.mounted) return;
-    final filters = await SavedSourceFilters.load();
-    if (!context.mounted) return;
-    final answer = await showDownloadChoiceSheet(
-      context,
-      title: title,
-      isTelevision: isTelevision,
-      filterSummary: FilterLadder(filters).filterSummary(),
-      series: series,
-      initialScope: scope,
-      onViewDownloads: onViewDownloads,
-    );
-    if (answer == null) return;
-    choice = answer.choice;
-    scope = answer.scope;
-    await Future.wait([
-      StorageService.setDownloadButtonMode(choice.name),
-      StorageService.setDownloadButtonAlwaysAsk(answer.alwaysAsk),
-      if (scope != null) StorageService.setDownloadSeriesScope(scope.name),
-    ]);
-  }
-  if (!context.mounted) return;
-  AutoDownloadResult? why;
-  if (choice == DownloadChoice.auto) {
-    why = await auto(scope);
-    if (why.done || !context.mounted) return;
-  }
-  await manual(scope, why);
-}
-
-/// Copy for a [DownloadScope], e.g. "Episodes 4–6".
-String downloadScopeLabel(DownloadScope scope, DownloadSeriesTarget target) =>
-    switch (scope) {
-      DownloadScope.episode => 'Episode ${target.episode}',
-      DownloadScope.nextEpisodes =>
-        'Episodes ${target.episode}–${target.episode + kNextEpisodesCount - 1}',
-      DownloadScope.season => 'Season ${target.season}',
-    };
-
-/// The source list's note for an automatic download that came back empty.
-({String title, String message, IconData icon, bool showAll}) downloadMissNote(
-  AutoDownloadResult why,
-) => switch (why.miss) {
-  AutoDownloadMiss.noFilterMatch => (
-    title: 'No match for your filters',
-    message: why.filterSummary.isEmpty
-        ? "Here's everything we found — tap one to download it."
-        : "There's no ${why.filterSummary} version right now. Here's "
-              'everything we found — tap one to download it.',
-    icon: Icons.tune_rounded,
-    showAll: true,
-  ),
-  AutoDownloadMiss.notReady => (
-    title: 'Nothing ready to download instantly',
-    message:
-        "Pick any source below. If it isn't ready yet, we'll fetch it and "
-        'start the download for you.',
-    icon: Icons.hourglass_top_rounded,
-    showAll: false,
-  ),
-  _ => (
-    title: "We couldn't pick one automatically",
-    message: 'Choose a source below to download it.',
-    icon: Icons.lightbulb_outline_rounded,
-    showAll: true,
-  ),
-};
-
-/// The how-to-download sheet. Returns null when dismissed.
-Future<({DownloadChoice choice, DownloadScope? scope, bool alwaysAsk})?>
-showDownloadChoiceSheet(
-  BuildContext context, {
-  required String title,
+  required DownloadRequest request,
   required bool isTelevision,
   String filterSummary = '',
-  DownloadSeriesTarget? series,
-  DownloadScope? initialScope,
+  DownloadPreferences initial = const DownloadPreferences(),
   VoidCallback? onViewDownloads,
 }) {
   final app = AppThemeScope.of(context);
   var alwaysAsk = true;
-  var scope = series == null
-      ? null
-      : (initialScope ?? DownloadScope.nextEpisodes);
-  return showModalBottomSheet<
-    ({DownloadChoice choice, DownloadScope? scope, bool alwaysAsk})
-  >(
+  var scope = initial.seriesScope;
+  return showModalBottomSheet<DownloadPreferences>(
     sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     backgroundColor: app.sheetSurface,
@@ -150,8 +34,14 @@ showDownloadChoiceSheet(
           constraints: const BoxConstraints(maxWidth: 640),
           child: StatefulBuilder(
             builder: (context, setSheetState) {
-              void pick(DownloadChoice choice) => Navigator.of(sheetContext)
-                  .pop((choice: choice, scope: scope, alwaysAsk: alwaysAsk));
+              void pick(DownloadChoice choice) =>
+                  Navigator.of(sheetContext).pop(
+                    initial.copyWith(
+                      choice: choice,
+                      alwaysAsk: alwaysAsk,
+                      seriesScope: scope,
+                    ),
+                  );
               return SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -176,7 +66,7 @@ showDownloadChoiceSheet(
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  title,
+                                  request.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
@@ -202,7 +92,7 @@ showDownloadChoiceSheet(
                         ],
                       ),
                     ),
-                    if (series != null)
+                    if (request.isSeries)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                         child: Wrap(
@@ -211,9 +101,7 @@ showDownloadChoiceSheet(
                           children: [
                             for (final option in DownloadScope.values)
                               ChoiceChip(
-                                label: Text(
-                                  downloadScopeLabel(option, series),
-                                ),
+                                label: Text(request.scopeLabel(option)),
                                 selected: scope == option,
                                 onSelected: (_) =>
                                     setSheetState(() => scope = option),
