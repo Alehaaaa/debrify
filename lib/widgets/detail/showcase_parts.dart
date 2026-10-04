@@ -338,7 +338,7 @@ class _FilmGrainState extends State<_FilmGrain> {
   static const int _tile = 128;
 
   /// Peak grain alpha (0–255). Visible texture, not static.
-  static const int _strength = 24;
+  static const int _strength = 12;
 
   static Future<ui.Image>? _shared;
 

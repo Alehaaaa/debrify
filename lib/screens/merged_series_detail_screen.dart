@@ -1,5 +1,6 @@
 import '../widgets/downloaded_media_button.dart';
 import '../services/downloaded_media_service.dart';
+import '../services/offline_title_store.dart';
 import '../widgets/metadata_franchise_rail.dart';
 import '../widgets/metadata_title_navigation.dart';
 import '../services/metadata_provider_service.dart';
@@ -439,7 +440,48 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   );
 
   @override
-  StremioMeta get originalMetadata => _enriched ?? widget.item;
+  StremioMeta get originalMetadata {
+    final base = _enriched ?? widget.item;
+    // Memoized: the presentation mixin compares this by identity, so a fresh
+    // object per read would restart metadata resolution on every rebuild.
+    if (!identical(base, _logoSeedSource)) {
+      _logoSeedSource = base;
+      _logoSeeded = _withDerivedLogo(base);
+    }
+    return _logoSeeded!;
+  }
+
+  StremioMeta? _logoSeedSource;
+  StremioMeta? _logoSeeded;
+
+  /// Shelf items rarely carry a title logo, and the Cinemeta enrichment that
+  /// would supply one is skipped for items that already have a synopsis —
+  /// which is why only Continue Watching titles (no synopsis, so always
+  /// enriched) opened with their logo. Cinemeta's logo IS this metahub URL,
+  /// so derive it from the IMDb id: no request at all. A title without logo
+  /// art 404s into the text title, exactly as before.
+  static StremioMeta _withDerivedLogo(StremioMeta item) {
+    if (item.logo?.isNotEmpty ?? false) return item;
+    final imdb = item.effectiveImdbId ?? item.id;
+    if (!RegExp(r'^tt\d+$').hasMatch(imdb)) return item;
+    return StremioMeta(
+      id: item.id,
+      imdbId: item.imdbId,
+      type: item.type,
+      name: item.name,
+      poster: item.poster,
+      background: item.background,
+      description: item.description,
+      year: item.year,
+      imdbRating: item.imdbRating,
+      genres: item.genres,
+      runtime: item.runtime,
+      sourceAddon: item.sourceAddon,
+      trailerYtId: item.trailerYtId,
+      logo: 'https://images.metahub.space/logo/medium/$imdb/img',
+      addedAtMs: item.addedAtMs,
+    );
+  }
   // Presentation is for rendering; source searches retain widget.item so a
   // translated display title cannot change file matching or binding queries.
   StremioMeta get _item => presentedMetadata!;
@@ -543,6 +585,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void initState() {
     super.initState();
     _downloads; // start watching this title's downloads
+    // One TMDB call for credits, recommendations, trailers and availability
+    // instead of one each (no-op when TMDB isn't a selected provider).
+    unawaited(MetadataProviderService.instance.prefetchTitle(widget.item));
+    unawaited(_restoreOffline());
     StorageService.trackingSourceRevision.addListener(
       _onMovieProgressPolicyChanged,
     );
@@ -649,7 +695,116 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         ..addListener(_onDownloadsChanged);
 
   void _onDownloadsChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    // A download that just started makes this page worth keeping offline.
+    _syncOfflineArtwork();
+    _scheduleOfflineSave();
+  }
+
+  // ── Offline copy (downloaded titles) ──────────────────────────────────────
+
+  /// What this page last showed for a downloaded title. Seeds the page as
+  /// soon as it opens and stands in for whatever the network can't answer,
+  /// so a download's details still read in full without a connection.
+  PageSnapshot? _offline;
+  Timer? _offlineSaveTimer;
+  bool _offlineArtworkActive = false;
+
+  String get _offlineId => widget.item.effectiveImdbId ?? widget.item.id;
+  bool get _offlineKept => OfflineTitleStore.instance.isPinned(_offlineId);
+
+  Future<void> _restoreOffline() async {
+    final store = OfflineTitleStore.instance;
+    await store.ensureLoaded();
+    if (!mounted || !_offlineKept) return;
+    _syncOfflineArtwork();
+    final snapshot = PageSnapshot.fromJson(
+      await store.read(_offlineId, OfflineTitleStore.page),
+    );
+    if (!mounted || snapshot == null) return;
+    _offline = snapshot;
+    final saved = snapshot.meta;
+    final seedMeta = _enriched == null && saved != null;
+    setState(() {
+      if (seedMeta) _enriched = _withSavedMeta(widget.item, saved);
+      _imdbExtra ??= snapshot.details;
+      _parentsGuide ??= snapshot.parentsGuide;
+      if ((_recommendations?.isEmpty ?? true) &&
+          snapshot.recommendations.isNotEmpty) {
+        _recommendations = snapshot.recommendations;
+      }
+    });
+    if (seedMeta) refreshMetadataPresentation();
+  }
+
+  /// [item] with the gaps filled from what was saved for it.
+  static StremioMeta _withSavedMeta(StremioMeta item, StremioMeta saved) =>
+      StremioMeta(
+        id: item.id,
+        imdbId: item.imdbId ?? saved.imdbId,
+        type: item.type,
+        name: item.name.isNotEmpty ? item.name : saved.name,
+        // The saved art is the title's full art; the item's may be a small
+        // shelf poster (the Downloads library only keeps that one).
+        poster: saved.poster ?? item.poster,
+        background: saved.background ?? item.background,
+        description: (item.description?.isNotEmpty ?? false)
+            ? item.description
+            : saved.description,
+        year: item.year ?? saved.year,
+        imdbRating: item.imdbRating ?? saved.imdbRating,
+        genres: (item.genres?.isNotEmpty ?? false) ? item.genres : saved.genres,
+        runtime: item.runtime ?? saved.runtime,
+        sourceAddon: item.sourceAddon,
+        trailerYtId: item.trailerYtId ?? saved.trailerYtId,
+        logo: saved.logo ?? item.logo,
+      );
+
+  /// Saves what the page shows now, a moment after it settles.
+  void _scheduleOfflineSave() {
+    if (!_offlineKept) return;
+    _offlineSaveTimer?.cancel();
+    _offlineSaveTimer = Timer(const Duration(seconds: 2), _saveOffline);
+  }
+
+  void _saveOffline() {
+    if (!mounted || !_offlineKept) return;
+    final previous = _offline;
+    final recommendations = _recommendations ?? const <StremioMeta>[];
+    final snapshot = PageSnapshot(
+      meta: _item,
+      details: _imdbExtra ?? previous?.details,
+      parentsGuide: _parentsGuide ?? previous?.parentsGuide,
+      recommendations: recommendations.isNotEmpty
+          ? recommendations
+          : (previous?.recommendations ?? const []),
+    );
+    _offline = snapshot;
+    final store = OfflineTitleStore.instance;
+    unawaited(
+      store.write(_offlineId, OfflineTitleStore.page, snapshot.toJson()),
+    );
+    for (final url in snapshot.imageUrls) {
+      unawaited(store.pinImage(_offlineId, url));
+    }
+  }
+
+  /// While this page is on top and its title is downloaded, every image it
+  /// loads (episode stills, cast, rails…) is saved with the title.
+  void _syncOfflineArtwork({bool covered = false}) {
+    final active =
+        mounted &&
+        !covered &&
+        _offlineKept &&
+        (ModalRoute.of(context)?.isCurrent ?? false);
+    if (active == _offlineArtworkActive) return;
+    _offlineArtworkActive = active;
+    if (active) {
+      OfflineTitleStore.instance.enterPage(_offlineId);
+    } else {
+      OfflineTitleStore.instance.leavePage(_offlineId);
+    }
   }
 
   /// Not downloaded: the movie's source list or the series' season-pack
@@ -791,7 +946,18 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// The IN-APP player (and the Sources screen) pushes a route on top of this
   /// screen, so it pops BACK here when playback ends — refresh the label then.
   @override
-  void didPopNext() => _refreshAfterPlayback();
+  void didPopNext() {
+    _syncOfflineArtwork();
+    _refreshAfterPlayback();
+  }
+
+  /// Images loaded by a route on top (the player, a source list…) aren't
+  /// this title's.
+  @override
+  void didPushNext() => _syncOfflineArtwork(covered: true);
+
+  @override
+  void onMetadataPresentationChanged() => _scheduleOfflineSave();
 
   /// The other half of the same story: the Android TV native player, DeoVR and
   /// external players run in their own ACTIVITY and never push a Flutter route,
@@ -1171,7 +1337,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     try {
       final c = await DominantColorCache.of(
         url,
-        CachedNetworkImageProvider(url),
+        CachedNetworkImageProvider(
+          url,
+          cacheManager: DebrifyImageCache.manager,
+        ),
       );
       if (c != null && mounted) setState(() => _accent = c);
     } catch (_) {}
@@ -1188,6 +1357,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     _downloads
       ..removeListener(_onDownloadsChanged)
       ..dispose();
+    _offlineSaveTimer?.cancel();
+    if (_offlineArtworkActive) {
+      OfflineTitleStore.instance.leavePage(_offlineId);
+    }
     StorageService.trackingSourceRevision.removeListener(
       _onMovieProgressPolicyChanged,
     );
@@ -1247,6 +1420,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         );
       });
       refreshMetadataPresentation();
+      _scheduleOfflineSave();
     } catch (_) {
     } finally {
       _setDetailsPending(cinemeta: false);
@@ -1588,7 +1762,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         loadExisting: () async =>
             imdbId == null ? null : ImdbEnrichmentService.fetch(imdbId),
       );
-      if (mounted && valid()) setState(() => _imdbExtra = extra);
+      if (mounted && valid()) {
+        setState(() => _imdbExtra = extra ?? _offline?.details);
+        if (extra != null) _scheduleOfflineSave();
+      }
     } catch (_) {
     } finally {
       _setDetailsPending(imdb: false);
@@ -1600,7 +1777,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     if (imdbId == null) return;
     try {
       final guide = await ImdbParentsGuideService.fetch(imdbId);
-      if (mounted) setState(() => _parentsGuide = guide);
+      if (!mounted) return;
+      setState(() => _parentsGuide = guide ?? _offline?.parentsGuide);
+      if (guide != null) _scheduleOfflineSave();
     } catch (_) {}
   }
 
@@ -1615,15 +1794,20 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         revision == MetadataPreferencesService.revision.value;
     final loader = widget.recommendationsLoader;
     try {
-      final recs = await MetadataDetailsService.instance.recommendations(
+      final live = await MetadataDetailsService.instance.recommendations(
         _item,
         loader,
       );
+      // Offline, a downloaded title keeps the rail it last showed.
+      final saved = _offline?.recommendations ?? const <StremioMeta>[];
+      final recs = live.isEmpty && saved.isNotEmpty ? saved : live;
       if (mounted && valid()) {
         _recommendationOriginals.clear();
         setState(() => _recommendations = recs);
       }
       if (!valid()) return;
+      if (identical(recs, saved)) return;
+      _scheduleOfflineSave();
       await for (final batch in MetadataProviderService.instance.presentBatches(
         recs,
         isRelevant: valid,
@@ -1634,6 +1818,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         }
         setState(() => _recommendations = batch);
       }
+      _scheduleOfflineSave();
     } catch (_) {}
   }
 

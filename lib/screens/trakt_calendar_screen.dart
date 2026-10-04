@@ -409,14 +409,6 @@ sheetAnimationStyle: kMenuSheetAnimation,
       format: _timeFormat,
       child: Scaffold(
         backgroundColor: app.calendar.bg,
-        appBar: _isTelevision
-            ? null
-            : AppBar(
-                backgroundColor: Colors.transparent,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                title: Text('$_sourceName Calendar'),
-              ),
         body: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
@@ -429,7 +421,12 @@ sheetAnimationStyle: kMenuSheetAnimation,
               ],
             ),
           ),
-          child: SafeArea(top: false, child: _buildBody(isWide, app)),
+          // No app bar: the page header (month, chevrons, filters) is the
+          // top of the page, so it keeps clear of the status bar itself.
+          child: SafeArea(
+            top: !_isTelevision,
+            child: _buildBody(isWide, app),
+          ),
         ),
       ),
     );
@@ -458,6 +455,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     final days = _visibleDays;
 
     if (_isTelevision) return _buildTvBody(days, isWide, app);
+    if (isWide) return _buildWideBody(days, app);
 
     return Center(
       child: ConstrainedBox(
@@ -536,6 +534,189 @@ sheetAnimationStyle: kMenuSheetAnimation,
           Expanded(child: dayListWidget),
         ],
       ),
+    );
+  }
+
+  /// Wide (desktop/tablet) layout: the filters get their own column on the
+  /// left, laid out as full labelled fields, and the day list takes the rest
+  /// — instead of every option squeezed into icon buttons beside the title.
+  Widget _buildWideBody(List<_AiringDay> days, AppTheme app) {
+    final dayList = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 160),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeOutCubic,
+      child: _isChangingMonth
+          ? const Center(
+              key: ValueKey('changing-month'),
+              child: CircularProgressIndicator(),
+            )
+          : days.isEmpty
+          ? _EmptyMonthState(
+              key: ValueKey('empty-$_selectedYear-$_selectedMonth'),
+              monthLabel: _monthName(_selectedMonth),
+              year: _selectedYear,
+              fromToday: _isCurrentMonth && !_showEarlierDays,
+            )
+          : _buildDayList(days, true, app),
+    );
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1180),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 280,
+                child: SingleChildScrollView(
+                  child: _buildWideFilters(days, app),
+                ),
+              ),
+              const SizedBox(width: 28),
+              Expanded(child: dayList),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWideFilters(List<_AiringDay> days, AppTheme app) {
+    final t = app.settings;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final summary = days.isEmpty
+        ? 'No episodes airing'
+        : '${days.length} airing day${days.length == 1 ? '' : 's'} · '
+              '$_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
+
+    void step(int delta) {
+      final next = DateTime(_selectedYear, _selectedMonth + delta, 1);
+      _selectMonth(year: next.year, month: next.month);
+    }
+
+    Widget label(String text) => Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 0, 8),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+          color: t.dim,
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${_monthName(_selectedMonth)} $_selectedYear',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  height: 1.15,
+                  color: onSurface,
+                ),
+              ),
+            ),
+            IconButton(
+              tooltip: 'Previous month',
+              onPressed: () => step(-1),
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Icons.chevron_left_rounded, size: 22, color: t.dim),
+            ),
+            IconButton(
+              tooltip: 'Next month',
+              onPressed: () => step(1),
+              visualDensity: VisualDensity.compact,
+              icon: Icon(Icons.chevron_right_rounded, size: 22, color: t.dim),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(summary, style: TextStyle(fontSize: 12, color: t.dim)),
+        const SizedBox(height: 24),
+        if (_buildSourceSelector() case final sourceField?) ...[
+          sourceField,
+          const SizedBox(height: 22),
+        ],
+        label('Period'),
+        _SelectorField(
+          // Keyed by value: the chevrons change the month from outside the
+          // field, and a form field otherwise keeps showing its first value.
+          key: ValueKey('wide-month-$_selectedMonth'),
+          label: 'Month',
+          value: _selectedMonth,
+          focusNode: _monthFocusNode,
+          items: [
+            for (int i = 1; i <= 12; i++)
+              DropdownMenuItem<int>(value: i, child: Text(_monthName(i))),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _selectMonth(month: value);
+          },
+        ),
+        const SizedBox(height: 12),
+        _SelectorField(
+          key: ValueKey('wide-year-$_selectedYear'),
+          label: 'Year',
+          value: _selectedYear,
+          focusNode: _yearFocusNode,
+          items: [
+            for (final year in _yearOptions)
+              DropdownMenuItem<int>(value: year, child: Text('$year')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _selectMonth(year: value);
+          },
+        ),
+        const SizedBox(height: 22),
+        label('Display'),
+        _SelectorField<CalendarTimeFormat>(
+          label: 'Time format',
+          value: _timeFormat,
+          focusNode: _timeFormatFocusNode,
+          items: [
+            for (final format in CalendarTimeFormat.values)
+              DropdownMenuItem(value: format, child: Text(format.label)),
+          ],
+          onChanged: (value) async {
+            if (value == null) return;
+            setState(() => _timeFormat = value);
+            await _displayPreferences?.setString(_timeFormatKey, value.name);
+          },
+        ),
+        if (_isCurrentMonth) ...[
+          const SizedBox(height: 6),
+          SwitchListTile(
+            value: _showEarlierDays,
+            onChanged: (value) => setState(() => _showEarlierDays = value),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            activeThumbColor: app.calendar.accent,
+            title: Text(
+              'Show earlier days',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: onSurface,
+              ),
+            ),
+            subtitle: Text(
+              'Include days of this month that already aired',
+              style: TextStyle(fontSize: 12, color: t.dim),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -942,6 +1123,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
 class _SelectorField<T> extends StatelessWidget {
   const _SelectorField({
+    super.key,
     required this.label,
     required this.value,
     required this.items,

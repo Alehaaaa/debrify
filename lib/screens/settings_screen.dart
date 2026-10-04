@@ -7872,21 +7872,25 @@ class _SettingsLayout extends StatelessWidget {
         : readyCount > 0
         ? '$readyCount services are configured on this device.'
         : 'Add a debrid, cloud, or IPTV service to get started.';
-    final summaryTarget = firstAttention ?? _providerConnections.first;
     return SettingsSpotlightShell(
       categories: _kAdaptiveSettingsCategories,
       onOpenSearch: onOpenSearch,
-      compactSummary: SettingsSpotlightSummaryCard(
+      compactSummaryBuilder: (openCategory) => SettingsSpotlightSummaryCard(
         eyebrow: attentionCount > 0 ? 'Connection check' : 'Service health',
         title: summaryTitle,
         subtitle: summarySubtitle,
-        actionLabel: attentionCount > 0
-            ? 'Review ${summaryTarget.title}'
+        actionLabel: firstAttention != null
+            ? 'Review ${firstAttention.title}'
             : readyCount > 0
             ? 'Manage connections'
             : 'Connect a service',
         tone: summaryTone,
-        onTap: () => unawaited(summaryTarget.onTap()),
+        // A connection that needs attention opens that provider; otherwise
+        // the card is about all of them, so it opens the Connections list
+        // (category 0) rather than whichever provider happens to be first.
+        onTap: firstAttention != null
+            ? () => unawaited(firstAttention.onTap())
+            : () => openCategory(0),
       ),
       categoryBuilder: _buildSpotlightCategory,
     );

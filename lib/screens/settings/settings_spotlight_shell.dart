@@ -59,6 +59,7 @@ class SettingsSpotlightShell extends StatefulWidget {
     required this.categoryBuilder,
     required this.onOpenSearch,
     this.compactSummary,
+    this.compactSummaryBuilder,
     this.initialCategory = 0,
   }) : assert(categories.length > 0);
 
@@ -66,6 +67,12 @@ class SettingsSpotlightShell extends StatefulWidget {
   final SettingsCategoryBuilder categoryBuilder;
   final VoidCallback onOpenSearch;
   final Widget? compactSummary;
+
+  /// Like [compactSummary], but handed a callback that opens a category in
+  /// place — for a summary whose action belongs to a category rather than
+  /// to one setting. Takes precedence over [compactSummary].
+  final Widget Function(void Function(int category) openCategory)?
+  compactSummaryBuilder;
   final int initialCategory;
 
   @override
@@ -242,6 +249,14 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
 
   Widget _buildCompactRoot() {
     final insets = MediaQuery.viewPaddingOf(context);
+    final summary =
+        widget.compactSummaryBuilder?.call(
+          (category) => _select(
+            category.clamp(0, widget.categories.length - 1),
+            openCompact: true,
+          ),
+        ) ??
+        widget.compactSummary;
     final normal = <MapEntry<int, SettingsCategoryDefinition>>[];
     final destructive = <MapEntry<int, SettingsCategoryDefinition>>[];
     for (var i = 0; i < widget.categories.length; i++) {
@@ -255,10 +270,7 @@ class _SettingsSpotlightShellState extends State<SettingsSpotlightShell> {
         const SettingsRootHeader(),
         const SizedBox(height: 20),
         SettingsSpotlightSearchButton(onTap: widget.onOpenSearch),
-        if (widget.compactSummary != null) ...[
-          const SizedBox(height: 18),
-          widget.compactSummary!,
-        ],
+        if (summary != null) ...[const SizedBox(height: 18), summary],
         const SizedBox(height: 26),
         const SettingsSectionLabel('Browse by category'),
         LayoutBuilder(

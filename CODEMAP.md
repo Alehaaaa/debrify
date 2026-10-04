@@ -88,6 +88,11 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
 ## Detail screens & trailers
 - `screens/merged_series_detail_screen.dart` (default-on), legacy `screens/catalog_item_detail_screen.dart`
   (no trailer), `widgets/episodes_panel.dart`, `widgets/series_browser.dart`.
+- Offline copy of downloaded titles' detail pages (meta, episodes, IMDb details, parents guide,
+  recommendations, artwork): `services/offline_title_store.dart`; fed by `stremio_service.dart`
+  (`fetchMetaDetails`/`fetchSeriesMeta` fallbacks), `merged_series_detail_screen.dart` (`_restoreOffline`,
+  `_saveOffline`) and the library scan (`downloaded_media_service.dart` → `updatePinned`); artwork served by
+  `debrify_image_cache.dart`'s `_OfflineAwareCacheManager`.
 - Trailer: `widgets/hero_trailer_backdrop.dart` (`buildVideo(fit:)` — crop lives here),
   `widgets/trailer_engine.dart`.
 

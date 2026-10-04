@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:background_downloader/background_downloader.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/stremio_addon.dart';
-import '../services/app_migration_service.dart';
+import '../services/debrify_image_cache.dart';
 import '../services/discover_prefs.dart';
 import '../services/download_service.dart';
 import '../services/downloaded_media_service.dart';
+import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_controller.dart';
@@ -13,6 +15,7 @@ import '../theme/app_theme_scope.dart';
 import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../theme/theme_core_resolver.dart';
 import '../theme/theme_overrides.dart';
+import '../utils/artwork_url.dart';
 import '../widgets/detail/detail_identity.dart';
 import '../widgets/detail/detail_style.dart';
 import '../widgets/detail/theme/detail_theme.dart';
@@ -348,6 +351,21 @@ Future<void> openDownloadedItem(
   final media = group.first.media!;
   final ready = sortDownloads(group.where((e) => e.isReady));
   final addon = await _metadataAddon();
+  // The library only knows the small shelf poster the download was started
+  // with. The page's hero wants the title's full art, which is kept with the
+  // download — use it from the first frame (and offline).
+  final store = OfflineTitleStore.instance;
+  final savedMeta = await store.read(
+    media.id,
+    '${OfflineTitleStore.meta}:${media.type}',
+  );
+  final saved =
+      PageSnapshot.fromJson(
+        await store.read(media.id, OfflineTitleStore.page),
+      )?.meta ??
+      (savedMeta is Map
+          ? StremioMeta.fromJson(Map<String, dynamic>.from(savedMeta))
+          : null);
   if (!context.mounted) return;
 
   Future<void> playFallback(
@@ -380,10 +398,16 @@ Future<void> openDownloadedItem(
           imdbId: media.id.startsWith('tt') ? media.id : null,
           type: media.type,
           name: media.title,
-          poster: media.poster,
-          year: media.year,
+          poster: saved?.poster ?? media.poster,
+          background: saved?.background,
+          logo: saved?.logo,
+          year: media.year ?? saved?.year,
         ),
         addon: addon,
+        // The full details (summary, rating, art) — from the network, or
+        // from the copy kept for the download when offline.
+        metaEnricher: (id, type) =>
+            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
         initialSeason: ready.first.media?.season,
         initialEpisode: ready.first.media?.episode,
         onResume: (_) => playFallback(routeContext),
@@ -399,23 +423,7 @@ Future<void> openDownloadedItem(
 
 /// The user's Cinemeta install when present, else the stock one — the
 /// detail page only needs it for metadata.
-Future<StremioAddon> _metadataAddon() async {
-  try {
-    final addons = await StremioService.instance.getEnabledAddons();
-    for (final addon in addons) {
-      if (StremioService.isCinemetaAddon(addon)) return addon;
-    }
-  } catch (_) {}
-  return StremioAddon(
-    id: 'com.linvo.cinemeta',
-    name: 'Cinemeta',
-    manifestUrl: AppMigrationService.cinemetaManifestUrl,
-    baseUrl: 'https://v3-cinemeta.strem.io',
-    types: const ['movie', 'series'],
-    resources: const ['catalog', 'meta'],
-    idPrefixes: const ['tt'],
-  );
-}
+Future<StremioAddon> _metadataAddon() => OfflineTitleStore.cinemetaAddon();
 
 List<LocalDownload> sortDownloads(Iterable<LocalDownload> items) =>
     [...items]..sort((a, b) {
@@ -715,8 +723,8 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
     final transfers = items.where((item) => !item.isReady).toList();
     final series = first.media?.type == 'series';
     final gutter = width >= 900 ? 48.0 : 20.0;
-    final poster = _meta?.poster ?? first.media?.poster;
-    final backdrop = _meta?.background ?? poster;
+    final poster = highQualityArtworkUrl(_meta?.poster ?? first.media?.poster);
+    final backdrop = highQualityArtworkUrl(_meta?.background) ?? poster;
     final description = _meta?.description?.trim();
     final facts = [
       ?(_meta?.year ?? first.media?.year),
@@ -764,11 +772,12 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
                 blendMode: BlendMode.dstIn,
                 child: Opacity(
                   opacity: 0.45,
-                  child: Image.network(
-                    backdrop,
+                  child: CachedNetworkImage(
+                    imageUrl: backdrop,
+                    cacheManager: DebrifyImageCache.manager,
                     fit: BoxFit.cover,
                     alignment: Alignment.topCenter,
-                    errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -1210,10 +1219,11 @@ class _Still extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               ColoredBox(color: theme.ground),
-              Image.network(
-                url,
+              CachedNetworkImage(
+                imageUrl: url,
+                cacheManager: DebrifyImageCache.manager,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
               ),
               const DecoratedBox(
                 decoration: BoxDecoration(
@@ -1260,10 +1270,12 @@ class _Artwork extends StatelessWidget {
     );
     return url == null
         ? placeholder
-        : Image.network(
-            url!,
+        : CachedNetworkImage(
+            imageUrl: url!,
+            cacheManager: DebrifyImageCache.manager,
             fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => placeholder,
+            placeholder: (_, _) => placeholder,
+            errorWidget: (_, _, _) => placeholder,
           );
   }
 }

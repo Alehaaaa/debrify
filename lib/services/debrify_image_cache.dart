@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+
+import 'offline_title_store.dart';
 
 /// Shared image disk cache for poster/thumbnail-heavy surfaces.
 ///
@@ -30,7 +34,10 @@ class DebrifyImageCache {
     );
   }
 
-  static final CacheManager manager = CacheManager(
+  /// Also serves the artwork saved for downloaded titles
+  /// ([OfflineTitleStore]), so their detail pages keep their images offline
+  /// and after this cache has evicted them.
+  static final CacheManager manager = _OfflineAwareCacheManager(
     Config(
       'debrifyImageCache',
       // Count and byte limits apply together; large backdrops cannot consume
@@ -55,4 +62,65 @@ class DebrifyImageCache {
       stalePeriod: const Duration(days: 30),
     ),
   );
+}
+
+/// [CacheManager] that answers from a downloaded title's saved artwork first,
+/// and saves what a downloaded title's detail page loads while it is open.
+class _OfflineAwareCacheManager extends CacheManager {
+  _OfflineAwareCacheManager(super.config);
+
+  static const _pinnedAge = Duration(days: 3650);
+
+  @override
+  Stream<FileResponse> getFileStream(
+    String url, {
+    String? key,
+    Map<String, String>? headers,
+    bool withProgress = false,
+  }) async* {
+    final store = OfflineTitleStore.instance;
+    final saved = await store.imageFile(url);
+    if (saved != null) {
+      final cacheKey = key ?? url;
+      FileInfo? cached;
+      try {
+        cached = await getFileFromCache(cacheKey);
+        if (cached != null && !await cached.file.exists()) cached = null;
+        if (cached == null) {
+          final file = await putFile(
+            url,
+            await saved.readAsBytes(),
+            key: cacheKey,
+            maxAge: _pinnedAge,
+            fileExtension: saved.path.split('.').last,
+          );
+          cached = FileInfo(
+            file,
+            FileSource.Cache,
+            DateTime.now().add(_pinnedAge),
+            url,
+          );
+        }
+      } catch (_) {
+        cached = null;
+      }
+      if (cached != null) {
+        // Saved art is served as-is: no revalidation, so no network needed.
+        yield cached;
+        return;
+      }
+    }
+    final owner = store.activeImageOwner;
+    await for (final response in super.getFileStream(
+      url,
+      key: key,
+      headers: headers,
+      withProgress: withProgress,
+    )) {
+      if (owner != null && response is FileInfo) {
+        unawaited(store.pinImage(owner, url, source: response.file.path));
+      }
+      yield response;
+    }
+  }
 }

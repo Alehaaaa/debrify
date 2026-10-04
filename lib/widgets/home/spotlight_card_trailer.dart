@@ -120,6 +120,8 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
         imageUrl: null,
         videoUrl: streams.playUrl,
         audioUrl: streams.audioUrl,
+        // Native platform-view renderer on iOS, like the detail page trailer.
+        muxedVideoUrl: streams.muxedPlaybackFallback,
         enabled: true,
         focusPreviewOwner: _owner,
         ambientVolume: widget.volume,

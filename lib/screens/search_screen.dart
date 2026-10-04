@@ -238,6 +238,13 @@ class SearchScreen extends StatefulWidget {
   /// reuses this screen's item-open/play handlers and cached CW/Trakt rows.
   final bool discoverMode;
 
+  /// Off-TV Search tab: the HOME board pinned with its search sheet open.
+  /// Runs Home's full pipeline (Continue Watching, lists, catalogs) so the
+  /// blank query shows Home's shelves — exactly what Home's own search button
+  /// shows — instead of the TV Search tab's empty prompt. Home's search button
+  /// navigates here on layouts whose sidebar carries the Search tab.
+  final bool searchPage;
+
   /// A FIXED-source Discover page (requires [discoverMode]): a person's or
   /// studio's titles, pushed over a detail page. The page is titled with the
   /// name instead of offering a Source dropdown, shows a back button, and
@@ -255,6 +262,7 @@ class SearchScreen extends StatefulWidget {
     this.isTelevision = false,
     this.searchMode = false,
     this.discoverMode = false,
+    this.searchPage = false,
     this.discoverCredits,
     this.titleSearch,
     this.suggestedTitleResolver,
@@ -553,7 +561,7 @@ class _SearchScreenState extends State<SearchScreen>
     with RouteAware, WidgetsBindingObserver {
   // Which nav tab this instance backs, for the TV content-focus handler: the
   // dedicated Search tab (17) or the Home-New board (15).
-  int get _tabIndex => widget.searchMode ? 17 : (widget.discoverMode ? 18 : 15);
+  int get _tabIndex => _isSearchSurface ? 17 : (widget.discoverMode ? 18 : 15);
 
   final StremioService _stremio = StremioService.instance;
 
@@ -784,10 +792,18 @@ class _SearchScreenState extends State<SearchScreen>
   /// the next profile is published and must still tag its snapshot as outgoing.
   late final ProfileSessionOwner _profileSessionOwner;
 
+  /// Either Search tab flavour: the TV prompt ([SearchScreen.searchMode]) or
+  /// the off-TV Home-backed page ([SearchScreen.searchPage]). Gates the
+  /// search-field UX (title suggestions, the 'search' Back key); data loading
+  /// still keys off `searchMode` alone, so the page loads Home's rows.
+  bool get _isSearchSurface => widget.searchMode || widget.searchPage;
+
   /// Discriminates the three [SearchScreen] variants so a preserved keyword
   /// search only restores into the same kind of tab it came from.
   String get _variantKey => widget.searchMode
       ? 'search'
+      : widget.searchPage
+      ? 'search-page'
       : widget.discoverMode
       ? 'discover'
       : 'board';
@@ -1886,10 +1902,14 @@ class _SearchScreenState extends State<SearchScreen>
         homeSnapshot.hideWatched == HideWatchedPrefs.enabled;
     _homeLastScroll = restoredHome && !widget.isTelevision
         ? homeSnapshot.scrollOffset : 0;
-    _boardScroll = ScrollController(initialScrollOffset: _homeLastScroll);
+    // The Search page borrows Home's snapshot (instant rows) but not its
+    // scroll, and hands Home's offset back untouched on dispose.
+    _boardScroll = ScrollController(
+      initialScrollOffset: widget.searchPage ? 0 : _homeLastScroll,
+    );
     // This one widget backs three tabs (Home board / dedicated Search / Discover).
     AnalyticsService.screenView(
-      widget.searchMode
+      _isSearchSurface
           ? 'search'
           : widget.discoverMode
           ? 'discover'
@@ -1909,7 +1929,7 @@ class _SearchScreenState extends State<SearchScreen>
       );
       MainPageBridge.addPlaylistChangeListener(_loadPlaylistFavorites);
     }
-    if (widget.searchMode) {
+    if (_isSearchSurface) {
       MainPageBridge.registerTabBackHandler('search', _handleSearchBack);
       MainPageBridge.activeTab.addListener(_onTitleSearchTabChanged);
     }
@@ -2080,7 +2100,17 @@ class _SearchScreenState extends State<SearchScreen>
         // mechanism — a nested PopScope would race the root scope in
         // main.dart (its didPop==false path continues into double-back-exit
         // arming even when an inner scope consumed the press).
-        MainPageBridge.registerTabBackHandler('home', _handleHomeBack);
+        // The Search page answers to the 'search' key (registered above)
+        // and its sheet never closes.
+        if (widget.searchPage) {
+          _searchSheetOpen = true;
+          // Bring the keyboard up on arrival, as Home's button did.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _searchFocusNode.requestFocus();
+          });
+        } else {
+          MainPageBridge.registerTabBackHandler('home', _handleHomeBack);
+        }
         // Restored keyword results must come back with the sheet open — the
         // full-bleed shell would otherwise hide them behind a hero.
         if (restoredKeyword) _searchSheetOpen = true;
@@ -2579,7 +2609,7 @@ class _SearchScreenState extends State<SearchScreen>
         _openPendingCatalogDetail,
       );
     }
-    if (widget.searchMode) {
+    if (_isSearchSurface) {
       MainPageBridge.unregisterTabBackHandler('search', _handleSearchBack);
       MainPageBridge.activeTab.removeListener(_onTitleSearchTabChanged);
     }
@@ -3387,7 +3417,9 @@ class _SearchScreenState extends State<SearchScreen>
 
   /// Fire off the next batch as the user nears the bottom of the board.
   void _onBoardScroll() {
-    if (_boardScroll.hasClients) _homeLastScroll = _boardScroll.offset;
+    if (!widget.searchPage && _boardScroll.hasClients) {
+      _homeLastScroll = _boardScroll.offset;
+    }
     if (!_canPageHome || !_boardHasMore || _boardLoadingMore) return;
     if (!_boardScroll.hasClients) return;
     final pos = _boardScroll.position;
@@ -11808,7 +11840,8 @@ class _SearchScreenState extends State<SearchScreen>
             ? await YoutubeService.resolveStreams(
                 ytId,
                 maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
-                preferVp9: true,
+                // Match the detail page: no VP9 on iOS (no hardware path).
+                preferVp9: !PlatformUtil.isIosMobile,
               )
             : null;
         // Backup source: IMDb hosts its own trailer MP4s, so a YouTube block
@@ -12177,11 +12210,31 @@ class _SearchScreenState extends State<SearchScreen>
         final originalDetails = imdb == null
             ? item
             : await _stremio.fetchMetaDetails(imdbId: imdb, type: item.type);
-        final presentation = await MetadataProviderService.instance.present(
-          mergeHeroMetadata(item, originalDetails),
+        final source = mergeHeroMetadata(item, originalDetails);
+        var presentation = await MetadataProviderService.instance.present(
+          source,
           preferences: prefs,
           isRelevant: current,
         );
+        // A rate-limited TMDB lookup used to leave the hero text-titled for
+        // good. Retry past the cooldown while this title is still focused.
+        for (var attempt = 1;
+            presentation.retryable && attempt <= 3 && current();
+            attempt++) {
+          final cooldown = TmdbMetadataRepository.instance.cooldownRemaining;
+          final backoff = Duration(seconds: attempt * 2);
+          await Future<void>.delayed(
+            cooldown > backoff
+                ? cooldown + const Duration(milliseconds: 300)
+                : backoff,
+          );
+          if (!current()) return;
+          presentation = await MetadataProviderService.instance.present(
+            source,
+            preferences: prefs,
+            isRelevant: current,
+          );
+        }
         final details = prefs.isCurrent ? originalDetails : presentation.item;
         if (!current() || details == null) return;
         _heroEnriched.value = HeroMetadataPresentation(details, prefs);
@@ -12223,7 +12276,7 @@ class _SearchScreenState extends State<SearchScreen>
       language: preferences?.language ?? 'en-US',
       // Title lookup belongs only to Catalog. Keyword, Lists and pasted
       // links retain their own search semantics.
-      enabled: widget.searchMode && _mode == _Mode.catalog &&
+      enabled: _isSearchSurface && _mode == _Mode.catalog &&
           MainPageBridge.activeTab.value == 'search' &&
           _titleSearchPolicyReady &&
           !_openingSuggestedTitle &&
@@ -12310,9 +12363,23 @@ class _SearchScreenState extends State<SearchScreen>
     // must invalidate EVERY mode's cached query/result state; otherwise a mode
     // switch can reveal results for text the field no longer contains.
     _catalogDebounce?.cancel();
-    if (value.trim().isEmpty) {
+    final q = value.trim();
+    if (q.isEmpty) {
       _clearQuery();
+      return;
     }
+    // Off-TV, Catalog and Lists search as you type (debounced) — a keyboard
+    // makes that cheap. TV keeps submit-only: DPAD typing is slow, and each
+    // letter would fan out a full catalog search.
+    if (widget.isTelevision || _mode == _Mode.keyword) return;
+    _catalogDebounce = Timer(const Duration(milliseconds: 450), () {
+      if (!mounted || _searchController.text.trim() != q) return;
+      if (_mode == _Mode.catalog && q != _catalogQuery) {
+        _runCatalogSearch(q);
+      } else if (_mode == _Mode.lists && q != _listsQuery) {
+        _runListsSearch(q);
+      }
+    });
   }
 
   void _onQuerySubmitted(String value) {
@@ -16537,7 +16604,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
             // (hardware or gesture) is the way out, and it resets atomically
             // via _closeSearchSheet.
             _buildHeader(
-              onClose: !_sheetForced && _searchController.text.isEmpty
+              // The Search page has no close button — it's a tab, not a sheet.
+              onClose: widget.searchPage
+                  ? null
+                  : !_sheetForced && _searchController.text.isEmpty
                   ? _closeSearchSheet
                   : null,
             ),
@@ -16560,14 +16630,24 @@ sheetAnimationStyle: kMenuSheetAnimation,
             top: topInset + 10,
             right: _SpotlightSearchButton.rightInset,
             child: _SpotlightSearchButton(
-              onTap: () => setState(() {
-                _searchSheetOpen = true;
-                // Focus the field once the sheet's frame exists, so the
-                // keyboard comes up in the same gesture.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _searchFocusNode.requestFocus();
+              // Where the sidebar carries a Search tab, the button goes THERE
+              // (one search page, highlighted in the nav). Phones have no
+              // Search tab, so they keep the in-place sheet — same content.
+              onTap: () {
+                final switchTab = MainPageBridge.switchTab;
+                if (MainPageBridge.searchTabInNav && switchTab != null) {
+                  switchTab(MainTab.search);
+                  return;
+                }
+                setState(() {
+                  _searchSheetOpen = true;
+                  // Focus the field once the sheet's frame exists, so the
+                  // keyboard comes up in the same gesture.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) _searchFocusNode.requestFocus();
+                  });
                 });
-              }),
+              },
             ),
           ),
         ],
@@ -16783,7 +16863,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           // it renders the same plain TextField as before.
           final field = TvTextField(
             controller: _searchController,
-            suggestions: widget.searchMode && _mode == _Mode.catalog
+            suggestions: _isSearchSurface && _mode == _Mode.catalog
                 ? _titleSuggestions : null,
             suggestionsLabel: 'Titles from TMDB',
             focusNode: _searchFocusNode,

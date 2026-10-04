@@ -118,6 +118,65 @@ class MetadataProviderService {
     }
   }
 
+  /// Details pages: ONE TMDB request for everything the page will ask for
+  /// (artwork, credits, recommendations, trailers, where-to-watch), via
+  /// `append_to_response`. The page's separate lookups are then answered from
+  /// this bundle by the repository instead of each costing its own call.
+  /// Best effort and silent; does nothing when TMDB isn't in use.
+  Future<void> prefetchTitle(
+    StremioMeta item, {
+    MetadataPreferences? preferences,
+  }) async {
+    if (item.type != 'movie' && item.type != 'series') return;
+    if (!tmdb.configured) return;
+    try {
+      final prefs = preferences ?? await MetadataPreferencesService.load();
+      bool uses(MetadataCategory c) =>
+          prefs.provider(c) == MetadataPreferences.tmdb;
+      final trailerLanguage = prefs.trailerLanguage == 'same'
+          ? prefs.language
+          : prefs.trailerLanguage;
+      final parts = <String>{
+        if (uses(MetadataCategory.posters) ||
+            uses(MetadataCategory.backgrounds) ||
+            uses(MetadataCategory.information))
+          'images',
+        if (prefs.features.contains(MetadataFeature.people)) 'credits',
+        if (uses(MetadataCategory.recommendations)) 'recommendations',
+        if (uses(MetadataCategory.trailers) &&
+            trailerLanguage == prefs.language)
+          'videos',
+        if (prefs.features.contains(MetadataFeature.availability))
+          'watch/providers',
+      };
+      final creditsFromTmdb = uses(MetadataCategory.credits);
+      if (parts.isEmpty && !creditsFromTmdb) return;
+      final identity = await TmdbMetadataRepository.withHeroPriority(
+        () => tmdb.identify(item),
+      );
+      if (identity == null) return;
+      if (creditsFromTmdb) {
+        parts.add(identity.type == 'tv' ? 'aggregate_credits' : 'credits');
+      }
+      final imageLanguage = prefs.artworkLanguage == 'same'
+          ? prefs.language.split('-').first
+          : prefs.artworkLanguage;
+      await TmdbMetadataRepository.withHeroPriority(
+        () => tmdb.details(
+          identity,
+          language: prefs.language,
+          // Same image query as [present], so its request is covered too.
+          imageLanguage: imageLanguage == 'original'
+              ? 'null'
+              : imageLanguage.split('-').first,
+          append: parts.join(','),
+        ),
+      );
+    } catch (_) {
+      // Every consumer still falls back to its own request.
+    }
+  }
+
   Future<MetadataPresentation> present(
     StremioMeta item, {
     MetadataPreferences? preferences,

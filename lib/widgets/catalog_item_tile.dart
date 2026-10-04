@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
+import '../services/debrify_image_cache.dart';
+import '../services/offline_title_store.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/widgets/parallax_focus.dart';
@@ -170,6 +172,11 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       if (poster != null && poster.isNotEmpty)
         RecoverableNetworkImage(
           imageUrl: poster,
+          // A downloaded title's saved poster lives with the shared image
+          // cache, which can serve it offline.
+          cacheManager: OfflineTitleStore.instance.hasImage(poster)
+              ? DebrifyImageCache.manager
+              : null,
           fit: BoxFit.cover,
           color: blend?.$1,
           colorBlendMode: blend?.$2,

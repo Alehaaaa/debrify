@@ -41,8 +41,13 @@ void main() {
         );
         PlatformUtil.debugSetTvOS(layout.tv);
         addTearDown(() => PlatformUtil.debugSetTvOS(null));
-        await tester.binding.setSurfaceSize(layout.size);
-        addTearDown(() => tester.binding.setSurfaceSize(null));
+        tester.view
+          ..physicalSize = layout.size
+          ..devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        // Phone keeps its options in icon buttons; desktop and TV show them
+        // as labelled fields beside the list.
+        final compact = layout.name == 'phone';
         final now = DateTime.now();
         Map<String, Object> entry(int day, String title) => {
           'first_aired': DateTime(
@@ -78,7 +83,9 @@ void main() {
           expect(find.text('Today episode'), findsOneWidget);
           expect(find.text('Earlier episode'), findsNothing);
           await tester.tap(
-            find.byType(DropdownButtonFormField<CalendarTimeFormat>),
+            compact
+                ? find.byTooltip('Time format')
+                : find.byType(DropdownButtonFormField<CalendarTimeFormat>),
           );
           await tester.pumpAndSettle();
           await tester.tap(find.text('12-hour').last);
@@ -104,10 +111,23 @@ void main() {
           );
           Navigator.of(tester.element(find.text('Today episode').last)).pop();
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Show earlier days'));
+          await tester.tap(
+            compact
+                ? find.byTooltip('Show earlier days')
+                : find.text('Show earlier days'),
+          );
           await tester.pumpAndSettle();
           if (now.day > 1) expect(find.text('Earlier episode'), findsOneWidget);
-          expect(find.text('From today'), findsOneWidget);
+          if (compact) {
+            expect(find.byTooltip('From today'), findsOneWidget);
+          } else if (layout.tv) {
+            expect(find.text('From today'), findsOneWidget);
+          } else {
+            expect(
+              tester.widget<SwitchListTile>(find.byType(SwitchListTile)).value,
+              isTrue,
+            );
+          }
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.runAsync(() async {
             await tester.pumpWidget(

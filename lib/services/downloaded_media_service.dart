@@ -9,6 +9,7 @@ import '../utils/app_storage.dart';
 import 'download_service.dart';
 import 'profiles/profile_runtime.dart';
 import 'local_playback_resume_resolver.dart';
+import 'offline_title_store.dart';
 import 'video_player_launcher.dart';
 
 class LocalDownload {
@@ -206,6 +207,7 @@ class DownloadedMediaService {
     }
 
     final ready = <LocalDownload>[];
+    final otherProfileTitles = <DownloadedMedia>[];
     for (final entry in scanned.entries) {
       final path = entry.key;
       final linked = finishedByPath[path] ?? const <TaskRecord>[];
@@ -214,6 +216,8 @@ class DownloadedMediaService {
       if (linked.isEmpty &&
           cached?.profile != null &&
           cached!.profile != owner) {
+        // Still on the device: its offline details stay too.
+        if (cached.media != null) otherProfileTitles.add(cached.media!);
         continue;
       }
       final fromRecord = finishedMeta[path];
@@ -257,6 +261,16 @@ class DownloadedMediaService {
       ...contentUriItems,
       ..._dedupeTransfers(transfers, [...ready, ...contentUriItems]),
     ];
+    // Every title on the device (or on its way) keeps its detail page
+    // available offline. Marked before anyone hears about this load, so a
+    // page reacting to a new download already sees it as kept.
+    unawaited(
+      OfflineTitleStore.instance.updatePinned([
+        for (final item in [...ready, ...contentUriItems, ...transfers])
+          ?item.media,
+        ...otherProfileTitles,
+      ]),
+    );
     if (owner != _activeProfile()) return [];
     result.sort(
       (a, b) =>

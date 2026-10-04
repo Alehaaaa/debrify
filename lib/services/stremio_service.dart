@@ -1,5 +1,7 @@
+import 'dart:async';
 import '../models/media_identity.dart';
 import 'native_series_metadata_service.dart';
+import 'offline_title_store.dart';
 import 'metadata_preferences_service.dart';
 import 'home_return_cache.dart';
 import 'local_series_completion_service.dart';
@@ -2228,7 +2230,33 @@ class StremioService {
   /// which are built straight from an addon's stream entry and so lack the
   /// structured fields a Cinemeta catalog item carries. Returns null when
   /// no meta-capable addon resolves it (the caller keeps what it had).
+  ///
+  /// Titles that are downloaded keep their last answer on the device
+  /// ([OfflineTitleStore]) and get it back when no addon can be reached.
   Future<StremioMeta?> fetchMetaDetails({
+    required String imdbId,
+    required String type,
+    String? providerOverride,
+  }) async {
+    final live = await _fetchMetaDetailsLive(
+      imdbId: imdbId,
+      type: type,
+      providerOverride: providerOverride,
+    );
+    if (providerOverride != null) return live;
+    final store = OfflineTitleStore.instance;
+    final slot = '${OfflineTitleStore.meta}:$type';
+    if (live != null) {
+      unawaited(store.write(imdbId, slot, live.toJson()));
+      return live;
+    }
+    final saved = await store.read(imdbId, slot);
+    return saved is Map
+        ? StremioMeta.fromJson(Map<String, dynamic>.from(saved))
+        : null;
+  }
+
+  Future<StremioMeta?> _fetchMetaDetailsLive({
     required String imdbId,
     required String type,
     String? providerOverride,
@@ -2781,7 +2809,29 @@ class StremioService {
 
   /// Fetch full meta (including videos/episodes) from an addon's meta endpoint.
   /// Returns the raw videos list, or null if the addon doesn't support meta or the fetch fails.
+  ///
+  /// A downloaded series keeps its last episode list on the device
+  /// ([OfflineTitleStore]) and gets it back when the addon can't be reached.
   Future<List<Map<String, dynamic>>?> fetchSeriesMeta(
+    StremioAddon addon,
+    String contentId,
+  ) async {
+    final live = await _fetchSeriesMetaLive(addon, contentId);
+    final store = OfflineTitleStore.instance;
+    if (live != null && live.isNotEmpty) {
+      unawaited(store.write(contentId, OfflineTitleStore.videos, live));
+      return live;
+    }
+    final saved = await store.read(contentId, OfflineTitleStore.videos);
+    if (saved is! List) return live;
+    final videos = [
+      for (final v in saved)
+        if (v is Map) Map<String, dynamic>.from(v),
+    ];
+    return videos.isEmpty ? live : videos;
+  }
+
+  Future<List<Map<String, dynamic>>?> _fetchSeriesMetaLive(
     StremioAddon addon,
     String contentId,
   ) async {

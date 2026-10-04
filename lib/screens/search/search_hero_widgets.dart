@@ -1295,6 +1295,11 @@ class _HeroTrailerLayerState extends State<_HeroTrailerLayer> {
                   imageUrl: null,
                   videoUrl: streams.playUrl,
                   audioUrl: streams.audioUrl,
+                  // Same renderer as the detail page's trailer: on iOS a muxed
+                  // source selects the native AVPlayer platform view instead
+                  // of the media_kit texture, which re-rasterized the whole
+                  // scene at the video's framerate (the app-wide stutter).
+                  muxedVideoUrl: streams.muxedPlaybackFallback,
                   enabled: true,
                   imageBlurSigma: 0,
                   videoBlurSigma: 0,

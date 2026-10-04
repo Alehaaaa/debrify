@@ -34,6 +34,19 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     return hero || prioritizeMetadata
         ? TmdbMetadataRepository.withHeroPriority(action) : action();
   }
+  /// Rate-limited lookups recover once TMDB's cooldown lifts, so a card keeps
+  /// retrying past it rather than giving up inside it (which is what left
+  /// titles without their logo after a burst of browsing).
+  static const int _maxRetries = 4;
+  Duration _retryDelay(int attempt) {
+    final backoff = Duration(seconds: attempt * 2);
+    final cooldown = TmdbMetadataRepository.instance.cooldownRemaining;
+    if (cooldown == Duration.zero) return backoff;
+    // Spread the wake-ups so every waiting card doesn't hit TMDB at once.
+    final jitter = Duration(milliseconds: 250 + (identityHashCode(this) % 1500));
+    final afterCooldown = cooldown + jitter;
+    return afterCooldown > backoff ? afterCooldown : backoff;
+  }
   final _preloadDelays = <VoidCallback>{};
   void _cancelPreloadDelays() {
     for (final cancel in _preloadDelays.toList()) { cancel(); }
@@ -186,10 +199,10 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
             var result = cached != null && cached.expires.isAfter(DateTime.now())
                 ? cached.value
                 : await _present(item, prefs, relevant, hero: true);
-            for (var attempt = 1; result.retryable && attempt <= 2 && relevant(); attempt++) {
+            for (var attempt = 1; result.retryable && attempt <= _maxRetries && relevant(); attempt++) {
               DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'hero_preload_retry',
                   fields: {'slot': index, 'attempt': attempt});
-              await _preloadDelay(Duration(seconds: attempt * 2));
+              await _preloadDelay(_retryDelay(attempt));
               if (!relevant()) return;
               result = await _present(item, prefs, relevant, hero: true);
             }
@@ -225,8 +238,8 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
   void _storePresentation(StremioMeta original, MetadataPresentation presentation) {
     if (presentation.retryable || presentation.unavailable.isNotEmpty) return;
     _resolved[original] = (value: presentation,
-        expires: DateTime.now().add(const Duration(minutes: 15)));
-    while (_resolved.length > 256) {
+        expires: DateTime.now().add(const Duration(minutes: 60)));
+    while (_resolved.length > 1024) {
       _resolved.remove(_resolved.keys.first);
     }
   }
@@ -260,9 +273,9 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
           'attempt': _attempt, 'missing': presentation.unavailable.length});
       _storePresentation(original, presentation);
       _resolvedOnce = true;
-      if (presentation.retryable && _attempt < 2) {
+      if (presentation.retryable && _attempt < _maxRetries) {
         _retry?.cancel();
-        _retry = Timer(Duration(seconds: ++_attempt * 2), () {
+        _retry = Timer(_retryDelay(++_attempt), () {
           if (mounted && generation == _metadataGeneration) {
             unawaited(_resolveMetadata());
           }

@@ -1983,7 +1983,15 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
               fit: StackFit.expand,
               children: [
                 if (widget.animationsEnabled)
-                  Positioned.fill(
+                  Positioned(
+                    // The scene is laid out [_sceneSettle] taller than the
+                    // board, the extra strip parked below the bottom edge
+                    // (clipped by this Stack). Settling slides it UP into
+                    // view, so neither edge ever shows a gap — no scaling.
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    bottom: -_sceneSettle,
                     child: AnimatedBuilder(
                       animation: _scroll,
                       child: switch (widget.animationStyle) {
@@ -2003,7 +2011,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
                             (offset / (heroH * .8)).clamp(0.0, 1.0);
                         final settle = Curves.easeInOutCubic.transform(progress);
                         return Transform.translate(
-                          offset: Offset(0, 20 * (1 - settle)),
+                          offset: Offset(0, -_sceneSettle * settle),
                           child: child,
                         );
                       },
@@ -2393,6 +2401,10 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   /// The pinned picture: art, trailer, scrims, and the scroll veil. Sits
   /// BEHIND the scroll view (see [_board]); everything here is
   /// non-interactive by construction.
+  /// How far the animated weather scene rises as the first hero is
+  /// scrolled away (see the backdrop Stack in the board build).
+  static const double _sceneSettle = 20;
+
   Widget _heroBackdrop(double heroH) {
     final backdrop = _heroBackdropContent(heroH);
     if (!widget.animationsEnabled) return backdrop;

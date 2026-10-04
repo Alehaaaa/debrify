@@ -28,17 +28,43 @@ class TmdbMetadataRepository {
     http.Client Function()? clientFactory,
     DateTime Function()? now,
     this.timeout = const Duration(seconds: 12),
+    this.minRequestGap = Duration.zero,
   }) : _token = token,
        _clientFactory =
            clientFactory ?? (() => TmdbHttpClient(dnsCache: _dnsCache)),
        _now = now ?? DateTime.now;
 
-  static final instance = TmdbMetadataRepository();
+  /// Paced to ~25 requests/second. TMDB throttles bursts (429) well before
+  /// its documented ceiling, and fast browsing used to trip it: every card
+  /// costs a `find` plus a `details` call, and a tripped cooldown blanked
+  /// every title logo on screen until the next rebuild.
+  static final instance = TmdbMetadataRepository(
+    minRequestGap: const Duration(milliseconds: 40),
+  );
   static final _dnsCache = TmdbDnsCache();
   final String _token;
   final http.Client Function() _clientFactory;
   final DateTime Function() _now;
   final Duration timeout;
+
+  /// Minimum spacing between request STARTS (see [instance]). Zero = unpaced.
+  final Duration minRequestGap;
+  DateTime? _nextStart;
+
+  /// IMDb → TMDB identity. Tiny, effectively immutable, and half of every
+  /// card's TMDB traffic — kept for the session instead of riding the
+  /// 15-minute response cache, where large `details` payloads evicted it.
+  final _identities = <String, TmdbIdentity?>{};
+
+  /// How long until the 429 cooldown lifts (zero when not cooling down).
+  /// Callers schedule retries past it instead of burning them inside it.
+  Duration get cooldownRemaining {
+    final until = _retryAfter;
+    if (until == null) return Duration.zero;
+    final left = until.difference(_now());
+    return left.isNegative ? Duration.zero : left;
+  }
+
   final _cache =
       <String, ({DateTime expires, Map<String, dynamic> data, int bytes})>{};
   final _pending = <String, Future<Map<String, dynamic>>>{};
@@ -59,7 +85,14 @@ class TmdbMetadataRepository {
     String path, [
     Map<String, String> query = const {},
     bool Function()? isRelevant,
-  ]) {
+  ]) => _get(path, query, isRelevant, useBundles: true);
+
+  Future<Map<String, dynamic>> _get(
+    String path,
+    Map<String, String> query,
+    bool Function()? isRelevant, {
+    required bool useBundles,
+  }) {
     if (!configured) {
       return Future.error(
         const TmdbMetadataException('TMDB is unavailable in this build.'),
@@ -85,6 +118,11 @@ class TmdbMetadataRepository {
       _relevance[key]?.add(isRelevant ?? () => true);
       return pending.then(_copy);
     }
+    final bundled = useBundles ? _fromBundle(path, sorted, isRelevant) : null;
+    if (bundled != null) {
+      _heroRequests.remove(key);
+      return bundled;
+    }
     if (_pending.length >= 128) {
       _heroRequests.remove(key);
       return Future.error(
@@ -95,12 +133,12 @@ class TmdbMetadataRepository {
     final request = _fetch(uri)
         .then((result) {
           _cache[key] = (
-            expires: _now().add(const Duration(minutes: 15)),
+            expires: _now().add(const Duration(minutes: 60)),
             data: result.data,
             bytes: result.bytes,
           );
           _cacheBytes += result.bytes;
-          while (_cache.length > 128 || _cacheBytes > 8 * 1024 * 1024) {
+          while (_cache.length > 384 || _cacheBytes > 24 * 1024 * 1024) {
             final evicted = _cache.remove(_cache.keys.first)!;
             _cacheBytes -= evicted.bytes;
           }
@@ -114,6 +152,79 @@ class TmdbMetadataRepository {
     _pending[key] = request;
     return request.then(_copy);
   }
+
+  static Set<String> _appendSet(String? raw) => {
+    for (final part in (raw ?? '').split(','))
+      if (part.trim().isNotEmpty) part.trim(),
+  };
+
+  /// Serves a title request from an already cached or in-flight
+  /// `append_to_response` bundle for the same title and language, instead of
+  /// a separate TMDB call: a details request whose appends are a subset of the
+  /// bundle's, or one appended sub-resource (`movie/1/credits` from
+  /// `movie/1?append_to_response=credits,...`). Null when nothing covers it.
+  Future<Map<String, dynamic>>? _fromBundle(
+    String path,
+    Map<String, String> query,
+    bool Function()? isRelevant,
+  ) {
+    final match = RegExp(
+      r'^(movie|tv)/(\d+)(?:/(credits|aggregate_credits|videos|recommendations))?$',
+    ).firstMatch(path);
+    if (match == null) return null;
+    final base = '/3/${match[1]}/${match[2]}';
+    final part = match[3];
+    final rest = Map<String, String>.of(query);
+    final Set<String> wanted;
+    if (part == null) {
+      wanted = _appendSet(rest.remove('append_to_response'));
+      if (wanted.isEmpty) return null;
+    } else {
+      if ((rest.remove('page') ?? '1') != '1') return null;
+      wanted = {part};
+    }
+    // Image language only matters to a request that asks for images.
+    if (!wanted.contains('images')) rest.remove('include_image_language');
+    bool covers(String candidate) {
+      final uri = Uri.parse(candidate);
+      if (uri.path != base) return false;
+      final q = Map<String, String>.of(uri.queryParameters);
+      if (!_appendSet(q.remove('append_to_response')).containsAll(wanted)) {
+        return false;
+      }
+      if (!wanted.contains('images')) q.remove('include_image_language');
+      return q.length == rest.length &&
+          q.entries.every((e) => rest[e.key] == e.value);
+    }
+
+    Map<String, dynamic>? slice(Map<String, dynamic> data) {
+      if (part == null) return _copy(data);
+      final value = data[part];
+      return value is Map<String, dynamic> ? _copy(value) : null;
+    }
+
+    final now = _now();
+    for (final entry in _cache.entries) {
+      if (!entry.value.expires.isAfter(now) || !covers(entry.key)) continue;
+      final hit = slice(entry.value.data);
+      if (hit != null) return Future.value(hit);
+    }
+    for (final entry in _pending.entries) {
+      if (!covers(entry.key)) continue;
+      _relevance[entry.key]?.add(isRelevant ?? () => true);
+      // A bundle that fails or lacks the part falls back to its own request.
+      return entry.value.then<Map<String, dynamic>?>(slice, onError: (_) => null)
+          .then((hit) => hit ?? _direct(path, query, isRelevant));
+    }
+    return null;
+  }
+
+  /// [get] without bundle reuse — the fallback when a bundle didn't deliver.
+  Future<Map<String, dynamic>> _direct(
+    String path,
+    Map<String, String> query,
+    bool Function()? isRelevant,
+  ) => _get(path, query, isRelevant, useBundles: false);
 
   static Object? _clone(Object? value) => switch (value) {
     Map<String, dynamic> value => value.map(
@@ -170,11 +281,23 @@ class TmdbMetadataRepository {
         failure = 'rate_limited';
         throw const TmdbMetadataException('TMDB is busy. Try again shortly.');
       }
+      if (minRequestGap > Duration.zero) {
+        // Reserve a start slot in queue order, then wait for it.
+        final now = _now();
+        final slot = _nextStart == null || _nextStart!.isBefore(now)
+            ? now
+            : _nextStart!;
+        _nextStart = slot.add(minRequestGap);
+        final wait = slot.difference(now);
+        if (wait > Duration.zero) await Future<void>.delayed(wait);
+      }
       final response = await _readWithRetry(uri);
       status = response.statusCode;
       if (response.statusCode == 429) {
+        // No header: a short cooldown. Burst throttling clears in seconds,
+        // and every second here is a second of text-only titles.
         final seconds =
-            int.tryParse(response.headers['retry-after'] ?? '') ?? 30;
+            int.tryParse(response.headers['retry-after'] ?? '') ?? 10;
         _retryAfter = _now().add(Duration(seconds: seconds.clamp(1, 300)));
       }
       if (response.statusCode != 200) {
@@ -282,14 +405,22 @@ class TmdbMetadataRepository {
     }
     final imdb = item.imdbId ?? item.id;
     if (!RegExp(r'^tt\d+$').hasMatch(imdb)) return null;
+    final cacheKey = '$type:$imdb';
+    if (_identities.containsKey(cacheKey)) return _identities[cacheKey];
     final data = await get('find/$imdb', {
       'external_source': 'imdb_id',
     }, isRelevant);
     final results = data[type == 'movie' ? 'movie_results' : 'tv_results'];
-    if (results is! List || results.length != 1) return null;
-    final row = results.first;
+    final row = results is List && results.length == 1 ? results.first : null;
     final id = row is Map ? row['id'] : null;
-    return id is int && id > 0 ? (type: type, id: id) : null;
+    final identity = id is int && id > 0 ? (type: type, id: id) : null;
+    // Only answers are remembered; a failed lookup threw above.
+    _identities.remove(cacheKey);
+    _identities[cacheKey] = identity;
+    while (_identities.length > 4096) {
+      _identities.remove(_identities.keys.first);
+    }
+    return identity;
   }
 
   Future<Map<String, dynamic>> details(

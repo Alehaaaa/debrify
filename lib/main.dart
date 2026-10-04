@@ -1,6 +1,7 @@
 import 'services/webdav_sync/webdav_log_upload.dart';
 import 'services/cache_scratch_cleanup.dart';
 import 'services/debrify_image_cache.dart';
+import 'services/offline_title_store.dart';
 import 'widgets/webdav_sync/webdav_save_status.dart';
 import 'services/local_validation_diagnostics.dart';
 import 'dart:async';
@@ -785,6 +786,8 @@ Future<void> _continueApplicationStartup() async {
   // app lifecycle automatically (see AnalyticsService.init / PugOptions).
   runApp(const DebrifyApp());
   unawaited(DebrifyImageCache.maintainDiskCaches());
+  // Downloaded titles' saved details, ready before their pages open offline.
+  unawaited(OfflineTitleStore.instance.ensureLoaded());
   applicationReady.complete();
   // Desktop scheduled recordings (Tier 1: fire while the app is running).
   // Arms stored timers + late-joins anything already in its window; no-op on
@@ -3373,7 +3376,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 16: // Cloud (consolidated provider hub)
         return CloudScreen(isTelevision: _isAndroidTv);
       case 17: // Search (dedicated tab — TV + sidebar layouts)
-        return SearchScreen(isTelevision: _isAndroidTv, searchMode: true);
+        // Off-TV it is Home's board pinned in search, so an empty query shows
+        // Home's shelves (lists, Continue Watching, catalogs) like Home's own
+        // search button; TV keeps the dedicated prompt.
+        return _isAndroidTv
+            ? SearchScreen(isTelevision: _isAndroidTv, searchMode: true)
+            : const SearchScreen(searchPage: true);
       case 18: // Discover (source-dropdown browser)
         return SearchScreen(isTelevision: _isAndroidTv, discoverMode: true);
       case 19: // Calendar (gated on Trakt OR Simkl auth in the nav below)
@@ -3958,6 +3966,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                               i != _kSearchTabIndex,
                         )
                         .toList();
+                MainPageBridge.searchTabInNav =
+                    nonTvIndices.contains(_kSearchTabIndex);
                 final nonTvSelected = nonTvIndices.indexOf(_selectedIndex);
                 // Touch tablets (iPad / Android tablet in landscape) get the
                 // wider rail. True desktop keeps the slim rail.
