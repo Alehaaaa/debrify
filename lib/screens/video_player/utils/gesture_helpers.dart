@@ -30,3 +30,13 @@ bool shouldToggleForTap(
   if (isInCenterRegion(pos, size)) return false;
   return true;
 }
+
+/// What a double tap does where it lands: the outer thirds seek back and
+/// forward, the middle third plays / pauses — VLC's and MX Player's layout.
+enum DoubleTapZone { seekBack, playPause, seekForward }
+
+DoubleTapZone doubleTapZoneFor(Offset pos, Size size) {
+  if (pos.dx <= size.width / 3) return DoubleTapZone.seekBack;
+  if (pos.dx >= size.width * 2 / 3) return DoubleTapZone.seekForward;
+  return DoubleTapZone.playPause;
+}

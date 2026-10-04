@@ -585,6 +585,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   Timer? _hideTimer;
 
+  // ---- Touch lock -----------------------------------------------------------
+  // Phones and tablets: a padlock at the right edge, mid-height. Locked, the
+  // HUD and every gesture are off; a tap shows just the padlock (it fades after
+  // a few seconds) and tapping it unlocks — the VLC / Netflix pattern.
+  bool _touchLocked = false;
+  final ValueNotifier<bool> _lockButtonVisible = ValueNotifier<bool>(false);
+  Timer? _lockButtonTimer;
+
+  bool get _supportsTouchLock =>
+      !PlatformUtil.isTelevision && (Platform.isAndroid || Platform.isIOS);
+
   // ---- Television transport bar -------------------------------------------
   // The TV bar is a separate widget with real focus; these are the pieces the
   // SCREEN has to own, because raising the bar, restoring focus and deciding
@@ -11873,6 +11884,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   @override
   void dispose() {
     MediaSessionService.instance.detach(this);
+    _lockButtonTimer?.cancel();
+    _lockButtonVisible.dispose();
     _stremioTvStartupWatch?.dispose();
     _stremioTvStartupSeek.cancel();
     _observeServerWatch();
@@ -13077,11 +13090,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // so this — not the key handler — is what makes BACK behave.
     return PopScope(
       canPop:
+          !_touchLocked &&
           _tvScrubTarget == null &&
           !_controlsVisible.value &&
           !_anyPlayerOverlayOpen,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop || !mounted) return;
+        // Locked: BACK only points at the padlock, it never leaves.
+        if (_touchLocked) {
+          _showLockButton();
+          return;
+        }
         if (_tvScrubTarget != null) {
           _tvScrubCancel();
           return;
@@ -13393,6 +13412,90 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     return KeyEventResult.ignored;
   }
 
+  void _lockTouch() {
+    _hideTimer?.cancel();
+    setState(() => _touchLocked = true);
+    _controlsVisible.value = false;
+    // Show the padlock briefly so it's clear where unlocking lives.
+    _showLockButton();
+  }
+
+  void _unlockTouch() {
+    _lockButtonTimer?.cancel();
+    _lockButtonVisible.value = false;
+    setState(() => _touchLocked = false);
+    _controlsVisible.value = true;
+    _scheduleAutoHide();
+  }
+
+  void _showLockButton() {
+    _lockButtonTimer?.cancel();
+    _lockButtonVisible.value = true;
+    _lockButtonTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) _lockButtonVisible.value = false;
+    });
+  }
+
+  void _onLockedTap() {
+    if (_lockButtonVisible.value) {
+      _lockButtonTimer?.cancel();
+      _lockButtonVisible.value = false;
+    } else {
+      _showLockButton();
+    }
+  }
+
+  /// Top of the player stack: unlocked, the padlock rides with the HUD;
+  /// locked, a layer that swallows every touch and shows only the padlock.
+  Widget _buildTouchLockLayer() {
+    if (!_touchLocked) {
+      return ValueListenableBuilder<bool>(
+        valueListenable: _controlsVisible,
+        builder: (context, visible, _) => Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          child: SafeArea(
+            left: false,
+            child: Center(
+              child: AnimatedOpacity(
+                opacity: visible ? 1 : 0,
+                duration: const Duration(milliseconds: 150),
+                child: IgnorePointer(
+                  ignoring: !visible,
+                  child: _TouchLockButton(locked: false, onTap: _lockTouch),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _onLockedTap,
+        child: SafeArea(
+          left: false,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: _lockButtonVisible,
+              builder: (context, visible, _) => AnimatedOpacity(
+                opacity: visible ? 1 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: IgnorePointer(
+                  ignoring: !visible,
+                  child: _TouchLockButton(locked: true, onTap: _unlockTouch),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _toggleControls() {
     _controlsVisible.value = !_controlsVisible.value;
     if (_controlsVisible.value) {
@@ -13452,6 +13555,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onControlsVisibilityChanged() {
+    // Nothing raises the HUD through a lock (volume keys, pointer wake…).
+    if (_touchLocked && _controlsVisible.value) {
+      _controlsVisible.value = false;
+      return;
+    }
     _syncPlaybackClockVisibility();
     // The dock carries its own copy of the panel, so the floating one goes the
     // instant the dock opens. Fading it would cross-dissolve two copies of the
@@ -13573,7 +13681,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       if (localPos.dy < topBar || localPos.dy > size.height - bottomBar) return;
     }
 
-    // Default seek behavior for left/right taps
+    // Middle third: play / pause (VLC, MX Player). Outer thirds seek.
+    if (doubleTapZoneFor(localPos, size) == DoubleTapZone.playPause) {
+      if (!_isReady) return;
+      final wasPlaying = _isPlaying;
+      _togglePlay();
+      _ripple = DoubleTapRipple(
+        center: localPos,
+        icon: wasPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+      );
+      setState(() {});
+      Future.delayed(const Duration(milliseconds: 450), () {
+        if (mounted) setState(() => _ripple = null);
+      });
+      return;
+    }
+
     final isLeft = localPos.dx < size.width / 2;
     final delta = VideoPlayerTimingConstants.seekDelta;
     final target = _position + (isLeft ? -delta : delta);
@@ -15965,6 +16088,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                   Positioned.fill(child: _buildPlayerMenuPanel()),
                 // Subtitle sync overlay
                 if (_showSyncOverlay && !inPip) _buildSyncOverlay(),
+                // Touch lock: last, so when locked it sits above everything.
+                if (_supportsTouchLock && isReady && !inPip)
+                  _buildTouchLockLayer(),
               ],
             ),
             builder: (context, controlsVisible, child) {
@@ -18220,5 +18346,55 @@ class _PlayerMediaSession implements MediaSessionHandler {
   @override
   void seekBy(Duration offset) {
     if (_live) _state._mediaSeekTo(_state._position + offset);
+  }
+}
+
+/// The touch-lock padlock: a round glass button with a short caption, the
+/// same at both ends so it reads as one control that toggles.
+class _TouchLockButton extends StatelessWidget {
+  const _TouchLockButton({required this.locked, required this.onTap});
+
+  final bool locked;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Material(
+            color: Colors.black.withValues(alpha: 0.45),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  locked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                  color: Colors.white,
+                  size: 24,
+                  semanticLabel: locked ? 'Unlock screen' : 'Lock screen',
+                ),
+              ),
+            ),
+          ),
+          if (locked) ...[
+            const SizedBox(height: 6),
+            const Text(
+              'Tap to unlock',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
