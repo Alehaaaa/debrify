@@ -78,6 +78,8 @@ void main() {
       branch,
       lessThan(source.indexOf('await _reconcileSeriesResume(', start)),
     );
-    expect(RegExp('startFromBeginning: true').allMatches(source).length, 2);
+    // One detail page (the merged one) wires Rewatch since the legacy
+    // CatalogItemDetailScreen route was folded into it.
+    expect(RegExp('startFromBeginning: true').allMatches(source).length, 1);
   });
 }
