@@ -566,6 +566,7 @@ class StorageService {
   static const String _defaultFilterSizesKey = 'default_filter_sizes_v1';
   static const String _defaultFilterDynamicRangesKey =
       'default_filter_dynamic_ranges_v1';
+  static const String _defaultFilterCodecsKey = 'default_filter_codecs_v1';
   static const String _quickPlayHonorsFiltersKey =
       'quick_play_honors_filters_v1';
 
@@ -594,6 +595,9 @@ class StorageService {
   static const String _quickPlayMovieRulesKey = 'quick_play_movie_rules_v2';
   static const String _quickPlaySeriesRulesKey = 'quick_play_series_rules_v2';
   static const String _playButtonModeKey = 'play_button_mode';
+  static const String _downloadButtonModeKey = 'download_button_mode_v1';
+  static const String _downloadButtonAlwaysAskKey =
+      'download_button_always_ask_v1';
 
   // Series auto-pin: on a series play with no pinned source, search packs
   // first (complete series → season pack), and pin whatever source plays so
@@ -5144,6 +5148,7 @@ class StorageService {
     await prefs.remove(_defaultFilterLanguagesKey);
     await prefs.remove(_defaultFilterSizesKey);
     await prefs.remove(_defaultFilterDynamicRangesKey);
+    await prefs.remove(_defaultFilterCodecsKey);
     await prefs.remove(_defaultTorrentProviderKey);
   }
 
@@ -8780,6 +8785,18 @@ class StorageService {
     await prefs.setString(_defaultFilterDynamicRangesKey, jsonEncode(ranges));
   }
 
+  static Future<List<String>> getDefaultFilterCodecs() async {
+    final prefs = await ProfilePreferences.instance();
+    final json = prefs.getString(_defaultFilterCodecsKey);
+    if (json == null) return [];
+    return List<String>.from(jsonDecode(json));
+  }
+
+  static Future<void> setDefaultFilterCodecs(List<String> codecs) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_defaultFilterCodecsKey, jsonEncode(codecs));
+  }
+
   // Debrify TV Filter Settings — scoped to Debrify TV only, deliberately
   // separate from the Search tab's default filters above so tuning a channel
   // feed never changes search behaviour (and vice versa).
@@ -9026,6 +9043,32 @@ class StorageService {
   static Future<void> setPlayButtonMode(String value) async {
     final prefs = await ProfilePreferences.instance();
     await prefs.setString(_playButtonModeKey, value);
+  }
+
+  /// What a title's Download button does when it doesn't ask: `auto`
+  /// downloads the best source matching the saved source filters, `manual`
+  /// opens the source list. Absent means `manual` — the button's old behavior.
+  static Future<String> getDownloadButtonMode() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getString(_downloadButtonModeKey) == 'auto'
+        ? 'auto'
+        : 'manual';
+  }
+
+  static Future<void> setDownloadButtonMode(String value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setString(_downloadButtonModeKey, value);
+  }
+
+  /// Whether the Download button asks auto-or-manual each time. On by default.
+  static Future<bool> getDownloadButtonAlwaysAsk() async {
+    final prefs = await ProfilePreferences.instance();
+    return prefs.getBool(_downloadButtonAlwaysAskKey) ?? true;
+  }
+
+  static Future<void> setDownloadButtonAlwaysAsk(bool value) async {
+    final prefs = await ProfilePreferences.instance();
+    await prefs.setBool(_downloadButtonAlwaysAskKey, value);
   }
 
   /// Loads the per-content Quick Play profile. When no v2 profile exists,

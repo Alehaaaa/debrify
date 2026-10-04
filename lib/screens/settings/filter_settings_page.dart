@@ -22,6 +22,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
   final Set<AudioLanguage> _selectedLanguages = {};
   final Set<SizeBucket> _selectedSizes = {};
   final Set<DynamicRange> _selectedRanges = {};
+  final Set<VideoCodec> _selectedCodecs = {};
 
   // Focus nodes for D-pad navigation
   final List<FocusNode> _qualityFocusNodes = [];
@@ -29,6 +30,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
   final List<FocusNode> _languageFocusNodes = [];
   final List<FocusNode> _sizeFocusNodes = [];
   final List<FocusNode> _rangeFocusNodes = [];
+  final List<FocusNode> _codecFocusNodes = [];
   final FocusNode _clearAllFocusNode = FocusNode(debugLabel: 'clear-all');
   bool _clearAllFocused = false;
 
@@ -70,6 +72,9 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
     for (int i = 0; i < _rangeOptions.length; i++) {
       _rangeFocusNodes.add(FocusNode(debugLabel: 'range-$i'));
     }
+    for (int i = 0; i < _codecOptions.length; i++) {
+      _codecFocusNodes.add(FocusNode(debugLabel: 'codec-$i'));
+    }
   }
 
   @override
@@ -91,6 +96,9 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
     for (final node in _rangeFocusNodes) {
       node.dispose();
     }
+    for (final node in _codecFocusNodes) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -101,6 +109,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
       final languages = await StorageService.getDefaultFilterLanguages();
       final sizes = await StorageService.getDefaultFilterSizes();
       final ranges = await StorageService.getDefaultFilterDynamicRanges();
+      final codecs = await StorageService.getDefaultFilterCodecs();
 
       setState(() {
         // Convert stored strings back to enums
@@ -129,6 +138,12 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
               .where((e) => e.name == r)
               .firstOrNull;
           if (range != null) _selectedRanges.add(range);
+        }
+        for (final c in codecs) {
+          final codec = VideoCodec.values
+              .where((e) => e.name == c)
+              .firstOrNull;
+          if (codec != null) _selectedCodecs.add(codec);
         }
         _loading = false;
       });
@@ -195,6 +210,21 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
     await _saveRanges();
   }
 
+  Future<void> _toggleCodec(VideoCodec codec) async {
+    setState(() {
+      if (!_selectedCodecs.add(codec)) {
+        _selectedCodecs.remove(codec);
+      }
+    });
+    await _saveCodecs();
+  }
+
+  Future<void> _saveCodecs() async {
+    await StorageService.setDefaultFilterCodecs(
+      _selectedCodecs.map((e) => e.name).toList(),
+    );
+  }
+
   Future<void> _saveQualities() async {
     await StorageService.setDefaultFilterQualities(
       _selectedQualities.map((e) => e.name).toList(),
@@ -236,6 +266,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
       _selectedLanguages.clear();
       _selectedSizes.clear();
       _selectedRanges.clear();
+      _selectedCodecs.clear();
     });
     if (reseedFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -250,6 +281,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
       _saveLanguages(),
       _saveSizes(),
       _saveRanges(),
+      _saveCodecs(),
     ]);
   }
 
@@ -268,7 +300,8 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
         _selectedSources.isNotEmpty ||
         _selectedLanguages.isNotEmpty ||
         _selectedSizes.isNotEmpty ||
-        _selectedRanges.isNotEmpty;
+        _selectedRanges.isNotEmpty ||
+        _selectedCodecs.isNotEmpty;
 
     return SettingsPageScaffold(
       title: 'Filters',
@@ -346,6 +379,13 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
                     title: 'Dynamic range',
                     subtitle: 'Pick SDR alone to exclude HDR sources',
                     children: _buildRangeChips(),
+                  ),
+                  const SizedBox(height: 20),
+                  _buildSection(
+                    context,
+                    title: 'Codec',
+                    subtitle: 'Read from the release name',
+                    children: _buildCodecChips(),
                   ),
                   const SizedBox(height: 20),
                   _buildSection(
@@ -454,6 +494,20 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
         subtitle: option.subtitle,
         selected: _selectedRanges.contains(option.value),
         onSelected: () => _toggleRange(option.value),
+      );
+    }).toList();
+  }
+
+  List<Widget> _buildCodecChips() {
+    return _codecOptions.asMap().entries.map((entry) {
+      final index = entry.key;
+      final option = entry.value;
+      return _DpadFilterChip(
+        focusNode: _codecFocusNodes[index],
+        label: option.title,
+        subtitle: option.subtitle,
+        selected: _selectedCodecs.contains(option.value),
+        onSelected: () => _toggleCodec(option.value),
       );
     }).toList();
   }
@@ -607,6 +661,19 @@ class _RangeOption {
 const _rangeOptions = <_RangeOption>[
   _RangeOption(DynamicRange.sdr, 'SDR', 'No HDR tag'),
   _RangeOption(DynamicRange.hdr, 'HDR', 'HDR10 / 10+, Dolby Vision, HLG'),
+];
+
+class _CodecOption {
+  final VideoCodec value;
+  final String title;
+  final String subtitle;
+  const _CodecOption(this.value, this.title, this.subtitle);
+}
+
+const _codecOptions = <_CodecOption>[
+  _CodecOption(VideoCodec.av1, 'AV1', 'Smallest files, newer devices'),
+  _CodecOption(VideoCodec.hevc, 'H.265 / HEVC', 'x265'),
+  _CodecOption(VideoCodec.avc, 'H.264 / AVC', 'x264, plays everywhere'),
 ];
 
 // Options lists

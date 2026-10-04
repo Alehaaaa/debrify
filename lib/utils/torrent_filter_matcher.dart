@@ -46,6 +46,10 @@ class TorrentFilterMatcher {
         !f.dynamicRanges.contains(detectDynamicRange(t.name))) {
       return false;
     }
+    if (f.codecs.isNotEmpty) {
+      final codec = detectVideoCodec(t.name);
+      if (codec == null || !f.codecs.contains(codec)) return false;
+    }
     return true;
   }
 
@@ -112,6 +116,24 @@ class TorrentFilterMatcher {
       }
     }
     return DynamicRange.sdr;
+  }
+
+  /// The codec the name carries, read by [FormatTagDetector] like the row's
+  /// codec badge; null when the name names none.
+  static VideoCodec? detectVideoCodec(String rawName) {
+    for (final tag in FormatTagDetector.detect(rawName)) {
+      switch (tag) {
+        case FormatTag.av1:
+          return VideoCodec.av1;
+        case FormatTag.hevc:
+          return VideoCodec.hevc;
+        case FormatTag.avc:
+          return VideoCodec.avc;
+        default:
+          continue;
+      }
+    }
+    return null;
   }
 
   /// Bare "WEB" as its own word — catches dotted scene names like

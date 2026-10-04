@@ -352,6 +352,11 @@ abstract final class SettingsRows {
     title: 'Download Location',
     subtitle: '',
   );
+  static const downloadButton = SettingsRowContent(
+    icon: Icons.download_for_offline_rounded,
+    title: 'Download Button',
+    subtitle: 'Ask, download automatically, or pick a source',
+  );
   static const clearDownloads = SettingsRowContent(
     icon: Icons.download_rounded,
     title: 'Clear Download Data',

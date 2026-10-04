@@ -67,6 +67,7 @@ class SettingsTvLayout extends StatefulWidget {
   final Future<void> Function() onClearPlayback;
   // Android-only custom download folder (SAF); null hides the row.
   final Future<void> Function()? onOpenDownloadLocation;
+  final Future<void> Function()? onOpenDownloadButtonSettings;
   final String downloadLocationSubtitle;
   final Future<void> Function() onCreateBackup;
   final Future<void> Function() onRestoreBackup;
@@ -183,6 +184,7 @@ class SettingsTvLayout extends StatefulWidget {
     required this.onClearDownloads,
     required this.onClearPlayback,
     this.onOpenDownloadLocation,
+    this.onOpenDownloadButtonSettings,
     this.downloadLocationSubtitle = '',
     required this.onCreateBackup,
     required this.onRestoreBackup,
@@ -1274,17 +1276,25 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
               ],
             ),
             const SizedBox(height: 18),
-            if (widget.onOpenDownloadLocation != null) ...[
+            if (widget.onOpenDownloadButtonSettings != null ||
+                widget.onOpenDownloadLocation != null) ...[
               const SettingsSectionLabel('Downloads'),
               SettingsSection(
                 title: '',
                 children: [
-                  SettingsTile.spec(
-                    SettingsRows.downloadLocation,
-                    subtitle: widget.downloadLocationSubtitle,
-                    onTap: widget.onOpenDownloadLocation!,
-                    focusNode: nextNode(),
-                  ),
+                  if (widget.onOpenDownloadButtonSettings != null)
+                    SettingsTile.spec(
+                      SettingsRows.downloadButton,
+                      onTap: widget.onOpenDownloadButtonSettings!,
+                      focusNode: nextNode(),
+                    ),
+                  if (widget.onOpenDownloadLocation != null)
+                    SettingsTile.spec(
+                      SettingsRows.downloadLocation,
+                      subtitle: widget.downloadLocationSubtitle,
+                      onTap: widget.onOpenDownloadLocation!,
+                      focusNode: nextNode(),
+                    ),
                 ],
               ),
               const SizedBox(height: 18),

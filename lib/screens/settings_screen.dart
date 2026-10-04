@@ -115,6 +115,7 @@ import 'settings/torbox_settings_page.dart';
 import 'settings/premiumize_settings_page.dart';
 import 'settings/alldebrid_settings_page.dart';
 import 'settings/torrent_settings_page.dart';
+import 'settings/download_settings_page.dart';
 import 'settings/filter_settings_page.dart';
 import 'settings/indexer_managers_settings_page.dart';
 import 'settings/provider_settings_page.dart';
@@ -1338,6 +1339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenDownloadLocation: _downloadLocationSupported
           ? _openDownloadLocationSettings
           : null,
+      onOpenDownloadButtonSettings: _openDownloadButtonSettings,
       downloadLocationSubtitle: _downloadLocationSubtitle,
       onCreateBackup: _createBackup,
       onRestoreBackup: _restoreBackup,
@@ -1463,6 +1465,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenDownloadLocation: _downloadLocationSupported
           ? _openDownloadLocationSettings
           : null,
+      onOpenDownloadButtonSettings: _openDownloadButtonSettings,
       downloadLocationSubtitle: _downloadLocationSubtitle,
       onCreateBackup: _createBackup,
       onRestoreBackup: _restoreBackup,
@@ -2770,6 +2773,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
 
       // Downloads
+      nav(
+        SettingsRows.downloadButton,
+        'Data & Backup',
+        _openDownloadButtonSettings,
+        keywords: const [
+          'download',
+          'automatic',
+          'auto download',
+          'always ask',
+          'manual',
+          'filters',
+        ],
+      ),
       if (_downloadLocationSupported)
         nav(
           SettingsRows.downloadLocation,
@@ -5305,6 +5321,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() {});
   }
 
+  Future<void> _openDownloadButtonSettings() async {
+    await pushSettingsPage(context, const DownloadSettingsPage());
+  }
+
   Future<void> _openFilterSettings() async {
     await pushSettingsPage(context, const FilterSettingsPage());
     if (!mounted) return;
@@ -7672,6 +7692,7 @@ class _SettingsLayout extends StatelessWidget {
   final Future<void> Function() onClearPlayback;
   // Android-only custom download folder (SAF); null hides the row.
   final Future<void> Function()? onOpenDownloadLocation;
+  final Future<void> Function()? onOpenDownloadButtonSettings;
   final String downloadLocationSubtitle;
   final Future<void> Function() onCreateBackup;
   final Future<void> Function() onRestoreBackup;
@@ -7770,6 +7791,7 @@ class _SettingsLayout extends StatelessWidget {
     required this.onClearDownloads,
     required this.onClearPlayback,
     this.onOpenDownloadLocation,
+    this.onOpenDownloadButtonSettings,
     this.downloadLocationSubtitle = '',
     required this.onCreateBackup,
     required this.onRestoreBackup,
@@ -8229,15 +8251,22 @@ class _SettingsLayout extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
-            if (onOpenDownloadLocation != null) ...[
+            if (onOpenDownloadButtonSettings != null ||
+                onOpenDownloadLocation != null) ...[
               SettingsSection(
                 title: 'Downloads',
                 children: [
-                  SettingsTile.spec(
-                    SettingsRows.downloadLocation,
-                    subtitle: downloadLocationSubtitle,
-                    onTap: onOpenDownloadLocation!,
-                  ),
+                  if (onOpenDownloadButtonSettings != null)
+                    SettingsTile.spec(
+                      SettingsRows.downloadButton,
+                      onTap: onOpenDownloadButtonSettings!,
+                    ),
+                  if (onOpenDownloadLocation != null)
+                    SettingsTile.spec(
+                      SettingsRows.downloadLocation,
+                      subtitle: downloadLocationSubtitle,
+                      onTap: onOpenDownloadLocation!,
+                    ),
                 ],
               ),
               const SizedBox(height: 18),
@@ -8674,6 +8703,11 @@ class _SettingsLayout extends StatelessWidget {
                       onTap: onOpenSyncAndMigrate,
                       trailing: const WebDavSyncPendingBadge(),
                     ),
+                    if (onOpenDownloadButtonSettings != null)
+                      SettingsTile.spec(
+                        SettingsRows.downloadButton,
+                        onTap: onOpenDownloadButtonSettings!,
+                      ),
                     if (onOpenDownloadLocation != null)
                       SettingsTile.spec(
                         SettingsRows.downloadLocation,

@@ -37,6 +37,7 @@ import '../theme/app_theme_scope.dart';
 import '../utils/deovr_utils.dart' as deovr;
 import '../utils/dialog_tap_guard.dart';
 import '../utils/filter_ladder.dart';
+import '../utils/torrent_filter_matcher.dart';
 import '../utils/file_utils.dart';
 import '../utils/formatters.dart';
 import '../utils/rd_blocked_filter.dart';
@@ -67,6 +68,7 @@ import 'stremio_service.dart';
 import 'series_source_service.dart';
 import 'resolved_playback_link_cache.dart';
 import 'failed_saved_source.dart';
+import 'saved_source_filters.dart';
 import 'storage_service.dart';
 import 'stream_url_validator.dart';
 import 'startup_stream_policy.dart';
@@ -7468,12 +7470,155 @@ class TorrentPlaybackService {
     );
   }
 
+  /// The Download button's automatic path: search the title's sources, keep
+  /// the ones matching the user's saved source filters, and download the best
+  /// that resolves — a movie's file, or for a series the best pack of
+  /// [season] (all of its files). Returns false when nothing matched or
+  /// resolved, so the caller can hand the user the manual list instead.
+  static Future<bool> downloadBestFromSelection(
+    BuildContext context, {
+    required String imdbId,
+    required bool isMovie,
+    int? season,
+    required PlaybackMeta meta,
+  }) async {
+    final label = meta.title ?? '';
+    if (!ProfilePolicyGuard.allowsSync(ProfileFeature.downloads)) {
+      _snack(context, 'Downloads are disabled for this profile.');
+      return true;
+    }
+    if (!imdbId.startsWith('tt') || (!isMovie && season == null)) {
+      return false;
+    }
+    final provider = await _pickProvider(context);
+    if (!context.mounted || provider == _cancelled) return true;
+    if (provider == null) {
+      _snack(context, 'No debrid provider configured. Add one in Settings.');
+      return true;
+    }
+    var cancelled = false;
+    final overlay = _showPipeline(
+      context,
+      provider: provider,
+      meta: meta,
+      title: label,
+      onCancel: () => cancelled = true,
+    );
+    var overlayUp = true;
+    void closeOverlay() {
+      if (!overlayUp) return;
+      overlayUp = false;
+      overlay.dismiss();
+    }
+
+    try {
+      final rules = await StorageService.getQuickPlayRules(isMovie: isMovie);
+      var filters = await SavedSourceFilters.load();
+      // Pack sizes are per-episode, so the size facet is movie-only.
+      if (!isMovie) filters = filters.copyWith(sizes: const <SizeBucket>{});
+      if (cancelled) return true;
+      final List<Torrent> found;
+      if (isMovie) {
+        found = await searchCuratedSources(
+          imdbId: imdbId,
+          label: label,
+          year: meta.year,
+          isMovie: true,
+          provider: provider,
+          rules: rules,
+          originMeta: meta,
+          isCancelled: () => cancelled,
+          onResults: (n) =>
+              overlay.setStage(PlayLoadStage.searching, sourceCount: n),
+        );
+      } else {
+        found =
+            await searchSeriesPackSources(
+              imdbId: imdbId,
+              label: label,
+              season: season!,
+              provider: provider,
+              ladder: FilterLadder(filters),
+              rules: rules,
+              isCancelled: () => cancelled,
+              onCacheCheck: () => overlay.setStage(PlayLoadStage.cacheCheck),
+            ) ??
+            const <Torrent>[];
+      }
+      if (cancelled) return true;
+      if (!context.mounted) return true;
+      final matching = TorrentFilterMatcher.apply(found, filters);
+      final torrents = orderCandidatesForRules(
+        matching.where((t) => t.streamType == StreamType.torrent).toList(),
+        rules: rules,
+      );
+      final direct = matching
+          .where(
+            (t) =>
+                (t.streamType == StreamType.directUrl ||
+                    t.streamType == StreamType.externalUrl) &&
+                (t.directUrl?.isNotEmpty ?? false) &&
+                supportsDirectStreamDownload(t),
+          )
+          .toList();
+      if (torrents.isNotEmpty) {
+        overlay.setStage(PlayLoadStage.preparing);
+        final (resolved, winner) = await _probeCandidates(
+          provider,
+          torrents,
+          rules: rules,
+          isCancelled: () => cancelled,
+          // A download is worth a few probes; PikPak still stops at one.
+          minAttempts: 3,
+        );
+        if (cancelled) return true;
+        if (!context.mounted) return true;
+        if (resolved != null && winner != null) {
+          closeOverlay();
+          await _download(
+            context,
+            resolved,
+            winner,
+            provider,
+            meta: meta,
+            pickFiles: false,
+          );
+          return true;
+        }
+      }
+      if (direct.isNotEmpty) {
+        closeOverlay();
+        await downloadDirectStream(context, direct.first, meta: meta);
+        return true;
+      }
+      closeOverlay();
+      if (context.mounted) {
+        _snack(
+          context,
+          matching.isEmpty
+              ? 'No source matches your saved filters. Pick one yourself.'
+              : 'No matching source is ready to download. Pick one yourself.',
+        );
+      }
+      return false;
+    } catch (e) {
+      closeOverlay();
+      if (cancelled) return true;
+      if (context.mounted) _snack(context, 'Search failed: $e');
+      return true;
+    } finally {
+      closeOverlay();
+    }
+  }
+
   static Future<void> _download(
     BuildContext context,
     _Resolved r,
     Torrent torrent,
     String provider, {
     PlaybackMeta? meta,
+    // Off for auto-download: a pack queues all of its files without asking.
+    bool pickFiles = true,
   }) async {
     final credentialKey = _credentialKeyForProvider(provider);
     // Multi-file pack: let the user choose which files (parity with the old
@@ -7481,7 +7626,9 @@ class TorrentPlaybackService {
     // on demand (RD/TorBox/AllDebrid resolve only the start file up front;
     // Premiumize resolves all).
     if (r.playlist != null && r.playlist!.length > 1) {
-      final chosen = await _showDownloadPicker(context, r.playlist!);
+      final chosen = pickFiles
+          ? await _showDownloadPicker(context, r.playlist!)
+          : r.playlist!;
       if (chosen == null || chosen.isEmpty) return; // cancelled
       var n = 0;
       for (final e in chosen) {

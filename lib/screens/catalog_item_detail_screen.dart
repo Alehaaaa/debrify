@@ -29,6 +29,7 @@ import '../services/mdblist/mdblist_service.dart';
 import '../widgets/rewatch_progress_dialog.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/detail/detail_primary_sources.dart';
+import '../widgets/detail/download_choice_sheet.dart';
 import '../widgets/parents_guide_section.dart';
 import '../widgets/movie_watched_badge.dart';
 import '../widgets/shimmer.dart';
@@ -74,6 +75,11 @@ class CatalogItemDetailScreen extends StatefulWidget {
   /// would choose. When null, series Play remains tap-only; movies reuse
   /// [onBrowse] directly because that already is their Sources action.
   final Future<void> Function()? onBrowsePrimaryEpisodeSources;
+
+  /// A movie's Download button, automatic path: downloads the best source
+  /// matching the saved source filters; false when nothing was downloadable.
+  /// Null keeps the button opening the source list.
+  final Future<bool> Function()? onAutoDownload;
 
   /// False for detail surfaces whose [onBrowse] is not a source browser (for
   /// example Stremio TV channel details, where both buttons play the channel).
@@ -122,6 +128,7 @@ class CatalogItemDetailScreen extends StatefulWidget {
     this.onRewatch,
     required this.onBrowse,
     this.onBrowsePrimaryEpisodeSources,
+    this.onAutoDownload,
     this.enablePrimarySourcesHold = true,
     this.onLoaderArt,
     this.resumeInfoLoader,
@@ -1837,10 +1844,21 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
         // stacks on top). The host handles teardown via _returnToCatalogIfNeeded.
         // Movies: a Download button — the source list until the title has a
         // download, then its download page. Series keep their Episodes button.
-        onBrowse: item.type != 'series' &&
-                _downloads.state != DownloadedTitleState.none
+        onBrowse: item.type == 'series'
+            ? widget.onBrowse
+            : _downloads.state != DownloadedTitleState.none
             ? () => unawaited(_downloads.open(context))
-            : widget.onBrowse,
+            : widget.onAutoDownload == null
+            ? widget.onBrowse
+            : () => unawaited(
+                runDownloadButton(
+                  context,
+                  title: item.name,
+                  isTelevision: widget.isTelevision,
+                  auto: widget.onAutoDownload!,
+                  manual: widget.onBrowse,
+                ),
+              ),
         downloadState: _downloads.state,
         inMyWatchlist: _inMyWatchlist,
         onToggleMyWatchlist: _supportsMyWatchlist ? _toggleMyWatchlist : null,

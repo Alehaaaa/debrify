@@ -93,6 +93,8 @@ import '../services/next_episode_service.dart';
 import '../services/episode_tracker_snapshot_revision.dart';
 import '../services/local_series_completion_service.dart';
 import '../services/source_priority.dart';
+import '../services/saved_source_filters.dart';
+import '../utils/filter_ladder.dart' show FilterLadder;
 import '../services/storage_service.dart';
 import '../services/tv_hero_artwork_quality_controller.dart';
 import '../services/tvos_top_shelf_service.dart';
@@ -12616,69 +12618,12 @@ class _SearchScreenState extends State<SearchScreen>
   /// least one default is configured so an empty default keeps filters off.
   Future<void> _loadDefaultKeywordFilters() async {
     try {
-      final qualities = await StorageService.getDefaultFilterQualities();
-      final sources = await StorageService.getDefaultFilterRipSources();
-      final languages = await StorageService.getDefaultFilterLanguages();
-      final sizes = await StorageService.getDefaultFilterSizes();
-      final ranges = await StorageService.getDefaultFilterDynamicRanges();
-      if (!mounted) return;
-
-      final qualitySet = <QualityTier>{};
-      final sourceSet = <RipSourceCategory>{};
-      final languageSet = <AudioLanguage>{};
-      final sizeSet = <SizeBucket>{};
-      final rangeSet = <DynamicRange>{};
-      for (final q in qualities) {
-        for (final e in QualityTier.values) {
-          if (e.name == q) qualitySet.add(e);
-        }
-      }
-      for (final s in sources) {
-        for (final e in RipSourceCategory.values) {
-          if (e.name == s) sourceSet.add(e);
-        }
-      }
-      for (final l in languages) {
-        for (final e in AudioLanguage.values) {
-          if (e.name == l) languageSet.add(e);
-        }
-      }
-      for (final s in sizes) {
-        for (final e in SizeBucket.values) {
-          if (e.name == s) sizeSet.add(e);
-        }
-      }
-      for (final r in ranges) {
-        for (final e in DynamicRange.values) {
-          if (e.name == r) rangeSet.add(e);
-        }
-      }
-
-      if (qualitySet.isEmpty &&
-          sourceSet.isEmpty &&
-          languageSet.isEmpty &&
-          sizeSet.isEmpty &&
-          rangeSet.isEmpty) {
-        return;
-      }
+      final saved = await SavedSourceFilters.load();
+      if (!mounted || saved.isEmpty) return;
       // If the user already picked filters while these async reads were in
       // flight, don't clobber their choice with the saved defaults.
-      if (_kwFilters.qualities.isNotEmpty ||
-          _kwFilters.ripSources.isNotEmpty ||
-          _kwFilters.languages.isNotEmpty ||
-          _kwFilters.sizes.isNotEmpty ||
-          _kwFilters.dynamicRanges.isNotEmpty) {
-        return;
-      }
-      setState(() {
-        _kwFilters = TorrentFilterState(
-          qualities: qualitySet,
-          ripSources: sourceSet,
-          languages: languageSet,
-          sizes: sizeSet,
-          dynamicRanges: rangeSet,
-        );
-      });
+      if (!_kwFilters.isEmpty) return;
+      setState(() => _kwFilters = saved);
       // If results are already on screen (defaults resolved after a fast
       // search), re-apply so the seeded filters take effect immediately.
       if (_kwAll.isNotEmpty) _recomputeKeyword();
@@ -13407,6 +13352,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
     if (result == null || !mounted) return;
     _kwFilters = result;
     _recomputeKeyword();
+    // The next search, here or in a title's Sources, starts from these.
+    unawaited(SavedSourceFilters.save(result));
   }
 
   /// Info banner shown above the results when the list is narrowed to
@@ -13930,6 +13877,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
                         isMdblistSource: isMdblistSource,
                       )
                     : null,
+                onAutoDownload: (season) =>
+                    _autoDownload(item, addon, season: season),
                 onItemSelected: (selection) => _browseSelection(
                   selection, metadataAddonId: addon.id, catalogItem: item.withSourceAddon(addon),
                 ),
@@ -14081,6 +14030,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 isTraktSource: isTraktSource,
                 isMdblistSource: isMdblistSource,
               ),
+              onAutoDownload: item.type == 'movie'
+                  ? () => _autoDownload(item, addon)
+                  : null,
               onBrowsePrimaryEpisodeSources: item.type == 'series'
                   ? () => _onCatalogPlay(
                       item,
@@ -16122,6 +16074,38 @@ sheetAnimationStyle: kMenuSheetAnimation,
     }
   }
 
+  /// A detail page's Download button, automatic path: the best source that
+  /// matches the saved source filters — the movie, or a pack of [season].
+  Future<bool> _autoDownload(
+    StremioMeta item,
+    StremioAddon addon, {
+    int? season,
+  }) {
+    final isMovie = item.type != 'series';
+    final sel = isMovie
+        ? _movieSelection(item)
+        : AdvancedSearchSelection(
+            imdbId: item.progressId ?? item.id,
+            isSeries: true,
+            title: item.name,
+            year: item.year,
+            season: season,
+            contentType: item.type,
+            posterUrl: item.poster,
+          );
+    return TorrentPlaybackService.downloadBestFromSelection(
+      context,
+      imdbId: sel.imdbId,
+      isMovie: isMovie,
+      season: season,
+      meta: _metaFor(
+        sel,
+        addonId: addon.id,
+        catalogItem: item.withSourceAddon(addon),
+      ),
+    );
+  }
+
   AdvancedSearchSelection _movieSelection(
     StremioMeta item, {
     bool isTraktSource = false,
@@ -18101,7 +18085,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
         _kwFilters.ripSources.length +
         _kwFilters.languages.length +
         _kwFilters.sizes.length +
-        _kwFilters.dynamicRanges.length;
+        _kwFilters.dynamicRanges.length +
+        _kwFilters.codecs.length;
 
     // [navIndex]/[navTotal], when provided, make the pill keyboard/DPAD
     // focusable at that position in the toolbar (left/right between pills, up to

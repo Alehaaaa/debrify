@@ -430,9 +430,18 @@ class _SourcesScreenState extends State<_SourcesScreen> {
       _loadSourcePriority(),
       _reloadBound(),
       _loadAddonText(),
+      _loadSavedFilters(),
     ]);
     if (!mounted) return;
     await _runSearch();
+  }
+
+  /// Opens with the filters the user last searched with.
+  Future<void> _loadSavedFilters() async {
+    try {
+      final saved = await SavedSourceFilters.load();
+      if (mounted && _filters.isEmpty) _filters = saved;
+    } catch (_) {}
   }
 
   Future<void> _loadAddonText() async {
@@ -2378,6 +2387,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
       for (final l in _filters.languages) 'Lang · ${_langFilterLabel(l)}',
       for (final s in _filters.sizes) 'Size · ${_sizeFilterLabel(s)}',
       for (final d in _filters.dynamicRanges) 'Range · ${_rangeFilterLabel(d)}',
+      for (final c in _filters.codecs) 'Codec · ${FilterLadder.codecLabel(c)}',
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -2407,6 +2417,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             onTap: () {
               _filters = const TorrentFilterState.empty();
               _rebuildVisible();
+              unawaited(SavedSourceFilters.save(_filters));
             },
             child: Text(
               'Clear',
@@ -2538,6 +2549,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
     if (!mounted || result == null || result == _filters) return;
     _filters = result;
     _rebuildVisible();
+    // Remembered for the next search (and for auto-download).
+    unawaited(SavedSourceFilters.save(result));
   }
 
   String _providerLabel(String s) {

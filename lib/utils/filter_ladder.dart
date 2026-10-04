@@ -1,6 +1,6 @@
 import '../models/torrent.dart';
 import '../models/torrent_filter_state.dart';
-import '../services/storage_service.dart';
+import '../services/saved_source_filters.dart';
 import '../widgets/torrent_result_row.dart' show qualityTierForName;
 import 'torrent_filter_matcher.dart';
 
@@ -25,44 +25,8 @@ class FilterLadder {
 
   /// Loads the saved default filters (Settings → Filter Settings) — the same
   /// persisted values the Search tab seeds its toolbar from.
-  static Future<FilterLadder> fromSavedDefaults() async {
-    final results = await Future.wait([
-      StorageService.getDefaultFilterQualities(),
-      StorageService.getDefaultFilterRipSources(),
-      StorageService.getDefaultFilterLanguages(),
-      StorageService.getDefaultFilterSizes(),
-      StorageService.getDefaultFilterDynamicRanges(),
-    ]);
-    final qualities = <QualityTier>{
-      for (final q in results[0])
-        ...QualityTier.values.where((e) => e.name == q),
-    };
-    final ripSources = <RipSourceCategory>{
-      for (final s in results[1])
-        ...RipSourceCategory.values.where((e) => e.name == s),
-    };
-    final languages = <AudioLanguage>{
-      for (final l in results[2])
-        ...AudioLanguage.values.where((e) => e.name == l),
-    };
-    final sizes = <SizeBucket>{
-      for (final s in results[3])
-        ...SizeBucket.values.where((e) => e.name == s),
-    };
-    final dynamicRanges = <DynamicRange>{
-      for (final r in results[4])
-        ...DynamicRange.values.where((e) => e.name == r),
-    };
-    return FilterLadder(
-      TorrentFilterState(
-        qualities: qualities,
-        ripSources: ripSources,
-        languages: languages,
-        sizes: sizes,
-        dynamicRanges: dynamicRanges,
-      ),
-    );
-  }
+  static Future<FilterLadder> fromSavedDefaults() async =>
+      FilterLadder(await SavedSourceFilters.load());
 
   bool get isActive => !filters.isEmpty;
 
@@ -78,7 +42,7 @@ class FilterLadder {
     // detection is the least reliable signal — then rip source, then quality,
     // then size (a hard byte count, the most reliable dimension).
     //
-    // Dynamic range is relaxed LAST, after size, so it is honored longest of
+    // Dynamic range is relaxed LAST, after size and codec, so it is honored longest of
     // all: excluding HDR is a statement about what the user's display can show,
     // not a preference about which release is nicer, and a quick play that
     // quietly hands back an HDR file has failed at the thing that mattered.
@@ -98,6 +62,12 @@ class FilterLadder {
     }
     if (current.sizes.isNotEmpty) {
       current = current.copyWith(sizes: const <SizeBucket>{});
+      tiers.add(current);
+    }
+    // Codec, like dynamic range, is about what the device can decode, so it
+    // is held until only the range is left.
+    if (current.codecs.isNotEmpty) {
+      current = current.copyWith(codecs: const <VideoCodec>{});
       tiers.add(current);
     }
     if (current.dynamicRanges.isNotEmpty) {
@@ -158,6 +128,10 @@ class FilterLadder {
     if (tier.dynamicRanges.isNotEmpty &&
         (range == null || !tier.dynamicRanges.contains(range))) {
       return false;
+    }
+    if (tier.codecs.isNotEmpty) {
+      final codec = TorrentFilterMatcher.detectVideoCodec(name);
+      if (codec == null || !tier.codecs.contains(codec)) return false;
     }
     return true;
   }
@@ -233,6 +207,7 @@ class FilterLadder {
       ...filters.ripSources.map(_ripLabel),
       ...filters.languages.map(_languageLabel),
       ...filters.sizes.map(_sizeLabel),
+      ...filters.codecs.map(codecLabel),
     ];
     return parts.join(' · ');
   }
@@ -253,6 +228,9 @@ class FilterLadder {
     }
     if (filters.sizes.isNotEmpty && _tiers[tier].sizes.isEmpty) {
       dropped.add('size');
+    }
+    if (filters.codecs.isNotEmpty && _tiers[tier].codecs.isEmpty) {
+      dropped.add('codec');
     }
     if (dropped.isEmpty) return null;
     return 'without ${dropped.join(' or ')} match';
@@ -277,6 +255,12 @@ class FilterLadder {
   static String _languageLabel(AudioLanguage l) => switch (l) {
     AudioLanguage.multiAudio => 'Multi-audio',
     _ => l.name[0].toUpperCase() + l.name.substring(1),
+  };
+
+  static String codecLabel(VideoCodec c) => switch (c) {
+    VideoCodec.av1 => 'AV1',
+    VideoCodec.hevc => 'H.265',
+    VideoCodec.avc => 'H.264',
   };
 
   static String _sizeLabel(SizeBucket s) => switch (s) {

@@ -48,6 +48,7 @@ import '../theme/app_theme_scope.dart';
 import '../theme/artwork_accent.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/hero_trailer_backdrop.dart';
+import '../widgets/detail/download_choice_sheet.dart';
 import '../widgets/episodes_panel.dart';
 import '../widgets/horizontal_mouse_wheel.dart';
 import '../widgets/home/home_theme.dart';
@@ -197,6 +198,12 @@ class MergedDetailScreen extends StatefulWidget {
   /// episodes it accepts (the Downloads page: only what's on the device).
   final bool Function(int season, int episode)? episodeFilter;
 
+  /// The Download button's automatic path: downloads the best source matching
+  /// the saved source filters (for a series, a pack of the given season).
+  /// Returns false when nothing was downloadable. Null keeps the button's
+  /// manual-only behavior.
+  final Future<bool> Function(int? season)? onAutoDownload;
+
   const MergedDetailScreen({
     super.key,
     required this.item,
@@ -237,6 +244,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.heroTag,
     this.seasonsLoader,
     this.episodeFilter,
+    this.onAutoDownload,
     this.onPlayEpisode,
     this.watchProgressLoader,
   });
@@ -818,15 +826,31 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     if (_downloads.state != DownloadedTitleState.none) {
       return () => unawaited(_downloads.open(context));
     }
-    if (_isMovie) return widget.onBrowse;
-    if (widget.onTraktAction != null &&
+    final VoidCallback? manual;
+    if (_isMovie) {
+      manual = widget.onBrowse;
+    } else if (widget.onTraktAction != null &&
         _appMenuOptions.any(
           (o) => o.action == TraktItemMenuAction.searchPacks,
         )) {
-      return () => widget.onTraktAction!(TraktItemMenuAction.searchPacks);
+      manual = () => widget.onTraktAction!(TraktItemMenuAction.searchPacks);
+    } else {
+      manual = null;
     }
-    return null;
+    final auto = widget.onAutoDownload;
+    if (manual == null || auto == null) return manual;
+    // Asks auto-or-manual (or does the remembered one) first.
+    return () => unawaited(
+      runDownloadButton(
+        context,
+        title: _item.name,
+        isTelevision: widget.isTelevision,
+        auto: () => auto(_isMovie ? null : (_resumeSeason ?? 1)),
+        manual: manual!,
+      ),
+    );
   }
+
   bool _rewatchPending = false;
 
   Future<void> _rewatchTitle() async {
