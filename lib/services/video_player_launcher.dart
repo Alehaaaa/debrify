@@ -536,6 +536,7 @@ class VideoPlayerLaunchArgs {
       contentEpisode: contentEpisode,
       resumePolicy: resumePolicy,
       contentTitle: contentTitle,
+      posterUrl: posterUrl,
       iptvChannels: iptvChannels,
       iptvStartIndex: iptvStartIndex,
       iptvCategories: iptvCategories,

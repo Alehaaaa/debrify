@@ -42,6 +42,9 @@ class MainActivity : FlutterActivity() {
 	private val REQUEST_PICK_DOWNLOAD_DIR = 51423
 	private var pendingDirPickResult: MethodChannel.Result? = null
     private var localSourceAccess: com.debrify.app.storage.LocalSourceAccess? = null
+    // The in-app player's media session (headset buttons, media keys, media
+    // notification). One per engine, like the channels around it.
+    private var mediaSessionBridge: com.debrify.app.media.MediaSessionBridge? = null
     // Process-local and enabled only by the journaled, user-confirmed recovery
     // reset. This lets that reset drain every owner's native work even when the
     // last projected profile was a child and the encrypted registry cannot be
@@ -1064,6 +1067,8 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         recordActivityLifecycle("engine_cleanup")
         super.cleanUpFlutterEngine(flutterEngine)
+        mediaSessionBridge?.dispose()
+        mediaSessionBridge = null
         // The trailer player's ExoPlayer listeners keep emitting onto this
         // engine's messenger after detach; invokeMethod on a detached engine
         // throws an UNCAUGHT RuntimeException on the main thread (process
@@ -1094,6 +1099,8 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         localSourceAccess?.dispose()
         localSourceAccess = null
+        mediaSessionBridge?.dispose()
+        mediaSessionBridge = null
         recordActivityLifecycle("destroy")
         tvTrailerPlayer?.releaseAll()
         tvTrailerPlayer = null
@@ -1305,6 +1312,11 @@ class MainActivity : FlutterActivity() {
 		super.configureFlutterEngine(flutterEngine)
         localSourceAccess?.dispose()
         localSourceAccess = com.debrify.app.storage.LocalSourceAccess(this, flutterEngine.dartExecutor.binaryMessenger)
+        mediaSessionBridge?.dispose()
+        mediaSessionBridge = com.debrify.app.media.MediaSessionBridge(
+            this,
+            flutterEngine.dartExecutor.binaryMessenger,
+        )
 		com.debrify.app.security.DeviceSecretCipherPlugin.register(this, flutterEngine)
 		MethodChannel(
 			flutterEngine.dartExecutor.binaryMessenger,

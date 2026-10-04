@@ -5,6 +5,7 @@ import '../models/subtitle_source_priority.dart';
 import 'video_player/utils/subtitle_priority_selection.dart';
 import 'video_player/player_pip_route.dart';
 import 'dart:async';
+import '../services/media_session_service.dart';
 import '../services/source_selection_diagnostics.dart';
 import '../services/player_visibility.dart';
 import '../utils/media_kit_init.dart';
@@ -308,6 +309,8 @@ class VideoPlayerScreen extends StatefulWidget {
   final int? contentSeason;
   final int? contentEpisode;
   final String? contentTitle; // Clean display name (IMDB title)
+  // Artwork for the OS media controls (lock screen, SMTC, Now Playing).
+  final String? posterUrl;
   final PlaybackResumePolicy resumePolicy;
   // IPTV channel list for in-player channel switching
   final List<IptvChannel>? iptvChannels;
@@ -391,6 +394,7 @@ class VideoPlayerScreen extends StatefulWidget {
     this.contentSeason,
     this.contentEpisode,
     this.contentTitle,
+    this.posterUrl,
     this.resumePolicy = PlaybackResumePolicy.sourceSpecific,
     this.iptvChannels,
     this.iptvStartIndex,
@@ -1622,6 +1626,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _continuousShuffleEnabled = widget.initialContinuousShuffle;
     _activeHttpHeaders = widget.httpHeaders;
     PlayerVisibility.opened(this);
+    // OS media controls: headset/Bluetooth buttons, media keys, lock screen.
+    MediaSessionService.instance.attach(this, _PlayerMediaSession(this));
     AnalyticsService.screenView('video_player');
     _startAnalyticsHeartbeat();
     _activePlaylist = widget.playlist
@@ -3842,6 +3848,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         _iptvLiveRecovery.onProgress(d, wantsPlayback: _isPlaying);
       }
       _position = d;
+      _publishMediaPlayback();
       _observeServerWatch();
       _prepareNextDirectEpisode();
       _updateMdblistPosition();
@@ -3869,6 +3876,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       if (!isCurrent()) return;
       final hadDuration = _duration > Duration.zero;
       _duration = d;
+      // A new duration is a new item (or its first load): refresh both.
+      _publishMediaMetadata();
+      _publishMediaPlayback();
       final startupOffset = _stremioTvStartupSeek.take(
         d,
         epoch: _resumeVerifyEpoch,
@@ -3904,6 +3914,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       }
       final wasPlaying = _isPlaying;
       _isPlaying = p;
+      _publishMediaMetadata();
+      _publishMediaPlayback();
       _observeServerWatch();
       ProfileLockController.instance.setPlaybackActive(p);
       _syncWakelock(p);
@@ -11860,6 +11872,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   @override
   void dispose() {
+    MediaSessionService.instance.detach(this);
     _stremioTvStartupWatch?.dispose();
     _stremioTvStartupSeek.cancel();
     _observeServerWatch();
@@ -13682,6 +13695,88 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   String _format(Duration d) => formatDuration(d);
+
+  // ── OS media controls ────────────────────────────────────────────────────
+
+  /// What the OS media controls show as playing: the clean title, and for a
+  /// series the episode it is on.
+  void _publishMediaMetadata() {
+    final title = _effectiveContentTitle?.trim().isNotEmpty == true
+        ? _effectiveContentTitle!.trim()
+        : widget.title;
+    String? subtitle;
+    final type = _effectiveContentType;
+    if (type == 'series') {
+      final se = _traktSeasonEpisode();
+      if (se.season != null && se.episode != null) {
+        subtitle = 'S${se.season} · E${se.episode}';
+      }
+    } else if (_effectiveIptvChannels != null) {
+      subtitle = widget.channelName;
+    }
+    MediaSessionService.instance.setMetadata(
+      this,
+      title: title,
+      subtitle: subtitle,
+      artworkUrl: widget.posterUrl,
+    );
+  }
+
+  void _publishMediaPlayback() {
+    MediaSessionService.instance.setPlayback(
+      this,
+      playing: _isPlaying,
+      position: _position,
+      duration: _duration,
+      canNext: _mediaNextAction != null,
+      canPrevious: _mediaPreviousAction != null,
+    );
+  }
+
+  /// The same next/previous the on-screen controls offer.
+  VoidCallback? get _mediaNextAction => _hasIptvNext
+      ? () => _switchToIptvChannel(_currentIptvIndex + 1)
+      : _canZapIptvChannel
+      ? () => _zapIptvChannel(1)
+      : (_hasAnyNext ? _goToNextEpisode : null);
+
+  VoidCallback? get _mediaPreviousAction => _hasIptvPrevious
+      ? () => _switchToIptvChannel(_currentIptvIndex - 1)
+      : _canZapIptvChannel
+      ? () => _zapIptvChannel(-1)
+      : (_hasPreviousEpisode() ? _goToPreviousEpisode : null);
+
+  void _mediaPlay() {
+    if (!_isReady || _isPlaying) return;
+    _sleepStopLatched = false;
+    _activeMediaUserPaused = false;
+    _activeMediaShouldPlay = true;
+    _player.play();
+  }
+
+  void _mediaPause() {
+    if (!_isReady || !_isPlaying) return;
+    _activeMediaUserPaused = true;
+    _activeMediaShouldPlay = false;
+    _player.pause();
+    unawaited(_saveResume(positionOverride: _position));
+  }
+
+  void _mediaSeekTo(Duration target) {
+    if (!_isReady || widget.hideSeekbar) return;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (_duration > Duration.zero && target > _duration
+              ? _duration
+              : target);
+    _position = clamped;
+    _playbackUiClock.updatePosition(clamped, immediate: true);
+    unawaited(_player.seek(clamped));
+    _traktScrobbleSeek(clamped);
+    _simklScrobbleSeek(clamped);
+    _mdblistScrobbleSeek(clamped);
+    _publishMediaPlayback();
+  }
 
   void _togglePlay() {
     if (!_isReady) return;
@@ -18087,5 +18182,43 @@ class _RandomChoiceTile extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Routes the OS media controls to the player screen that owns them.
+class _PlayerMediaSession implements MediaSessionHandler {
+  _PlayerMediaSession(this._state);
+  final _VideoPlayerScreenState _state;
+
+  bool get _live => _state.mounted;
+
+  @override
+  void play() {
+    if (_live) _state._mediaPlay();
+  }
+
+  @override
+  void pause() {
+    if (_live) _state._mediaPause();
+  }
+
+  @override
+  void next() {
+    if (_live) _state._mediaNextAction?.call();
+  }
+
+  @override
+  void previous() {
+    if (_live) _state._mediaPreviousAction?.call();
+  }
+
+  @override
+  void seekTo(Duration position) {
+    if (_live) _state._mediaSeekTo(position);
+  }
+
+  @override
+  void seekBy(Duration offset) {
+    if (_live) _state._mediaSeekTo(_state._position + offset);
   }
 }
