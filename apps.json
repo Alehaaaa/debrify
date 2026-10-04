@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/55da8512a363beadbd4c4447ef15694f472cfa54/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/6cbb890444c2776c7005d4f0072f8d5ccefcf227/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610042200",
+          "date": "2026-10-04T22:05:51Z",
+          "localizedDescription": "What's new:\n• Download flow: one question, clear feedback, series scopes (6cbb8904)\n\nBuild 202610042200 from nextup@6cbb890\nhttps://github.com/Alehaaaa/debrify/compare/55da851...6cbb890",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-23-6cbb890.ipa",
+          "size": 39813471,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610042144",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Restore over matching profiles instead of duplicating; sync looks (d0b26653)\n\nBuild 202610021018 from nextup@d0b2665\nhttps://github.com/Alehaaaa/debrify/compare/bb7a70b...d0b2665",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-12-d0b2665.ipa",
           "size": 39390971,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610012038",
-          "date": "2026-10-01T20:44:08Z",
-          "localizedDescription": "What's new:\n• Download library and iOS edge-to-edge polish (bb7a70b0)\n\nBuild 202610012038 from nextup@bb7a70b\nhttps://github.com/Alehaaaa/debrify/compare/efe9730...bb7a70b",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-10-bb7a70b.ipa",
-          "size": 39370627,
           "minOSVersion": "14.0"
         }
       ],
