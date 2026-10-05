@@ -6,20 +6,32 @@ class StartupStreamPolicy {
   /// Channel playback keeps the player's own network/error handling. Other
   /// initial playback retains its startup validator. Manual source picks have
   /// a separate validation path and must not use this initial-open routing.
+  ///
+  /// A file already on the device ([isLocalFile]) opens directly too: the
+  /// validator exists to keep dead links' placeholder clips off screen and
+  /// to fail over to another source, and a downloaded file has neither.
   static Future<bool> openInitialMedia({
     required bool hasResolvedUrl,
     required bool hasExternalAudio,
     required bool isLiveIptv,
     required bool isStremioTv,
+    bool isLocalFile = false,
     required Future<void> Function() openDirect,
     required Future<bool> Function() openValidated,
   }) async {
-    if (hasResolvedUrl && (hasExternalAudio || isLiveIptv || isStremioTv)) {
+    if (hasResolvedUrl &&
+        (hasExternalAudio || isLiveIptv || isStremioTv || isLocalFile)) {
       await openDirect();
       return true;
     }
     return openValidated();
   }
+
+  /// A URL that points at a file on this device rather than the network.
+  static bool isLocalUrl(String url) =>
+      url.startsWith('file:') ||
+      url.startsWith('content://') ||
+      url.startsWith('/');
 
   static bool isAioStreams({String? addonId, String? sourceName, String? url}) {
     final identity = [

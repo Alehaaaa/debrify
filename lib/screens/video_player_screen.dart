@@ -3597,6 +3597,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             // Stremio TV owns channel selection and slot changes. As on native
             // TV, a slow channel must not hit the VOD gate's one-attempt limit.
             isStremioTv: isStremioTv,
+            isLocalFile: StartupStreamPolicy.isLocalUrl(initialUrl),
             openDirect: () async {
               final opening = _openMedia(
                 mk.Media(initialUrl, httpHeaders: _activeHttpHeaders),
