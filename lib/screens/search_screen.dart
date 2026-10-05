@@ -69,6 +69,8 @@ import '../services/episode_artwork_service.dart';
 import '../services/home_collection_rows.dart';
 import '../services/home_collections_store.dart';
 import '../services/home_list_rows.dart';
+import '../services/simkl/simkl_list_source.dart';
+import '../services/trakt/trakt_list_source.dart';
 import '../services/home_row_order.dart';
 import '../services/filtered_catalog_pager.dart';
 import '../services/hide_watched_prefs.dart';
@@ -3058,6 +3060,9 @@ class _SearchScreenState extends State<SearchScreen>
     final gen = ++_boardLoadGen;
     _deferredHomeProgress = null;
     final scope = ProfileRuntime.scope.value;
+    final topTenFuture = SimklListSource.instance.loadList(SimklSeeAllList.trending)
+        .timeout(const Duration(seconds: 2),
+            onTimeout: () => (items: const <StremioMeta>[], failed: true));
     bool current() => mounted && gen == _boardLoadGen &&
         scope == ProfileRuntime.scope.value;
     // Refreshes already preserve visible rows. Only the Android TV initial
@@ -3255,9 +3260,13 @@ class _SearchScreenState extends State<SearchScreen>
           final collectionRows = widget.searchMode || widget.discoverMode
               ? const <HomeCollectionSection>[]
               : _buildCollectionSections();
+          final topTenResult = await topTenFuture;
+          final topTen = topTenResult.failed ? null : topTenResult.items
+              .where((item) => item.poster?.isNotEmpty == true).take(10).toList();
           final sections = <CatalogSection>[
             for (final s in collectionRows)
               if (s.collection.pinToTop) s,
+            if (topTen != null && topTen.isNotEmpty) HomeTopTenSection(items: topTen),
             ...listRows,
             for (final s in collectionRows)
               if (!s.collection.pinToTop) s,
@@ -5159,6 +5168,10 @@ class _SearchScreenState extends State<SearchScreen>
       _openCollectionFolder(section, item);
       return;
     }
+    if (section is HomeTopTenSection) {
+      _openSimklItem(item, heroTag: heroTag);
+      return;
+    }
     if (section is HomeListSection) {
       if (section.simklList != null) {
         _openSimklItem(item, heroTag: heroTag);
@@ -5183,6 +5196,10 @@ class _SearchScreenState extends State<SearchScreen>
     // A folder tile has nothing to play — open it instead.
     if (section is HomeCollectionSection) {
       _openCollectionFolder(section, item);
+      return;
+    }
+    if (section is HomeTopTenSection) {
+      _playSimklItem(item);
       return;
     }
     if (section is HomeListSection) {
@@ -8023,6 +8040,31 @@ class _SearchScreenState extends State<SearchScreen>
                   : SpotlightCardShape.poster,
               showCaption: !(section.folderOf(m)?.hideTitle ?? false),
               onOpen: () => _openCollectionFolder(section, m),
+            ),
+        ],
+      );
+    }
+    if (_usesTopTenStyle(section)) {
+      return SpotlightShelf(
+        id: railKey,
+        title: section.title,
+        nodes: i < _rowNodes.length ? _rowNodes[i] : const [],
+        onSeeAll: () => _openCatalogSeeAll(section),
+        captions: false,
+        items: [
+          for (var rank = 0; rank < min(10, section.items.length); rank++)
+            SpotlightCard(
+              metadata: section.items[rank],
+              title: section.items[rank].name,
+              image: section.items[rank].poster,
+              fallbackImage: section.items[rank].background,
+              shape: SpotlightCardShape.poster,
+              showCaption: false,
+              rank: rank + 1,
+              watchedImdbId: section.items[rank].progressId ?? section.items[rank].id,
+              watchedContentType: section.items[rank].type,
+              onOpen: () => _sectionOpenItem(section, section.items[rank]),
+              onOptions: _pikpakOnly ? null : () => _sectionQuickPlay(section, section.items[rank]),
             ),
         ],
       );
@@ -20605,6 +20647,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   Widget _buildRow(int rowIndex, {String? homeRowId}) {
     final section = _sections[rowIndex];
+    if (_usesTopTenStyle(section)) {
+      return _buildTopTenRow(rowIndex, homeRowId: homeRowId);
+    }
     final nodes = _rowNodes[rowIndex];
     final tv = widget.isTelevision;
     // Bigger, roomier posters on desktop (Stremio-scale); smaller on phones.
@@ -20771,6 +20816,63 @@ sheetAnimationStyle: kMenuSheetAnimation,
         ),
       ),
     );
+  }
+
+  bool _usesTopTenStyle(CatalogSection section) =>
+      section is HomeTopTenSection ||
+      (section is HomeListSection &&
+          section.traktChoice?.builtin == TraktSeeAllList.trending);
+
+  Widget _buildTopTenRow(int rowIndex, {String? homeRowId}) {
+    final section = _sections[rowIndex];
+    final nodes = _rowNodes[rowIndex];
+    final posterH = _railTitleCardH(context);
+    final posterW = posterH * 2 / 3;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _railHeader(title: section.title),
+      SizedBox(height: posterH + 14, child: ListView.builder(
+        scrollDirection: Axis.horizontal, clipBehavior: Clip.hardEdge,
+        padding: const EdgeInsets.symmetric(horizontal: 13),
+        itemCount: min(10, section.items.length),
+        itemBuilder: (context, index) {
+          final item = section.items[index];
+          final heroTag = 'top-ten-${identityHashCode(this)}-$index';
+          final up = homeRowId != null
+              ? () => _focusRelativeHomeRail(homeRowId, -1, index)
+              : rowIndex == 0 ? () => _leaveBoardTop()
+              : () => _focusRow(rowIndex - 1, index);
+          final down = homeRowId != null
+              ? () => _focusRelativeHomeRail(homeRowId, 1, index)
+              : () => _focusRow(rowIndex + 1, index);
+          return SizedBox(width: posterW + 62, child: Stack(
+            alignment: Alignment.centerLeft, clipBehavior: Clip.none,
+            children: [
+              Positioned(left: 0, bottom: -20, child: IgnorePointer(child: Text(
+                '${index + 1}',
+                style: TextStyle(
+                  color: AppThemeScope.of(context).core.tx.withValues(alpha: 0.88),
+                  fontSize: posterH * 0.98, fontWeight: FontWeight.w900,
+                  letterSpacing: -posterH * 0.09, height: 0.9,
+                ),
+              ))),
+              Positioned(left: 48, child: SizedBox(width: posterW, height: posterH,
+                child: _BoardCell(
+                  item: item, isTelevision: widget.isTelevision,
+                  focusNode: nodes[index], column: index, rowNodes: nodes,
+                  hasBoundSource: _isBound(item), aspectRatio: 2 / 3,
+                  artUrl: _titleArtUrl(item), showTitleOverlay: false,
+                  onQuickPlay: _pikpakOnly ? null : () => _sectionQuickPlay(section, item),
+                  onFocused: () { _setHero(item); _rowCol[rowIndex] = index; },
+                  onUp: up, onDown: down,
+                  onOpen: () => _sectionOpenItem(section, item, heroTag: heroTag),
+                  heroTag: heroTag,
+                ),
+              )),
+            ],
+          ));
+        },
+      )),
+    ]);
   }
 
   /// A leading Continue Watching row (local or Trakt) — same poster cards as the

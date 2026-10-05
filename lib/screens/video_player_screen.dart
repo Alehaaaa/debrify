@@ -33,6 +33,7 @@ import '../services/resume_write_guard.dart';
 import '../models/profiles/profile_policy.dart';
 import '../services/profiles/profile_policy_guard.dart';
 import '../services/skip_segment_service.dart';
+import '../services/offline_title_store.dart';
 import '../services/analytics_service.dart';
 import '../services/pip_service.dart';
 import '../services/audio_effect_session_service.dart';
@@ -1330,7 +1331,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// initialization, this may legitimately appear after launch when TVMaze
   /// enriches a release-only playlist.
   String? get _currentSeriesImdbId {
-    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId)) return _effectiveContentImdbId;
+    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId))
+      return _effectiveContentImdbId;
     final value =
         _seriesPlaylist?.imdbId ??
         _syntheticGuidePlaylist?.imdbId ??
@@ -1351,6 +1353,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   String? _loadingSkipSegmentsKey;
   int _skipSegmentsFetchGeneration = 0;
   final Map<String, SkipSegments> _skipSegmentsCache = <String, SkipSegments>{};
+  final Set<String> _offlineSkipSegmentsChecked = <String>{};
 
   /// Whether _position/_duration describe the item currently selected, rather
   /// than the one being switched away from. The native player's equivalent is
@@ -1394,7 +1397,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   String? _activeExternalSubtitlePath;
   bool _subtitleOnlyForeignAudio = false;
   bool _subtitleForcedOnly = false;
-  bool get _hasSubtitlePolicy => _subtitleOnlyForeignAudio || _subtitleForcedOnly;
+  bool get _hasSubtitlePolicy =>
+      _subtitleOnlyForeignAudio || _subtitleForcedOnly;
   String? _subtitlePreferredAudio;
   String? _subtitleSelectedAudio;
   int _subtitleAudioRevision = 0;
@@ -1523,24 +1527,34 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   bool _pinching = false;
   bool _pinchFired = false;
 
-  // Fingers on the glass right now, and whether this touch session became a
-  // pinch. Once two fingers have been down, nothing until every finger is
-  // lifted may seek: the scale recognizer restarts with the remaining finger
-  // when one lifts, and that leftover drag used to scrub the video.
-  int _touches = 0;
-  bool _pinchSession = false;
+  // Pointer events define the physical touch session; ScaleGestureRecognizer
+  // callbacks can restart as fingers join or leave. A set is deliberately
+  // used instead of a counter so duplicate/cancelled events cannot leave a
+  // stale "two fingers down" state behind.
+  final Set<int> _activeTouchPointers = <int>{};
+  bool _hadMultiTouchInSession = false;
 
-  void _onTouchDown(PointerDownEvent _) {
-    _touches++;
-    if (_touches >= 2 && !_pinchSession) {
-      _pinchSession = true;
+  void _onTouchDown(PointerDownEvent event) {
+    final startsSession = _activeTouchPointers.isEmpty;
+    _activeTouchPointers.add(event.pointer);
+    if (startsSession) {
+      // Start completely fresh only after every previous finger has lifted.
+      // This is the boundary between two intentional pinches.
+      _hadMultiTouchInSession = false;
+      _pinchFired = false;
+      _pinching = false;
+    }
+    if (_activeTouchPointers.length >= 2 && !_hadMultiTouchInSession) {
+      _hadMultiTouchInSession = true;
       _cancelDragGesture();
     }
   }
 
-  void _onTouchUp(PointerEvent _) {
-    if (_touches > 0) _touches--;
-    if (_touches == 0) _pinchSession = false;
+  void _onTouchUp(PointerEvent event) {
+    _activeTouchPointers.remove(event.pointer);
+    // Keep [_hadMultiTouchInSession] true until the next pointer-down. The
+    // scale recognizer may emit an end/restart after this callback; treating
+    // that remaining finger as a drag would seek the video accidentally.
   }
 
   /// Drops a one-finger drag already under way (its seek preview, volume or
@@ -1551,6 +1565,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _seekHud.value = null;
     _verticalHud.value = null;
   }
+
   double _playbackSpeed = 1.0;
 
   // ── Sleep timer ───────────────────────────────────────────────────────────
@@ -1989,6 +2004,56 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       return;
     }
 
+    // Downloads keep the last known-good markers beside the media. Read them
+    // before asking a provider, so an offline launch (and the current online
+    // launch) always uses the same local snapshot. A refresh below only saves
+    // a newer snapshot for a future playback; it never swaps the active skip
+    // button halfway through this one.
+    if (_offlineSkipSegmentsChecked.add(request.key)) {
+      unawaited(_loadOfflineSkipSegments(request, provider));
+      return;
+    }
+
+    _fetchSkipSegments(request, provider);
+  }
+
+  Future<void> _loadOfflineSkipSegments(
+    ({String imdbId, int season, int episode, Duration duration, String key})
+    request,
+    SkipSegmentProvider provider,
+  ) async {
+    final saved = await OfflineTitleStore.instance.read(
+      request.imdbId,
+      OfflineTitleStore.skipSegments,
+    );
+    final raw = saved is Map ? saved[request.key] : null;
+    final segments = SkipSegments.fromJson(raw);
+    if (!mounted || _currentSkipSegmentRequest()?.key != request.key) return;
+
+    if (raw != null) {
+      _skipSegmentsCache[request.key] = segments;
+      setState(() {
+        _skipSegments = segments;
+        _loadedSkipSegmentsKey = request.key;
+      });
+      _syncActiveSkipSegmentUi();
+      // Refresh in the background. Do not replace [_skipSegments] here: this
+      // session is deliberately anchored to the local saved snapshot.
+      unawaited(_refreshOfflineSkipSegments(request, provider));
+      return;
+    }
+    _fetchSkipSegments(request, provider);
+  }
+
+  void _fetchSkipSegments(
+    ({String imdbId, int season, int episode, Duration duration, String key})
+    request,
+    SkipSegmentProvider provider,
+  ) {
+    if (_loadedSkipSegmentsKey == request.key ||
+        _loadingSkipSegmentsKey == request.key) {
+      return;
+    }
     final generation = ++_skipSegmentsFetchGeneration;
     _loadingSkipSegmentsKey = request.key;
     provider
@@ -2000,6 +2065,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         )
         .then((segments) {
           _skipSegmentsCache[request.key] = segments;
+          unawaited(_saveOfflineSkipSegments(request, segments));
           if (!mounted || generation != _skipSegmentsFetchGeneration) return;
           if (_currentSkipSegmentRequest()?.key != request.key) return;
           setState(() {
@@ -2029,6 +2095,45 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             _loadingSkipSegmentsKey = null;
           }
         });
+  }
+
+  Future<void> _refreshOfflineSkipSegments(
+    ({String imdbId, int season, int episode, Duration duration, String key})
+    request,
+    SkipSegmentProvider provider,
+  ) async {
+    try {
+      final segments = await provider.fetch(
+        imdbId: request.imdbId,
+        season: request.season,
+        episode: request.episode,
+        duration: request.duration,
+      );
+      _skipSegmentsCache[request.key] = segments;
+      await _saveOfflineSkipSegments(request, segments);
+    } catch (_) {
+      // The retained markers remain valid when refresh is offline or the
+      // provider has no newer answer.
+    }
+  }
+
+  Future<void> _saveOfflineSkipSegments(
+    ({String imdbId, int season, int episode, Duration duration, String key})
+    request,
+    SkipSegments segments,
+  ) async {
+    final store = OfflineTitleStore.instance;
+    final saved = await store.read(
+      request.imdbId,
+      OfflineTitleStore.skipSegments,
+    );
+    final all = <String, Object?>{
+      if (saved is Map)
+        for (final entry in saved.entries)
+          if (entry.key is String) entry.key as String: entry.value,
+      request.key: segments.toJson(),
+    };
+    await store.write(request.imdbId, OfflineTitleStore.skipSegments, all);
   }
 
   /// Forget the outgoing item's skip segments when switching playlist entries,
@@ -2076,7 +2181,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (!widget.traktScrobble) return;
     if (widget.contentImdbId == null) return;
     if (widget.contentType != 'movie' && widget.contentType != 'series') return;
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     _traktScrobbleEnabled =
         policy.scrobbles(TrackingSource.trakt) &&
         await TraktService.instance.isAuthenticated();
@@ -2329,7 +2436,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (!widget.simklScrobble) return;
     if (widget.contentImdbId == null) return;
     if (widget.contentType != 'movie' && widget.contentType != 'series') return;
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     _simklScrobbleEnabled =
         policy.scrobbles(TrackingSource.simkl) &&
         await SimklService.instance.isAuthenticated();
@@ -2529,7 +2638,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       debugPrint('[MDBListDiag] player init skipped: tracking not requested');
       return;
     }
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     if (!policy.scrobbles(TrackingSource.mdblist)) return;
     // Playlist launches resolve their requested/resume episode asynchronously.
     // Before that finishes `_currentIndex` is still zero, so constructing the
@@ -2654,7 +2765,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   Future<double?> _currentEpisodeTraktPercent({bool forGuide = false}) async {
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     if (!forGuide && !policy.progressFrom(TrackingSource.trakt)) return null;
     final imdbId = _currentSeriesImdbId;
     if (imdbId == null) return null;
@@ -2712,7 +2825,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// above but remains independently stored so remote unwatch changes never
   /// mutate local playback history.
   Future<double?> _currentEpisodeSimklPercent({bool forGuide = false}) async {
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     if (!forGuide && !policy.progressFrom(TrackingSource.simkl)) return null;
     final imdbId = _currentSeriesImdbId;
     if (imdbId == null) return null;
@@ -2761,7 +2876,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   Future<double?> _currentEpisodeMdblistPercent({bool forGuide = false}) async {
-    final policy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final policy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     if (!forGuide && !policy.progressFrom(TrackingSource.mdblist)) return null;
     final imdbId = _currentSeriesImdbId;
     if (imdbId == null) return null;
@@ -3749,9 +3866,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             _currentSourceIndex < sources.length
         ? sources[_currentSourceIndex]
         : null;
-    final sourceName = [source?.source, source?.addonDisplayName, source?.name]
-        .whereType<String>()
-        .join(' ');
+    final sourceName = [
+      source?.source,
+      source?.addonDisplayName,
+      source?.name,
+    ].whereType<String>().join(' ');
     final isAioStreams = StartupStreamPolicy.isAioStreams(
       addonId: source?.stremioAddonId,
       sourceName: sourceName,
@@ -3794,7 +3913,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   Future<void> _reportStartupFailure({bool Function()? isCurrent}) async {
-    bool current() => mounted && !_screenDisposed && (isCurrent?.call() ?? true);
+    bool current() =>
+        mounted && !_screenDisposed && (isCurrent?.call() ?? true);
     if (!current()) return;
     final canRecover = widget.onStartupSourcesExhausted != null;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -3816,7 +3936,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
     if (!mounted || !current() || playerRoute?.isCurrent != true) return;
     if (canRecover) {
-      Navigator.of(context).pop(<String, dynamic>{'startupSourcesExhausted': true});
+      Navigator.of(
+        context,
+      ).pop(<String, dynamic>{'startupSourcesExhausted': true});
     } else {
       Navigator.of(context).maybePop();
     }
@@ -3865,8 +3987,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       final source = _openedWatchSource;
       if (isCurrent() && source != null) {
         // mpv errors can contain credential-bearing URLs; record only category.
-        logSourceSelection('media_server_player_error', source: source,
-            player: 'mpv', reason: mediaServerPlayerErrorCategory(error));
+        logSourceSelection(
+          'media_server_player_error',
+          source: source,
+          player: 'mpv',
+          reason: mediaServerPlayerErrorCategory(error),
+        );
       }
       // mpv also emits nonfatal decoder/stream log errors here. Re-evaluate
       // actual state; healthy playback may not emit another state event.
@@ -3939,10 +4065,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       );
       if (startupOffset != null) {
         unawaited(
-          _seekForResume(startupOffset.inMilliseconds, verifyLanding: true)
-              .catchError((Object error) {
-                debugPrint('Player: Stremio TV startup seek failed: $error');
-              }),
+          _seekForResume(
+            startupOffset.inMilliseconds,
+            verifyLanding: true,
+          ).catchError((Object error) {
+            debugPrint('Player: Stremio TV startup seek failed: $error');
+          }),
         );
       }
       _updateMdblistPosition();
@@ -4133,8 +4261,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (_openedWatchSource != null &&
         _mediaServerFrameGeneration != _decoderProbeGeneration) {
       _mediaServerFrameGeneration = _decoderProbeGeneration;
-      logSourceSelection('media_server_first_frame', source: _openedWatchSource,
-          player: 'mpv');
+      logSourceSelection(
+        'media_server_first_frame',
+        source: _openedWatchSource,
+        player: 'mpv',
+      );
     }
     _decoderProbeParams = params;
     _scheduleTvosDisplayMatch(params);
@@ -4532,9 +4663,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (watch?.hasFailed != true) {
           watch?.dispose();
           _stremioTvStartupSeek.cancel();
-          unawaited(_reportStartupFailure(
-            isCurrent: () => failureEpoch == _resumeVerifyEpoch,
-          ));
+          unawaited(
+            _reportStartupFailure(
+              isCurrent: () => failureEpoch == _resumeVerifyEpoch,
+            ),
+          );
         }
       }
     } finally {
@@ -4845,12 +4978,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (request?.isCurrent == false) return;
     final watchEpoch = ++_watchOpenEpoch;
     final sources = _effectiveSources;
-    final indexedSource = sources != null &&
+    final indexedSource =
+        sources != null &&
             _currentSourceIndex >= 0 &&
             _currentSourceIndex < sources.length
         ? sources[_currentSourceIndex]
         : null;
-    final candidate = source ??
+    final candidate =
+        source ??
         (indexedSource?.directUrl == media.uri ? indexedSource : null);
     final watchSource = MediaServerWatchController.isServerSource(candidate)
         ? candidate
@@ -4957,7 +5092,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         );
         await DirectSourceAuthorization.authorize(watchSource);
       }
-      if (_screenDisposed || !mounted || watchEpoch != _watchOpenEpoch ||
+      if (_screenDisposed ||
+          !mounted ||
+          watchEpoch != _watchOpenEpoch ||
           request?.isCurrent == false) {
         return;
       }
@@ -4965,7 +5102,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // media could still emit events during a server watch-state request.
       if (beforeOpen != null && !beforeOpen()) return;
       if (watchSource != null) {
-        logSourceSelection('media_server_open', source: watchSource, player: 'mpv');
+        logSourceSelection(
+          'media_server_open',
+          source: watchSource,
+          player: 'mpv',
+        );
       }
       _openedWatchSource = watchSource;
       _activeOpenedMedia = media;
@@ -4978,6 +5119,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       }
       return _player.open(media, play: play);
     }
+
     // Startup direct fallbacks bypass URL resolvers. Recheck their captured
     // capability here so revoked/disabled/reconnected sources cannot open.
     if (source != null) {
@@ -6483,7 +6625,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (palette == 'app') {
       accent = appAccent;
     } else if (palette == 'custom') {
-      accent = ThemePalette.colorOf(
+      accent =
+          ThemePalette.colorOf(
             await StorageService.getPlayerDockCustomSwatch(),
           ) ??
           appAccent;
@@ -6507,7 +6650,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   Future<void> _loadPlayerDefaults() async {
-    _subtitleOnlyForeignAudio = await StorageService.getSubtitleOnlyForeignAudio();
+    _subtitleOnlyForeignAudio =
+        await StorageService.getSubtitleOnlyForeignAudio();
     _subtitleForcedOnly = await StorageService.getSubtitleForcedOnly();
     _subtitlePreferredAudio = await StorageService.getDefaultAudioLanguage();
     _subtitleAutoSyncEnabled =
@@ -9799,7 +9943,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           await _openMedia(
             mk.Media(previousUrl, httpHeaders: _activeHttpHeaders),
             play: true,
-            source: _effectiveSources != null &&
+            source:
+                _effectiveSources != null &&
                     previousSourceIndex >= 0 &&
                     previousSourceIndex < _effectiveSources!.length &&
                     MediaServerWatchController.isServerSource(
@@ -10399,7 +10544,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             : null;
         if (prev == null && se.season != null && se.episode != null) {
           final resolved = await _resolveAdjacentWithCachedGuide(
-            se.season!, se.episode!, -1,
+            se.season!,
+            se.episode!,
+            -1,
           );
           if (resolved != null) prev = (resolved.season, resolved.episode);
         }
@@ -12142,7 +12289,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   String get _resumeKey {
     final customKey = CustomSeriesIdentity.resumeBookmarkKey(
-      _effectiveContentImdbId, _effectiveContentSeason, _effectiveContentEpisode,
+      _effectiveContentImdbId,
+      _effectiveContentSeason,
+      _effectiveContentEpisode,
     );
     if (customKey != null) return customKey;
     if (_activePlaylist != null &&
@@ -12282,7 +12431,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // Don't reset _isManualEpisodeSelection here - let it be reset after a delay
       return;
     }
-    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(_effectiveContentImdbId);
+    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
+      _effectiveContentImdbId,
+    );
     // The launched item's widget percent is a first-load-only signal; capture it
     // before marking it spent so it can't apply to a later switched-to episode.
     final firstLoad = !_launchTraktPercentSpent;
@@ -12616,11 +12767,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       if (_effectiveContentType == 'series') {
         if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId) ||
             (_effectiveContentImdbId?.startsWith('medialibrary:') ?? false)) {
-          if (_effectiveContentSeason == null || _effectiveContentEpisode == null) return null;
+          if (_effectiveContentSeason == null ||
+              _effectiveContentEpisode == null)
+            return null;
           return LocalPlaybackResumeResolver.episode(
             seriesTitle: _effectiveContentTitle ?? widget.title,
-            season: _effectiveContentSeason!, episode: _effectiveContentEpisode!,
-            imdbId: _effectiveContentImdbId, policy: widget.resumePolicy,
+            season: _effectiveContentSeason!,
+            episode: _effectiveContentEpisode!,
+            imdbId: _effectiveContentImdbId,
+            policy: widget.resumePolicy,
           );
         }
         if (widget.resumePolicy == PlaybackResumePolicy.sourceSpecific &&
@@ -12712,9 +12867,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _observeServerWatch({bool completed = false}) {
-    if (!_serverWatch.isActive || _validationGateActive || !_isReady ||
+    if (!_serverWatch.isActive ||
+        _validationGateActive ||
+        !_isReady ||
         _isTransitioning ||
-        _resumeWriteGuard.heldTargetIfBlocked(_position.inMilliseconds) != null) {
+        _resumeWriteGuard.heldTargetIfBlocked(_position.inMilliseconds) !=
+            null) {
       return;
     }
     // This resolver follows the current playlist entry after episode advance;
@@ -12924,21 +13082,22 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     } catch (e) {}
 
     // Also save to legacy system for backward compatibility
-    if (!CustomSeriesIdentity.isCustom(_effectiveContentImdbId)) await StorageService.upsertVideoResume(
-      _resumeKey,
-      {
-        'positionMs': pos.inMilliseconds,
-        'speed': persistedSpeed,
-        'aspect': aspectStr,
-        'durationMs': dur.inMilliseconds,
-        'updatedAt': DateTime.now().millisecondsSinceEpoch,
-      },
-      sourceId:
-          _currentIptvChannel?.attributes['series_playlist_id'] ??
-          _currentIptvChannel?.attributes['source_playlist_id'] ??
-          _iptvGuideContextOverride?.sourceId ??
-          widget.iptvSourceId,
-    );
+    if (!CustomSeriesIdentity.isCustom(_effectiveContentImdbId))
+      await StorageService.upsertVideoResume(
+        _resumeKey,
+        {
+          'positionMs': pos.inMilliseconds,
+          'speed': persistedSpeed,
+          'aspect': aspectStr,
+          'durationMs': dur.inMilliseconds,
+          'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        },
+        sourceId:
+            _currentIptvChannel?.attributes['series_playlist_id'] ??
+            _currentIptvChannel?.attributes['source_playlist_id'] ??
+            _iptvGuideContextOverride?.sourceId ??
+            widget.iptvSourceId,
+      );
 
     // Explicit checkpoints (pause, settled seek, exit-adjacent saves) are the
     // handoff moments another device would resume from — let sync flush now
@@ -13753,8 +13912,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleStart(ScaleStartDetails details) {
-    _pinching = details.pointerCount >= 2 || _pinchSession;
-    if (!_pinching) _pinchFired = false;
+    _pinching = details.pointerCount >= 2 || _hadMultiTouchInSession;
     if (_pinching) return;
     _onPanStart(
       DragStartDetails(
@@ -13765,12 +13923,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    if ((details.pointerCount >= 2 || _pinchSession) && !_pinching) {
+    if (details.pointerCount >= 2 && !_hadMultiTouchInSession) {
       // A second finger joined a drag: it's a pinch now, drop the drag HUDs.
+      _hadMultiTouchInSession = true;
       _pinching = true;
       _cancelDragGesture();
     }
-    if (_pinching) {
+    if (_pinching || _hadMultiTouchInSession) {
+      _pinching = true;
       if (!_pinchFired && (details.scale > 1.12 || details.scale < 0.88)) {
         _pinchFired = true;
         unawaited(_animateFraming(fill: details.scale > 1));
@@ -13787,7 +13947,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
-    if (_pinching || _pinchSession) {
+    if (_pinching || _hadMultiTouchInSession) {
       _pinching = false;
       return;
     }
@@ -13853,6 +14013,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     });
   }
 
+  /// Phones, tablets and televisions use the platform's volume controls.
+  /// Desktop retains a per-player gain control for mouse and keyboard use.
+  bool get _usesSystemVolume =>
+      PlatformUtil.isPhone || PlatformUtil.isTelevision;
+
   void _onPanStart(DragStartDetails details) async {
     // If controls are visible, ignore pans that begin within top/bottom bars so buttons and slider work unaffected
     _panIgnore = false;
@@ -13894,6 +14059,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       } else if (absDy > 12) {
         final isLeftHalf = _gestureStartPosition.dx < size.width / 2;
         if (isLeftHalf && !PlayerDisplayControls.supportsBrightness) return;
+        // Hand-held devices and televisions own volume at the OS level.
+        // Do not turn a right-edge swipe into an independent player gain.
+        if (!isLeftHalf && _usesSystemVolume) return;
         _mode = isLeftHalf ? GestureMode.brightness : GestureMode.volume;
       }
     }
@@ -15215,7 +15383,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                 return KeyEventResult.handled;
               }
 
-              // Otherwise, control volume
+              // On hand-held and TV devices volume belongs to the system.
+              if (_usesSystemVolume) return KeyEventResult.ignored;
+
+              // Otherwise, control volume.
               _controlsVisible.value = true;
               _scheduleAutoHide();
 
@@ -15242,6 +15413,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             }
 
             if (key == LogicalKeyboardKey.arrowDown) {
+              if (_usesSystemVolume) return KeyEventResult.ignored;
+
               // Show controls first
               _controlsVisible.value = true;
               _scheduleAutoHide();
@@ -15688,35 +15861,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                     onPointerUp: _onTouchUp,
                     onPointerCancel: _onTouchUp,
                     child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTapDown: (d) => _lastTapLocal = d.localPosition,
-                    onTap: () {
-                      // Disable single tap when both back button and options are hidden
-                      if (widget.hideBackButton && widget.hideOptions) {
-                        return;
-                      }
-                      final box = context.findRenderObject() as RenderBox?;
-                      if (box == null) return;
-                      final size = box.size;
-                      final pos = _lastTapLocal ?? Offset.zero;
-                      if (shouldToggleForTap(
-                        pos,
-                        size,
-                        controlsVisible: _controlsVisible.value,
-                        bottomBar: _dockBand(72.0),
-                      )) {
-                        _toggleControls();
-                      }
-                    },
-                    onDoubleTapDown: _handleDoubleTap,
-                    onLongPressStart: _onLongPressStart,
-                    onLongPressEnd: _onLongPressEnd,
-                    // Scale, not pan: one finger still drives the drag
-                    // gestures (seek / volume / brightness), two pinch.
-                    onScaleStart: _onScaleStart,
-                    onScaleUpdate: _onScaleUpdate,
-                    onScaleEnd: _onScaleEnd,
-                  ),
+                      behavior: HitTestBehavior.translucent,
+                      onTapDown: (d) => _lastTapLocal = d.localPosition,
+                      onTap: () {
+                        // Disable single tap when both back button and options are hidden
+                        if (widget.hideBackButton && widget.hideOptions) {
+                          return;
+                        }
+                        final box = context.findRenderObject() as RenderBox?;
+                        if (box == null) return;
+                        final size = box.size;
+                        final pos = _lastTapLocal ?? Offset.zero;
+                        if (shouldToggleForTap(
+                          pos,
+                          size,
+                          controlsVisible: _controlsVisible.value,
+                          bottomBar: _dockBand(72.0),
+                        )) {
+                          _toggleControls();
+                        }
+                      },
+                      onDoubleTapDown: _handleDoubleTap,
+                      onLongPressStart: _onLongPressStart,
+                      onLongPressEnd: _onLongPressEnd,
+                      // Scale, not pan: one finger still drives the drag
+                      // gestures (seek / volume / brightness), two pinch.
+                      onScaleStart: _onScaleStart,
+                      onScaleUpdate: _onScaleUpdate,
+                      onScaleEnd: _onScaleEnd,
+                    ),
                   ),
                 // Above the gesture layer: startup hides normal controls, but
                 // leaving the player must remain available while links resolve.
@@ -15805,12 +15978,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                     }
                                   },
                                   volume: _dockVolume,
-                                  onVolumeChanged: (v) {
-                                    setState(() => _dockVolume = v);
-                                    _player.setVolume(
-                                      (v * 100).clamp(0.0, 100.0),
-                                    );
-                                  },
+                                  // Mobile, tablet and TV playback follows
+                                  // the device's system volume. The compact
+                                  // player-level gain control remains useful
+                                  // on desktop, where system volume is not a
+                                  // practical per-window playback control.
+                                  onVolumeChanged: _usesSystemVolume
+                                      ? null
+                                      : (v) {
+                                          setState(() => _dockVolume = v);
+                                          _player.setVolume(
+                                            (v * 100).clamp(0.0, 100.0),
+                                          );
+                                        },
                                   // windowManager drives fullscreen only on
                                   // Windows/Linux; macOS and mobile leave it
                                   // to the OS, so the button would be a lie.
@@ -17304,7 +17484,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     await _persistTrackChoice(audioId, subtitleId);
   }
 
-  Future<void> _audioTrackChoiceChanged(String audioId, String currentSubId) async {
+  Future<void> _audioTrackChoiceChanged(
+    String audioId,
+    String currentSubId,
+  ) async {
     _captureIptvAudioLanguage(audioId);
     await _persistTrackChoice(
       audioId,
@@ -17837,7 +18020,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     final token = _addonSubtitleFetchToken;
     _subtitleSelectedAudio = null;
     final audio = _player.state.track.audio;
-    String? language = LanguageMapper.canonicalLanguage(audio.language) ??
+    String? language =
+        LanguageMapper.canonicalLanguage(audio.language) ??
         LanguageMapper.canonicalLanguage(audio.title);
     final platform = _player.platform;
     if (platform is mk.NativePlayer) {
@@ -18005,7 +18189,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
     if (!current()) return false;
     final track = _player.state.tracks.subtitle
-        .where((track) => track.id == id && !isAppManagedAddonSubtitleTrack(track))
+        .where(
+          (track) => track.id == id && !isAppManagedAddonSubtitleTrack(track),
+        )
         .firstOrNull;
     // A missing or unmarked track must never fall back to full subtitles.
     return _setSubtitleTrackWithDiagnostics(
@@ -18119,7 +18305,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     final platform = _player.platform;
     if (platform is mk.NativePlayer) {
       for (final id in oldExternalIds) {
-        if (!mounted || contentToken != _addonSubtitleFetchToken ||
+        if (!mounted ||
+            contentToken != _addonSubtitleFetchToken ||
             (isCurrent != null && !isCurrent())) {
           debugPrint(
             'VideoPlayer: Content changed during addon subtitle cleanup; '
@@ -18152,7 +18339,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// Fetch Stremio addon subtitles proactively and auto-select if no embedded subtitle was applied.
   /// This mirrors the Android TV behavior where subtitles are always fetched on playback start.
   Future<void> _fetchAndMaybeAutoSelectAddonSubtitle() async {
-    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId) && _manualContentImdbId == null) return;
+    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId) &&
+        _manualContentImdbId == null)
+      return;
     // Capture token at start to detect if content changes during async operations
     final fetchToken = _addonSubtitleFetchToken;
 

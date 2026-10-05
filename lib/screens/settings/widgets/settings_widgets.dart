@@ -145,7 +145,7 @@ abstract final class SettingsRows {
   static const navigationStyle = SettingsRowContent(
     icon: Icons.call_to_action_rounded,
     title: 'Navigation',
-    subtitle: 'Classic bottom bar or floating button',
+    subtitle: 'Tab bar or floating button',
   );
   static const searchSettings = SettingsRowContent(
     icon: Icons.search_rounded,
@@ -229,13 +229,6 @@ abstract final class SettingsRows {
   );
   // Subtitle is dynamic (the chosen style) — passed per call site.
   static const tvSidebarStyle = SettingsRowContent(
-    icon: Icons.view_sidebar_rounded,
-    title: 'Sidebar Style',
-    subtitle: '',
-  );
-  // The desktop/tablet counterpart — never shown beside the TV row (each is
-  // platform-gated), so the shared title is unambiguous wherever it appears.
-  static const desktopSidebarStyle = SettingsRowContent(
     icon: Icons.view_sidebar_rounded,
     title: 'Sidebar Style',
     subtitle: '',

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -17,6 +18,7 @@ import 'trakt_calendar_service.dart';
 import 'trakt_constants.dart';
 import '../../models/media_identity.dart';
 import '../tracker_identity_service.dart';
+import '../tracker_scrobble_outbox.dart';
 
 /// The user's Trakt relationship to a single title — used to render a
 /// state-aware detail page (in watchlist / collection / watched / rating)
@@ -745,7 +747,7 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType,
+    String? contentType, bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/start',
@@ -753,7 +755,7 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType,
+      contentType: contentType, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -763,7 +765,7 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType,
+    String? contentType, bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/pause',
@@ -771,7 +773,7 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType,
+      contentType: contentType, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -781,7 +783,7 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType,
+    String? contentType, bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/stop',
@@ -789,7 +791,7 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType,
+      contentType: contentType, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -799,7 +801,7 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType,
+    String? contentType, bool queueOnFailure = true,
   }) async {
     final scope = ProfileRuntime.scope.value;
     if (MediaIdentity.isNative(imdbId) &&
@@ -857,7 +859,10 @@ class TraktService {
         'progress': progress,
       },
     );
-    if (response == null) return false;
+    if (response == null) {
+      if (queueOnFailure) unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'trakt', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: type, season: season, episode: episode));
+      return false;
+    }
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (season != null && episode != null) {
         EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', imdbId);
@@ -869,6 +874,7 @@ class TraktService {
       debugPrint('Trakt: Scrobble completed');
       return true;
     }
+    if (queueOnFailure) unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'trakt', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: type, season: season, episode: episode));
     debugPrint('Trakt: Scrobble failed (${response.statusCode})');
     return false;
   }

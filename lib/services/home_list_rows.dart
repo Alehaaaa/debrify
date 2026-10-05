@@ -132,6 +132,29 @@ class HomeListSection extends CatalogSection {
        );
 }
 
+/// A public, ranked home rail. It is separate from optional tracker rows so a
+/// fresh profile gets one useful discovery shelf without connecting an account.
+class HomeTopTenSection extends CatalogSection {
+  static final StremioAddon placeholderAddon = StremioAddon(
+    id: 'debrify.home.top-ten',
+    name: 'Top 10',
+    manifestUrl: '',
+    baseUrl: '',
+  );
+
+  HomeTopTenSection({required super.items})
+    : super(
+        title: 'Top 10 Today',
+        addon: placeholderAddon,
+        catalog: StremioAddonCatalog(
+          id: 'top-ten-today',
+          type: 'mixed',
+          name: 'Top 10 Today',
+        ),
+        exhausted: true,
+      );
+}
+
 /// Loads the opted-in Trakt/Simkl list rows for the Home board.
 ///
 /// Pure data logic, stateless. The board calls [resolve] with the stored
@@ -282,9 +305,9 @@ class HomeListRowsService {
       isCurrent: isCurrent,
     );
 
-    // Trakt built-ins, enum order.
+    // Same order shown in Home Screen settings.
     var rank = 0;
-    for (final list in TraktSeeAllList.values) {
+    for (final list in kTraktHomeRowOrder) {
       if (list == TraktSeeAllList.continueWatching) continue;
       final id = HomeExtraRowIds.traktBuiltin(list);
       if (!byId.containsKey(id)) continue;

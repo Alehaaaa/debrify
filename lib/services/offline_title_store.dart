@@ -43,6 +43,7 @@ class OfflineTitleStore {
   static const meta = 'meta';
   static const videos = 'videos';
   static const page = 'page';
+  static const skipSegments = 'skip_segments';
 
   /// A removed download keeps its offline copy this long, so a drive that is
   /// briefly unplugged (or a library scan that couldn't read a folder) does

@@ -209,17 +209,11 @@ class SkeletonPosterGrid extends StatelessWidget {
   }
 }
 
-/// The home board's load state: a quiet brand moment — the DEBRIFY wordmark
-/// centred on the page ink with a thin breathing accent bar beneath — instead
-/// of a screenful of skeleton boxes (which read as "broken app", the old
-/// complaint). This is the Netflix grammar: brand holds the stage, then the
-/// board simply appears.
+/// The home board's quiet load state.
 ///
-/// Cost-shaped for weak TV hardware: the wordmark is one static text layer
-/// (never animates — it must read rock solid, and text that blinks during a
-/// CPU-busy load judders); the only motion is the tiny accent bar breathing
-/// opacity inside its own [DelayedPulse] compositor layer, which also waits
-/// out the busiest first moments of the load before starting.
+/// The surrounding page keeps its own background and layout; this contributes
+/// only a centered progress indicator. It avoids a second, branded splash
+/// while the board is already loading behind it.
 class BrandLoadingStage extends StatelessWidget {
   final bool isTelevision;
 
@@ -227,39 +221,18 @@ class BrandLoadingStage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tv = isTelevision;
+    final colorScheme = Theme.of(context).colorScheme;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'DEBRIFY',
-            // Poppins — the same display face the hero titles wear, so the
-            // brand and the content read as one voice.
-            style: TextStyle(fontFamily: 'Poppins', 
-              fontSize: tv ? 34 : 26,
-              fontWeight: FontWeight.w600,
-              letterSpacing: tv ? 10 : 7,
-              color: Colors.white.withValues(alpha: 0.92),
-            ),
+      child: Semantics(
+        label: 'Loading',
+        child: SizedBox(
+          width: isTelevision ? 34 : 28,
+          height: isTelevision ? 34 : 28,
+          child: CircularProgressIndicator(
+            strokeWidth: isTelevision ? 3 : 2.5,
+            color: colorScheme.primary,
           ),
-          SizedBox(height: tv ? 22 : 18),
-          // The life sign: a small accent bar breathing slowly. Starts after a
-          // short beat so instant loads never show motion at all.
-          DelayedPulse(
-            delay: const Duration(milliseconds: 400),
-            child: Container(
-              width: 56,
-              height: 3,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF7B5CFF), Color(0xFF818CF8)],
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

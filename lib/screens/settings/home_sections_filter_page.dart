@@ -245,7 +245,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       _Group('Trakt', [
         cw('trakt:movies', 'Movies', TrackingSource.trakt, badge: 'CW'),
         cw('trakt:shows', 'Shows', TrackingSource.trakt, badge: 'CW'),
-        for (final l in TraktSeeAllList.values)
+        for (final l in kTraktHomeRowOrder)
           if (l != TraktSeeAllList.continueWatching)
             opt(HomeExtraRowIds.traktBuiltin(l), l.label, badge: 'LIST'),
         for (final c in customLists)

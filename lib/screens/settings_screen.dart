@@ -96,7 +96,6 @@ import 'settings/tv_render_quality_page.dart';
 import 'settings/tv_hero_artwork_quality_page.dart';
 import 'settings/tv_screen_size_page.dart';
 import 'settings/recordings_page.dart';
-import 'settings/desktop_sidebar_style_page.dart';
 import 'settings/tv_sidebar_style_page.dart';
 import 'settings/sidebar_customization_page.dart';
 import 'settings/profile_backup_flows.dart';
@@ -1523,9 +1522,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenParentsGuideStyle: _openParentsGuideStylePage,
       phoneNavStyleLabel: _phoneNavStyle == 'floating'
           ? 'Floating button'
-          : 'Classic bar',
-      desktopSidebarStyleLabel: desktopSidebarStyleLabel(_desktopSidebarStyle),
-      onOpenDesktopSidebarStyle: _openDesktopSidebarStyle,
+          : 'Tab bar',
+      desktopSidebarStyleLabel: _desktopSidebarStyle == 'pill'
+          ? 'Floating button'
+          : 'Tab bar',
       onOpenSidebarCustomization: _openSidebarCustomization,
       profileAppearanceLabel: ProfileGateStyle.labelFor(
         ProfileGateStyle.cached,
@@ -2182,32 +2182,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'order and names',
             'rename sidebar',
             ...labels(kTvSidebarStyleChoices.map((choice) => choice.label)),
-          ],
-        ),
-      // Desktop/tablet — the wide-window rail's own picker.
-      if (!_isAndroidTv && !PlatformUtil.isTelevision)
-        nav(
-          SettingsRows.desktopSidebarStyle,
-          'Appearance',
-          _openDesktopSidebarStyle,
-          subtitle: desktopSidebarStyleLabel(_desktopSidebarStyle),
-          keywords: [
-            'sidebar',
-            'nav',
-            'navigation',
-            'rail',
-            'menu',
-            'pill',
-            'desktop',
-            'tablet',
-            'ipad',
-            'display',
-            'home & display',
-            'order and names',
-            'rename sidebar',
-            ...labels(
-              kDesktopSidebarStyleChoices.map((choice) => choice.label),
-            ),
           ],
         ),
       // Gated like the IPTV section itself: the picker only matters where
@@ -5084,80 +5058,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _loadSummaries();
   }
 
-  /// Phone/small-window chrome choice: classic bottom bar (default) vs the
-  /// floating glass button. Applies live — MainPageBridge tells the shell.
+  /// The single non-TV navigation choice. Both layout implementations share
+  /// the selection, and each swaps its chrome live.
   Future<void> _openNavigationSettings() async {
-    final current = await StorageService.getPhoneNavStyle();
+    final isWide = MediaQuery.sizeOf(context).width >= 600;
+    final current = isWide
+        ? await StorageService.getDesktopSidebarStyle()
+        : await StorageService.getPhoneNavStyle();
     if (!mounted) return;
-
-    // The dialog RETURNS the choice; the write is awaited here before the
-    // bridge fires. Popping first and writing unawaited (the old shape)
-    // let an immediate pref re-read race the write.
+    final currentChoice = current == 'pill' || current == 'floating'
+        ? 'floating'
+        : 'tabs';
     final chosen = await showDialog<String>(
       context: context,
-      builder: (dialogContext) {
-        Widget option({
-          required IconData icon,
-          required String title,
-          required String subtitle,
-          required String value,
-        }) {
-          final selected = current == value;
-          return ListTile(
-            leading: Icon(
-              icon,
-              color: selected ? const Color(0xFFC7BFFF) : null,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Navigation'),
+        contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _navigationChoice(
+              dialogContext,
+              currentChoice: currentChoice,
+              value: 'tabs',
+              icon: Icons.call_to_action_rounded,
+              title: 'Tab bar',
+              subtitle: 'A persistent tab bar',
             ),
-            title: Text(
-              title,
-              style: TextStyle(
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-              ),
+            _navigationChoice(
+              dialogContext,
+              currentChoice: currentChoice,
+              value: 'floating',
+              icon: Icons.blur_on_rounded,
+              title: 'Floating button',
+              subtitle: 'A floating button that opens the menu',
             ),
-            subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
-            trailing: selected
-                ? const Icon(Icons.check_rounded, color: Color(0xFFC7BFFF))
-                : null,
-            onTap: () => Navigator.of(dialogContext).pop(value),
-          );
-        }
-
-        return AlertDialog(
-          title: const Text('Navigation'),
-          contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              option(
-                icon: Icons.call_to_action_rounded,
-                title: 'Classic bar',
-                subtitle:
-                    'Bottom tabs \u2014 Home, three slots you pick, More '
-                    'holds the rest',
-                value: 'classic',
-              ),
-              option(
-                icon: Icons.blur_on_rounded,
-                title: 'Floating button',
-                subtitle: 'The glass button with the expanding menu',
-                value: 'floating',
-              ),
-            ],
-          ),
-        );
-      },
+          ],
+        ),
+      ),
     );
-    if (chosen == null || chosen == current || !mounted) return;
-    // The shell reads this synchronously to choose its bottom chrome. Publish
-    // before writing so the visible navigation swaps in the current frame.
-    MainPageBridge.phoneNavStyleCached = chosen;
+    if (chosen == null || chosen == currentChoice || !mounted) return;
+    final desktopStyle = chosen == 'floating' ? 'pill' : 'rail';
+    final phoneStyle = chosen == 'floating' ? 'floating' : 'classic';
+
+    // Publish both synchronous mirrors before their writes complete so the
+    // current layout switches in this frame.
+    MainPageBridge.phoneNavStyleCached = phoneStyle;
     MainPageBridge.navPrefsChanged?.call();
-    await StorageService.setPhoneNavStyle(chosen);
+    await Future.wait<void>([
+      StorageService.setDesktopSidebarStyle(desktopStyle),
+      StorageService.setPhoneNavStyle(phoneStyle),
+    ]);
+    MainPageBridge.desktopSidebarStyleChanged?.call();
     if (!mounted) return;
-    setState(() => _phoneNavStyle = chosen);
-    // The immediate notification above updates visible chrome; this second
-    // one reconciles the async preference read after the write commits.
-    MainPageBridge.navPrefsChanged?.call();
+    setState(() {
+      _desktopSidebarStyle = desktopStyle;
+      _phoneNavStyle = phoneStyle;
+    });
+  }
+
+  Widget _navigationChoice(
+    BuildContext dialogContext, {
+    required String currentChoice,
+    required String value,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    final selected = currentChoice == value;
+    return ListTile(
+      leading: Icon(icon, color: selected ? const Color(0xFFC7BFFF) : null),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        ),
+      ),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      trailing: selected
+          ? const Icon(Icons.check_rounded, color: Color(0xFFC7BFFF))
+          : null,
+      onTap: () => Navigator.of(dialogContext).pop(value),
+    );
   }
 
   Future<void> _openIptvSettings() async {
@@ -7116,26 +7098,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  /// Same contract, for the desktop/tablet sidebar picker.
-  Future<void> _openDesktopSidebarStyle() async {
-    final current = await StorageService.getDesktopSidebarStyle();
-    if (!mounted) return;
-    final style = await _chooseSidebarStyle(
-      title: 'Sidebar style',
-      current: current,
-      choices: kDesktopSidebarStyleChoices
-          .map((choice) => (choice.value, choice.label, choice.subtitle))
-          .toList(),
-    );
-    if (style == null || style == current || !mounted) return;
-    await StorageService.setDesktopSidebarStyle(style);
-    if (!mounted) return;
-    setState(() {
-      _desktopSidebarStyle = style;
-    });
-    MainPageBridge.desktopSidebarStyleChanged?.call();
-  }
-
   Future<String?> _chooseSidebarStyle({
     required String title,
     required String current,
@@ -7760,7 +7722,6 @@ class _SettingsLayout extends StatelessWidget {
   final Future<void> Function() onOpenParentsGuideStyle;
   final String phoneNavStyleLabel;
   final String desktopSidebarStyleLabel;
-  final Future<void> Function() onOpenDesktopSidebarStyle;
   final Future<void> Function() onOpenSidebarCustomization;
   final String profileAppearanceLabel;
   final Future<void> Function() onOpenProfileAppearance;
@@ -7843,7 +7804,6 @@ class _SettingsLayout extends StatelessWidget {
     required this.onOpenParentsGuideStyle,
     required this.phoneNavStyleLabel,
     required this.desktopSidebarStyleLabel,
-    required this.onOpenDesktopSidebarStyle,
     required this.onOpenSidebarCustomization,
     required this.profileAppearanceLabel,
     required this.onOpenProfileAppearance,
@@ -7977,17 +7937,14 @@ class _SettingsLayout extends StatelessWidget {
                 ),
                 SettingsTile.spec(
                   SettingsRows.navigationStyle,
-                  subtitle: phoneNavStyleLabel,
+                  subtitle: MediaQuery.sizeOf(context).width >= 600
+                      ? desktopSidebarStyleLabel
+                      : phoneNavStyleLabel,
                   onTap: onOpenNavigationSettings,
-                ),
-                SettingsTile.spec(
-                  SettingsRows.desktopSidebarStyle,
-                  subtitle: desktopSidebarStyleLabel,
-                  onTap: onOpenDesktopSidebarStyle,
                 ),
                 SettingsTile(
                   icon: Icons.tune_rounded,
-                  title: 'Sidebar items',
+                  title: 'Navigation items',
                   subtitle: 'Choose the order, names and visibility',
                   onTap: onOpenSidebarCustomization,
                 ),
@@ -8578,28 +8535,25 @@ class _SettingsLayout extends StatelessWidget {
                       subtitle: profileAppearanceLabel,
                       onTap: onOpenProfileAppearance,
                     ),
-                    // Phone/small-window chrome — TVs navigate by sidebar
-                    // and never read the style.
+                    // One navigation choice: its presentation follows this
+                    // device's current layout.
                     SettingsTile.spec(
                       SettingsRows.navigationStyle,
-                      subtitle: phoneNavStyleLabel,
+                      subtitle: MediaQuery.sizeOf(context).width >= 600
+                          ? desktopSidebarStyleLabel
+                          : phoneNavStyleLabel,
                       onTap: onOpenNavigationSettings,
                     ),
                   ],
                 ),
                 const SizedBox(height: 24),
                 SettingsSection(
-                  title: 'Sidebar',
-                  blurb: 'Choose the sidebar look, then arrange its items.',
+                  title: 'Navigation items',
+                  blurb: 'Arrange navigation items and labels.',
                   children: [
-                    SettingsTile.spec(
-                      SettingsRows.desktopSidebarStyle,
-                      subtitle: desktopSidebarStyleLabel,
-                      onTap: onOpenDesktopSidebarStyle,
-                    ),
                     SettingsTile(
                       icon: Icons.tune_rounded,
-                      title: 'Sidebar items',
+                      title: 'Navigation items',
                       subtitle: 'Order, names and visibility',
                       onTap: onOpenSidebarCustomization,
                     ),

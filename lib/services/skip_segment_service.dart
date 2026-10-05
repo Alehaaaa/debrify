@@ -22,6 +22,35 @@ class SkipSegment {
   });
 
   bool contains(Duration position) => position >= start && position < end;
+
+  Map<String, Object?> toJson() => {
+    'type': type.name,
+    'startMs': start.inMilliseconds,
+    'endMs': end.inMilliseconds,
+    if (confidence != null) 'confidence': confidence,
+    if (match != null) 'match': match,
+  };
+
+  static SkipSegment? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final start = value['startMs'];
+    final end = value['endMs'];
+    if (start is! int || end is! int || start < 0 || end <= start) return null;
+    final type = switch (value['type']) {
+      'intro' => SkipSegmentType.intro,
+      'outro' => SkipSegmentType.outro,
+      _ => null,
+    };
+    if (type == null) return null;
+    final confidence = value['confidence'];
+    return SkipSegment(
+      type: type,
+      start: Duration(milliseconds: start),
+      end: Duration(milliseconds: end),
+      confidence: confidence is num ? confidence.toDouble() : null,
+      match: value['match'] as String?,
+    );
+  }
 }
 
 class SkipSegments {
@@ -43,6 +72,30 @@ class SkipSegments {
       if (segment.contains(position)) return segment;
     }
     return null;
+  }
+
+  Map<String, Object?> toJson() => {
+    'intros': [for (final segment in intros) segment.toJson()],
+    'outros': [for (final segment in outros) segment.toJson()],
+  };
+
+  static SkipSegments fromJson(Object? value) {
+    if (value is! Map) return empty;
+    List<SkipSegment> read(String key, SkipSegmentType type) {
+      final raw = value[key];
+      if (raw is! List) return const [];
+      return [
+        for (final entry in raw)
+          if (SkipSegment.fromJson(entry) case final segment?
+              when segment.type == type)
+            segment,
+      ];
+    }
+
+    return SkipSegments(
+      intros: read('intros', SkipSegmentType.intro),
+      outros: read('outros', SkipSegmentType.outro),
+    );
   }
 }
 

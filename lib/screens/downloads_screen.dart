@@ -401,6 +401,18 @@ Future<void> openDownloadedItem(
           season: selection.season,
           episode: selection.episode,
         ),
+        // A downloaded title still has a full metadata graph. Keep its
+        // people, studios and universe links alive, and let the user inspect
+        // a related title even when that related title is not on the device.
+        recommendationsLoader: media.id.startsWith('tt')
+            ? () => StremioService.instance.getRecommendations(
+                imdbId: media.id,
+                type: media.type,
+              )
+            : null,
+        onRecommendationTap: (item) {
+          unawaited(_openDownloadedCatalogPreview(routeContext, item));
+        },
       ),
     ),
   );
@@ -409,6 +421,69 @@ Future<void> openDownloadedItem(
 /// The user's Cinemeta install when present, else the stock one — the
 /// detail page only needs it for metadata.
 Future<StremioAddon> _metadataAddon() => OfflineTitleStore.cinemetaAddon();
+
+/// Opens metadata reached from a downloaded title (a similar title or a
+/// franchise entry). It deliberately stays in the Downloads flow: playback is
+/// offered when the title is available locally, while metadata browsing and
+/// the person/studio Discover links remain useful for every catalog title.
+Future<void> _openDownloadedCatalogPreview(
+  BuildContext context,
+  StremioMeta item,
+) async {
+  final addon = item.sourceAddon ?? await _metadataAddon();
+  if (!context.mounted) return;
+
+  Future<void> unavailable(
+    BuildContext routeContext, {
+    int? season,
+    int? episode,
+  }) async {
+    if (await DownloadedMediaService.playMatching(
+      routeContext,
+      item.imdbId ?? item.id,
+      season: season,
+      episode: episode,
+    )) {
+      return;
+    }
+    if (!routeContext.mounted) return;
+    ScaffoldMessenger.of(routeContext).showSnackBar(
+      SnackBar(
+        content: Text('“${item.name}” is not downloaded on this device.'),
+      ),
+    );
+  }
+
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (routeContext) => MergedDetailScreen(
+        item: item,
+        addon: addon,
+        onResume: (promised) => unavailable(
+          routeContext,
+          season: promised?.season,
+          episode: promised?.episode,
+        ),
+        onQuickPlay: (selection) => unavailable(
+          routeContext,
+          season: selection.season,
+          episode: selection.episode,
+        ),
+        recommendationsLoader: (item.imdbId ?? item.id).startsWith('tt')
+            ? () => StremioService.instance.getRecommendations(
+                imdbId: item.imdbId ?? item.id,
+                type: item.type,
+              )
+            : null,
+        onRecommendationTap: (next) {
+          unawaited(_openDownloadedCatalogPreview(routeContext, next));
+        },
+        metaEnricher: (id, type) =>
+            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+      ),
+    ),
+  );
+}
 
 List<LocalDownload> sortDownloads(Iterable<LocalDownload> items) =>
     [...items]..sort((a, b) {

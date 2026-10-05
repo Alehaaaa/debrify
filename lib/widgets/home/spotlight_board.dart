@@ -117,6 +117,9 @@ class SpotlightCard {
   final SpotlightCardShape shape;
   final bool showCaption;
 
+  /// Optional chart rank, rendered as a large, quiet numeral over the art.
+  final int? rank;
+
   /// Title identity for the effective watched marker. Null for channels,
   /// playlists, and other non-title cards.
   final String? watchedImdbId;
@@ -151,6 +154,7 @@ class SpotlightCard {
     this.onOptions,
     this.shape = SpotlightCardShape.poster,
     this.showCaption = true,
+    this.rank,
     this.previewBuilder,
     this.collectionGifUrl,
     this.collectionVideoUrl,
@@ -224,6 +228,8 @@ class SpotlightShelf {
   /// Whether the shelf heading, provenance pill and See-All affordance paint.
   /// Collection rows may opt out while their cards remain fully interactive.
   final bool showHeader;
+  /// A compact chart strip, rather than Spotlight's featured poster shelf.
+  final bool compactRanked;
 
   /// Stable identity for element reuse across board updates. Tracker rows
   /// stream in and FRONT-INSERT above the catalog rows; without identity the
@@ -241,6 +247,7 @@ class SpotlightShelf {
     this.tag,
     this.captions = true,
     this.showHeader = true,
+    this.compactRanked = false,
     this.id,
   });
 }
@@ -2853,6 +2860,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   }
 
   double _shelfCardHeight(SpotlightShelf section, _M m) {
+    if (section.compactRanked) return m.posterH * 0.58;
     // Wide cards use their own rail width. Keeping the portrait card's
     // width makes a 16:9 tile too short to read, while keeping its height
     // makes it enormous and leaves only two titles on a TV row. The rule is
@@ -2947,14 +2955,20 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
                     : m.gutter,
               ),
               itemCount: section.items.length,
-              separatorBuilder: (_, __) => SizedBox(width: m.gap),
-              itemBuilder: (context, c) => _Card(
+              separatorBuilder: (_, index) => SizedBox(
+                width: m.gap +
+                    (section.items[index].rank != null ? cardHeight * 0.03 : 0),
+              ),
+              itemBuilder: (context, c) {
+                final card = section.items[c];
+                final ranked = card.rank != null;
+                final cardWidget = _Card(
                 rowId: section.id ?? i,
                 largeInteractions: _largeCardInteractions,
                 register: _registerCard,
                 unregister: _unregisterCard,
                 onInteraction: _interactWithCard,
-                card: section.items[c],
+                card: card,
                 node: c < nodes.length ? nodes[c] : null,
                 // Every shape shares the ROW's height and takes the width its
                 // aspect implies, so a shelf that mixes posters and channel
@@ -2967,7 +2981,12 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
                 captionBlock: captions ? m.captionBlock : 0,
                 showCaption: captions && section.items[c].showCaption,
                 showTitleAndRating: widget.showCardTitlesAndRatings,
-                expandOnFocus: (widget.dpad || _largeCardInteractions) && widget.expandFocusedCard,
+                // Chart cards are a fixed composition: expanding one into a
+                // feature card destroys the number/poster overlap and pushes
+                // the neighbouring ranks out of rhythm.
+                expandOnFocus: !ranked &&
+                    (widget.dpad || _largeCardInteractions) &&
+                    widget.expandFocusedCard,
                 forceParallax: widget.forceCardParallax || _largeCardInteractions,
                 trailerEnabled: widget.trailersEnabled,
                 trailerVolume: widget.cardTrailerVolume,
@@ -2976,7 +2995,68 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
                 dpad: widget.dpad,
                 onDesktopPreviewActivityChanged:
                     _onDesktopPreviewActivityChanged,
-              ),
+                );
+                if (!ranked) return cardWidget;
+                // Let the rank read as its own full-height object before the
+                // poster overlaps it, rather than looking printed on the art.
+                final overlap = cardHeight * switch (card.rank) {
+                  1 => 0.38,
+                  10 => 0.82,
+                  _ => 0.52,
+                };
+                return SizedBox(
+                  width: cardHeight * card.shape.aspect + overlap,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('${card.rank}', style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            // Flutter glyphs sit inside their line box; this
+                            // makes the visible numeral match poster height.
+                            fontSize: cardHeight * 1.14,
+                            height: 0.86,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -cardHeight * 0.10,
+                            shadows: const [
+                              Shadow(
+                                color: Colors.black54,
+                                blurRadius: 18,
+                                offset: Offset(5, 7),
+                              ),
+                              Shadow(
+                                color: Colors.black26,
+                                blurRadius: 5,
+                                offset: Offset(1, 2),
+                              ),
+                            ],
+                            )),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: overlap,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(m.radius),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: Colors.black54,
+                                blurRadius: 22,
+                                offset: Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: cardWidget,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
         ),

@@ -10,6 +10,35 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  test('skip markers round-trip through the offline snapshot format', () {
+    const original = SkipSegments(
+      intros: [
+        SkipSegment(
+          type: SkipSegmentType.intro,
+          start: Duration(seconds: 12),
+          end: Duration(seconds: 75),
+          confidence: 0.9,
+          match: 'episode',
+        ),
+      ],
+      outros: [
+        SkipSegment(
+          type: SkipSegmentType.outro,
+          start: Duration(minutes: 42),
+          end: Duration(minutes: 43),
+        ),
+      ],
+    );
+
+    final restored = SkipSegments.fromJson(original.toJson());
+
+    expect(restored.intro?.start, const Duration(seconds: 12));
+    expect(restored.intro?.end, const Duration(seconds: 75));
+    expect(restored.intro?.confidence, 0.9);
+    expect(restored.outro?.start, const Duration(minutes: 42));
+    expect(restored.outro?.end, const Duration(minutes: 43));
+  });
+
   group('AutoSkipSegmentProvider', () {
     test(
       'queries every provider in parallel and falls back per segment type',

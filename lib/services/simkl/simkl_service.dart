@@ -11,6 +11,7 @@ import '../episode_tracker_snapshot_revision.dart';
 import '../profiles/profile_async_authorization.dart';
 import '../profiles/profile_runtime.dart';
 import '../storage_service.dart';
+import '../tracker_scrobble_outbox.dart';
 import 'simkl_calendar_service.dart';
 import 'simkl_constants.dart';
 
@@ -905,14 +906,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode,
+    int? episode, bool queueOnFailure = true,
   }) {
     return _scrobble(
       '/scrobble/start',
       imdbId,
       progress,
       season: season,
-      episode: episode,
+      episode: episode, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -922,14 +923,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode,
+    int? episode, bool queueOnFailure = true,
   }) {
     return _scrobble(
       '/scrobble/pause',
       imdbId,
       progress,
       season: season,
-      episode: episode,
+      episode: episode, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -939,14 +940,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode,
+    int? episode, bool queueOnFailure = true,
   }) {
     return _scrobble(
       '/scrobble/stop',
       imdbId,
       progress,
       season: season,
-      episode: episode,
+      episode: episode, queueOnFailure: queueOnFailure,
     );
   }
 
@@ -959,7 +960,7 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode,
+    int? episode, bool queueOnFailure = true,
   }) async {
     final token = await StorageService.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
@@ -1028,6 +1029,9 @@ class SimklService {
           EpisodeTrackerSnapshotRevision.identity('simkl', imdbId),
         ),
       );
+    }
+    if (result == null && queueOnFailure) {
+      unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'simkl', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: s == null ? 'movie' : 'series', season: s, episode: e));
     }
     return result != null;
   }
