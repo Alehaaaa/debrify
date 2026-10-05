@@ -1522,6 +1522,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   );
   bool _pinching = false;
   bool _pinchFired = false;
+
+  // Fingers on the glass right now, and whether this touch session became a
+  // pinch. Once two fingers have been down, nothing until every finger is
+  // lifted may seek: the scale recognizer restarts with the remaining finger
+  // when one lifts, and that leftover drag used to scrub the video.
+  int _touches = 0;
+  bool _pinchSession = false;
+
+  void _onTouchDown(PointerDownEvent _) {
+    _touches++;
+    if (_touches >= 2 && !_pinchSession) {
+      _pinchSession = true;
+      _cancelDragGesture();
+    }
+  }
+
+  void _onTouchUp(PointerEvent _) {
+    if (_touches > 0) _touches--;
+    if (_touches == 0) _pinchSession = false;
+  }
+
+  /// Drops a one-finger drag already under way (its seek preview, volume or
+  /// brightness HUD) without applying it.
+  void _cancelDragGesture() {
+    _panIgnore = true;
+    _mode = GestureMode.none;
+    _seekHud.value = null;
+    _verticalHud.value = null;
+  }
   double _playbackSpeed = 1.0;
 
   // ── Sleep timer ───────────────────────────────────────────────────────────
@@ -6601,6 +6630,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   void _hideSyncOverlay() {
     setState(() => _showSyncOverlay = false);
+    if (!PlatformUtil.isTelevision) _restoreHudAfterOverlay();
   }
 
   Widget _buildSyncOverlay() {
@@ -9011,10 +9041,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // the user's own source; say so. Failover retries keep the counter
       // (the ladder really is trying alternatives at that point).
       final firstAttempt = attempts == 1 && !initialAttemptAlreadyFailed;
-      final debridFirstOpen =
-          firstAttempt &&
-          !pikPakResolver &&
-          source.streamType == StreamType.torrent;
+      // Any first open — debrid or an addon's direct link — shows the player
+      // itself: the Play pipeline (search → cache → prepare → start) has
+      // just been on screen, and a second full-screen loader after it read
+      // as a stall. The screen appears only once failover starts retrying.
+      final debridFirstOpen = firstAttempt && !pikPakResolver;
       if (_startupGateOverlayHidden != debridFirstOpen) {
         _startupGateOverlayHidden = debridFirstOpen;
         if (mounted) setState(() {});
@@ -12972,6 +13003,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         _tvHideBar();
         return;
       }
+      // Touch / desktop: a sheet or dialog over the player (tracks, sleep,
+      // sources, playlist) pauses the countdown, so closing it finds the HUD
+      // still there instead of having faded away underneath.
+      if (!_controlsVisible.value) return;
+      final route = ModalRoute.of(context);
+      if ((route != null && !route.isCurrent) || _anyPlayerOverlayOpen) {
+        _scheduleAutoHide();
+        return;
+      }
       _controlsVisible.value = false;
     });
   }
@@ -13713,8 +13753,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleStart(ScaleStartDetails details) {
-    _pinching = details.pointerCount >= 2;
-    _pinchFired = false;
+    _pinching = details.pointerCount >= 2 || _pinchSession;
+    if (!_pinching) _pinchFired = false;
     if (_pinching) return;
     _onPanStart(
       DragStartDetails(
@@ -13725,13 +13765,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleUpdate(ScaleUpdateDetails details) {
-    if (details.pointerCount >= 2 && !_pinching) {
+    if ((details.pointerCount >= 2 || _pinchSession) && !_pinching) {
       // A second finger joined a drag: it's a pinch now, drop the drag HUDs.
       _pinching = true;
-      _panIgnore = true;
-      _mode = GestureMode.none;
-      _seekHud.value = null;
-      _verticalHud.value = null;
+      _cancelDragGesture();
     }
     if (_pinching) {
       if (!_pinchFired && (details.scale > 1.12 || details.scale < 0.88)) {
@@ -13750,7 +13787,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _onScaleEnd(ScaleEndDetails details) {
-    if (_pinching) {
+    if (_pinching || _pinchSession) {
       _pinching = false;
       return;
     }
@@ -15644,7 +15681,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                 ),
                 // Full-screen gesture layer (placed below controls)
                 if (!inPip)
-                  GestureDetector(
+                  Listener(
+                    // Counts fingers for the pinch session (see _touches).
+                    behavior: HitTestBehavior.translucent,
+                    onPointerDown: _onTouchDown,
+                    onPointerUp: _onTouchUp,
+                    onPointerCancel: _onTouchUp,
+                    child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onTapDown: (d) => _lastTapLocal = d.localPosition,
                     onTap: () {
@@ -15673,6 +15716,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                     onScaleStart: _onScaleStart,
                     onScaleUpdate: _onScaleUpdate,
                     onScaleEnd: _onScaleEnd,
+                  ),
                   ),
                 // Above the gesture layer: startup hides normal controls, but
                 // leaving the player must remain available while links resolve.
@@ -17234,7 +17278,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   void _hidePlayerMenu() {
     if (!_showPlayerMenu) return;
     setState(() => _showPlayerMenu = false);
-    if (PlatformUtil.isTelevision) _tvRootFocus.requestFocus();
+    if (PlatformUtil.isTelevision) {
+      _tvRootFocus.requestFocus();
+    } else {
+      _restoreHudAfterOverlay();
+    }
+  }
+
+  /// Options panels hide the HUD only while they're open: closing one brings
+  /// the controls straight back (then they fade on the usual timer), so the
+  /// user never has to tap the picture again just to reach Play.
+  void _restoreHudAfterOverlay() {
+    if (!mounted || _touchLocked || _isPipActive) return;
+    _controlsVisible.value = true;
+    _scheduleAutoHide();
   }
 
   /// Persist an explicit subtitle choice made from the menu.
