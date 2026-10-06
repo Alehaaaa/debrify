@@ -13,7 +13,7 @@ void main() {
   testWidgets(
     'reel keeps the same poster from resolving through first video frame',
     (tester) async {
-      final engine = _PendingFirstFrameEngine();
+      final engine = _TextureFirstFrameEngine();
       final item = StremioMeta(id: 'tt1234', type: 'movie', name: 'Scene');
       Widget host(YoutubeResolvedStreams? streams) => MaterialApp(
         home: ReelVideoSurface(
