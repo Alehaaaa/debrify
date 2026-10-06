@@ -23,6 +23,7 @@ import '../../theme/widgets/parallax_focus.dart';
 import '../../utils/artwork_url.dart';
 import '../../utils/dominant_color.dart';
 import '../../utils/dialog_tap_guard.dart';
+import '../card_action_menu.dart';
 import '../../utils/tv_keys.dart';
 import 'row_tag_pill.dart';
 import 'home_row_focus.dart';
@@ -4019,6 +4020,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
         c.onOpen();
       },
       onLongPress: c.onOptions,
+      onSecondaryTap: CardMenuGesture.secondaryClick(c.onOptions),
       child: card,
     );
     final interactive = widget.hoverable

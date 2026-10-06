@@ -415,6 +415,8 @@ class _StremioCardState extends State<_StremioCard>
           // Touch/desktop counterpart of TV's hold-OK: the menu when there is
           // one, else the old long-press-to-play.
           onLongPress: widget.onLongPress ?? widget.onQuickPlay,
+          // Right-click is the pointer's way to the same menu.
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
           // No title beneath the poster — Stremio lets the artwork carry the
           // rail; the title lives on the hero (focused) and the detail page.
@@ -732,6 +734,10 @@ class _ArtPoster extends StatefulWidget {
   final FocusNode focusNode;
   final VoidCallback onOpen;
 
+  /// Optional card menu: long-press, right-click, or a held OK on TV. Null
+  /// keeps OK a plain open.
+  final VoidCallback? onLongPress;
+
   /// Fired when this card gains DPAD focus (TV only — see [_ArtPosterState]'s
   /// `onFocusChange`). The IPTV favourites rows use it to retune the hero's
   /// video region (boxed on classic, full-bleed on Canvas) to the focused
@@ -747,6 +753,7 @@ class _ArtPoster extends StatefulWidget {
     required this.isTelevision,
     required this.focusNode,
     required this.onOpen,
+    this.onLongPress,
     this.imageFit = BoxFit.cover,
     this.badge,
     this.live = false,
@@ -763,6 +770,18 @@ class _ArtPosterState extends State<_ArtPoster> {
   bool _focused = false;
   bool _hovered = false;
   bool _keyDown = false;
+
+  /// Held OK opens [_ArtPoster.onLongPress]; a short press still opens.
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
   bool get _active => _focused || _hovered;
 
   Widget _glyph() {
@@ -899,7 +918,10 @@ class _ArtPosterState extends State<_ArtPoster> {
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) _keyDown = false;
+        if (!f) {
+          _keyDown = false;
+          _hold.reset();
+        }
         if (f) {
           widget.onFocused?.call();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -923,6 +945,7 @@ class _ArtPosterState extends State<_ArtPoster> {
       onKeyEvent: (node, event) {
         if (isActivateKey(event.logicalKey) ||
             event.logicalKey == LogicalKeyboardKey.space) {
+          if (widget.onLongPress != null) return _hold.handle(event);
           if (event is KeyDownEvent) {
             _keyDown = true;
             return KeyEventResult.handled;
@@ -943,7 +966,14 @@ class _ArtPosterState extends State<_ArtPoster> {
         },
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: widget.onOpen,
+          onTap: () {
+            // Same echo guard as [_StremioCard]: a DPAD pick in the hold menu
+            // must not fall through and open this card underneath.
+            if (DialogTapGuard.shouldIgnoreTap()) return;
+            widget.onOpen();
+          },
+          onLongPress: widget.onLongPress,
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
           child: Column(
             mainAxisSize: MainAxisSize.min,

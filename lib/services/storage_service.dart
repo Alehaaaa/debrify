@@ -6650,10 +6650,10 @@ class StorageService {
     await prefs.setBool(_homeContinueWatchingEnabledKey, value);
   }
 
-  /// Whether holding a Continue Watching card should immediately Quick Play
-  /// instead of opening the Play / Remove action menu. Off by default so the
-  /// removal action remains discoverable until the user opts into the faster
-  /// gesture.
+  /// Whether holding a title card (Home rows, Continue Watching, Discover)
+  /// should immediately Quick Play instead of opening the card's action menu.
+  /// Off by default so the menu's actions stay discoverable until the user
+  /// opts into the faster gesture. The key keeps its original CW-only name.
   static Future<bool> getHomeCwHoldToQuickPlay() async {
     final prefs = await ProfilePreferences.instance();
     return prefs.getBool(_homeCwHoldToQuickPlayKey) ?? false;

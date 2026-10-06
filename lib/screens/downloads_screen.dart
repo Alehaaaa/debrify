@@ -17,6 +17,7 @@ import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../theme/theme_core_resolver.dart';
 import '../theme/theme_overrides.dart';
 import '../utils/artwork_url.dart';
+import '../widgets/card_action_menu.dart';
 import '../widgets/detail/detail_identity.dart';
 import '../widgets/detail/detail_style.dart';
 import '../widgets/detail/theme/detail_theme.dart';
@@ -28,6 +29,8 @@ import '../widgets/see_all/stremio_dropdown.dart';
 import 'download_manager_screen.dart';
 import 'merged_series_detail_screen.dart';
 export 'download_manager_screen.dart' hide DownloadManagerScreen;
+
+enum _DownloadCardAction { play, open, files, pause, resume, retry, delete }
 
 /// Downloads library: Home's page wash, header typography and white glass
 /// controls around Discover's own filter bar, poster grid and card settings.
@@ -103,6 +106,224 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   TitleDownloadSummary _summary(List<LocalDownload> items) =>
       TitleDownloadSummary.of(items, live: _progress);
+
+  bool _menuOpen = false;
+
+  /// Hold / right-click on a library poster: play the download, open it, look
+  /// at its files, steer the transfers still running, or delete it.
+  Future<void> _showOptions(
+    StremioMeta poster,
+    List<LocalDownload> group,
+  ) async {
+    if (_menuOpen) return;
+    _menuOpen = true;
+    final ready = sortDownloads(group.where((e) => e.isReady));
+    final pending = group.where((e) => !e.isReady).toList();
+    final running = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.running ||
+            e.record.status == TaskStatus.enqueued ||
+            e.record.status == TaskStatus.waitingToRetry)
+          e,
+    ];
+    final paused = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.paused) e,
+    ];
+    final failed = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.failed) e,
+    ];
+    final series = group.first.media?.type == 'series';
+    final homeDetail = opensHomeDetail(group);
+    final first = ready.isEmpty ? null : ready.first.media;
+    final firstEpisode =
+        series && first?.season != null && first?.episode != null
+        ? 'S${first!.season.toString().padLeft(2, '0')}'
+              'E${first.episode.toString().padLeft(2, '0')}'
+        : null;
+    final summary = _summary(group);
+    _DownloadCardAction? action;
+    try {
+      action = await showCardActionMenu<_DownloadCardAction>(
+        context,
+        title: poster.name,
+        isTelevision: false,
+        posterUrl: poster.poster,
+        subtitle: [
+          if (group.length > 1) '${group.length} files',
+          summary.inFlight
+              ? (summary.status ?? 'Downloading')
+              : 'On this device',
+        ].join('  ·  '),
+        actions: [
+          if (ready.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.play,
+              icon: Icons.play_arrow_rounded,
+              label: firstEpisode == null ? 'Play' : 'Play $firstEpisode',
+              description: series
+                  ? 'Start the first downloaded episode, offline.'
+                  : 'Play the downloaded file, offline.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.open,
+            icon: homeDetail
+                ? Icons.info_outline_rounded
+                : Icons.folder_open_rounded,
+            label: homeDetail ? 'Details' : 'Open download',
+            description: homeDetail
+                ? 'The title page, with Play wired to the files on this device.'
+                : 'Every file of this download and its progress.',
+          ),
+          if (homeDetail)
+            CardMenuAction(
+              value: _DownloadCardAction.files,
+              icon: Icons.folder_open_rounded,
+              label: 'Downloaded files',
+              description: series
+                  ? 'Each downloaded episode, with its size and progress.'
+                  : 'The file on this device, with its size.',
+            ),
+          if (running.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.pause,
+              icon: Icons.pause_rounded,
+              label: 'Pause',
+              description: running.length == 1
+                  ? 'Pause this download. Resume it any time.'
+                  : 'Pause the ${running.length} downloads still running.',
+            ),
+          if (paused.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.resume,
+              icon: Icons.play_circle_outline_rounded,
+              label: 'Resume',
+              description: paused.length == 1
+                  ? 'Carry on from where this download stopped.'
+                  : 'Carry on with the ${paused.length} paused downloads.',
+            ),
+          if (failed.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.retry,
+              icon: Icons.refresh_rounded,
+              label: 'Retry',
+              description: failed.length == 1
+                  ? 'Restart the download that failed.'
+                  : 'Restart the ${failed.length} downloads that failed.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.delete,
+            icon: Icons.delete_outline_rounded,
+            label: group.length == 1
+                ? 'Delete download'
+                : 'Delete ${group.length} downloads',
+            description:
+                'Removes it from this device. You can download it '
+                'again later.',
+            destructive: true,
+          ),
+        ],
+      );
+    } finally {
+      _menuOpen = false;
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _DownloadCardAction.play:
+        try {
+          await DownloadedMediaService.play(context, ready.first);
+        } catch (_) {
+          _snack('Could not open this download.');
+        }
+      case _DownloadCardAction.open:
+        await openDownloadedItem(context, group);
+      case _DownloadCardAction.files:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DownloadedTitleScreen(items: group),
+          ),
+        );
+      case _DownloadCardAction.pause:
+        for (final e in running) {
+          try {
+            await DownloadService.instance.pause(e.record.task);
+          } catch (_) {}
+        }
+      case _DownloadCardAction.resume:
+      case _DownloadCardAction.retry:
+        var ok = true;
+        for (final e
+            in action == _DownloadCardAction.resume ? paused : failed) {
+          try {
+            ok = await DownloadService.instance.resume(e.record.task) && ok;
+          } catch (_) {
+            ok = false;
+          }
+        }
+        if (!ok) _snack('Could not restart every download. Try again later.');
+      case _DownloadCardAction.delete:
+        await _deleteGroup(poster.name, group);
+    }
+    if (mounted) _refresh();
+  }
+
+  Future<void> _deleteGroup(String title, List<LocalDownload> group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          group.length == 1
+              ? 'Delete download?'
+              : 'Delete ${group.length} downloads?',
+        ),
+        content: Text(
+          group.length == 1
+              ? 'Delete “$title” from this device? You can download it again later.'
+              : 'Delete every downloaded file of “$title” from this device? '
+                    'You can download them again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    var failed = false;
+    try {
+      // Same profile recheck as the download page: only touch queue records
+      // the active profile owns. (Scanned files were already filtered.)
+      final owned = {
+        for (final record in await DownloadService.instance.allRecords())
+          record.taskId,
+      };
+      for (final item in group) {
+        if (!item.isScanned && !owned.contains(item.record.taskId)) continue;
+        try {
+          await DownloadedMediaService.remove(item);
+        } catch (_) {
+          failed = true;
+        }
+      }
+    } catch (_) {
+      failed = true;
+    }
+    if (failed) _snack('Could not remove every file. Try again.');
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -284,6 +505,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             await openDownloadedItem(context, groups[item.id]!);
                             _refresh();
                           },
+                          onOptions: (item) =>
+                              _showOptions(item, groups[item.id]!),
                         ),
                       ),
               ),

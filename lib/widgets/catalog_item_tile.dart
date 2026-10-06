@@ -2,6 +2,7 @@ import '../models/metadata_preferences.dart';
 import 'metadata_presentation_mixin.dart';
 import 'dart:async';
 
+import 'card_action_menu.dart';
 import 'recoverable_network_image.dart';
 import 'dart:math' as math;
 
@@ -23,8 +24,9 @@ import 'movie_watched_badge.dart';
 
 /// Poster-first grid tile for catalog and search results.
 ///
-/// Tap (or D-pad SELECT) calls [onOpen]. A long-press calls [onLongPress]
-/// (used to Quick Play straight from the grid). Description, year, genres
+/// Tap (or D-pad SELECT) calls [onOpen]. A long-press (or a held SELECT on
+/// TV) calls [onLongPress] — a library's card menu, or Quick Play where there
+/// is none — and a right-click calls [onSecondaryTap]. Description, year, genres
 /// and per-item actions live on the detail screen — the grid stays clean.
 class CatalogItemTile extends StatefulWidget {
   final StremioMeta item;
@@ -33,8 +35,12 @@ class CatalogItemTile extends StatefulWidget {
   final bool hasBoundSource;
   final VoidCallback onOpen;
 
-  /// Optional long-press action (Quick Play). When null, long-press is a no-op.
+  /// Optional long-press action (the card menu, or Quick Play). When null,
+  /// long-press is a no-op.
   final VoidCallback? onLongPress;
+
+  /// Optional right-click action — the card menu on pointer devices.
+  final VoidCallback? onSecondaryTap;
 
   /// Fires when this tile *gains* DPAD/hover focus — the hook the Discover
   /// two-pane detail rail uses to know which item to preview. Not called on
@@ -95,6 +101,7 @@ class CatalogItemTile extends StatefulWidget {
     required this.hasBoundSource,
     required this.onOpen,
     this.onLongPress,
+    this.onSecondaryTap,
     this.onFocused,
     this.progress,
     this.downloadProgress,
@@ -556,6 +563,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
                   HapticFeedback.mediumImpact();
                   widget.onLongPress!();
                 },
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onSecondaryTap),
           behavior: HitTestBehavior.opaque,
           // Isolate the tile's repaint: focus flips its shadow/ring/overlay,
           // and without a boundary each DPAD move repaints the whole grid

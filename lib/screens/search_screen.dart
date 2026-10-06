@@ -75,6 +75,7 @@ import '../services/home_row_order.dart';
 import '../services/filtered_catalog_pager.dart';
 import '../services/hide_watched_prefs.dart';
 import '../services/watched_filter.dart';
+import '../services/watched_action_coordinator.dart';
 import '../services/watched_status_service.dart';
 import '../services/iptv_cw_router.dart';
 import '../services/iptv_media_store.dart';
@@ -130,7 +131,7 @@ import '../services/youtube_service.dart';
 import '../widgets/add_source_picker_dialog.dart';
 import '../widgets/debrid_action_sheet.dart';
 import '../widgets/hero_trailer_backdrop.dart';
-import '../widgets/home/cw_card_menu.dart';
+import '../widgets/card_action_menu.dart';
 import '../widgets/home/card_focus_rise.dart';
 import '../widgets/home/home_theme.dart';
 import '../widgets/home/row_tag_pill.dart';
@@ -282,6 +283,22 @@ class SearchScreen extends StatefulWidget {
 }
 
 enum _Mode { catalog, keyword, lists }
+
+/// Rows of the hold / right-click menu on a title card (Home rows, Discover,
+/// Search). [play] and [removeCw] mean the Continue Watching row's own
+/// resume / removal when the menu was opened from one.
+enum _TitleCardAction {
+  play,
+  open,
+  randomEpisode,
+  watchlistAdd,
+  watchlistRemove,
+  markWatched,
+  markUnwatched,
+  sources,
+  stremioTv,
+  removeCw,
+}
 
 /// Keyword mode is a plain torrent lookup, not media-aware. Hidden from the
 /// search header (and never restored) until it earns its place again.
@@ -883,6 +900,12 @@ class _SearchScreenState extends State<SearchScreen>
   late final _spotlightCatalogCards = SpotlightCatalogCardCache(
     wideArtwork: _wideArtUrl,
     onOpen: (item, addon) => _openItem(item, addon),
+    onOptions: (item, addon) => _openTitleCardMenu(
+      item,
+      addon: addon,
+      open: () => _openItem(item, addon),
+      quickPlay: _pikpakOnly ? null : () => _onCatalogPlay(item, addon),
+    ),
   );
 
   /// Stable ids in the user's global Home-row order. Rows not present append
@@ -5219,6 +5242,53 @@ class _SearchScreenState extends State<SearchScreen>
     _onCatalogPlay(item, section.addon);
   }
 
+  /// The card menu for a My Watchlist row card. Xtream series saved to the
+  /// watchlist open their IPTV page and can't quick-play or take the catalog
+  /// actions, so they keep a plain tap.
+  VoidCallback? _watchlistCardOptions(StremioMeta item) {
+    if (item.sourceAddon?.id == 'xtream-iptv' ||
+        parseXtreamSeriesMetaId(item.id) != null) {
+      return null;
+    }
+    final addon = _addonForContinue(item.sourceAddon?.id);
+    return () => _openTitleCardMenu(
+      item,
+      addon: addon,
+      open: () => _openMyWatchlistItem(item),
+      quickPlay: _pikpakOnly ? null : () => _onCatalogPlay(item, addon),
+      subtitle: item.type == 'series' ? 'Watchlist Series' : 'Watchlist Movies',
+    );
+  }
+
+  /// [_sectionCardOptions] for a stage / canvas rail's card (null for rails
+  /// with no backing catalog section).
+  VoidCallback? _railCardOptions(_CanvasRail rail, StremioMeta item) {
+    final index = rail.sectionIndex;
+    if (index == null || index >= _sections.length) return null;
+    return _sectionCardOptions(_sections[index], item);
+  }
+
+  /// The hold / right-click menu for a Home row card, routed through the
+  /// row's own open and quick-play. Null for collection folder tiles, which
+  /// open a folder rather than a title and have nothing else to offer.
+  VoidCallback? _sectionCardOptions(
+    CatalogSection section,
+    StremioMeta item, {
+    String? heroTag,
+  }) {
+    if (section is HomeCollectionSection) return null;
+    final addon = section is HomeListSection || section is HomeTopTenSection
+        ? _addonForContinue(item.sourceAddon?.id)
+        : section.addon;
+    return () => _openTitleCardMenu(
+      item,
+      addon: addon,
+      open: () => _sectionOpenItem(section, item, heroTag: heroTag),
+      quickPlay: _pikpakOnly ? null : () => _sectionQuickPlay(section, item),
+      subtitle: section.title,
+    );
+  }
+
   Future<List<HomeCollection>> _readHomeCollections() async {
     try {
       return await HomeCollectionsStore.instance.getCollections();
@@ -5751,6 +5821,7 @@ class _SearchScreenState extends State<SearchScreen>
     int cwIndex,
     int col,
   ) async {
+    final viaClick = CardMenuGesture.isSecondaryClick;
     if (_cwMenuOpen) return;
     _cwMenuOpen = true;
     final isSeries = item.type == 'series';
@@ -5768,7 +5839,7 @@ class _SearchScreenState extends State<SearchScreen>
     try {
       final holdToQuickPlay = await StorageService.getHomeCwHoldToQuickPlay();
       if (!mounted) return;
-      if (holdToQuickPlay && quickPlayAvailable) {
+      if (holdToQuickPlay && quickPlayAvailable && !viaClick) {
         row.onQuickPlay(item);
         return;
       }
@@ -5829,33 +5900,330 @@ class _SearchScreenState extends State<SearchScreen>
     }
 
     final episode = row.episodeOf(item);
-    CwCardAction? action;
+    final addon = item.sourceAddon ?? _addonForContinue(null);
+    _TitleCardAction? action;
     try {
-      action = await showCwCardMenu(
+      // IPTV entries are channels / Xtream series, not catalog titles: the
+      // library actions (watchlist, watched, sources) don't apply to them.
+      final extras = row.kind == _CwKind.iptv
+          ? const <CardMenuAction<_TitleCardAction>>[]
+          : await _titleCardExtraActions(item, offerCwRemoval: false);
+      if (!mounted) return;
+      action = await showCardActionMenu<_TitleCardAction>(
         context,
         title: item.name,
         isTelevision: widget.isTelevision,
         posterUrl: item.poster,
         subtitle: [row.title, if (episode != null) episode].join('  ·  '),
-        // Mirrors the card's own long-press-to-play gate: PikPak-only setups
-        // have no quick play, so the menu offers the removal alone.
-        showPlay: playActionAvailable,
-        showRemove: removeActionAvailable,
-        playLabel: playLabel,
-        playDescription: playDescription,
-        removeDescription: removeDescription,
+        actions: [
+          // Mirrors the card's own long-press-to-play gate: PikPak-only
+          // setups have no quick play, so the menu skips it.
+          if (playActionAvailable)
+            CardMenuAction(
+              value: _TitleCardAction.play,
+              icon: Icons.play_arrow_rounded,
+              label: playLabel,
+              description: playDescription,
+            ),
+          if (row.kind != _CwKind.iptv)
+            const CardMenuAction(
+              value: _TitleCardAction.open,
+              icon: Icons.info_outline_rounded,
+              label: 'Details',
+              description: 'Open the title page: episodes, sources, cast.',
+            ),
+          ...extras,
+          if (removeActionAvailable)
+            CardMenuAction(
+              value: _TitleCardAction.removeCw,
+              icon: Icons.playlist_remove_rounded,
+              label: 'Remove from Continue Watching',
+              description: removeDescription,
+              destructive: true,
+            ),
+        ],
       );
     } finally {
       _cwMenuOpen = false;
     }
     if (!mounted || action == null) return;
     switch (action) {
-      case CwCardAction.play:
+      case _TitleCardAction.play:
         row.onQuickPlay(item);
-      case CwCardAction.remove:
+      case _TitleCardAction.open:
+        row.onOpen(item);
+      case _TitleCardAction.removeCw:
         await row.onRemove(item);
         if (!mounted) return;
         _refocusAfterCwRemoval(cwIndex, col);
+      default:
+        await _runTitleCardExtraAction(action, item, addon);
+    }
+  }
+
+  /// Hold (hold-OK on TV) or right-click on a title card that isn't on a
+  /// Continue Watching row — a Home catalog / list / watchlist row, Discover,
+  /// or a search result. [open] and [quickPlay] are the card's own tap and
+  /// quick-play, so the menu's first rows do exactly what the card does.
+  ///
+  /// Home's Hold to Quick Play preference applies here too: when it's on, a
+  /// hold plays straight away, the way holding a card always used to. A
+  /// right-click always opens the menu.
+  Future<void> _openTitleCardMenu(
+    StremioMeta item, {
+    required StremioAddon addon,
+    required VoidCallback open,
+    VoidCallback? quickPlay,
+    String? subtitle,
+  }) async {
+    // Read before the first await: the flag only lives for the click's
+    // synchronous dispatch.
+    final viaClick = CardMenuGesture.isSecondaryClick;
+    if (_cwMenuOpen) return;
+    _cwMenuOpen = true;
+    _TitleCardAction? action;
+    try {
+      if (quickPlay != null && !viaClick) {
+        var holdToQuickPlay = false;
+        try {
+          holdToQuickPlay = await StorageService.getHomeCwHoldToQuickPlay();
+        } catch (_) {
+          // A preference read must never take the menu away.
+        }
+        if (!mounted) return;
+        if (holdToQuickPlay) {
+          quickPlay();
+          return;
+        }
+      }
+      final extras = await _titleCardExtraActions(
+        item,
+        offerCwRemoval: true,
+      );
+      if (!mounted) return;
+      final isSeries = item.type == 'series';
+      action = await showCardActionMenu<_TitleCardAction>(
+        context,
+        title: item.name,
+        isTelevision: widget.isTelevision,
+        posterUrl: item.poster,
+        subtitle:
+            subtitle ??
+            [
+              if (isSeries) 'Series' else if (item.type == 'movie') 'Movie',
+              if (item.year != null && item.year!.isNotEmpty) item.year!,
+            ].join('  ·  '),
+        actions: [
+          if (quickPlay != null)
+            CardMenuAction(
+              value: _TitleCardAction.play,
+              icon: Icons.play_arrow_rounded,
+              label: 'Play',
+              description: isSeries
+                  ? 'Quick Play the episode you\'re up to.'
+                  : 'Quick Play the best source.',
+            ),
+          const CardMenuAction(
+            value: _TitleCardAction.open,
+            icon: Icons.info_outline_rounded,
+            label: 'Details',
+            description: 'Open the title page: sources, trailer, cast.',
+          ),
+          ...extras,
+        ],
+      );
+    } finally {
+      _cwMenuOpen = false;
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _TitleCardAction.play:
+        quickPlay?.call();
+      case _TitleCardAction.open:
+        open();
+      default:
+        await _runTitleCardExtraAction(action, item, addon);
+    }
+  }
+
+  /// [CardOptionsScope] handler for the poster grids on this screen (Discover's
+  /// panels, pushed See-All pages): the grid hands over its own open and
+  /// quick-play for the item.
+  void _scopedCardOptions(
+    StremioMeta item, {
+    required VoidCallback open,
+    VoidCallback? quickPlay,
+  }) {
+    _openTitleCardMenu(
+      item,
+      addon: _addonForContinue(item.sourceAddon?.id),
+      open: open,
+      quickPlay: quickPlay,
+    );
+  }
+
+  /// The library rows every title card menu shares, after Play / Details:
+  /// My Watchlist, watched state, pinned sources, Stremio TV, a random
+  /// episode — and the Continue Watching removal when [offerCwRemoval]
+  /// asks to check for it (a CW row supplies its own removal instead).
+  Future<List<CardMenuAction<_TitleCardAction>>> _titleCardExtraActions(
+    StremioMeta item, {
+    required bool offerCwRemoval,
+  }) async {
+    final type = item.type.toLowerCase();
+    final isTitle = type == 'movie' || type == 'series';
+    if (!isTitle) return const [];
+    final isSeries = type == 'series';
+    final imdb = _imdbOf(item);
+    var inWatchlist = false;
+    try {
+      inWatchlist = await StorageService.isInMyWatchlist(
+        StorageService.withMyWatchlistSource(
+          item,
+          item.sourceAddon ?? _addonForContinue(null),
+        ),
+      );
+    } catch (_) {}
+    // Same identity the mark below writes, read from the snapshot the
+    // posters' ✓ badges draw from, so the row offered matches the badge.
+    WatchedStatusService.instance.ensureStarted();
+    final watched =
+        imdb != null &&
+        WatchedStatusService.instance.isWatchedForTicks(imdb, type);
+    final bound = _isBound(item);
+    return [
+      if (isSeries && !_pikpakOnly)
+        const CardMenuAction(
+          value: _TitleCardAction.randomEpisode,
+          icon: Icons.shuffle_rounded,
+          label: 'Play a random episode',
+          description: 'Pick any episode of the series and start it.',
+        ),
+      inWatchlist
+          ? const CardMenuAction(
+              value: _TitleCardAction.watchlistRemove,
+              icon: Icons.bookmark_remove_rounded,
+              label: 'Remove from My Watchlist',
+              description: 'Takes it off your watchlist row.',
+            )
+          : const CardMenuAction(
+              value: _TitleCardAction.watchlistAdd,
+              icon: Icons.bookmark_add_outlined,
+              label: 'Add to My Watchlist',
+              description: 'Saves it to the watchlist row on Home.',
+            ),
+      if (imdb != null)
+        watched
+            ? CardMenuAction(
+                value: _TitleCardAction.markUnwatched,
+                icon: Icons.remove_done_rounded,
+                label: 'Mark as unwatched',
+                description: isSeries
+                    ? 'Clears the series\' watched mark here and on your '
+                          'synced trackers.'
+                    : 'Clears the watched mark here and on your synced '
+                          'trackers.',
+              )
+            : CardMenuAction(
+                value: _TitleCardAction.markWatched,
+                icon: Icons.done_all_rounded,
+                label: 'Mark as watched',
+                description: isSeries
+                    ? 'Marks the whole series watched here and on your synced '
+                          'trackers.'
+                    : 'Marks it watched here and on your synced trackers.',
+              ),
+      if (imdb != null)
+        CardMenuAction(
+          value: _TitleCardAction.sources,
+          icon: Icons.link_rounded,
+          label: bound ? 'Edit pinned source' : 'Pin a source',
+          description: bound
+              ? 'Reorder, remove or add the sources this title plays from.'
+              : 'Choose the torrent or file this title always plays from.',
+        ),
+      const CardMenuAction(
+        value: _TitleCardAction.stremioTv,
+        icon: Icons.live_tv_rounded,
+        label: 'Add to Stremio TV',
+        description: 'Put it on one of your Stremio TV channels.',
+      ),
+      if (offerCwRemoval && imdb != null && _cwIds.contains(imdb))
+        const CardMenuAction(
+          value: _TitleCardAction.removeCw,
+          icon: Icons.playlist_remove_rounded,
+          label: 'Remove from Continue Watching',
+          description:
+              'Takes it off the row and clears the position saved on this '
+              'device.',
+          destructive: true,
+        ),
+    ];
+  }
+
+  /// Runs a row from [_titleCardExtraActions].
+  Future<void> _runTitleCardExtraAction(
+    _TitleCardAction action,
+    StremioMeta item,
+    StremioAddon addon,
+  ) async {
+    switch (action) {
+      case _TitleCardAction.play:
+      case _TitleCardAction.open:
+        return; // The caller's own.
+      case _TitleCardAction.randomEpisode:
+        await _playRandomEpisodeFromDetail(item.withSourceAddon(addon), addon);
+      case _TitleCardAction.watchlistAdd:
+      case _TitleCardAction.watchlistRemove:
+        final add = action == _TitleCardAction.watchlistAdd;
+        try {
+          await StorageService.setMyWatchlistItem(
+            StorageService.withMyWatchlistSource(item, addon),
+            add,
+          );
+          if (!mounted) return;
+          HapticFeedback.mediumImpact();
+          _snack(add ? 'Added to My Watchlist' : 'Removed from My Watchlist');
+          await _loadMyWatchlist();
+        } catch (_) {
+          _snack('Couldn\'t update My Watchlist');
+        }
+      case _TitleCardAction.markWatched:
+      case _TitleCardAction.markUnwatched:
+        final imdb = _imdbOf(item);
+        if (imdb == null) return;
+        final watched = action == _TitleCardAction.markWatched;
+        final result = await WatchedActionCoordinator.setTitleWatched(
+          imdbId: imdb,
+          contentType: item.type,
+          watched: watched,
+        );
+        WatchedStatusService.instance.refresh();
+        if (!mounted) return;
+        _snack(
+          result.success
+              ? (watched ? 'Marked as watched' : 'Marked as unwatched')
+              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
+                    'didn\'t update',
+        );
+        // A watched mark moves a title on or off the Continue Watching rows.
+        if (!widget.searchMode) {
+          _seriesResumeCache.clear();
+          await Future.wait([
+            _loadContinueWatching(),
+            _loadTraktContinueWatching(refreshBound: false),
+            _loadSimklContinueWatching(refreshBound: false),
+            _loadMdblistContinueWatching(refreshBound: false),
+          ]);
+        }
+      case _TitleCardAction.sources:
+        _activeAddonId = addon.id;
+        await _handleEditOrSelectSource(item.withSourceAddon(addon));
+        if (mounted) await _refreshBoundSources();
+      case _TitleCardAction.stremioTv:
+        await _addToStremioTvFromDetail(item);
+      case _TitleCardAction.removeCw:
+        await _removeLocalCwItem(item);
     }
   }
 
@@ -7566,6 +7934,7 @@ class _SearchScreenState extends State<SearchScreen>
             ringColor: Colors.white,
             focusNode: nodes[col],
             onOpen: () => _openMyWatchlistItem(item),
+            onLongPress: _watchlistCardOptions(item),
             onFocused: () => _canvasFavFocused(
               railKey,
               col,
@@ -8064,7 +8433,7 @@ class _SearchScreenState extends State<SearchScreen>
               watchedImdbId: section.items[rank].progressId ?? section.items[rank].id,
               watchedContentType: section.items[rank].type,
               onOpen: () => _sectionOpenItem(section, section.items[rank]),
-              onOptions: _pikpakOnly ? null : () => _sectionQuickPlay(section, section.items[rank]),
+              onOptions: _sectionCardOptions(section, section.items[rank]),
             ),
         ],
       );
@@ -8194,6 +8563,7 @@ class _SearchScreenState extends State<SearchScreen>
                 watchedImdbId: item.progressId ?? item.id,
                 watchedContentType: item.type,
                 onOpen: () => _openMyWatchlistItem(item),
+                onOptions: _watchlistCardOptions(item),
               ),
           ],
         );
@@ -8336,7 +8706,7 @@ class _SearchScreenState extends State<SearchScreen>
                     watchedImdbId: item.progressId ?? item.id,
                     watchedContentType: item.type,
                     onOpen: () => _sectionOpenItem(sections[i], item),
-                    onOptions: _pikpakOnly ? null : () => _onCatalogPlay(item, sections[i].addon),
+                    onOptions: _sectionCardOptions(sections[i], item),
                   ),
               ],
             ),
@@ -9055,7 +9425,7 @@ class _SearchScreenState extends State<SearchScreen>
                                                     item,
                                                   ),
                                             onLongPress: rail.cw == null
-                                                ? null
+                                                ? _railCardOptions(rail, item)
                                                 : () => _openCwCardMenu(
                                                     rail.cw!,
                                                     item,
@@ -9530,7 +9900,7 @@ class _SearchScreenState extends State<SearchScreen>
           ? null
           : () => _sectionQuickPlay(_sections[rail.sectionIndex!], item),
       onLongPress: rail.cw == null
-          ? null
+          ? _railCardOptions(rail, item)
           : () => _openCwCardMenu(rail.cw!, item, rail.cwIndex, col),
       onFocused: () {
         _setHero(item);
@@ -10020,7 +10390,7 @@ class _SearchScreenState extends State<SearchScreen>
                                     items[col],
                                   ),
                             onLongPress: rail.cw == null
-                                ? null
+                                ? _railCardOptions(rail, items[col])
                                 : () => _openCwCardMenu(
                                     rail.cw!,
                                     items[col],
@@ -10399,7 +10769,7 @@ class _SearchScreenState extends State<SearchScreen>
             ? null
             : () => _sectionQuickPlay(_sections[rail.sectionIndex!], item),
         onLongPress: rail.cw == null
-            ? null
+            ? _railCardOptions(rail, item)
             : () => _openCwCardMenu(rail.cw!, item, rail.cwIndex, col),
         onFocused: () {
           _setHero(item);
@@ -10826,7 +11196,7 @@ class _SearchScreenState extends State<SearchScreen>
           ? null
           : () => _sectionQuickPlay(_sections[rail.sectionIndex!], item),
       onLongPress: rail.cw == null
-          ? null
+          ? _railCardOptions(rail, item)
           : () => _openCwCardMenu(rail.cw!, item, rail.cwIndex, col),
       onFocused: () {
         _setHero(item);
@@ -16500,40 +16870,45 @@ sheetAnimationStyle: kMenuSheetAnimation,
     // bloom below.
     final glassHome = _heroTrailerActive;
     final app = AppThemeScope.of(context);
-    return Scaffold(
-      backgroundColor: glassHome ? Colors.transparent : app.home.bg,
-      // A restrained indigo bloom near the top fading fast into near-black —
-      // toned down from a saturated purple so the posters carry the colour
-      // (Stremio's home grid is nearly monochrome).
-      body: Container(
-        decoration: glassHome ? null : BoxDecoration(gradient: app.home.wash),
-        // Four layouts:
-        //  • Dedicated Search tab (searchMode) — the field + Catalog/Keyword
-        //    toggle over a blank prompt until the user types (TV only).
-        //  • Home-New board on TV — chrome-free hero + rows, no search bar
-        //    (search lives in its own tab).
-        //  • Off-TV Home with Spotlight selected — the full-bleed shell with
-        //    search behind a button (see _buildSpotlightShell). The hero owns
-        //    the status-bar region, so SafeArea's top inset is the shell's to
-        //    manage.
-        //  • Home-New board on desktop/mobile classic — keeps a persistent
-        //    search bar above the board; the separate Search tab is an
-        //    additional way in on TV and sidebar layouts, not a replacement.
-        child: widget.discoverMode
-            ? SafeArea(child: _buildDiscover())
-            : (widget.isTelevision && !widget.searchMode)
-            ? SafeArea(child: _buildBoard())
-            : _spotlightShellActive
-            ? _buildSpotlightShell()
-            : SafeArea(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    _buildUnifiedCatalogSourcesBar(),
-                    Expanded(child: _buildAnimatedBody()),
-                  ],
+    // Discover's See-All panels (and any other poster grid on this screen)
+    // open the same title-card menu Home's rows use on hold / right-click.
+    return CardOptionsScope(
+      onOptions: _scopedCardOptions,
+      child: Scaffold(
+        backgroundColor: glassHome ? Colors.transparent : app.home.bg,
+        // A restrained indigo bloom near the top fading fast into near-black —
+        // toned down from a saturated purple so the posters carry the colour
+        // (Stremio's home grid is nearly monochrome).
+        body: Container(
+          decoration: glassHome ? null : BoxDecoration(gradient: app.home.wash),
+          // Four layouts:
+          //  • Dedicated Search tab (searchMode) — the field + Catalog/Keyword
+          //    toggle over a blank prompt until the user types (TV only).
+          //  • Home-New board on TV — chrome-free hero + rows, no search bar
+          //    (search lives in its own tab).
+          //  • Off-TV Home with Spotlight selected — the full-bleed shell with
+          //    search behind a button (see _buildSpotlightShell). The hero owns
+          //    the status-bar region, so SafeArea's top inset is the shell's to
+          //    manage.
+          //  • Home-New board on desktop/mobile classic — keeps a persistent
+          //    search bar above the board; the separate Search tab is an
+          //    additional way in on TV and sidebar layouts, not a replacement.
+          child: widget.discoverMode
+              ? SafeArea(child: _buildDiscover())
+              : (widget.isTelevision && !widget.searchMode)
+              ? SafeArea(child: _buildBoard())
+              : _spotlightShellActive
+              ? _buildSpotlightShell()
+              : SafeArea(
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      _buildUnifiedCatalogSourcesBar(),
+                      Expanded(child: _buildAnimatedBody()),
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
@@ -16991,22 +17366,25 @@ sheetAnimationStyle: kMenuSheetAnimation,
     Navigator.of(pushCtx)
         .push(
           MaterialPageRoute(
-            builder: (_) => MdblistSeeAllScreen(
-              initialList: list,
-              isTelevision: widget.isTelevision,
-              isBound: _isBound,
-              onOpen: (item) => _openItem(
-                item,
-                _addonForContinue(item.sourceAddon?.id),
-                isMdblistSource: true,
+            builder: (_) => CardOptionsScope(
+              onOptions: _scopedCardOptions,
+              child: MdblistSeeAllScreen(
+                initialList: list,
+                isTelevision: widget.isTelevision,
+                isBound: _isBound,
+                onOpen: (item) => _openItem(
+                  item,
+                  _addonForContinue(item.sourceAddon?.id),
+                  isMdblistSource: true,
+                ),
+                onQuickPlay: _pikpakOnly
+                    ? null
+                    : (item) => _onCatalogPlay(
+                        item,
+                        _addonForContinue(item.sourceAddon?.id),
+                        isMdblistSource: true,
+                      ),
               ),
-              onQuickPlay: _pikpakOnly
-                  ? null
-                  : (item) => _onCatalogPlay(
-                      item,
-                      _addonForContinue(item.sourceAddon?.id),
-                      isMdblistSource: true,
-                    ),
             ),
           ),
         )
@@ -20252,6 +20630,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// controls. Search stays independent: its standalone result walls retain
   /// their normal labels and badges.
   Widget _withHomeExpandedCardSettings(Widget child) {
+    // A pushed route sits outside this screen's own [CardOptionsScope], so
+    // hand the title-card menu on to its poster grid explicitly.
+    child = CardOptionsScope(onOptions: _scopedCardOptions, child: child);
     if (widget.searchMode || widget.discoverMode) return child;
     return DiscoverCardSettingsScope(
       showTypeTags: DiscoverPrefs.showTypeTags,
@@ -20777,6 +21158,13 @@ sheetAnimationStyle: kMenuSheetAnimation,
                             onQuickPlay: _pikpakOnly || collection != null
                                 ? null
                                 : () => _sectionQuickPlay(section, item),
+                            onLongPress: collection != null
+                                ? null
+                                : _sectionCardOptions(
+                                    section,
+                                    item,
+                                    heroTag: heroTag,
+                                  ),
                             onFocused: () {
                               _setHero(item);
                               _rowCol[rowIndex] = col;
@@ -20862,6 +21250,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   hasBoundSource: _isBound(item), aspectRatio: 2 / 3,
                   artUrl: _titleArtUrl(item), showTitleOverlay: false,
                   onQuickPlay: _pikpakOnly ? null : () => _sectionQuickPlay(section, item),
+                  onLongPress: _sectionCardOptions(section, item, heroTag: heroTag),
                   onFocused: () { _setHero(item); _rowCol[rowIndex] = index; },
                   onUp: up, onDown: down,
                   onOpen: () => _sectionOpenItem(section, item, heroTag: heroTag),
@@ -21024,6 +21413,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             isTelevision: tv,
             focusNode: nodes[col],
             onOpen: () => _openMyWatchlistItem(item),
+            onLongPress: _watchlistCardOptions(item),
             onFocused: _clearHeroLiveIptv,
           ),
         );
