@@ -186,8 +186,9 @@ void main() {
           language: 'en-US',
           random: math.Random(1),
           get: (path, query) async {
-            if (offline && !path.endsWith('/popular'))
+            if (offline && !path.endsWith('/popular')) {
               throw StateError('offline');
+            }
             return tmdb.get(path, query);
           },
         );
