@@ -7,16 +7,110 @@ import 'package:debrify/widgets/hero_trailer_backdrop.dart';
 import 'package:debrify/widgets/trailer_engine.dart';
 
 void main() {
-  testWidgets('finite trailer plays once until a new focus session', (tester) async {
+  testWidgets('iOS opens the muxed URL instead of rejecting it as stale', (
+    tester,
+  ) async {
+    final engines = <_PendingFirstFrameEngine>[];
+    Widget host(String muxed) => MaterialApp(
+      home: HeroTrailerBackdrop(
+        imageUrl: null,
+        videoUrl: 'https://example.invalid/video-only.mp4',
+        audioUrl: 'https://example.invalid/audio.m4a',
+        muxedVideoUrl: muxed,
+        platformViewOverride: true,
+        enabled: true,
+        startDelay: Duration.zero,
+        engineFactory: () async {
+          final engine = _PendingFirstFrameEngine();
+          engines.add(engine);
+          return engine;
+        },
+      ),
+    );
+    await tester.pumpWidget(host('https://example.invalid/muxed.mp4'));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(engines.single.openedUrl, 'https://example.invalid/muxed.mp4');
+    expect(engines.single.openedAudio, isNull);
+    expect(engines.single.disposed, isFalse);
+    await tester.pumpWidget(host('https://example.invalid/new-muxed.mp4'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(engines.first.disposed, isTrue);
+    expect(engines.last.openedUrl, 'https://example.invalid/new-muxed.mp4');
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+    'next iOS reel prepares while current plays and resumes without reopening',
+    (tester) async {
+      final current = _PendingFirstFrameEngine();
+      final next = _PendingFirstFrameEngine();
+      Widget host(bool suspended) => MaterialApp(
+        home: Stack(
+          children: [
+            HeroTrailerBackdrop(
+              imageUrl: null,
+              videoUrl: 'https://example.invalid/current-video.mp4',
+              muxedVideoUrl: 'https://example.invalid/current.mp4',
+              platformViewOverride: true,
+              prewarm: true,
+              enabled: true,
+              startDelay: Duration.zero,
+              engineFactory: () async => current,
+            ),
+            HeroTrailerBackdrop(
+              imageUrl: null,
+              videoUrl: 'https://example.invalid/next-video.mp4',
+              muxedVideoUrl: 'https://example.invalid/next.mp4',
+              platformViewOverride: true,
+              prewarm: true,
+              enabled: true,
+              suspended: suspended,
+              startDelay: Duration.zero,
+              engineFactory: () async => next,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(host(true));
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(current.opened, isTrue);
+      expect(next.opened, isTrue);
+      expect(next.playCalls, 0);
+      expect(next.pauseCalls, greaterThan(0));
+      await tester.pumpWidget(host(false));
+      await tester.pump();
+      expect(next.playCalls, 1);
+      expect(next.openCalls, 1);
+      expect(next.disposed, isFalse);
+      await tester.pumpWidget(const SizedBox());
+      expect(current.disposed, isTrue);
+      expect(next.disposed, isTrue);
+    },
+  );
+
+  testWidgets('finite trailer plays once until a new focus session', (
+    tester,
+  ) async {
     final engines = <_PendingFirstFrameEngine>[];
     final key = GlobalKey<HeroTrailerBackdropState>();
-    Widget host(bool enabled) => MaterialApp(home: HeroTrailerBackdrop(
-      key: key, imageUrl: null, videoUrl: 'https://example.invalid/trailer.mp4',
-      enabled: enabled, startDelay: Duration.zero,
-      engineFactory: () async {
-        final engine = _PendingFirstFrameEngine(); engines.add(engine); return engine;
-      },
-    ));
+    Widget host(bool enabled) => MaterialApp(
+      home: HeroTrailerBackdrop(
+        key: key,
+        imageUrl: null,
+        videoUrl: 'https://example.invalid/trailer.mp4',
+        enabled: enabled,
+        startDelay: Duration.zero,
+        engineFactory: () async {
+          final engine = _PendingFirstFrameEngine();
+          engines.add(engine);
+          return engine;
+        },
+      ),
+    );
     await tester.pumpWidget(host(true));
     await tester.pump(const Duration(milliseconds: 1));
     final engine = engines.single;
@@ -139,6 +233,11 @@ class _PendingFirstFrameEngine implements TrailerEngine {
   final positions = StreamController<Duration>.broadcast();
   bool? looped;
   bool opened = false;
+  int openCalls = 0;
+  int pauseCalls = 0;
+  int playCalls = 0;
+  String? openedUrl;
+  String? openedAudio;
   bool disposed = false;
   int buildVideoCalls = 0;
 
@@ -171,6 +270,9 @@ class _PendingFirstFrameEngine implements TrailerEngine {
     Map<String, String>? httpHeaders,
   }) async {
     opened = true;
+    openCalls++;
+    openedUrl = videoUrl;
+    openedAudio = audioUrl;
     looped = loop;
   }
 
@@ -181,10 +283,14 @@ class _PendingFirstFrameEngine implements TrailerEngine {
   Future<void> seek(Duration position) async {}
 
   @override
-  Future<void> play() async {}
+  Future<void> play() async {
+    playCalls++;
+  }
 
   @override
-  Future<void> pause() async {}
+  Future<void> pause() async {
+    pauseCalls++;
+  }
 
   @override
   void detach() {}

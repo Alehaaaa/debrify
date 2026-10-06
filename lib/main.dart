@@ -3400,7 +3400,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 19: // Calendar (gated on Trakt OR Simkl auth in the nav below)
         return const TraktCalendarScreen();
       case MainTab.reels:
-        return ReelsScreen(isTelevision: _isAndroidTv);
+        return ReelsScreen(
+          isTelevision: _isAndroidTv,
+          floatingNav: !_isAndroidTv &&
+              _phoneNavLoaded &&
+              _phoneNavStyle == 'floating' &&
+              MediaQuery.sizeOf(context).width < 600,
+        );
       default:
         return _pages[index];
     }

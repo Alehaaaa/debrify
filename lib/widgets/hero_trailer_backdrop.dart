@@ -59,6 +59,17 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// while suspended.
   final bool suspended;
 
+  /// iOS reels may prepare one paused native player ahead of the swipe.
+  /// Ignored by engines that require the single video-output lease.
+  final bool prewarm;
+
+  /// Reels are intentional video playback, not reduced-motion decoration.
+  final bool decorative;
+  final Duration fadeDuration;
+
+  @visibleForTesting
+  final bool? platformViewOverride;
+
   /// Fired when the user dismisses the fullscreen trailer (X / tap-scrim). The
   /// parent should flip [foreground] back to false.
   final VoidCallback? onRequestClose;
@@ -141,6 +152,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// real platform decoder. Production callers always use the platform engine.
   @visibleForTesting
   final Future<TrailerEngine> Function()? engineFactory;
+
   /// Only decorative video artwork repeats. Finite trailers play once.
   final bool repeat;
 
@@ -158,6 +170,10 @@ class HeroTrailerBackdrop extends StatefulWidget {
     required this.enabled,
     this.foreground = false,
     this.suspended = false,
+    this.prewarm = false,
+    this.decorative = true,
+    this.fadeDuration = const Duration(milliseconds: 650),
+    this.platformViewOverride,
     this.onRequestClose,
     this.onPlayingChanged,
     this.onPlaybackFailed,
@@ -285,7 +301,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       CollectionFocusPlayback.allows(widget.focusPreviewOwner) &&
       widget.videoUrl != null &&
       widget.videoUrl!.isNotEmpty &&
-      !_reduceMotion &&
+      (!widget.decorative || !_reduceMotion) &&
       !_stoppedForExternalPlayback &&
       !_stoppedForContentPlayback;
 
@@ -312,12 +328,22 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Asynchronous because media_kit must wait for the single video-output slot
   /// (see [VideoOutputLease]), while Android TV must first read the native
   /// activity's fixed underlay-mode snapshot. Exo itself takes no output lease.
+  bool get _usePlatformView =>
+      widget.platformViewOverride ??
+      (!kIsWeb &&
+          PlatformUtil.isIosMobile &&
+          (widget.muxedVideoUrl?.isNotEmpty ?? false));
+
+  String? get _playbackUrl =>
+      _usePlatformView ? widget.muxedVideoUrl : widget.videoUrl;
+
   Future<TrailerEngine> _createEngine() async {
     final factory = widget.engineFactory;
     if (factory != null) return await factory();
-    if (!kIsWeb && PlatformUtil.isIosMobile &&
-        (widget.muxedVideoUrl?.isNotEmpty ?? false)) {
-      return PlatformViewTrailerEngine();
+    if (_usePlatformView) {
+      return PlatformViewTrailerEngine(
+        startPaused: widget.prewarm && widget.suspended,
+      );
     }
     final useExo =
         !kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached;
@@ -387,7 +413,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     super.didUpdateWidget(old);
 
     final urlChanged =
-        widget.videoUrl != old.videoUrl || widget.audioUrl != old.audioUrl;
+        widget.videoUrl != old.videoUrl ||
+        widget.audioUrl != old.audioUrl ||
+        widget.muxedVideoUrl != old.muxedVideoUrl;
     if (urlChanged || (!old.enabled && widget.enabled)) _completed = false;
     if (urlChanged || widget.enabled != old.enabled) {
       if (!_canPlay) {
@@ -469,16 +497,15 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       // backgrounded — trailer audio would play over other apps. The resume
       // handler reschedules.
       if (!mounted || !_canPlay || _covered || _appPaused) return;
-      if (widget.suspended) return;
+      if (widget.suspended && !(widget.prewarm && _usePlatformView)) return;
       _initPlayer();
     });
   }
 
   Future<void> _initPlayer() async {
     if (_engine != null) return;
-    final usePlatformView = !kIsWeb && PlatformUtil.isIosMobile &&
-        (widget.muxedVideoUrl?.isNotEmpty ?? false);
-    final url = usePlatformView ? widget.muxedVideoUrl : widget.videoUrl;
+    final usePlatformView = _usePlatformView;
+    final url = _playbackUrl;
     if (url == null || url.isEmpty) return;
 
     // Creation can now WAIT (for the video-output slot), so everything that
@@ -488,15 +515,21 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     final gen = ++_engineGen;
     TrailerEngine? created;
     try {
-      created = await SerializedTrailerEngine.create(
-        _createEngine,
-        () =>
-            mounted &&
-            gen == _engineGen &&
-            !_covered &&
-            !_appPaused &&
-            _canPlay,
-      );
+      // AVPlayer supports the bounded current + next reel pair. All other
+      // ambient players retain single-decoder serialization.
+      if (widget.prewarm && usePlatformView) {
+        created = await _createEngine();
+      } else {
+        created = await SerializedTrailerEngine.create(
+          _createEngine,
+          () =>
+              mounted &&
+              gen == _engineGen &&
+              !_covered &&
+              !_appPaused &&
+              _canPlay,
+        );
+      }
     } catch (_) {
       if (mounted && gen == _engineGen) _notifyPlaybackFailed();
       return;
@@ -509,7 +542,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         _covered ||
         _appPaused ||
         !_canPlay ||
-        widget.videoUrl != url) {
+        _playbackUrl != url) {
       // Nothing else knows this engine exists, so nothing else will dispose it
       // — and its lease would be stranded.
       unawaited(engine.dispose());
@@ -580,7 +613,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     _posSub = engine.positionStream.listen((p) {
       // Loop restart (position wrapped back to the start) → skip the intro
       // again. Ambient only: never fight a manual scrub or foreground seek.
-      if (widget.repeat && widget.skipIntro &&
+      if (widget.repeat &&
+          widget.skipIntro &&
           widget.focusPreviewOwner == null &&
           !widget.live &&
           !widget.foreground &&
@@ -631,9 +665,15 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         httpHeaders: widget.httpHeaders,
       );
       if (_engine != engine) return;
-      if (widget.foreground) _applyVolume(foreground: true);
+      _applyVolume(foreground: widget.foreground);
       // Suspended while the stream was opening: open() plays immediately.
-      if (widget.suspended) unawaited(engine.pause());
+      if (widget.suspended || _covered || _appPaused) {
+        await engine.pause();
+      } else if (widget.prewarm && usePlatformView) {
+        // The prepared controller opens paused, including when a swipe lands
+        // during initialize(). Resume only if this reel still owns playback.
+        await engine.play();
+      }
     } catch (_) {
       // Bot-blocked / dead stream → stay on the static poster. Guarded: a
       // STALE engine's error (e.g. its open() aborting after a URL switch
@@ -762,10 +802,14 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   }
 
   void _finishIfEnded() {
-    if (_completed || widget.live || widget.repeat ||
-        !_videoVisible || _duration <= Duration.zero ||
+    if (_completed ||
+        widget.live ||
+        widget.repeat ||
+        !_videoVisible ||
+        _duration <= Duration.zero ||
         (_playing && _lastPos < _duration) ||
-        _lastPos < _duration - const Duration(milliseconds: 250)) return;
+        _lastPos < _duration - const Duration(milliseconds: 250))
+      return;
     _completed = true;
     _teardownPlayer();
     if (widget.foreground) {
@@ -1049,7 +1093,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
                   // Flutter pixels), so the poster fades OUT over the
                   // already-running surface behind it.
                   opacity: _showVideo ? 0 : 1,
-                  duration: const Duration(milliseconds: 650),
+                  duration: widget.fadeDuration,
                   curve: Curves.easeOut,
                   child: _withHero(_buildStaticBackdrop()),
                 )
@@ -1063,7 +1107,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         if (engine != null && !underlay)
           AnimatedOpacity(
             opacity: _showVideo ? 1 : 0,
-            duration: const Duration(milliseconds: 650),
+            duration: widget.fadeDuration,
             curve: Curves.easeOut,
             child: widget.videoBlurSigma <= 0
                 ? engine.buildVideo(fit: BoxFit.cover)
@@ -1188,9 +1232,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
                   // commits.
                   child: ColoredBox(
                     color: Colors.black.withValues(
-                      alpha:
-                          ((_dismissDrag ?? 0) / (_dismissDistance * 2))
-                              .clamp(0.0, 0.5),
+                      alpha: ((_dismissDrag ?? 0) / (_dismissDistance * 2))
+                          .clamp(0.0, 0.5),
                     ),
                     child: const SizedBox.expand(),
                   ),

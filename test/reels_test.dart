@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:math' as math;
 
 import 'package:debrify/screens/reels_screen.dart';
@@ -164,12 +166,14 @@ void main() {
     Widget host(
       ReelsFeed feed, {
       Future<YoutubeResolvedStreams?> Function(String key)? resolver,
+      bool floatingNav = false,
     }) => MaterialApp(
       home: AppThemeScope(
         theme: AppThemes.legacy,
         child: Scaffold(
           body: ReelsScreen(
             feed: feed,
+            floatingNav: floatingNav,
             resolver:
                 resolver ??
                 (key) async {
@@ -219,6 +223,26 @@ void main() {
       expect(find.textContaining('LESS', findRichText: true), findsOneWidget);
     });
 
+    testWidgets('action rail only clears navigation in floating mode', (
+      tester,
+    ) async {
+      final feed = feedFor(FakeTmdb());
+      for (final floating in [false, true, false]) {
+        await tester.pumpWidget(host(feed, floatingNav: floating));
+        await tester.pumpAndSettle();
+        final rail = tester.widget<Positioned>(
+          find
+              .ancestor(
+                of: find.byTooltip('Mute'),
+                matching: find.byType(Positioned),
+              )
+              .first,
+        );
+        expect(rail.bottom, floating ? 104 : 24);
+      }
+      await tester.pumpWidget(const SizedBox());
+    });
+
     testWidgets('clips are ready three reels ahead, and the window moves '
         'with every swipe', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb())));
@@ -233,6 +257,35 @@ void main() {
       expect(playing(activeId(tester)!), findsOneWidget);
       expect(resolved.length, 5);
       expect(resolved.toSet().length, resolved.length);
+    });
+
+    testWidgets('a pending look-ahead request does not block a later swipe', (
+      tester,
+    ) async {
+      final pending = Completer<YoutubeResolvedStreams?>();
+      var calls = 0;
+      await tester.pumpWidget(
+        host(
+          feedFor(FakeTmdb()),
+          resolver: (key) {
+            resolved.add(key);
+            calls++;
+            return calls == 2 ? pending.future : Future.value(_clip);
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(resolved, hasLength(4));
+      // Jump past the still-pending second clip. The new fourth look-ahead
+      // request must start immediately, without waiting for that stale lookup.
+      final pages = tester.widget<PageView>(find.byType(PageView));
+      pages.controller!.jumpToPage(2);
+      await tester.pumpAndSettle();
+      expect(resolved.length, greaterThan(4));
+      expect(playing(activeId(tester)!), findsOneWidget);
+      pending.complete(_clip);
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
     });
 
     testWidgets('tapping the video pauses and resumes; a new reel plays', (

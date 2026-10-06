@@ -1,0 +1,30 @@
+name: Reels playback tests
+
+on:
+  pull_request:
+    paths:
+      - 'lib/screens/reels_screen.dart'
+      - 'lib/widgets/hero_trailer_backdrop.dart'
+      - 'lib/widgets/trailer_engine.dart'
+      - 'test/reels_test.dart'
+      - 'test/hero_trailer_backdrop_test.dart'
+      - '.github/workflows/reels-playback-tests.yml'
+  push:
+    branches: ['nextup']
+
+permissions:
+  contents: read
+
+jobs:
+  playback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/reels_test.dart test/hero_trailer_backdrop_test.dart test/youtube_resolved_streams_test.dart
+      - run: flutter analyze --no-fatal-infos --no-fatal-warnings lib/screens/reels_screen.dart lib/widgets/hero_trailer_backdrop.dart lib/widgets/trailer_engine.dart test/reels_test.dart test/hero_trailer_backdrop_test.dart
