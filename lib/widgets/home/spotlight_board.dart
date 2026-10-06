@@ -3486,14 +3486,10 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
   /// DPAD centre is a key gesture, not a pointer long-press. Keep the short
   /// press for opening Details, but let a held press reach the card's options
   /// action (Continue Watching's preference-aware Play/Remove handler).
-  late final TvHoldOk _hold = TvHoldOk(
+  late final CardHold _hold = CardHold(
     onTap: () => widget.card.onOpen(),
     onHold: () => widget.card.onOptions?.call(),
   );
-
-  /// Draws the hold filling — from the pointer itself, or from [_hold]'s
-  /// dwell on TV.
-  final HoldFeedbackController _holdFx = HoldFeedbackController();
 
   /// Pointer hover — desktop's focus. Kept SEPARATE from [_f] and OR-ed at
   /// paint, so a pointer wandering off a card can never erase a real focus
@@ -4022,18 +4018,12 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     final tappable = GestureDetector(
       onTap: () {
         if (DialogTapGuard.shouldIgnoreTap()) return;
-        c.onOpen();
+        withTapFeedback(c.onOpen)();
       },
-      onLongPress: c.onOptions == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              c.onOptions!();
-            },
+      onLongPress: withHoldHaptic(c.onOptions),
       onSecondaryTap: CardMenuGesture.secondaryClick(c.onOptions),
       child: HoldFeedback(
-        enabled: c.onOptions != null,
-        controller: _holdFx,
+        controller: _hold.ring,
         borderRadius: BorderRadius.circular(widget.radius),
         child: card,
       ),
@@ -4067,10 +4057,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
         }
         _loadFocusedDescription();
         _reportDesktopPreviewActivity(_previewActive);
-        if (!v) {
-          _hold.reset();
-          _holdFx.cancel();
-        }
+        if (!v) _hold.reset();
         if (v && context.findRenderObject() is RenderBox) {
           Scrollable.ensureVisible(
             context,
@@ -4089,14 +4076,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
       onKeyEvent: (_, e) {
         final k = e.logicalKey;
         if (!isActivateOrSpaceKey(k)) return KeyEventResult.ignored;
-        if (widget.dpad && c.onOptions != null) {
-          if (e is KeyDownEvent) {
-            _holdFx.start(_hold.dwell);
-          } else if (e is KeyUpEvent) {
-            _holdFx.cancel();
-          }
-          return _hold.handle(e);
-        }
+        if (widget.dpad && c.onOptions != null) return _hold.handle(e);
         if (e is KeyDownEvent) c.onOpen();
         // Own the complete activation sequence so repeats cannot bubble into
         // an ancestor shortcut after this card accepted the initial press.

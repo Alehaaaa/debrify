@@ -853,9 +853,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
       final items = await DownloadedMediaService.load(includeTransfers: true);
       if (!mounted || revision != _revision) return;
       setState(
-        () => _items = items
-            .where((e) => e.groupKey == widget.items.first.groupKey)
-            .toList(),
+        () => _items = items.where((e) => e.groupKey == _groupKey).toList(),
       );
       if (_items.isEmpty) Navigator.of(context).pop();
     } catch (_) {}
@@ -875,7 +873,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   Future<void> _loadDetails() async {
     try {
       final details = await (widget.detailsLoader ?? _loadTitleDetails)(
-        widget.items.first,
+        _items.first,
       );
       if (!mounted) return;
       setState(() {
@@ -903,6 +901,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   void initState() {
     super.initState();
     _items = [...widget.items];
+    _groupKey = widget.items.first.groupKey;
     unawaited(_loadDetails());
     _statusSub = DownloadService.instance.statusStream.listen((_) => _reload());
     _moveSub = DownloadService.instance.moveProgressStream.listen((e) {
@@ -916,6 +915,52 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   }
 
   final Set<String> _retrying = {};
+
+  /// Which library entry this page shows — follows a Fix match to the title
+  /// the files were refiled under.
+  late String _groupKey;
+
+  /// Fix match from the download page itself: refile every file here under
+  /// the title the user picks, then show it as that title.
+  Future<void> _fixMatch() async {
+    final first = _items.first;
+    final picked = await showFixMatchDialog(
+      context,
+      initialQuery: first.media?.isCatalogLinked == true
+          ? first.media!.title
+          : _searchableName(first),
+    );
+    if (picked == null || !mounted) return;
+    final type = picked.type == 'series' ? 'series' : 'movie';
+    final id = picked.effectiveImdbId ?? picked.id;
+    try {
+      await DownloadedMediaService.rematch(
+        _items,
+        id: id,
+        title: picked.name,
+        type: type,
+        poster: picked.poster,
+        year: picked.year,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t save the match. Try again.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    _groupKey = '$type:$id';
+    _episodes.clear();
+    _meta = null;
+    await _reload();
+    if (!mounted || _items.isEmpty) return;
+    unawaited(_loadDetails());
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Filed under ${picked.name}')));
+  }
 
   /// Restarts a failed download — from where it stopped when the platform
   /// kept resume data, otherwise from its saved record.
@@ -1131,15 +1176,24 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Tooltip(
-                    message: 'Back',
-                    child: DetailRoundButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: () => Navigator.of(context).maybePop(),
+                Row(
+                  children: [
+                    Tooltip(
+                      message: 'Back',
+                      child: DetailRoundButton(
+                        icon: Icons.arrow_back_rounded,
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    Tooltip(
+                      message: 'Fix match',
+                      child: DetailRoundButton(
+                        icon: Icons.manage_search_rounded,
+                        onTap: _fixMatch,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 Wrap(

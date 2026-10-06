@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/trakt/trakt_calendar_entry.dart';
 import '../theme/app_theme.dart';
@@ -133,14 +132,9 @@ class _EpisodeRow extends StatelessWidget {
         ? 'SEASON PREMIERE'
         : null;
 
-    final row = InkWell(
+    return InkWell(
       onTap: onTap,
-      onLongPress: onLongPress == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              onLongPress!();
-            },
+      onLongPress: withHoldHaptic(onLongPress),
       onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
       borderRadius: app.shape.br(8),
       child: Padding(
@@ -216,11 +210,6 @@ class _EpisodeRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-    return HoldFeedback(
-      enabled: onLongPress != null,
-      borderRadius: BorderRadius.circular(8),
-      child: row,
     );
   }
 }

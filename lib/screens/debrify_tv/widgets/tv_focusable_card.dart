@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../theme/app_theme.dart';
@@ -7,6 +6,7 @@ import '../../../theme/ui_feedback.dart';
 import '../../../theme/widgets/focus_expression.dart';
 import '../../../utils/platform_util.dart';
 import '../../../utils/tv_keys.dart';
+import '../../../widgets/hold_feedback.dart';
 
 /// TV-optimized focusable card.
 ///
@@ -32,14 +32,22 @@ class TvFocusableCard extends StatefulWidget {
 
 class _TvFocusableCardState extends State<TvFocusableCard> {
   bool _isFocused = false;
-  Timer? _longPressTimer;
-  bool _longPressTriggered = false;
   DateTime? _lastLongPressTime;
-  bool _keyDownReceived = false; // Track if we received KeyDown while focused
+
+  /// The shared card hold: OK opens on release, a held OK opens the menu.
+  late final CardHold _hold = CardHold(
+    // [CardHold] gives the activation feedback for a press it accepts.
+    onTap: () => widget.onPressed(),
+    onHold: () {
+      _lastLongPressTime = DateTime.now();
+      widget.onLongPress?.call();
+    },
+    canHold: () => widget.onLongPress != null,
+  );
 
   @override
   void dispose() {
-    _longPressTimer?.cancel();
+    _hold.reset();
     super.dispose();
   }
 
@@ -58,59 +66,13 @@ class _TvFocusableCardState extends State<TvFocusableCard> {
         setState(() {
           _isFocused = focused;
         });
-        if (!focused) {
-          _longPressTimer?.cancel();
-          _longPressTriggered = false;
-          _keyDownReceived = false; // Reset when losing focus
-        }
+        if (!focused) _hold.reset();
       },
       onKeyEvent: (node, event) {
-        // Handle Select/Enter button press
-        if (isActivateKey(event.logicalKey)) {
-          if (event is KeyDownEvent) {
-            _keyDownReceived = true; // Mark that we received KeyDown while focused
-            _longPressTriggered = false;
-
-            // Start timer for long press (800ms)
-            _longPressTimer?.cancel();
-            _longPressTimer = Timer(const Duration(milliseconds: 800), () {
-              _longPressTriggered = true;
-              _lastLongPressTime = DateTime.now();
-              if (widget.onLongPress != null) {
-                widget.onLongPress!();
-              }
-            });
-
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            _longPressTimer?.cancel();
-
-            // CRITICAL: Only process KeyUp if we received KeyDown while focused
-            // This prevents phantom triggers when focus changes during a key press
-            if (!_keyDownReceived) {
-              return KeyEventResult.handled;
-            }
-
-            // Check if we recently triggered a long press (within last 300ms)
-            final timeSinceLongPress = _lastLongPressTime != null
-                ? DateTime.now().difference(_lastLongPressTime!).inMilliseconds
-                : 999999;
-
-            // If not a long press and not immediately after closing dialog, trigger regular press
-            if (!_longPressTriggered && timeSinceLongPress > 300) {
-              // Explicit activation feedback at the chokepoint — never
-              // inferred from focus, and after the long-press and
-              // dialog-dismissal guards so a swallowed press stays silent too.
-              UiFeedback.instance.activate();
-              widget.onPressed();
-            }
-            _longPressTriggered = false;
-            _keyDownReceived = false; // Reset after processing
-
-            return KeyEventResult.handled;
-          }
-        }
-
+        // Select/Enter: tap vs hold (the hold menu's own closing key-up
+        // never reads as a press — [TvHoldOk] only answers presses it saw
+        // start).
+        if (isActivateKey(event.logicalKey)) return _hold.handle(event);
         return KeyEventResult.ignored;
       },
       child: GestureDetector(
@@ -128,14 +90,19 @@ class _TvFocusableCardState extends State<TvFocusableCard> {
           UiFeedback.instance.activate();
           widget.onPressed();
         },
-        onLongPress: widget.onLongPress != null
-            ? () {
-                _lastLongPressTime = DateTime.now();
-                widget.onLongPress!();
-              }
-            : null,
+        onLongPress: withHoldHaptic(
+          widget.onLongPress == null
+              ? null
+              : () {
+                  _lastLongPressTime = DateTime.now();
+                  widget.onLongPress!();
+                },
+        ),
         child: RepaintBoundary(
-          child: _cursor(app, Stack(
+          child: HoldFeedback(
+            controller: _hold.ring,
+            borderRadius: BorderRadius.circular(16),
+            child: _cursor(app, Stack(
           children: [
             AnimatedContainer(
               // TV: snap instead of animating — a 200ms tween of a blurred
@@ -243,7 +210,7 @@ class _TvFocusableCardState extends State<TvFocusableCard> {
                 ),
               ),
           ],
-          )),
+          ))),
         ),
       ),
     );

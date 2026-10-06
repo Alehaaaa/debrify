@@ -1,6 +1,5 @@
 import '../models/metadata_preferences.dart';
 import 'metadata_presentation_mixin.dart';
-import 'dart:async';
 
 import 'card_action_menu.dart';
 import 'hold_feedback.dart';
@@ -125,10 +124,12 @@ class _CatalogItemTileState extends State<CatalogItemTile>
   StremioMeta get originalMetadata => widget.item;
   bool _focused = false;
   bool _hovered = false;
-  Timer? _longPressTimer;
-  bool _longPressTriggered = false;
-  final HoldFeedbackController _holdFx = HoldFeedbackController();
-  bool _keyDownReceived = false;
+  /// OK opens; a held OK opens [CatalogItemTile.onLongPress] when set.
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+    canHold: () => widget.onLongPress != null,
+  );
 
   bool get _active => _focused || _hovered;
 
@@ -152,7 +153,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
 
   @override
   void dispose() {
-    _longPressTimer?.cancel();
+    _hold.reset();
     super.dispose();
   }
 
@@ -490,12 +491,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) {
-          _holdFx.cancel();
-          _longPressTimer?.cancel();
-          _longPressTriggered = false;
-          _keyDownReceived = false;
-        }
+        if (!f) _hold.reset();
         if (f) {
           widget.onFocused?.call();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -527,34 +523,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         }
       },
       onKeyEvent: (node, event) {
-        if (isActivateKey(event.logicalKey) ||
-            event.logicalKey == LogicalKeyboardKey.space) {
-          if (event is KeyDownEvent) {
-            _keyDownReceived = true;
-            _longPressTriggered = false;
-            _longPressTimer?.cancel();
-            if (widget.onLongPress != null) {
-              _holdFx.start(const Duration(milliseconds: 800));
-              _longPressTimer = Timer(const Duration(milliseconds: 800), () {
-                _longPressTriggered = true;
-                _holdFx.cancel();
-                HapticFeedback.mediumImpact();
-                widget.onLongPress!();
-              });
-            }
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            _holdFx.cancel();
-            _longPressTimer?.cancel();
-            if (!_keyDownReceived) return KeyEventResult.handled;
-            if (!_longPressTriggered) {
-              widget.onOpen();
-            }
-            _longPressTriggered = false;
-            _keyDownReceived = false;
-            return KeyEventResult.handled;
-          }
-        }
+        if (isActivateOrSpaceKey(event.logicalKey)) return _hold.handle(event);
         return KeyEventResult.ignored;
       },
       child: MouseRegion(
@@ -562,13 +531,8 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: widget.onOpen,
-          onLongPress: widget.onLongPress == null
-              ? null
-              : () {
-                  HapticFeedback.mediumImpact();
-                  widget.onLongPress!();
-                },
+          onTap: withTapFeedback(widget.onOpen),
+          onLongPress: withHoldHaptic(widget.onLongPress),
           onSecondaryTap: CardMenuGesture.secondaryClick(widget.onSecondaryTap),
           behavior: HitTestBehavior.opaque,
           // Isolate the tile's repaint: focus flips its shadow/ring/overlay,
@@ -576,8 +540,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           // viewport layer instead of just the two affected tiles.
           child: RepaintBoundary(
             child: HoldFeedback(
-              enabled: widget.onLongPress != null,
-              controller: _holdFx,
+              controller: _hold.ring,
               child: card,
             ),
           ),

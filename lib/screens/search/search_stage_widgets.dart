@@ -775,68 +775,25 @@ class _TonightQueueRow extends StatefulWidget {
   State<_TonightQueueRow> createState() => _TonightQueueRowState();
 }
 
-class _TonightQueueRowState extends State<_TonightQueueRow>
-    with SingleTickerProviderStateMixin {
+class _TonightQueueRowState extends State<_TonightQueueRow> {
   bool _focused = false;
-  bool _keyDown = false;
-  bool _holdFired = false;
-  bool _holding = false;
 
-  /// Same 500ms hold-OK the Continue Watching cards use.
-  static const _holdDuration = Duration(milliseconds: 500);
-  late final AnimationController _holdController = AnimationController(
-    vsync: this,
-    duration: _holdDuration,
+  /// The same hold-OK every card uses ([CardHold]).
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress(),
   );
 
   @override
-  void initState() {
-    super.initState();
-    _holdController.addStatusListener((status) {
-      if (status == AnimationStatus.completed && mounted) {
-        _holdFired = true;
-        setState(() => _holding = false);
-        _holdController.reset();
-        widget.onLongPress();
-      }
-    });
-  }
-
-  @override
   void dispose() {
-    _holdController.dispose();
+    _hold.reset();
     super.dispose();
   }
 
-  void _cancelHold() {
-    _holdController.reset();
-    if (_holding && mounted) setState(() => _holding = false);
-  }
-
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent) {
-      if (isActivateKey(event.logicalKey) ||
-          event.logicalKey == LogicalKeyboardKey.space) {
-        final wasPress = _keyDown && !_holdFired;
-        _keyDown = false;
-        _holdFired = false;
-        _cancelHold();
-        if (wasPress) widget.onOpen();
-        return KeyEventResult.handled;
-      }
-      return KeyEventResult.ignored;
-    }
     final key = event.logicalKey;
-    if (isActivateKey(key) || key == LogicalKeyboardKey.space) {
-      if (event is KeyDownEvent) {
-        _keyDown = true;
-        _holdFired = false;
-        setState(() => _holding = true);
-        _holdController.forward(from: 0);
-      }
-      // Swallow auto-repeat while held.
-      return KeyEventResult.handled;
-    }
+    if (isActivateOrSpaceKey(key)) return _hold.handle(event);
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
     if (key == LogicalKeyboardKey.arrowUp) {
       widget.onUp();
       return KeyEventResult.handled;
@@ -872,9 +829,7 @@ class _TonightQueueRowState extends State<_TonightQueueRow>
       onFocusChange: (f) {
         setState(() => _focused = f);
         if (!f) {
-          _keyDown = false;
-          _holdFired = false;
-          _cancelHold();
+          _hold.reset();
         } else {
           widget.onFocused();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -891,8 +846,8 @@ class _TonightQueueRowState extends State<_TonightQueueRow>
       },
       onKeyEvent: _onKey,
       child: GestureDetector(
-        onTap: widget.onOpen,
-        onLongPress: _withHaptic(widget.onLongPress),
+        onTap: withTapFeedback(widget.onOpen),
+        onLongPress: withHoldHaptic(widget.onLongPress),
         onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(
@@ -940,24 +895,14 @@ class _TonightQueueRowState extends State<_TonightQueueRow>
                             ],
                           ),
                         ),
-                      if (_holding) const ColoredBox(color: Color(0x730A0810)),
-                      if (_holding)
-                        Center(
-                          child: SizedBox(
-                            width: 26,
-                            height: 26,
-                            child: AnimatedBuilder(
-                              animation: _holdController,
-                              builder: (context, _) =>
-                                  CircularProgressIndicator(
-                                    value: _holdController.value,
-                                    strokeWidth: 2.5,
-                                    color: app.core.tx,
-                                    backgroundColor: Colors.white24,
-                                  ),
-                            ),
-                          ),
+                      Positioned.fill(
+                        child: HoldFeedback(
+                          controller: _hold.ring,
+                          ripple: false,
+                          borderRadius: BorderRadius.zero,
+                          child: const SizedBox.expand(),
                         ),
+                      ),
                     ],
                   ),
                 ),

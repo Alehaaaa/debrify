@@ -174,9 +174,11 @@ void main() {
   });
 
   group('HoldFeedback', () {
+    final ctl = HoldFeedbackController();
     Widget host() => _host(
       Center(
         child: HoldFeedback(
+          controller: ctl,
           child: GestureDetector(
             onLongPress: () {},
             child: const SizedBox(width: 120, height: 180),
@@ -184,40 +186,53 @@ void main() {
         ),
       ),
     );
+    Finder ripple() => find.descendant(
+      of: find.byType(HoldFeedback),
+      matching: find.byType(CustomPaint),
+    );
 
-    testWidgets('a held press fills the ring; a tap never shows it', (
+    testWidgets('a press ripples on top of the card and fades after', (
       tester,
     ) async {
       await tester.pumpWidget(host());
-      final center = tester.getCenter(find.byType(SizedBox).last);
-
-      // A quick tap: nothing drawn.
-      var gesture = await tester.startGesture(center);
-      await tester.pump(const Duration(milliseconds: 80));
+      expect(ripple(), findsNothing);
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(HoldFeedback)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(ripple(), findsOneWidget);
+      // A pointer press never draws the TV ring.
       expect(find.byType(CircularProgressIndicator), findsNothing);
       await gesture.up();
-      await tester.pump();
-
-      // A hold: the ring appears while the finger stays down…
-      gesture = await tester.startGesture(center);
-      await tester.pump(); // the ring's ticker starts on this frame
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      // …and goes as soon as it lifts.
-      await gesture.up();
-      await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pumpAndSettle();
+      expect(ripple(), findsNothing);
     });
 
-    testWidgets('dragging away cancels the ring', (tester) async {
+    testWidgets('scrolling away drops the ripple', (tester) async {
       await tester.pumpWidget(host());
-      final center = tester.getCenter(find.byType(SizedBox).last);
-      final gesture = await tester.startGesture(center);
-      await tester.pump(const Duration(milliseconds: 200));
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(HoldFeedback)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
       await gesture.moveBy(const Offset(0, 40));
-      await tester.pump(const Duration(milliseconds: 200));
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await tester.pumpAndSettle();
+      expect(ripple(), findsNothing);
       await gesture.up();
+    });
+
+    testWidgets('a TV hold fills the ring through the controller', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host());
+      ctl.start(const Duration(milliseconds: 600));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      ctl.cancel();
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   });
 

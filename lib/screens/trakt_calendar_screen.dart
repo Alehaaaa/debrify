@@ -323,12 +323,11 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   /// Hold-OK per TV day card (and the ring it fills): a short press opens
   /// the day, a held one opens the episode menu. Kept here beside the focus
   /// nodes because the cards themselves are stateless list items.
-  final Map<DateTime, TvHoldOk> _dayHolds = {};
-  final Map<DateTime, HoldFeedbackController> _dayHoldFx = {};
+  final Map<DateTime, CardHold> _dayHolds = {};
 
-  TvHoldOk _holdForDay(_AiringDay day) => _dayHolds.putIfAbsent(
+  CardHold _holdForDay(_AiringDay day) => _dayHolds.putIfAbsent(
     _dateOnly(day.day),
-    () => TvHoldOk(
+    () => CardHold(
       // Re-read the day at press time: the list rebuilds as months load.
       onTap: () {
         final current = _dayFor(day.day);
@@ -340,9 +339,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       },
     ),
   );
-
-  HoldFeedbackController _holdFxForDay(DateTime day) =>
-      _dayHoldFx.putIfAbsent(_dateOnly(day), HoldFeedbackController.new);
 
   _AiringDay? _dayFor(DateTime day) {
     final wanted = _dateOnly(day);
@@ -1287,7 +1283,6 @@ sheetAnimationStyle: kMenuSheetAnimation,
           onEpisodeOptions: (entry) =>
               _openEpisodeOptions(entry, dayEntries: airingDay.entries),
           hold: _isTelevision ? _holdForDay(airingDay) : null,
-          holdFx: _holdFxForDay(airingDay.day),
           onArrowUp: index == 0
               ? () => _monthFocusNode.requestFocus()
               : () => _focusNodeForDay(days[index - 1].day).requestFocus(),
@@ -1417,7 +1412,6 @@ class _AiringDayCard extends StatelessWidget {
     this.onEpisodeOpen,
     this.onEpisodeOptions,
     this.hold,
-    this.holdFx,
     this.isTelevision = false,
   });
 
@@ -1440,10 +1434,8 @@ class _AiringDayCard extends StatelessWidget {
   /// Hold / right-click on one episode row: the calendar's episode menu.
   final ValueChanged<TraktCalendarEntry>? onEpisodeOptions;
 
-  /// TV hold-OK on the whole card (see the screen's `_holdForDay`) and the
-  /// ring it fills.
-  final TvHoldOk? hold;
-  final HoldFeedbackController? holdFx;
+  /// TV hold-OK on the whole card (see the screen's `_holdForDay`).
+  final CardHold? hold;
 
   @override
   Widget build(BuildContext context) {
@@ -1456,7 +1448,6 @@ class _AiringDayCard extends StatelessWidget {
       onFocusChange: (focused) {
         if (!focused) {
           hold?.reset();
-          holdFx?.cancel();
           return;
         }
         final ctx = focusNode.context;
@@ -1471,14 +1462,7 @@ class _AiringDayCard extends StatelessWidget {
       },
       onKeyEvent: (_, event) {
         final hold = this.hold;
-        if (hold != null &&
-            (isActivateKey(event.logicalKey) ||
-                event.logicalKey == LogicalKeyboardKey.space)) {
-          if (event is KeyDownEvent) {
-            holdFx?.start(hold.dwell);
-          } else if (event is KeyUpEvent) {
-            holdFx?.cancel();
-          }
+        if (hold != null && isActivateOrSpaceKey(event.logicalKey)) {
           return hold.handle(event);
         }
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -1536,19 +1520,17 @@ class _AiringDayCard extends StatelessWidget {
                   ),
               ],
             ),
+            // TV ring only: the InkWell below already ripples on touch.
             child: HoldFeedback(
-              controller: holdFx,
-              enabled: onEpisodeOptions != null,
+              controller: hold?.ring,
+              ripple: false,
               borderRadius: BorderRadius.circular(16),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 onTap: onOpen,
-                onLongPress: onEpisodeOptions == null
-                    ? null
-                    : () {
-                        HapticFeedback.mediumImpact();
-                        _optionsForCard();
-                      },
+                onLongPress: withHoldHaptic(
+                  onEpisodeOptions == null ? null : _optionsForCard,
+                ),
                 onSecondaryTap: CardMenuGesture.secondaryClick(
                   onEpisodeOptions == null ? null : _optionsForCard,
                 ),
@@ -2028,14 +2010,9 @@ class _GroupEpisodeRow extends StatelessWidget {
         'E${entry.episodeNumber.toString().padLeft(2, '0')}';
     final title = entry.episodeTitle?.trim();
     final subtitle = title == null || title.isEmpty ? code : '$code · $title';
-    final row = InkWell(
+    return InkWell(
       onTap: onTap,
-      onLongPress: onLongPress == null
-          ? null
-          : () {
-              HapticFeedback.mediumImpact();
-              onLongPress!();
-            },
+      onLongPress: withHoldHaptic(onLongPress),
       onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
@@ -2085,11 +2062,6 @@ class _GroupEpisodeRow extends StatelessWidget {
           ],
         ),
       ),
-    );
-    return HoldFeedback(
-      enabled: onLongPress != null,
-      borderRadius: BorderRadius.zero,
-      child: row,
     );
   }
 }
