@@ -1394,6 +1394,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       widget.initialTab ??
       (MainPageBridge.hasPendingIptvStartup ? MainTab.iptv : MainTab.home);
 
+  // Phone/tablet tabs are one continuous horizontal surface. Keep the exact
+  // visible-index order here because app tab ids intentionally have gaps.
+  final PageController _tabPager = PageController();
+  List<int> _tabPagerIndices = const [];
+
   // Phone nav chrome: 'classic' (bottom bar, default) vs 'floating' (the
   // glass button). Nothing renders until the pref is read — a one-frame
   // empty strip beats flashing the wrong chrome at a floating-style user.
@@ -2030,6 +2035,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       HardwareKeyboard.instance.removeHandler(_tvDeadFocusRecovery);
     }
     _animationController.dispose();
+    _tabPager.dispose();
     _tvSidebarExpanded.dispose();
     DeepLinkService().dispose();
     RemoteControlState().stop();
@@ -2959,6 +2965,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (!visible.contains(index)) {
       return;
     }
+    final page = _tabPagerIndices.indexOf(index);
+    if (page >= 0 && _tabPager.hasClients && index != _selectedIndex) {
+      _tabPager.animateToPage(
+        page,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+      return;
+    }
+    _selectTab(index);
+  }
+
+  void _selectTab(int index) {
     // Tabs are section roots. Selecting one — including the already-active
     // tab — dismisses every page, sheet and dialog opened inside a section.
     _sectionNavigatorKey.currentState?.popUntil((route) => route.isFirst);
@@ -3417,7 +3436,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case MainTab.reels:
         return ReelsScreen(
           isTelevision: _isAndroidTv,
-          floatingNav: !_isAndroidTv &&
+          floatingNav:
+              !_isAndroidTv &&
               _phoneNavLoaded &&
               _phoneNavStyle == 'floating' &&
               MediaQuery.sizeOf(context).width < 600,
@@ -3435,6 +3455,36 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       isTelevision: _isAndroidTv,
       entranceAnimation: _fadeAnimation,
       child: _buildPage(_selectedIndex),
+    );
+  }
+
+  void _configureTabPager(List<int> indices) {
+    if (listEquals(_tabPagerIndices, indices)) return;
+    _tabPagerIndices = List<int>.of(indices);
+    final initial =
+        indices.indexOf(_selectedIndex).clamp(0, indices.length - 1) as int;
+    // This method runs from build. Recreating/disposal of a controller while
+    // PageView is registering its elements breaks Flutter's build scope; move
+    // the persistent controller only after this frame instead.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_tabPager.hasClients) return;
+      _tabPager.jumpToPage(initial);
+    });
+  }
+
+  Widget _buildSwipeableTabs(List<int> indices) {
+    _configureTabPager(indices);
+    return PageView.builder(
+      controller: _tabPager,
+      itemCount: indices.length,
+      onPageChanged: (page) => _selectTab(indices[page]),
+      itemBuilder: (context, page) {
+        final index = indices[page];
+        return KeyedSubtree(
+          key: ValueKey('tab-page-$index'),
+          child: _buildPage(index),
+        );
+      },
     );
   }
 
@@ -4145,7 +4195,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                                     pages: [
                                       MaterialPage<void>(
                                         key: const ValueKey('section-root'),
-                                        child: _buildAnimatedPage(),
+                                        // Sidebar/TV layouts retain their
+                                        // focus-first tab transition. On
+                                        // touch layouts PageView keeps the
+                                        // outgoing tab beside the incoming
+                                        // one throughout the swipe.
+                                        child: !isDesktopWide && !_isAndroidTv
+                                            ? _buildSwipeableTabs(nonTvIndices)
+                                            : _buildAnimatedPage(),
                                       ),
                                     ],
                                     onPopPage: (route, result) =>
