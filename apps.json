@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/bea6230c1a07f41492ba5a78857f0ab69de3f7b3/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/7f89ac8c83b6bed9aee8e9dd08b4e15e39beee7b/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610061847",
+          "date": "2026-10-06T18:52:01Z",
+          "localizedDescription": "What's new:\n• Complete offline cache dependencies and clean download startup checks (7f89ac8c)\n• Keep Downloads available without providers and remove transfer waits from its manager (c66b36e7)\n• Serve durable offline artwork directly and verify local playback preparation (be0302e8)\n• Open the local download library offline and remove network waits from startup (23cb21da)\n\nBuild 202610061847 from nextup@7f89ac8\nhttps://github.com/Alehaaaa/debrify/compare/bea6230...7f89ac8",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-53-7f89ac8.ipa",
+          "size": 39888958,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610061551",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• One hold for every card: 500ms, ripple, tap feedback (30bbdaad)\n\nBuild 202610060858 from nextup@30bbdaa\nhttps://github.com/Alehaaaa/debrify/compare/47d633c...30bbdaa",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-34-30bbdaa.ipa",
           "size": 39861214,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610060848",
-          "date": "2026-10-06T08:53:00Z",
-          "localizedDescription": "What's new:\n• Hold overlay everywhere, calendar menus, trailer gestures, Fix match (47d633c9)\n\nBuild 202610060848 from nextup@47d633c\nhttps://github.com/Alehaaaa/debrify/compare/f1532e2...47d633c",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-33-47d633c.ipa",
-          "size": 39838030,
           "minOSVersion": "14.0"
         }
       ],
