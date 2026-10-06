@@ -268,7 +268,7 @@ class TvosTopShelfService {
         }
         if (youtubeId == null) continue;
 
-        final streams = await YoutubeService.resolveStreams(
+        final streams = await YoutubeService.resolvePreviewStreams(
           youtubeId,
           maxHeightOverride: _previewHeight,
         );

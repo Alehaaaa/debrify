@@ -167,6 +167,7 @@ void main() {
       ReelsFeed feed, {
       Future<YoutubeResolvedStreams?> Function(String key)? resolver,
       bool floatingNav = false,
+      void Function(ReelPlayback)? onPlayer,
     }) => MaterialApp(
       home: AppThemeScope(
         theme: AppThemes.legacy,
@@ -180,13 +181,16 @@ void main() {
                   resolved.add(key);
                   return _clip;
                 },
-            playerBuilder: (p) => ColoredBox(
-              key: ValueKey(
-                'player:${p.item.id}:${p.active}:${p.volume}:'
-                '${p.streams != null}:${p.paused}',
-              ),
-              color: Colors.black,
-            ),
+            playerBuilder: (p) {
+              onPlayer?.call(p);
+              return ColoredBox(
+                key: ValueKey(
+                  'player:${p.item.id}:${p.active}:${p.volume}:'
+                  '${p.streams != null}:${p.paused}',
+                ),
+                color: Colors.black,
+              );
+            },
           ),
         ),
       ),
@@ -199,7 +203,7 @@ void main() {
     String? activeId(WidgetTester tester) {
       for (final element in find.byType(ColoredBox).evaluate()) {
         final key = element.widget.key;
-        if (key is ValueKey<String> && key.value.contains(':true:')) {
+        if (key is ValueKey<String> && key.value.split(':')[2] == 'true') {
           return key.value.split(':')[1];
         }
       }
@@ -220,7 +224,13 @@ void main() {
       expect(find.textContaining('MORE', findRichText: true), findsOneWidget);
       await tester.tap(find.textContaining('MORE', findRichText: true));
       await tester.pumpAndSettle();
-      expect(find.textContaining('LESS', findRichText: true), findsOneWidget);
+      expect(find.byTooltip('Close description'), findsOneWidget);
+      await tester.tap(find.byTooltip('Close description'));
+      await tester.pumpAndSettle();
+      // The collapsed description must pass vertical swipes to the feed.
+      await tester.fling(find.text('MORE'), const Offset(0, -400), 2000);
+      await tester.pumpAndSettle();
+      expect(activeId(tester), isNot(id));
     });
 
     testWidgets('action rail only clears navigation in floating mode', (
@@ -316,27 +326,97 @@ void main() {
       expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     });
 
-    testWidgets('a clip that can\'t play moves on to the next reel', (
-      tester,
-    ) async {
-      var first = true;
-      await tester.pumpWidget(
-        host(
-          feedFor(FakeTmdb()),
-          resolver: (key) async {
-            if (first) {
-              first = false;
-              return null;
-            }
-            return _clip;
-          },
-        ),
-      );
-      await tester.pumpAndSettle();
-      final page = tester.widget<PageView>(find.byType(PageView));
-      expect(page.controller!.page, 1);
-      expect(activeId(tester), isNotNull);
-    });
+    testWidgets(
+      'failed clips never advance or prevent going back; retry stays put',
+      (tester) async {
+        var recover = false;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) async {
+              resolved.add(key);
+              return recover ? _clip : null;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final controller = tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!;
+        final first = activeId(tester)!;
+        expect(controller.page, 0);
+        expect(find.text('Retry clip'), findsOneWidget);
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 10000);
+        await tester.pumpAndSettle();
+        expect(controller.page, 1);
+        await tester.fling(find.byType(PageView), const Offset(0, 500), 10000);
+        await tester.pumpAndSettle();
+        expect(controller.page, 0);
+        expect(activeId(tester), first);
+        recover = true;
+        await tester.tap(find.text('Retry clip'));
+        await tester.pumpAndSettle();
+        expect(controller.page, 0);
+        expect(playing(first), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'long and fast gestures move exactly one page in both directions',
+      (tester) async {
+        await tester.pumpWidget(host(feedFor(FakeTmdb())));
+        await tester.pumpAndSettle();
+        final controller = tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!;
+        final gesture = await tester.startGesture(const Offset(200, 450));
+        for (var i = 0; i < 5; i++) {
+          await gesture.moveBy(const Offset(0, -400));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        expect(controller.page, 1);
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 10000);
+        await tester.pumpAndSettle();
+        expect(controller.page, 2);
+        await tester.fling(find.byType(PageView), const Offset(0, 500), 10000);
+        await tester.pumpAndSettle();
+        expect(controller.page, 1);
+      },
+    );
+
+    testWidgets(
+      'late player errors cannot break a retried clip or change the page',
+      (tester) async {
+        VoidCallback? staleFailure;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            onPlayer: (playback) {
+              if (playback.active && playback.streams != null) {
+                staleFailure ??= playback.onPlaybackFailed;
+              }
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        staleFailure!();
+        await tester.pumpAndSettle();
+        expect(find.text('Retry clip'), findsOneWidget);
+        await tester.tap(find.text('Retry clip'));
+        await tester.pumpAndSettle();
+        expect(playing(first), findsOneWidget);
+        staleFailure!();
+        await tester.pumpAndSettle();
+        expect(playing(first), findsOneWidget);
+        expect(
+          tester.widget<PageView>(find.byType(PageView)).controller!.page,
+          0,
+        );
+      },
+    );
 
     testWidgets('mute and My Watchlist toggle from the rail', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb())));

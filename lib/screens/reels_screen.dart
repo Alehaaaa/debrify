@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
@@ -16,8 +17,9 @@ import '../services/storage_service.dart';
 import '../services/youtube_service.dart';
 import '../utils/tv_keys.dart';
 import '../utils/platform_util.dart';
-import '../widgets/detail/showcase_parts.dart' show ExpandableSynopsis;
 import '../widgets/hero_trailer_backdrop.dart';
+
+enum _ClipState { idle, resolving, ready, failed }
 
 /// A reel in the feed: the title, its clip, and that clip's stream once
 /// it has been resolved (only ever for the reel on screen and the next one).
@@ -26,8 +28,8 @@ class _Reel {
 
   final ReelTitle title;
   YoutubeResolvedStreams? streams;
-  bool resolving = false;
-  bool failed = false;
+  _ClipState state = _ClipState.idle;
+  int revision = 0;
 
   StremioMeta get item => title.item;
 }
@@ -88,11 +90,15 @@ class ReelPlayback {
     required this.volume,
     this.paused = false,
     this.prewarm = false,
+    this.failed = false,
+    this.onPlaybackFailed,
   });
 
   final StremioMeta item;
   final YoutubeResolvedStreams? streams;
   final bool active;
+  final bool failed;
+  final VoidCallback? onPlaybackFailed;
 
   /// Keep the current and next iOS native players prepared.
   final bool prewarm;
@@ -120,7 +126,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
   static const double _refreshPull = 90;
 
   late final ReelsFeed _feed = widget.feed ?? ReelsFeed();
-  final PageController _pages = PageController();
+  // The feed owns its index. Restoring an unrelated PageStorage offset would
+  // put the visible page and the selected player out of sync on tab re-entry.
+  final PageController _pages = PageController(keepPage: false);
   final FocusNode _focus = FocusNode(debugLabel: 'reels');
   final Object? _scope = ProfileRuntime.scope.value;
   final List<_Reel> _reels = [];
@@ -131,6 +139,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
   bool _exhausted = false;
   bool _refreshing = false;
   double _pull = 0;
+  bool _refreshArmed = false;
+  int? _dragPage;
+  bool _movingByKey = false;
+  late final _ReelPagePhysics _physics = _ReelPagePhysics(
+    anchorPage: () => _dragPage ?? _index,
+    parent: const BouncingScrollPhysics(),
+  );
 
   /// The reel on screen is paused (a tap on the video). A new reel always
   /// starts playing.
@@ -196,42 +211,50 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Future<void> _resolve(int index) async {
     if (index < 0 || index >= _reels.length) return;
     final reel = _reels[index];
-    if (reel.streams != null || reel.failed || reel.resolving) return;
-    reel.resolving = true;
+    if (reel.state != _ClipState.idle) return;
+    reel.state = _ClipState.resolving;
+    final revision = reel.revision;
     YoutubeResolvedStreams? streams;
     try {
       streams =
           await (widget.resolver?.call(reel.title.clipKey) ??
-                  YoutubeService.resolveStreams(
+                  YoutubeService.resolvePreviewStreams(
                     reel.title.clipKey,
                     // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
                     // more lines than a card preview.
                     maxHeightOverride: 720,
                     preferVp9: false,
                   ))
-              .timeout(const Duration(seconds: 20));
+              .timeout(const Duration(seconds: 30));
     } catch (_) {
       streams = null;
     }
-    if (!_current) return;
+    if (!_current || !_reels.contains(reel) || reel.revision != revision)
+      return;
     setState(() {
-      reel.resolving = false;
       if (streams != null && streams.hasPlayable) {
         reel.streams = streams;
+        reel.state = _ClipState.ready;
       } else {
-        reel.failed = true;
+        reel.state = _ClipState.failed;
       }
     });
-    _skipIfFailed(reel);
   }
 
-  /// One failure path for resolution, native playback and revisiting a dead
-  /// clip. Defer until PageView is mounted and re-check the current identity.
-  void _skipIfFailed(_Reel reel) {
-    if (!reel.failed) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_current && _reels.indexOf(reel) == _index) _go(_index + 1);
+  /// Loading can change a clip, never the page. In particular, failed clips
+  /// remain navigable in both directions instead of cascading auto-skips.
+  void _retry(_Reel reel) {
+    if (!_current || reel.state != _ClipState.failed) return;
+    final index = _reels.indexOf(reel);
+    if (index < 0) return;
+    YoutubeService.invalidateStreams(reel.title.clipKey);
+    setState(() {
+      reel.revision++;
+      reel.streams = null;
+      reel.state = _ClipState.idle;
+      if (index == _index) _paused = false;
     });
+    unawaited(_resolve(index));
   }
 
   /// Pull-down on the first reel: swap it for a fresh title.
@@ -258,6 +281,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _onPage(int index) {
+    if (index == _index) return;
     setState(() {
       _index = index;
       _paused = false;
@@ -265,23 +289,29 @@ class _ReelsScreenState extends State<ReelsScreen> {
     HapticFeedback.selectionClick();
     unawaited(_fill());
     _prepare();
-    _skipIfFailed(_reels[index]);
   }
 
-  void _playbackFailed(_Reel reel) {
-    if (!_current || reel.failed || !_reels.contains(reel)) return;
-    setState(() => reel.failed = true);
-    _skipIfFailed(reel);
+  void _playbackFailed(_Reel reel, int revision) {
+    if (!_current ||
+        reel.revision != revision ||
+        reel.state != _ClipState.ready ||
+        !_reels.contains(reel))
+      return;
+    setState(() {
+      reel.state = _ClipState.failed;
+      reel.streams = null;
+    });
   }
 
   void _togglePause() {
+    if (_reels[_index].state != _ClipState.ready) return;
     HapticFeedback.selectionClick();
     setState(() => _paused = !_paused);
   }
 
   /// DPAD / keyboard: up and down move through the feed, OK opens the title.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.arrowDown) {
       _go(_index + 1);
@@ -303,30 +333,51 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _go(int index) {
-    if (index < 0 || index >= _reels.length || !_pages.hasClients) return;
-    _pages.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
+    if (_movingByKey ||
+        index < 0 ||
+        index >= _reels.length ||
+        !_pages.hasClients)
+      return;
+    _movingByKey = true;
+    unawaited(
+      _pages
+          .animateToPage(
+            index,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() => _movingByKey = false),
     );
   }
 
   bool _onScroll(ScrollNotification n) {
-    if (n.depth != 0 || _index != 0) return false;
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification && n.dragDetails != null) {
+      _dragPage = (n.metrics.pixels / n.metrics.viewportDimension)
+          .round()
+          .clamp(0, _reels.length - 1);
+      _refreshArmed = false;
+    }
+    if (n is ScrollEndNotification) {
+      _dragPage = null;
+      if (_refreshArmed && _index == 0) unawaited(_refreshFirst());
+      _refreshArmed = false;
+      if (_pull != 0) setState(() => _pull = 0);
+      return false;
+    }
+    if (_dragPage != 0) return false;
     // Pulled past the top of the first reel (the bounce shows it as negative
     // offset): follow the finger, and refresh once it lets go far enough.
     if (n is ScrollUpdateNotification) {
       final pull = (-n.metrics.pixels).clamp(0.0, double.infinity);
       if (pull != _pull) setState(() => _pull = pull);
-      if (n.dragDetails == null && _pull >= _refreshPull) {
-        unawaited(_refreshFirst());
-      }
-    } else if (n is OverscrollNotification && n.overscroll < 0) {
+      if (n.dragDetails != null && _pull >= _refreshPull) _refreshArmed = true;
+    } else if (n is OverscrollNotification &&
+        n.overscroll < 0 &&
+        n.dragDetails != null) {
       // Clamping physics report the pull as overscroll instead.
       setState(() => _pull = (_pull - n.overscroll).clamp(0.0, 200.0));
-    } else if (n is ScrollEndNotification) {
-      if (_pull >= _refreshPull) unawaited(_refreshFirst());
-      if (_pull != 0) setState(() => _pull = 0);
+      if (_pull >= _refreshPull) _refreshArmed = true;
     }
     return false;
   }
@@ -420,17 +471,22 @@ class _ReelsScreenState extends State<ReelsScreen> {
           allowImplicitScrolling: _nativePrewarm,
           scrollDirection: Axis.vertical,
           // The bounce is what lets the first reel be pulled down.
-          physics: const PageScrollPhysics(parent: BouncingScrollPhysics()),
+          // Use our single-gesture snapper, rather than adding PageView's own
+          // ballistic physics on top of it.
+          pageSnapping: false,
+          physics: _physics,
           onPageChanged: _onPage,
           itemCount: _reels.length,
           itemBuilder: (context, i) {
             final reel = _reels[i];
+            final revision = reel.revision;
             return _ReelPage(
               key: ValueKey(_watchKey(reel.item)),
               reel: reel,
               active: i == _index,
               prewarm: _nativePrewarm && (i == _index || i == _index + 1),
-              onPlaybackFailed: () => _playbackFailed(reel),
+              onPlaybackFailed: () => _playbackFailed(reel, revision),
+              onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
               paused: i == _index && _paused,
               onTogglePause: _togglePause,
@@ -484,6 +540,62 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 }
 
+/// Anchor every drag to the page where it began, including its momentum.
+/// A long drag or a fast fling can reach the adjacent page, never cross a
+/// second one. A new gesture immediately establishes a new anchor.
+class _ReelPagePhysics extends PageScrollPhysics {
+  const _ReelPagePhysics({required this.anchorPage, super.parent});
+
+  final int Function() anchorPage;
+
+  @override
+  _ReelPagePhysics applyTo(ScrollPhysics? ancestor) =>
+      _ReelPagePhysics(anchorPage: anchorPage, parent: buildParent(ancestor));
+
+  @override
+  double carriedMomentum(double existingVelocity) => 0;
+
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    final height = position.viewportDimension;
+    final lower = (anchorPage() - 1) * height;
+    final upper = (anchorPage() + 1) * height;
+    if (value < lower && value < position.pixels) {
+      return value - (position.pixels < lower ? position.pixels : lower);
+    }
+    if (value > upper && value > position.pixels) {
+      return value - (position.pixels > upper ? position.pixels : upper);
+    }
+    return super.applyBoundaryConditions(position, value);
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if (position.outOfRange || position.viewportDimension <= 0) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+    final tolerance = toleranceFor(position);
+    var page = position.pixels / position.viewportDimension;
+    if (velocity < -tolerance.velocity) page -= 0.5;
+    if (velocity > tolerance.velocity) page += 0.5;
+    final target =
+        (page.round().clamp(anchorPage() - 1, anchorPage() + 1) *
+                position.viewportDimension)
+            .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target == position.pixels) return null;
+    return ScrollSpringSimulation(
+      spring,
+      position.pixels,
+      target,
+      velocity.clamp(-2500.0, 2500.0),
+      tolerance: tolerance,
+    );
+  }
+}
+
 /// One reel: the clip, the scrim, the identity bottom-left and the action
 /// rail on the right.
 class _ReelPage extends StatefulWidget {
@@ -492,6 +604,7 @@ class _ReelPage extends StatefulWidget {
   final bool prewarm;
   final bool floatingNav;
   final VoidCallback onPlaybackFailed;
+  final VoidCallback onRetry;
   final bool paused;
   final VoidCallback onTogglePause;
   final bool muted;
@@ -508,6 +621,7 @@ class _ReelPage extends StatefulWidget {
     required this.prewarm,
     required this.floatingNav,
     required this.onPlaybackFailed,
+    required this.onRetry,
     required this.paused,
     required this.onTogglePause,
     required this.muted,
@@ -541,11 +655,13 @@ class _ReelPageState extends State<_ReelPage>
     final insets = MediaQuery.paddingOf(context);
     final playback = ReelPlayback(
       item: item,
-      streams: reel.streams,
+      streams: reel.state == _ClipState.ready ? reel.streams : null,
       active: widget.active,
       volume: widget.muted ? 0 : 100,
       paused: widget.paused,
-      prewarm: widget.prewarm && !reel.failed,
+      prewarm: widget.prewarm && reel.state != _ClipState.failed,
+      failed: reel.state == _ClipState.failed,
+      onPlaybackFailed: widget.onPlaybackFailed,
     );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
     final description = item.description?.trim();
@@ -565,6 +681,24 @@ class _ReelPageState extends State<_ReelPage>
                 onPlaybackFailed: widget.onPlaybackFailed,
               ),
         ),
+        if (playback.failed && widget.active)
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Clip unavailable',
+                  style: TextStyle(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: widget.onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry clip'),
+                ),
+              ],
+            ),
+          ),
         if (widget.paused)
           const IgnorePointer(
             child: Center(
@@ -655,31 +789,7 @@ class _ReelPageState extends State<_ReelPage>
               ],
               if (description != null && description.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                ConstrainedBox(
-                  // An expanded description scrolls rather than covering the
-                  // clip end to end.
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(context).height * 0.4,
-                  ),
-                  child: SingleChildScrollView(
-                    child: ExpandableSynopsis(
-                      text: description,
-                      maxLines: 3,
-                      style: const TextStyle(
-                        color: Color(0xE6FFFFFF),
-                        fontSize: 14,
-                        height: 1.4,
-                        shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
-                      ),
-                      actionStyle: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                ),
+                _ReelSynopsis(title: item.name, text: description),
               ],
             ],
           ),
@@ -741,7 +851,7 @@ class _ReelPlayer extends StatelessWidget {
               fadeInDuration: Duration.zero,
               errorWidget: (_, _, _) => const SizedBox.shrink(),
             );
-      if (!playback.active) return image;
+      if (!playback.active || playback.failed) return image;
       // On screen, clip still on its way: the still, and a quiet spinner.
       return Stack(
         fit: StackFit.expand,
@@ -786,6 +896,75 @@ class _ReelPlayer extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The feed has one vertical gesture owner. Full descriptions scroll in a
+/// separate sheet, never in a competing scrollable over the reel.
+class _ReelSynopsis extends StatelessWidget {
+  const _ReelSynopsis({required this.title, required this.text});
+
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: () => showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (context) => SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.6,
+        child: Column(
+          children: [
+            ListTile(
+              title: Text(title),
+              trailing: IconButton(
+                tooltip: 'Close description',
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+                child: Text(text),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+    child: Semantics(
+      button: true,
+      label: 'Show full description',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xE6FFFFFF),
+              fontSize: 14,
+              height: 1.4,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+            ),
+          ),
+          const Text(
+            'MORE',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// The title as its logo; the name in type when there is no logo (or it

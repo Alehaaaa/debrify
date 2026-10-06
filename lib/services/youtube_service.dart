@@ -354,11 +354,91 @@ class YoutubeService {
   /// and it spares a second isolate + extraction when the detail page's trailer
   /// prefetch and its Trailer button (or a re-open) resolve the same id.
   static final Map<String, _ResolvedCacheEntry> _resolveCache = {};
+  static final Map<String, int> _resolveGeneration = {};
+  static String? _preferredClient;
+
+  @visibleForTesting
+  static Future<({YoutubeResolvedStreams streams, String client})?> Function(
+    String videoId,
+    int maxHeight,
+    bool withCaptions,
+    bool preferVp9,
+    bool includeMetadata,
+    bool preferMuxed,
+    String? preferredClient,
+  )?
+  streamResolverOverride;
+
+  @visibleForTesting
+  static void resetResolutionForTesting() {
+    _resolveCache.clear();
+    _resolveInFlight.clear();
+    _resolveGeneration.clear();
+    _preferredClient = null;
+    streamResolverOverride = null;
+  }
+
+  /// Discard failed signed URLs, including pending results from before retry.
+  static void invalidateStreams(String videoId) {
+    _resolveGeneration[videoId] = (_resolveGeneration[videoId] ?? 0) + 1;
+    bool matches(String key) => key == videoId || key.startsWith('$videoId#');
+    _resolveCache.removeWhere((key, _) => matches(key));
+    _resolveInFlight.removeWhere((key, _) => matches(key));
+  }
+
+  /// A failed player should not receive the same cached signed URL on reopen.
+  static void invalidateStreamUrl(String? url) {
+    if (url == null) return;
+    final ids = <String>{};
+    for (final entry in _resolveCache.entries) {
+      final streams = entry.value.streams;
+      if ([streams.playUrl, streams.audioUrl, streams.downloadUrl].contains(url)) {
+        ids.add(entry.key.split('#').first);
+      }
+    }
+    for (final id in ids) { invalidateStreams(id); }
+  }
+
+  /// Reels and trailers already have title metadata. Return playable streams
+  /// without fetching it again; native iOS uses a single muxed connection.
+  static Future<YoutubeResolvedStreams?> resolvePreviewStreams(
+    String videoId, {
+    int? maxHeightOverride,
+    bool preferVp9 = false,
+  }) => resolveStreams(
+    videoId,
+    maxHeightOverride: maxHeightOverride ?? ambientTrailerMaxHeight,
+    preferVp9: preferVp9,
+    includeMetadata: false,
+    preferMuxed: PlatformUtil.isIosMobile,
+  );
+
   static const Duration _resolveCacheTtl = Duration(minutes: 10);
+
+  static bool _cacheUsable(_ResolvedCacheEntry entry) {
+    final now = DateTime.now();
+    if (now.difference(entry.at) >= _resolveCacheTtl) return false;
+    for (final url in [
+      entry.streams.playUrl,
+      entry.streams.audioUrl,
+      entry.streams.downloadUrl,
+    ]) {
+      if (url == null) continue;
+      final expires = int.tryParse(
+        Uri.tryParse(url)?.queryParameters['expire'] ?? '',
+      );
+      if (expires != null &&
+          expires * 1000 <= now.millisecondsSinceEpoch + 30000) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /// Resolves in flight, keyed by videoId, so concurrent callers for the same id
   /// (prefetch + Trailer button) share one isolate instead of spawning two.
-  static final Map<String, Future<YoutubeResolvedStreams?>> _resolveInFlight = {};
+  static final Map<String, Future<YoutubeResolvedStreams?>> _resolveInFlight =
+      {};
 
   /// Resolution cap for ambient backdrop trailers (Home hero, Discover rail).
   ///
@@ -386,10 +466,10 @@ class YoutubeService {
   static int get ambientTrailerMaxHeight => PlatformUtil.isTvOS
       ? 1080
       : PlatformUtil.isAndroidTvCached
-          ? 1080
-          : PlatformUtil.isIosMobile
-              ? 720
-              : 1440;
+      ? 1080
+      : PlatformUtil.isIosMobile
+      ? 720
+      : 1440;
 
   /// Resolve a YouTube [videoId] into playable/downloadable stream URLs.
   ///
@@ -416,12 +496,19 @@ class YoutubeService {
     int? maxHeightOverride,
     bool withCaptions = false,
     bool preferVp9 = false,
+    bool includeMetadata = true,
+    bool preferMuxed = false,
   }) {
-    final key =
-        _resolveKey(videoId, maxHeightOverride, withCaptions, preferVp9);
+    final key = _resolveKey(
+      videoId,
+      maxHeightOverride,
+      withCaptions,
+      preferVp9,
+      includeMetadata,
+      preferMuxed,
+    );
     final cached = _resolveCache[key];
-    if (cached != null &&
-        DateTime.now().difference(cached.at) < _resolveCacheTtl) {
+    if (cached != null && _cacheUsable(cached)) {
       return Future.value(cached.streams);
     }
     final inFlight = _resolveInFlight[key];
@@ -431,6 +518,9 @@ class YoutubeService {
       maxHeightOverride: maxHeightOverride,
       withCaptions: withCaptions,
       preferVp9: preferVp9,
+      includeMetadata: includeMetadata,
+      preferMuxed: preferMuxed,
+      generation: _resolveGeneration[videoId] ?? 0,
     );
     _resolveInFlight[key] = future;
     // Block body: an arrow would return the removed (already-completed)
@@ -438,7 +528,9 @@ class YoutubeService {
     // the INNER future, but one refactor from the self-deadlock this exact
     // shape caused in remote_control_state. Don't leave the trap armed.
     return future.whenComplete(() {
-      _resolveInFlight.remove(key);
+      if (identical(_resolveInFlight[key], future)) {
+        _resolveInFlight.remove(key);
+      }
     });
   }
 
@@ -447,11 +539,15 @@ class YoutubeService {
     int? maxHeightOverride,
     bool withCaptions,
     bool preferVp9,
+    bool includeMetadata,
+    bool preferMuxed,
   ) {
     var base = maxHeightOverride == null
         ? videoId
         : '$videoId#h$maxHeightOverride';
     if (preferVp9) base = '$base#vp9';
+    if (!includeMetadata) base = '$base#preview';
+    if (preferMuxed) base = '$base#muxed';
     return withCaptions ? '$base#cc' : base;
   }
 
@@ -460,6 +556,9 @@ class YoutubeService {
     int? maxHeightOverride,
     bool withCaptions = false,
     bool preferVp9 = false,
+    bool includeMetadata = true,
+    bool preferMuxed = false,
+    required int generation,
   }) async {
     // Read the user's resolution cap on the MAIN isolate — SharedPreferences is
     // a platform channel and isn't available in the background isolate below.
@@ -472,17 +571,48 @@ class YoutubeService {
       // otherwise freeze the UI isolate (blocking DPAD/focus) for ~1s per client
       // it tries. Run it in a throwaway background isolate so the main isolate
       // only awaits (the network calls are already async).
-      final streams = await Isolate.run(
-        () => _resolveStreamsBlocking(
-            videoId, maxHeight, withCaptions, preferVp9),
-      );
-      if (streams != null) {
+      final preferredClient = _preferredClient;
+      final override = streamResolverOverride;
+      final result = override != null
+          ? await override(
+              videoId,
+              maxHeight,
+              withCaptions,
+              preferVp9,
+              includeMetadata,
+              preferMuxed,
+              preferredClient,
+            )
+          : await Isolate.run(
+              () => _resolveStreamsBlocking(
+                videoId,
+                maxHeight,
+                withCaptions,
+                preferVp9,
+                includeMetadata,
+                preferMuxed,
+                preferredClient,
+              ),
+            );
+      final streams = result?.streams;
+      if (streams != null && generation == (_resolveGeneration[videoId] ?? 0)) {
+        _preferredClient = result!.client;
         // Prune expired entries so the cache stays bounded to the active window.
-        _resolveCache
-            .removeWhere((_, e) => DateTime.now().difference(e.at) >= _resolveCacheTtl);
+        _resolveCache.removeWhere((_, e) => !_cacheUsable(e));
         _resolveCache[_resolveKey(
-                videoId, maxHeightOverride, withCaptions, preferVp9)] =
-            _ResolvedCacheEntry(streams, DateTime.now());
+          videoId,
+          maxHeightOverride,
+          withCaptions,
+          preferVp9,
+          includeMetadata,
+          preferMuxed,
+        )] = _ResolvedCacheEntry(
+          streams,
+          DateTime.now(),
+        );
+        while (_resolveCache.length > 64) {
+          _resolveCache.remove(_resolveCache.keys.first);
+        }
       }
       return streams;
     } catch (e) {
@@ -501,13 +631,17 @@ class YoutubeService {
   /// error outside the ladder still propagates to [_resolveUncached]. Only
   /// [yt_explode.YoutubeExplode.close] is guarded so a teardown failure can't
   /// discard a valid result.
-  static Future<YoutubeResolvedStreams?> _resolveStreamsBlocking(
+  static Future<({YoutubeResolvedStreams streams, String client})?>
+  _resolveStreamsBlocking(
     String videoId,
     int maxHeight,
     bool withCaptions,
     bool preferVp9,
+    bool includeMetadata,
+    bool preferMuxed,
+    String? preferredClient,
   ) async {
-    final yt = yt_explode.YoutubeExplode();
+    var yt = yt_explode.YoutubeExplode();
     try {
       // Client ladder — impersonations of official YouTube apps, tried in
       // order until one yields URLs that actually answer. Every rung earns
@@ -540,21 +674,44 @@ class YoutubeService {
         ('androidSdkless', [yt_explode.YoutubeApiClient.androidSdkless]),
         ('android', [yt_explode.YoutubeApiClient.android]),
       ];
+      // Reuse the last validated client first rather than paying for a known
+      // failing client on every clip. The remaining clients stay as fallbacks.
+      if (preferredClient != null) {
+        final index = rungs.indexWhere((rung) => rung.$1 == preferredClient);
+        if (index > 0) rungs.insert(0, rungs.removeAt(index));
+      }
+      var selectedClient = rungs.first.$1;
       _StreamSelection? selection;
       _StreamSelection? usableWithoutMuxedFallback;
+      String? adaptiveClient;
       for (final (label, clients) in rungs) {
         yt_explode.StreamManifest manifest;
         try {
           manifest = await yt.videos.streamsClient
-              .getManifest(videoId, ytClients: clients);
+              .getManifest(
+                videoId,
+                ytClients: clients,
+                // Skip a redundant watch-page fetch on the first attempt.
+                // Remaining clients use the conservative extraction path.
+                requireWatchPage: label != rungs.first.$1,
+              )
+              .timeout(const Duration(seconds: 5));
         } catch (e) {
           debugPrint('YoutubeService: $videoId [$label] manifest failed — $e');
+          yt.close();
+          yt = yt_explode.YoutubeExplode();
           continue;
         }
-        final candidate = _selectStreams(manifest, maxHeight, preferVp9);
+        final candidate = _selectStreams(
+          manifest,
+          maxHeight,
+          preferVp9,
+          preferMuxed,
+        );
         if (candidate == null) {
           debugPrint(
-              'YoutubeService: $videoId [$label] had no playable streams');
+            'YoutubeService: $videoId [$label] had no playable streams',
+          );
           continue;
         }
         final usability = await _chosenUrlsUsable(
@@ -562,17 +719,33 @@ class YoutubeService {
           candidate.audioUrl,
           candidate.bestMuxedUrl,
         );
+        if (!usability.primary &&
+            usability.muxedFallback &&
+            candidate.bestMuxedUrl != null) {
+          selection = _StreamSelection(
+            playUrl: candidate.bestMuxedUrl!,
+            audioUrl: null,
+            qualities: const [],
+            bestMuxedUrl: candidate.bestMuxedUrl,
+            bestMuxedHeight: candidate.bestMuxedHeight,
+          );
+          selectedClient = label;
+          break;
+        }
         if (!usability.primary) {
           debugPrint(
-              'YoutubeService: $videoId [$label] chosen URLs returned 403');
+            'YoutubeService: $videoId [$label] chosen URLs returned 403',
+          );
           continue;
         }
         if (!usability.muxedFallback) {
           // Keep the working adaptive pair as a last resort, but try the next
           // client for a muxed URL that single-URL players can actually open.
           usableWithoutMuxedFallback ??= candidate.withoutMuxedFallback();
+          adaptiveClient ??= label;
           debugPrint(
-              'YoutubeService: $videoId [$label] muxed fallback returned 403');
+            'YoutubeService: $videoId [$label] muxed fallback returned 403',
+          );
           continue;
         }
         if (label != 'androidVr') {
@@ -580,9 +753,13 @@ class YoutubeService {
           debugPrint('YoutubeService: $videoId resolved via [$label]');
         }
         selection = candidate;
+        selectedClient = label;
         break;
       }
-      selection ??= usableWithoutMuxedFallback;
+      if (selection == null && usableWithoutMuxedFallback != null) {
+        selection = usableWithoutMuxedFallback;
+        selectedClient = adaptiveClient!;
+      }
       if (selection == null) {
         debugPrint('YoutubeService: $videoId — every client rung failed');
         return null;
@@ -603,8 +780,11 @@ class YoutubeService {
       final captions = <YoutubeCaptionTrack>[];
       await Future.wait([
         () async {
+          if (!includeMetadata) return;
           try {
-            final video = await yt.videos.get(videoId);
+            final video = await yt.videos
+                .get(videoId)
+                .timeout(const Duration(seconds: 3));
             title = video.title;
             thumb = video.thumbnails.highResUrl;
             duration = video.duration?.inSeconds;
@@ -617,19 +797,23 @@ class YoutubeService {
           // Request VTT only so each language yields a single direct WebVTT URL
           // the player can feed to its existing external-subtitle pipeline.
           try {
-            final ccManifest = await yt.videos.closedCaptions.getManifest(
-              videoId,
-              formats: const [yt_explode.ClosedCaptionFormat.vtt],
-            );
+            final ccManifest = await yt.videos.closedCaptions
+                .getManifest(
+                  videoId,
+                  formats: const [yt_explode.ClosedCaptionFormat.vtt],
+                )
+                .timeout(const Duration(seconds: 3));
             for (final t in ccManifest.tracks) {
-              captions.add(YoutubeCaptionTrack(
-                url: t.url.toString(),
-                langCode: t.language.code,
-                langName: t.language.name.isNotEmpty
-                    ? t.language.name
-                    : t.language.code,
-                isAutoGenerated: t.isAutoGenerated,
-              ));
+              captions.add(
+                YoutubeCaptionTrack(
+                  url: t.url.toString(),
+                  langCode: t.language.code,
+                  langName: t.language.name.isNotEmpty
+                      ? t.language.name
+                      : t.language.code,
+                  isAutoGenerated: t.isAutoGenerated,
+                ),
+              );
             }
           } catch (_) {
             // No captions available (or fetch failed) — leave the list empty.
@@ -652,17 +836,20 @@ class YoutubeService {
         downloadHeight = match.isNotEmpty ? match.first.height : null;
       }
 
-      return YoutubeResolvedStreams(
-        playUrl: playUrl,
-        audioUrl: audioUrl,
-        downloadUrl: downloadUrl,
-        downloadHeight: downloadHeight,
-        downloadHasAudio: downloadHasAudio,
-        title: title,
-        thumbnailUrl: thumb,
-        durationSeconds: duration,
-        qualities: qualities,
-        captions: captions,
+      return (
+        client: selectedClient,
+        streams: YoutubeResolvedStreams(
+          playUrl: playUrl,
+          audioUrl: audioUrl,
+          downloadUrl: downloadUrl,
+          downloadHeight: downloadHeight,
+          downloadHasAudio: downloadHasAudio,
+          title: title,
+          thumbnailUrl: thumb,
+          durationSeconds: duration,
+          qualities: qualities,
+          captions: captions,
+        ),
       );
     } finally {
       // Guarded: a close() failure must not replace a valid return value (or a
@@ -680,15 +867,24 @@ class YoutubeService {
     yt_explode.StreamManifest manifest,
     int maxHeight,
     bool preferVp9,
+    bool preferMuxed,
   ) {
     // Best muxed single-file stream (download + playback fallback). Keep the
     // stream object (not just its URL) so we can report its resolution as the
     // actual download quality to the user.
     final muxed = manifest.muxed.toList()
-      ..sort((a, b) =>
-          b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
-    final muxedMp4 = muxed.where((s) => s.container.name.toLowerCase() == 'mp4');
-    final bestMuxedStream = muxedMp4.isNotEmpty
+      ..sort(
+        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
+      );
+    final muxedMp4 = muxed.where(
+      (s) => s.container.name.toLowerCase() == 'mp4',
+    );
+    final cappedMuxed = muxedMp4.where(
+      (s) => s.videoResolution.height <= maxHeight,
+    );
+    final bestMuxedStream = preferMuxed && cappedMuxed.isNotEmpty
+        ? cappedMuxed.first
+        : muxedMp4.isNotEmpty
         ? muxedMp4.first
         : (muxed.isNotEmpty ? muxed.first : null);
     final bestMuxed = bestMuxedStream?.url.toString();
@@ -735,13 +931,16 @@ class YoutubeService {
       // (phone/desktop hardware VP9; Apple TV software VP9 at its 1080 cap;
       // Android TV certifies VP9 hardware decode for the Exo underlay).
       videoOnly.sort((a, b) {
-        final byHeight =
-            b.videoResolution.height.compareTo(a.videoResolution.height);
+        final byHeight = b.videoResolution.height.compareTo(
+          a.videoResolution.height,
+        );
         if (byHeight != 0) return byHeight;
-        final aPreferred =
-            preferVp9 ? isVp9(a.videoCodec) : isAvc(a.videoCodec);
-        final bPreferred =
-            preferVp9 ? isVp9(b.videoCodec) : isAvc(b.videoCodec);
+        final aPreferred = preferVp9
+            ? isVp9(a.videoCodec)
+            : isAvc(a.videoCodec);
+        final bPreferred = preferVp9
+            ? isVp9(b.videoCodec)
+            : isAvc(b.videoCodec);
         if (aPreferred == bPreferred) return 0;
         return aPreferred ? -1 : 1;
       });
@@ -772,10 +971,18 @@ class YoutubeService {
           (atOrBelow.isNotEmpty ? atOrBelow.first : qualities.last).videoUrl;
 
       audioStreams.sort(
-          (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond));
+        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
+      );
       audioUrl = audioStreams.first.url.toString();
     }
 
+    // A single connection starts the native iOS preview without waiting for
+    // independent audio/video requests. Keep adaptive qualities for full player.
+    if (preferMuxed && bestMuxed != null) {
+      playUrl = bestMuxed;
+      audioUrl = null;
+      qualities.clear();
+    }
     // Fall back to muxed if adaptive streams are unavailable.
     if (playUrl == null) {
       playUrl = bestMuxed;
@@ -791,23 +998,25 @@ class YoutubeService {
     );
   }
 
-  /// Probe the primary pair and muxed fallback separately. An explicit HTTP
-  /// 403 marks that path unusable — the signature of YouTube's PO-token/Range
-  /// gating — while timeouts and transport errors fail open so a flaky probe
-  /// can never take down playback that would have worked.
+  /// Probe the selected connections concurrently. Reject explicit HTTP errors;
+  /// a short, inconclusive transport probe must not prevent player retries.
   static Future<({bool primary, bool muxedFallback})> _chosenUrlsUsable(
     String playUrl,
     String? audioUrl,
     String? muxedFallbackUrl,
   ) async {
     Future<bool> usable(String url) async {
+      final client = http.Client();
       try {
-        final resp = await http
+        final resp = await client
             .head(Uri.parse(url))
-            .timeout(const Duration(seconds: 8));
-        return resp.statusCode != 403;
+            .timeout(const Duration(seconds: 2));
+        // Transport failures are inconclusive; explicit HTTP rejection is not.
+        return resp.statusCode >= 200 && resp.statusCode < 400;
       } catch (_) {
         return true;
+      } finally {
+        client.close();
       }
     }
 
@@ -815,14 +1024,19 @@ class YoutubeService {
       usable(playUrl),
       if (audioUrl != null && audioUrl.isNotEmpty) usable(audioUrl),
     ]).then((checks) => !checks.contains(false));
-    final fallbackCheck = audioUrl != null &&
-            audioUrl.isNotEmpty &&
-            muxedFallbackUrl != null &&
-            muxedFallbackUrl.isNotEmpty
+    final fallbackCheck =
+        muxedFallbackUrl != null &&
+            muxedFallbackUrl.isNotEmpty &&
+            muxedFallbackUrl != playUrl
         ? usable(muxedFallbackUrl)
-        : Future<bool>.value(true);
+        : Future<bool>.value(
+            muxedFallbackUrl == playUrl || muxedFallbackUrl == null,
+          );
     final checks = await Future.wait([primaryCheck, fallbackCheck]);
-    return (primary: checks[0], muxedFallback: checks[1]);
+    return (
+      primary: checks[0],
+      muxedFallback: muxedFallbackUrl == playUrl ? checks[0] : checks[1],
+    );
   }
 
   // ============== URL helpers (shared with Lemmy) ==============

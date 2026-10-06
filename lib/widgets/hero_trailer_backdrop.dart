@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import '../services/app_route_observer.dart';
 import '../services/main_page_bridge.dart';
 import '../services/storage_service.dart';
+import '../services/youtube_service.dart';
 import '../services/debrify_image_cache.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
@@ -688,6 +689,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// See [HeroTrailerBackdrop.onPlaybackFailed]. Post-frame so a failure
   /// landing inside a parent build can't re-enter setState mid-build.
   void _notifyPlaybackFailed() {
+    YoutubeService.invalidateStreamUrl(widget.videoUrl);
+    YoutubeService.invalidateStreamUrl(widget.muxedVideoUrl);
     final cb = widget.onPlaybackFailed;
     if (cb == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {

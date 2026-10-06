@@ -41,7 +41,7 @@ Future<YoutubeResolvedStreams?> resolveTitleTrailer(
   final youtubeId = candidates.firstOrNull?.key;
   var streams = youtubeId == null
       ? null
-      : await YoutubeService.resolveStreams(
+      : await YoutubeService.resolvePreviewStreams(
           youtubeId,
           maxHeightOverride: maxHeight,
           preferVp9: false,

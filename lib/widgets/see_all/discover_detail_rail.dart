@@ -518,7 +518,7 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
     if (stale()) return; // moved on — the new title owns the pill now
     // Ambient rail backdrop: resolve at a low cap (small box, weak TV).
     var streams = (ytId != null && ytId.isNotEmpty)
-        ? await YoutubeService.resolveStreams(
+        ? await YoutubeService.resolvePreviewStreams(
             ytId,
             maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
             preferVp9: true,

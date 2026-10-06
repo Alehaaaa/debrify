@@ -1576,7 +1576,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       try {
         // This is a continuously composited backdrop, not the standalone
         // player. Keep iOS within its ambient decode/upload budget.
-        streams = await YoutubeService.resolveStreams(
+        streams = await YoutubeService.resolvePreviewStreams(
           ytId,
           maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
           preferVp9: !PlatformUtil.isIosMobile,
@@ -1743,7 +1743,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
     YoutubeResolvedStreams? streams;
     try {
-      streams = await YoutubeService.resolveStreams(ytId);
+      streams = await YoutubeService.resolveStreams(ytId, includeMetadata: false);
     } catch (_) {
       streams = null;
     }
