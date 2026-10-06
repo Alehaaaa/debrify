@@ -43,6 +43,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   List<LocalDownload> _items = [];
   final Map<String, double> _progress = {};
   StreamSubscription? _status, _moves, _progressSub;
+  Timer? _folderPoll;
   bool _loading = true;
   String? _error;
   String _filter = 'All', _availability = 'All';
@@ -62,6 +63,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       }
       setState(() => _progress[e.task.taskId] = e.progress);
     });
+    // Desktop and iOS do not provide a portable directory-watch API. A small
+    // polling interval keeps files copied in or removed externally reflected
+    // in the library without waiting for a download queue event.
+    _folderPoll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
     _refresh();
   }
 
@@ -93,6 +98,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     _status?.cancel();
     _moves?.cancel();
     _progressSub?.cancel();
+    _folderPoll?.cancel();
     super.dispose();
   }
 

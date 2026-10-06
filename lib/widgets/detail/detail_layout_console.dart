@@ -482,7 +482,9 @@ class _DetailConsoleState extends State<DetailConsole> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: DetailSeasonControl(
-              onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+              onOptions: view.seasonOptions == null
+                  ? null
+                  : () => view.seasonOptions!(view.selectedSeasonNumber),
               seasonNumber: view.selectedSeasonNumber,
               episodeCount: episodes.length,
               canPrev: idx > 0,
@@ -768,7 +770,7 @@ class _DetailConsoleState extends State<DetailConsole> {
         children: [
           DetailSlab('Cast'),
           const SizedBox(height: 10),
-          for (final member in cast.take(6))
+          for (final member in cast)
             Padding(
               padding: const EdgeInsets.only(bottom: 9),
               child: _CastPortrait(member: member),

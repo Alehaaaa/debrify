@@ -1372,6 +1372,13 @@ class _SupportCampaignDialogState extends State<_SupportCampaignDialog> {
 
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   static bool _didAutoUpdateCheck = false;
+  final GlobalKey<NavigatorState> _sectionNavigatorKey =
+      GlobalKey<NavigatorState>();
+  late final _SectionNavigatorObserver _sectionNavigatorObserver =
+      _SectionNavigatorObserver((playerOpen) {
+        if (mounted) setState(() => _playerRouteOpen = playerOpen);
+      });
+  bool _playerRouteOpen = false;
 
   // Home (the Stremio board; old index-0 Home retired) — unless a startup
   // channel is pending, in which case boot straight to IPTV (13) so the page
@@ -2942,6 +2949,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (!visible.contains(index)) {
       return;
     }
+    // Tabs are section roots. Selecting one — including the already-active
+    // tab — dismisses every page, sheet and dialog opened inside a section.
+    _sectionNavigatorKey.currentState?.popUntil((route) => route.isFirst);
     final changed = _selectedIndex != index;
     // A tab switch invalidates a pending "press back again to exit" arm —
     // otherwise tap-tap-back inside the 2s window could exit on what the
@@ -4104,7 +4114,20 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                               children: [
                                 // Page fills the whole area so its own
                                 // background covers the animated backdrop.
-                                Positioned.fill(child: _buildAnimatedPage()),
+                                Positioned.fill(
+                                  child: Navigator(
+                                    key: _sectionNavigatorKey,
+                                    observers: [_sectionNavigatorObserver],
+                                    pages: [
+                                      MaterialPage<void>(
+                                        key: const ValueKey('section-root'),
+                                        child: _buildAnimatedPage(),
+                                      ),
+                                    ],
+                                    onPopPage: (route, result) =>
+                                        route.didPop(result),
+                                  ),
+                                ),
                                 // Invisible top strip keeps frameless desktop
                                 // windows draggable now that the AppBar is gone.
                                 if (isDesktopWide)
@@ -4186,7 +4209,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                         ),
                       if (!isDesktopWide &&
                           _phoneNavLoaded &&
-                          _phoneNavStyle == 'floating')
+                          _phoneNavStyle == 'floating' &&
+                          !_playerRouteOpen)
                         MobileFloatingNav(
                           currentIndex: nonTvSelected == -1 ? 0 : nonTvSelected,
                           items: [
@@ -4253,6 +4277,37 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   int? get _iptvStartupChannelNumber {
     final number = StorageService.startupIptvChannelCached?['channelNumber'];
     return number is num ? number.toInt() : null;
+  }
+}
+
+/// Keeps shell controls above normal section routes while letting the player
+/// remain genuinely fullscreen.
+class _SectionNavigatorObserver extends NavigatorObserver {
+  _SectionNavigatorObserver(this._onPlayerVisibilityChanged);
+
+  final ValueChanged<bool> _onPlayerVisibilityChanged;
+
+  void _update(Route<dynamic>? route) {
+    if (route is! FrozenLegacyPageRoute) return;
+    _onPlayerVisibilityChanged(true);
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(route);
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is FrozenLegacyPageRoute) {
+      _onPlayerVisibilityChanged(false);
+    }
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route is FrozenLegacyPageRoute) {
+      _onPlayerVisibilityChanged(false);
+    }
   }
 }
 

@@ -11,6 +11,7 @@ import '../../utils/app_storage.dart';
 import '../../utils/streamed_file_copy.dart';
 import '../iptv_catalog_key.dart';
 import 'profile_scope.dart';
+import 'profile_storage_paths.dart';
 
 class DebrifyTvBackupOmission {
   static const String key = 'debrifyTvChannelsOmitted';
@@ -189,7 +190,7 @@ class ProfileDatabaseSnapshot {
     }
     final attachmentCap = debugExportBudgetOverride ?? maxAttachmentBytes;
     final budget = debugExportBudgetOverride ?? maxExportRawBytes;
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final support = await AppStorage.support();
     final scratch = Directory(p.join(support.path, 'profile-snapshot-tmp'));
     await scratch.create(recursive: true);
@@ -303,10 +304,7 @@ class ProfileDatabaseSnapshot {
     File snapshot,
     String name,
   ) async {
-    final db = await openDatabase(
-      source.path,
-      singleInstance: false,
-    );
+    final db = await openDatabase(source.path, singleInstance: false);
     try {
       final integrity = await db.rawQuery('PRAGMA integrity_check');
       if (!_integrityOk(integrity)) {
@@ -511,7 +509,7 @@ class ProfileDatabaseSnapshot {
     Map<Object?, Object?> attachments, {
     ProfileDatabaseFileResolver? fileResolver,
   }) async {
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     var total = 0;
     var restored = 0;
     for (final entry in attachments.entries) {
@@ -622,7 +620,7 @@ class ProfileDatabaseSnapshot {
     Map<String, String> resourceIds,
   ) async {
     if (resourceIds.isEmpty) return;
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     for (final name in databaseNames) {
       final file = scope.fileIn(documents, 'documents', name);
       if (!await file.exists()) continue;

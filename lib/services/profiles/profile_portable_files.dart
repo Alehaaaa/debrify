@@ -15,6 +15,7 @@ import 'profile_avatar_policy.dart';
 import 'profile_avatar_storage.dart';
 import 'profile_preferences.dart';
 import 'profile_scope.dart';
+import 'profile_storage_paths.dart';
 
 /// Allowlisted portable files. Device assets, caches, executable paths, OS
 /// grants, downloads, and recordings deliberately never enter this codec.
@@ -32,7 +33,7 @@ class ProfilePortableFiles {
   /// whole import on an avatar path; they safely ignore an unknown profile
   /// field, so separating the attachment is the compatibility boundary.
   static Future<Map<String, Object?>> export(ProfileScope scope) async {
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     final documents = scope.storageDirectory(root, 'documents');
     final engines = Directory(p.join(documents.path, 'engines'));
     if (!await engines.exists()) return const <String, Object?>{};
@@ -110,8 +111,9 @@ class ProfilePortableFiles {
     // this profile actually uses in favour of unused ones.
     final fonts = _customFontRegistry(device)
       ..sort(
-        (left, right) => (left.id == selectedSubtitleFontId ? 0 : 1)
-            .compareTo(right.id == selectedSubtitleFontId ? 0 : 1),
+        (left, right) => (left.id == selectedSubtitleFontId ? 0 : 1).compareTo(
+          right.id == selectedSubtitleFontId ? 0 : 1,
+        ),
       );
     for (final font in fonts) {
       final path = font.path;
@@ -236,7 +238,7 @@ class ProfilePortableFiles {
     List<int> bytes,
   ) async {
     final library = LaunchAnimationLibrary.instance;
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     final temporary = File(p.join(root.path, '.launch-restore-$id.lottie'));
     try {
       if ((await library.list()).any((entry) => entry.id == id)) return id;
@@ -300,7 +302,9 @@ class ProfilePortableFiles {
       if (decoded is! List) return <SubtitleFont>[];
       return decoded
           .whereType<Map>()
-          .map((value) => SubtitleFont.fromJson(Map<String, dynamic>.from(value)))
+          .map(
+            (value) => SubtitleFont.fromJson(Map<String, dynamic>.from(value)),
+          )
           .toList();
     } on Object {
       // A damaged local registry must not prevent the rest of a backup.
@@ -339,7 +343,7 @@ class ProfilePortableFiles {
     ProfileScope scope,
     Map<Object?, Object?> attachments,
   ) async {
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     var total = 0;
     var restored = 0;
     for (final entry in attachments.entries) {
@@ -400,7 +404,7 @@ class ProfilePortableFiles {
     );
     if (!ProfileAvatarPolicy.userImagesSupported) return null;
 
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     final stagingDirectory = Directory(
       p.join(
         scope.storageDirectory(root, 'documents').path,

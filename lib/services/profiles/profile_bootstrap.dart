@@ -21,6 +21,7 @@ import 'profile_avatar_mutation.dart';
 import 'profile_registry.dart';
 import 'profile_runtime.dart';
 import 'profile_scope.dart';
+import 'profile_storage_migration.dart';
 
 /// Establishes exactly one storage mode before any profile-sensitive service
 /// is allowed to warm. The registry commit is the authority; preference flags
@@ -195,6 +196,10 @@ class ProfileBootstrap {
     }
     _registry = opened;
     _installAuthorityCallback(opened);
+    // v1 profile generations and avatars were incorrectly stored under the
+    // user-visible Documents directory. Move them before any profile service
+    // can open a generation; this safely retries after an interrupted copy.
+    await ProfileStorageMigration.migrateDocumentsProfiles();
     await ProfileCleanupLedger.resume(opened);
     TvOsProfileRecoveryStore.checkpointCallback = opened.checkpointTvOsRecovery;
     if (tvOsRecovery != null) {

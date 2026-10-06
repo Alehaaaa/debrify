@@ -264,7 +264,7 @@ class _DetailDossierState extends State<DetailDossier> {
                 child: ListView.separated(
                   controller: _identityCastScroll,
                   scrollDirection: Axis.horizontal,
-                  itemCount: cast.length.clamp(0, 8),
+                  itemCount: cast.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 11),
                   itemBuilder: (context, i) => _CastChip(member: cast[i]),
                 ),
@@ -323,7 +323,9 @@ class _DetailDossierState extends State<DetailDossier> {
             child: Row(
               children: [
                 DetailSeasonControl(
-                  onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+                  onOptions: view.seasonOptions == null
+                      ? null
+                      : () => view.seasonOptions!(view.selectedSeasonNumber),
                   seasonNumber: view.selectedSeasonNumber,
                   episodeCount: episodes.length,
                   canPrev: idx > 0,
@@ -411,7 +413,7 @@ class _DetailDossierState extends State<DetailDossier> {
               child: ListView.separated(
                 controller: _referenceCastScroll,
                 scrollDirection: Axis.horizontal,
-                itemCount: cast.length.clamp(0, 12),
+                itemCount: cast.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, i) => _CastChip(member: cast[i]),
               ),

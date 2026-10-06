@@ -2162,6 +2162,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     String url,
     String? providedFileName,
     String? torrentName,
+    String? metadata,
   ) async {
     // Determine file name: provided > last path segment
     String filename = (providedFileName?.trim().isNotEmpty ?? false)
@@ -2172,9 +2173,27 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
     filename = _sanitizeName(filename);
 
-    // Use torrent name for folder if provided, otherwise use base name of file
+    // Catalog-linked downloads get a stable, human-friendly library layout.
+    // The original torrent name remains in the durable queue record and is
+    // never discarded merely because the file is named more nicely.
+    final media = DownloadedMedia.fromMetadata(metadata);
     String folder;
-    if (torrentName != null && torrentName.trim().isNotEmpty) {
+    if (media != null) {
+      final title = _sanitizeName(media.title);
+      if (media.type == 'series') {
+        final season = media.season == null
+            ? 'Season 00'
+            : 'Season ${media.season!.toString().padLeft(2, '0')}';
+        folder = path.join('Shows', title, season);
+      } else {
+        folder = path.join(
+          'Movies',
+          _sanitizeName(
+            '${media.title}${media.year == null ? '' : ' (${media.year})'}',
+          ),
+        );
+      }
+    } else if (torrentName != null && torrentName.trim().isNotEmpty) {
       folder = _sanitizeName(torrentName.trim());
     } else {
       // Make a folder from base name (without extension)
@@ -2281,7 +2300,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
         }
       } catch (_) {}
     }
-    final String displayName =
+    var displayName =
         providedName ??
         (() {
           try {
@@ -2293,6 +2312,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
             return 'file';
           }
         })();
+    displayName = _libraryFileName(
+      DownloadedMedia.fromMetadata(meta),
+      displayName,
+    );
 
     // Directory prompts and platform checks above can outlive the initiating
     // profile session. Never publish its queue entry into a later session.
@@ -2413,6 +2436,21 @@ sheetAnimationStyle: kMenuSheetAnimation,
       displayName: displayName,
       directory: '',
     );
+  }
+
+  static String _libraryFileName(DownloadedMedia? media, String fallback) {
+    if (media == null) return fallback;
+    final extension = path.extension(fallback);
+    final title = _sanitizeName(media.title);
+    if (media.type == 'series' &&
+        media.season != null &&
+        media.episode != null) {
+      return '$title - S${media.season!.toString().padLeft(2, '0')}E${media.episode!.toString().padLeft(2, '0')}$extension';
+    }
+    if (media.type == 'movie') {
+      return '${_sanitizeName('${media.title}${media.year == null ? '' : ' (${media.year})'}')}$extension';
+    }
+    return fallback;
   }
 
   Future<void> pause(Task task) async {
@@ -3993,6 +4031,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               finalUrl,
               null,
               p.torrentName,
+              p.meta,
             );
             name = fn;
           }
@@ -4105,6 +4144,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               finalUrl,
               finalFileName,
               p.torrentName,
+              p.meta,
             );
             final sanitizedRelativeDir =
                 p.relativeSubDir != null && p.relativeSubDir!.trim().isNotEmpty

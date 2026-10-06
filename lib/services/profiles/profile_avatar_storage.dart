@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import '../../models/profiles/profile_avatar.dart';
 import '../../utils/app_storage.dart';
 import 'profile_scope.dart';
+import 'profile_storage_paths.dart';
 
 /// Resolves where a profile's avatar files live.
 ///
@@ -50,10 +51,10 @@ class ProfileAvatarStorage {
   }
 
   static Future<Directory> directoryFor(String profileId) async =>
-      directoryIn(await AppStorage.documents(), profileId);
+      directoryIn(await ProfileStoragePaths.profileDataRoot(), profileId);
 
   static Future<File> fileFor(String profileId, ProfileAvatar avatar) async =>
-      fileIn(await AppStorage.documents(), profileId, avatar);
+      fileIn(await ProfileStoragePaths.profileDataRoot(), profileId, avatar);
 
   /// The readable file for [avatar], or null when there is nothing to read —
   /// a non-file kind, or a file that is simply absent. Absence is an ordinary

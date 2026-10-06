@@ -8,8 +8,14 @@ import 'profile_runtime.dart';
 class ProfileStoragePaths {
   ProfileStoragePaths._();
 
+  /// Private profile files belong in the native application-data location,
+  /// never in user-visible Documents. `support` maps to Application Support
+  /// on Apple platforms, AppData on desktop and the app-private files area on
+  /// Android (with the existing cache fallback on physical tvOS).
+  static Future<Directory> profileDataRoot() => AppStorage.support();
+
   static Future<String> documentsFile(String relativePath) async =>
-      _resolve(await AppStorage.documents(), 'documents', relativePath);
+      _resolve(await profileDataRoot(), 'documents', relativePath);
 
   static Future<String> supportFile(String relativePath) async =>
       _resolve(await AppStorage.support(), 'support', relativePath);
@@ -18,7 +24,7 @@ class ProfileStoragePaths {
       _resolve(await AppStorage.cache(), 'cache', relativePath);
 
   static Future<String> documentsDirectory() async {
-    final root = await AppStorage.documents();
+    final root = await profileDataRoot();
     if (ProfileRuntime.mode == ProfileRuntimeMode.legacyCompatibility) {
       return root.path;
     }

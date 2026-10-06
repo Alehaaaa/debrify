@@ -6,10 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import '../models/downloaded_media.dart';
 import '../utils/app_storage.dart';
+import '../utils/movie_parser.dart';
 import 'download_service.dart';
 import 'profiles/profile_runtime.dart';
 import 'local_playback_resume_resolver.dart';
 import 'offline_title_store.dart';
+import 'movie_metadata_service.dart';
+import 'tvmaze_service.dart';
 import 'video_player_launcher.dart';
 
 class LocalDownload {
@@ -52,8 +55,20 @@ class DownloadedMediaService {
   static const scannedTaskPrefix = 'local-file:';
 
   static const _videoExtensions = {
-    '.mkv', '.mp4', '.m4v', '.mov', '.avi', '.webm', '.ts', '.m2ts',
-    '.wmv', '.flv', '.mpg', '.mpeg', '.3gp', '.ogv',
+    '.mkv',
+    '.mp4',
+    '.m4v',
+    '.mov',
+    '.avi',
+    '.webm',
+    '.ts',
+    '.m2ts',
+    '.wmv',
+    '.flv',
+    '.mpg',
+    '.mpeg',
+    '.3gp',
+    '.ogv',
   };
 
   @visibleForTesting
@@ -84,12 +99,10 @@ class DownloadedMediaService {
   static Future<List<LocalDownload>> _shared() {
     final running = _inFlight;
     if (running == null) return _start();
-    return _queued ??= running
-        .then<void>((_) {}, onError: (_) {})
-        .then((_) {
-          _queued = null;
-          return _start();
-        });
+    return _queued ??= running.then<void>((_) {}, onError: (_) {}).then((_) {
+      _queued = null;
+      return _start();
+    });
   }
 
   static Future<List<LocalDownload>> _start() {
@@ -172,8 +185,7 @@ class DownloadedMediaService {
 
     // The download folder is the source of truth for finished files.
     final scanned = <String, FileStat>{};
-    final folders =
-        await (debugFolders?.call() ?? service.libraryFolders());
+    final folders = await (debugFolders?.call() ?? service.libraryFolders());
     for (final folder in folders) {
       final dir = Directory(folder);
       if (!await dir.exists()) continue;
@@ -224,13 +236,22 @@ class DownloadedMediaService {
       if (fromRecord != null) {
         cache.put(path, fromRecord, profile: owner);
       }
-      final media =
-          fromRecord ??
-          cached?.media ??
-          DownloadedMedia.fromFilename(
-            p.basename(path),
-            packName: _packName(path, folders),
-          );
+      final guessed = DownloadedMedia.fromFilename(
+        p.basename(path),
+        packName: _packName(path, folders),
+      );
+      var media =
+          fromRecord ?? cached?.media ?? guessed ?? _movieCandidate(path);
+      // Files copied into the download folder do not have a queue record.
+      // Resolve their parsed title once, then keep the result in the same
+      // path cache used for completed torrent downloads.
+      if (linked.isEmpty && cached?.media == null && media != null) {
+        final resolved = await _resolveManualMedia(media, p.basename(path));
+        if (resolved != null) {
+          media = resolved;
+          cache.put(path, resolved, profile: owner);
+        }
+      }
       final record = linked.isNotEmpty
           ? linked.first
           : TaskRecord(
@@ -279,6 +300,54 @@ class DownloadedMediaService {
     return result;
   }
 
+  static Future<DownloadedMedia?> _resolveManualMedia(
+    DownloadedMedia parsed,
+    String filename,
+  ) async {
+    try {
+      if (parsed.type == 'series') {
+        final show = await TVMazeService.searchShow(parsed.title);
+        if (show == null) return null;
+        final imdb = show['externals'] is Map
+            ? (show['externals'] as Map)['imdb'] as String?
+            : null;
+        if (imdb == null || imdb.isEmpty) return null;
+        final image = show['image'];
+        return DownloadedMedia(
+          id: imdb,
+          title: (show['name'] as String?) ?? parsed.title,
+          type: 'series',
+          poster: image is Map ? image['medium'] as String? : null,
+          year: (show['premiered'] as String?)?.split('-').first,
+          season: parsed.season,
+          episode: parsed.episode,
+        );
+      }
+      final movie = await MovieMetadataService.lookupFromFilename(filename);
+      if (movie == null) return null;
+      return DownloadedMedia(
+        id: movie.imdbId,
+        title: movie.title,
+        type: 'movie',
+        poster: movie.poster,
+        year: movie.year?.toString(),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static DownloadedMedia? _movieCandidate(String path) {
+    final parsed = MovieParser.parseFilename(p.basename(path));
+    if (!parsed.hasYear || parsed.title == null) return null;
+    return DownloadedMedia(
+      id: 'download-file:${parsed.title!.toLowerCase()}',
+      title: parsed.title!,
+      type: 'movie',
+      year: parsed.year?.toString(),
+    );
+  }
+
   /// The folder a file sits in, when that folder isn't the download root —
   /// usually the season pack it came from.
   static String? _packName(String path, List<String> roots) {
@@ -320,8 +389,7 @@ class DownloadedMediaService {
     };
     final done = {
       for (final item in finished) _episodeKey(item),
-      for (final item in finished)
-        p.basename(item.location).toLowerCase(),
+      for (final item in finished) p.basename(item.location).toLowerCase(),
     };
     final best = <String, LocalDownload>{};
     for (final item in transfers) {
@@ -348,7 +416,10 @@ class DownloadedMediaService {
   static Future<void> remove(LocalDownload item) async {
     if (item.isReady && !item.location.startsWith('content://')) {
       final file = File(item.location);
-      if (await file.exists()) await file.delete();
+      if (await file.exists()) {
+        await file.delete();
+        await _removeEmptyParents(file.parent);
+      }
     }
     for (final record in [
       if (!item.isScanned) item.record,
@@ -362,6 +433,27 @@ class DownloadedMediaService {
       final cache = await _MediaCache.open();
       cache.remove(_norm(item.location));
       await cache.save();
+    }
+  }
+
+  /// Tidy only folders owned by the configured download roots. This avoids
+  /// walking out into a user-selected folder (or, on desktop, Downloads).
+  static Future<void> _removeEmptyParents(Directory directory) async {
+    final roots =
+        (await (debugFolders?.call() ??
+                DownloadService.instance.libraryFolders()))
+            .map(_norm)
+            .toSet();
+    var current = directory;
+    while (!roots.contains(_norm(current.path))) {
+      try {
+        if (!await current.exists() || !await current.list().isEmpty) return;
+        final parent = current.parent;
+        await current.delete();
+        current = parent;
+      } catch (_) {
+        return;
+      }
     }
   }
 
@@ -475,10 +567,11 @@ class _MediaCache {
     File? file;
     final entries = <String, Map<String, dynamic>>{};
     try {
-      final f = await (DownloadedMediaService.debugCacheFile?.call() ??
-          AppStorage.support().then(
-            (dir) => File(p.join(dir.path, 'downloaded_media_cache.json')),
-          ));
+      final f =
+          await (DownloadedMediaService.debugCacheFile?.call() ??
+              AppStorage.support().then(
+                (dir) => File(p.join(dir.path, 'downloaded_media_cache.json')),
+              ));
       file = f;
       if (await f.exists()) {
         final decoded = jsonDecode(await f.readAsString());
