@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/downloaded_media.dart';
@@ -324,7 +325,8 @@ class OfflineTitleStore {
     }
     try {
       final cached = source == null
-          ? await DebrifyImageCache.manager.getFileFromCache(url)
+          ? (await DebrifyImageCache.manager.getFileFromCache(url) ??
+                await DefaultCacheManager().getFileFromCache(url))
           : null;
       final from =
           source ??

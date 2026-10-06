@@ -589,35 +589,34 @@ class DownloadService {
       final path = await _recordsFilePath();
       final raw = await File(path).readAsString();
       final data = await _decodeRecords(raw);
-      if (data is Map<String, dynamic>) {
-        final all = data.map(
-          (k, v) => MapEntry(k, (v as Map).cast<String, dynamic>()),
+
+      final all = data.map(
+        (k, v) => MapEntry(k, (v as Map).cast<String, dynamic>()),
+      );
+      if (ProfileRuntime.isProfileCommitted) {
+        final owner = _activeOwnerProfileId;
+        _records = Map<String, Map<String, dynamic>>.fromEntries(
+          all.entries.where((entry) {
+            final storedOwner = entry.value['ownerProfileId']?.toString();
+            return (storedOwner ?? 'legacy-admin-v1') == owner;
+          }),
         );
-        if (ProfileRuntime.isProfileCommitted) {
-          final owner = _activeOwnerProfileId;
-          _records = Map<String, Map<String, dynamic>>.fromEntries(
-            all.entries.where((entry) {
-              final storedOwner = entry.value['ownerProfileId']?.toString();
-              return (storedOwner ?? 'legacy-admin-v1') == owner;
-            }),
-          );
-          var sanitized = false;
-          for (final record in _records.values) {
-            final rawMeta = record['meta'];
-            if (rawMeta is! String || rawMeta.isEmpty) continue;
-            try {
-              final decoded = jsonDecode(rawMeta);
-              if (decoded is Map<String, dynamic> &&
-                  decoded.remove('apiKey') != null) {
-                record['meta'] = jsonEncode(decoded);
-                sanitized = true;
-              }
-            } catch (_) {}
-          }
-          if (sanitized) await _saveRecords();
-        } else {
-          _records = all;
+        var sanitized = false;
+        for (final record in _records.values) {
+          final rawMeta = record['meta'];
+          if (rawMeta is! String || rawMeta.isEmpty) continue;
+          try {
+            final decoded = jsonDecode(rawMeta);
+            if (decoded is Map<String, dynamic> &&
+                decoded.remove('apiKey') != null) {
+              record['meta'] = jsonEncode(decoded);
+              sanitized = true;
+            }
+          } catch (_) {}
         }
+        if (sanitized) await _saveRecords();
+      } else {
+        _records = all;
       }
     } catch (_) {
       _records = {};
@@ -1592,7 +1591,9 @@ class DownloadService {
 
     if (Platform.isAndroid) {
       await AndroidDownloadHistory.instance.initialize();
-      _androidEventsSub = AndroidNativeDownloader.events.listen((event) async {
+      _androidEventsSub ??= AndroidNativeDownloader.events.listen((
+        event,
+      ) async {
         if (!_profileViewAttached) return;
         final eventOwner = event['ownerProfileId']?.toString();
         if (ProfileRuntime.isProfileCommitted &&
@@ -4693,7 +4694,7 @@ class _PendingRequest {
   final BuildContext? context;
   final String? torrentName;
   final String contentKey;
-  bool canceled;
+  bool canceled = false;
   String? destPath;
   final String? relativeSubDir;
   final String? treeUri;
@@ -4716,7 +4717,6 @@ class _PendingRequest {
     required this.context,
     required this.torrentName,
     required this.contentKey,
-    this.canceled = false,
     this.destPath,
     this.relativeSubDir,
     this.treeUri,

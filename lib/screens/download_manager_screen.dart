@@ -32,6 +32,7 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
   StreamSubscription<TaskProgressUpdate>? _progressSub;
   StreamSubscription<TaskStatusUpdate>? _statusSub;
   StreamSubscription? _bytesSub;
+  StreamSubscription<MoveProgressUpdate>? _moveSub;
 
   List<TaskRecord> _records = [];
   Map<String, DownloadRecordDetails> _recordDetails = {};
@@ -90,7 +91,7 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       });
     }, onError: (_) {});
 
-    DownloadService.instance.moveProgressStream.listen((move) {
+    _moveSub = DownloadService.instance.moveProgressStream.listen((move) {
       setState(() {
         if (move.failed) {
           _moveFailed.add(move.taskId);
@@ -302,6 +303,7 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     _progressSub?.cancel();
     _statusSub?.cancel();
     _bytesSub?.cancel();
+    _moveSub?.cancel();
     super.dispose();
   }
 

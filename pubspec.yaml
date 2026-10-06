@@ -72,6 +72,7 @@ dependencies:
   device_info_plus: ^13.2.0
   flutter_sharing_intent: ^2.0.4
   collection: ^1.19.1
+  file: ^7.0.1
   synchronized: ^3.4.0
 
 
@@ -187,7 +188,6 @@ dependency_overrides:
     path: packages/path_provider_tvos_patched
 
 dev_dependencies:
-  file: ^7.0.1
   flutter_test:
     sdk: flutter
   path_provider_platform_interface: ^2.1.2
