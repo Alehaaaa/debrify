@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -85,10 +86,11 @@ class HoldFeedbackController {
 
 /// Press feedback for a tile — the one every tile in the app wears.
 ///
-/// **Pointer** (touch, mouse): a frosted-glass press. The tile sinks a few
-/// percent under the finger, and a lens of real backdrop blur — a frosted
-/// disc with a soft light tint and a bright glass rim — grows from the touch
-/// point while the finger stays down. On release the lens floods the tile
+/// **Pointer** (touch, mouse): a frosted-glass *hold*. A plain tap shows
+/// nothing; once a press outlasts a short grace, the tile sinks a few percent
+/// under the finger and a lens of real backdrop blur — a frosted disc with a
+/// soft light tint and a bright glass rim — grows from the touch point while
+/// the finger stays down. On release the lens floods the tile
 /// and thaws away as the tile springs back. Painted on top of the tile
 /// (Material ink paints *behind* it, where opaque artwork hides it), and the
 /// blur only exists for the length of a press, so a resting grid costs
@@ -126,6 +128,12 @@ class _HoldFeedbackState extends State<HoldFeedback>
   /// How far the tile sinks under a press.
   static const double _sink = 0.03;
 
+  /// A press shows nothing until it has lasted this long: an ordinary tap
+  /// (well under it) opens the tile without any glass. Past it the press is
+  /// a hold in the making, and the lens grows over the rest of
+  /// [kHoldDuration] — fully grown just as the hold menu opens.
+  static const Duration _grace = Duration(milliseconds: 180);
+
   /// TV hold ring (0 → 1 over the dwell).
   late final AnimationController _ring = AnimationController(vsync: this)
     ..addStatusListener((status) {
@@ -137,7 +145,7 @@ class _HoldFeedbackState extends State<HoldFeedback>
   /// finger — it never buries the tile).
   late final AnimationController _spread = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 360),
+    duration: kHoldDuration - _grace,
   );
 
   /// Release flood (0 → 1: the lens sweeps the whole tile as it thaws).
@@ -162,7 +170,12 @@ class _HoldFeedbackState extends State<HoldFeedback>
   int? _pointer;
   Offset? _downAt;
   Offset _origin = Offset.zero;
+
+  /// The glass is showing: the press outlasted [_grace].
   bool _pressed = false;
+
+  /// Pending [_grace] for the press in progress.
+  Timer? _arm;
 
   @override
   void initState() {
@@ -184,6 +197,7 @@ class _HoldFeedbackState extends State<HoldFeedback>
   @override
   void dispose() {
     if (widget.controller?._state == this) widget.controller!._state = null;
+    _arm?.cancel();
     _ring.dispose();
     _spread.dispose();
     _flood.dispose();
@@ -216,6 +230,14 @@ class _HoldFeedbackState extends State<HoldFeedback>
     _pointer = event.pointer;
     _downAt = event.position;
     _origin = event.localPosition;
+    _arm?.cancel();
+    _arm = Timer(_grace, _engage);
+  }
+
+  /// The press outlasted [_grace]: frost and sink.
+  void _engage() {
+    _arm = null;
+    if (!mounted || _pointer == null) return;
     _pressed = true;
     _thaw.value = 0;
     _flood.value = 0;
@@ -236,11 +258,14 @@ class _HoldFeedbackState extends State<HoldFeedback>
   void _release({bool fast = false}) {
     _pointer = null;
     _downAt = null;
+    // Lifted inside the grace: a plain tap, which never shows the glass.
+    _arm?.cancel();
+    _arm = null;
     if (!_pressed) return;
     _pressed = false;
     _depth.reverse();
-    // A tap or a lift: the lens sweeps the tile while it thaws, so even a
-    // quick tap reads. A scroll just lets the glass melt where it is.
+    // A held press lifting: the lens sweeps the tile while it thaws. A scroll
+    // just lets the glass melt where it is.
     if (!fast) _flood.forward(from: 0);
     _thaw.forward(from: 0);
   }
@@ -349,10 +374,7 @@ class _FrostLens extends StatelessWidget {
           rect.bottomLeft,
           rect.bottomRight,
         ].map((c) => (c - origin).distance).reduce(math.max);
-        final held = (size.shortestSide * _heldShare).clamp(
-          _heldMin,
-          _heldMax,
-        );
+        final held = (size.shortestSide * _heldShare).clamp(_heldMin, _heldMax);
         final heldRadius = held * (0.35 + 0.65 * grow);
         final radius = heldRadius + (reach - heldRadius) * flood;
         final lens = Rect.fromCircle(center: origin, radius: radius);

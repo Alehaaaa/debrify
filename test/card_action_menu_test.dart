@@ -192,32 +192,49 @@ void main() {
       matching: find.byType(BackdropFilter),
     );
 
-    testWidgets('a press frosts the tile under the finger and thaws after', (
-      tester,
-    ) async {
+    bool sunk(WidgetTester tester) => tester
+        .widgetList<Transform>(
+          find.descendant(
+            of: find.byType(HoldFeedback),
+            matching: find.byType(Transform),
+          ),
+        )
+        .any((t) => t.transform.storage[0] < 1); // x scale
+
+    testWidgets('a plain tap never shows the glass', (tester) async {
+      await tester.pumpWidget(host());
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(HoldFeedback)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 120));
+      expect(ripple(), findsNothing);
+      expect(sunk(tester), isFalse);
+      await gesture.up();
+      // Nothing on the way out either — no flood, no thaw.
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(ripple(), findsNothing);
+        expect(sunk(tester), isFalse);
+      }
+    });
+
+    testWidgets('a held press frosts the tile and thaws after', (tester) async {
       await tester.pumpWidget(host());
       expect(ripple(), findsNothing);
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(HoldFeedback)),
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200)); // past the grace
       await tester.pump(const Duration(milliseconds: 100));
       expect(ripple(), findsOneWidget);
-      // …and the tile sinks under the finger.
-      final sink = tester.widget<Transform>(
-        find
-            .descendant(
-              of: find.byType(HoldFeedback),
-              matching: find.byType(Transform),
-            )
-            .first,
-      );
-      expect(sink.transform.storage[0], lessThan(1)); // x scale
+      expect(sunk(tester), isTrue);
       // A pointer press never draws the TV ring.
       expect(find.byType(CircularProgressIndicator), findsNothing);
       await gesture.up();
       await tester.pumpAndSettle();
       expect(ripple(), findsNothing);
+      expect(sunk(tester), isFalse);
     });
 
     testWidgets('scrolling away lets the glass go', (tester) async {
@@ -225,8 +242,9 @@ void main() {
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(HoldFeedback)),
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.pump(const Duration(milliseconds: 100));
+      expect(ripple(), findsOneWidget);
       await gesture.moveBy(const Offset(0, 40));
       await tester.pumpAndSettle();
       expect(ripple(), findsNothing);
