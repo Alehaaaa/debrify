@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/trakt/trakt_calendar_entry.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
 import 'calendar_display_preferences.dart';
+import 'card_action_menu.dart';
+import 'hold_feedback.dart';
 
 /// Bottom sheet showing all episodes airing on a specific day.
 ///
@@ -15,11 +18,16 @@ class TraktCalendarDaySheet extends StatelessWidget {
     required this.date,
     required this.entries,
     required this.onEpisodeSelected,
+    this.onEpisodeOptions,
   });
 
   final DateTime date;
   final List<TraktCalendarEntry> entries;
   final void Function(TraktCalendarEntry entry) onEpisodeSelected;
+
+  /// Hold / right-click on an episode: the calendar's episode menu. The sheet
+  /// stays open underneath it.
+  final void Function(TraktCalendarEntry entry)? onEpisodeOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +68,9 @@ class TraktCalendarDaySheet extends StatelessWidget {
                     Navigator.of(ctx).pop();
                     onEpisodeSelected(sorted[i]);
                   },
+                  onLongPress: onEpisodeOptions == null
+                      ? null
+                      : () => onEpisodeOptions!(sorted[i]),
                 ),
               ),
             ),
@@ -102,11 +113,13 @@ class _EpisodeRow extends StatelessWidget {
     required this.app,
     required this.entry,
     required this.onTap,
+    this.onLongPress,
   });
 
   final AppTheme app;
   final TraktCalendarEntry entry;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -120,8 +133,15 @@ class _EpisodeRow extends StatelessWidget {
         ? 'SEASON PREMIERE'
         : null;
 
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              onLongPress!();
+            },
+      onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
       borderRadius: app.shape.br(8),
       child: Padding(
         padding: const EdgeInsets.all(8),
@@ -196,6 +216,11 @@ class _EpisodeRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return HoldFeedback(
+      enabled: onLongPress != null,
+      borderRadius: BorderRadius.circular(8),
+      child: row,
     );
   }
 }

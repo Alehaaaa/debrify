@@ -14,6 +14,12 @@ import '../services/trakt/trakt_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
 import '../widgets/trakt_calendar_day_sheet.dart';
+import '../widgets/card_action_menu.dart';
+import '../widgets/hold_feedback.dart';
+import '../models/stremio_addon.dart';
+import '../services/offline_title_store.dart';
+import '../services/storage_service.dart';
+import '../services/watched_action_coordinator.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
 import '../widgets/calendar_display_preferences.dart';
@@ -114,6 +120,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     _timeFormatFocusNode.dispose();
     for (final node in _dayFocusNodes.values) {
       node.dispose();
+    }
+    for (final hold in _dayHolds.values) {
+      hold.reset();
     }
     super.dispose();
   }
@@ -311,6 +320,194 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     }
   }
 
+  /// Hold-OK per TV day card (and the ring it fills): a short press opens
+  /// the day, a held one opens the episode menu. Kept here beside the focus
+  /// nodes because the cards themselves are stateless list items.
+  final Map<DateTime, TvHoldOk> _dayHolds = {};
+  final Map<DateTime, HoldFeedbackController> _dayHoldFx = {};
+
+  TvHoldOk _holdForDay(_AiringDay day) => _dayHolds.putIfAbsent(
+    _dateOnly(day.day),
+    () => TvHoldOk(
+      // Re-read the day at press time: the list rebuilds as months load.
+      onTap: () {
+        final current = _dayFor(day.day);
+        if (current != null) _openDaySheet(current.day, current.entries);
+      },
+      onHold: () {
+        final current = _dayFor(day.day);
+        if (current != null) _openDayOptions(current);
+      },
+    ),
+  );
+
+  HoldFeedbackController _holdFxForDay(DateTime day) =>
+      _dayHoldFx.putIfAbsent(_dateOnly(day), HoldFeedbackController.new);
+
+  _AiringDay? _dayFor(DateTime day) {
+    final wanted = _dateOnly(day);
+    for (final d in _visibleDays) {
+      if (_dateOnly(d.day) == wanted) return d;
+    }
+    return null;
+  }
+
+  /// A held TV day card: one episode gets its menu straight away; a busier
+  /// day opens its sheet, where each episode has its own hold menu.
+  void _openDayOptions(_AiringDay day) {
+    if (day.entries.length == 1) {
+      _openEpisodeOptions(day.entries.first);
+    } else {
+      _openDaySheet(day.day, day.entries);
+    }
+  }
+
+  bool _episodeMenuOpen = false;
+
+  /// Hold / right-click on a calendar episode: open it, see its day, keep the
+  /// show on My Watchlist, or mark the episode watched.
+  Future<void> _openEpisodeOptions(
+    TraktCalendarEntry entry, {
+    List<TraktCalendarEntry>? dayEntries,
+  }) async {
+    final imdbId = entry.showImdbId;
+    if (_episodeMenuOpen || imdbId == null || imdbId.isEmpty) return;
+    _episodeMenuOpen = true;
+    _CalendarEpisodeAction? action;
+    StremioMeta? show;
+    try {
+      final addon = await OfflineTitleStore.cinemetaAddon();
+      show = StorageService.withMyWatchlistSource(
+        StremioMeta(
+          id: imdbId,
+          imdbId: imdbId,
+          type: 'series',
+          name: entry.showTitle,
+          poster: entry.posterUrl,
+          year: entry.showYear?.toString(),
+        ),
+        addon,
+      );
+      var inWatchlist = false;
+      var watched = false;
+      try {
+        inWatchlist = await StorageService.isInMyWatchlist(show);
+        watched = await StorageService.isEpisodeFinished(
+          seriesTitle: entry.showTitle,
+          season: entry.seasonNumber,
+          episode: entry.episodeNumber,
+          imdbId: imdbId,
+        );
+      } catch (_) {}
+      if (!mounted) return;
+      final code =
+          'S${entry.seasonNumber.toString().padLeft(2, '0')}'
+          'E${entry.episodeNumber.toString().padLeft(2, '0')}';
+      final episodeTitle = entry.episodeTitle?.trim();
+      action = await showCardActionMenu<_CalendarEpisodeAction>(
+        context,
+        title: entry.showTitle,
+        subtitle: episodeTitle == null || episodeTitle.isEmpty
+            ? code
+            : '$code  ·  $episodeTitle',
+        posterUrl: entry.posterUrl,
+        isTelevision: _isTelevision,
+        actions: [
+          const CardMenuAction(
+            value: _CalendarEpisodeAction.open,
+            icon: Icons.info_outline_rounded,
+            label: 'Open episode',
+            description: 'The show\'s page, scrolled to this episode.',
+          ),
+          if (dayEntries != null && dayEntries.length > 1)
+            CardMenuAction(
+              value: _CalendarEpisodeAction.showDay,
+              icon: Icons.calendar_view_day_rounded,
+              label: 'Everything airing that day',
+              description: 'All ${dayEntries.length} episodes of the day.',
+            ),
+          inWatchlist
+              ? const CardMenuAction(
+                  value: _CalendarEpisodeAction.watchlistRemove,
+                  icon: Icons.bookmark_remove_rounded,
+                  label: 'Remove show from My Watchlist',
+                  description: 'Takes the show off your watchlist row.',
+                )
+              : const CardMenuAction(
+                  value: _CalendarEpisodeAction.watchlistAdd,
+                  icon: Icons.bookmark_add_outlined,
+                  label: 'Add show to My Watchlist',
+                  description: 'Saves the show to the watchlist row on Home.',
+                ),
+          watched
+              ? const CardMenuAction(
+                  value: _CalendarEpisodeAction.markUnwatched,
+                  icon: Icons.remove_done_rounded,
+                  label: 'Mark episode as unwatched',
+                  description:
+                      'Clears its watched mark here and on your synced '
+                      'trackers.',
+                )
+              : const CardMenuAction(
+                  value: _CalendarEpisodeAction.markWatched,
+                  icon: Icons.done_rounded,
+                  label: 'Mark episode as watched',
+                  description:
+                      'Marks it watched here and on your synced trackers.',
+                ),
+        ],
+      );
+    } finally {
+      _episodeMenuOpen = false;
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _CalendarEpisodeAction.open:
+        // The day sheet, when this came from one, closes on the way out like
+        // its own tap does.
+        if (dayEntries == null) {
+          _handleEpisodeSelected(entry);
+        } else {
+          Navigator.of(context).popUntil((route) => route is! ModalBottomSheetRoute);
+          _handleEpisodeSelected(entry);
+        }
+      case _CalendarEpisodeAction.showDay:
+        _openDaySheet(entry.firstAiredLocal, dayEntries!);
+      case _CalendarEpisodeAction.watchlistAdd:
+      case _CalendarEpisodeAction.watchlistRemove:
+        final add = action == _CalendarEpisodeAction.watchlistAdd;
+        try {
+          await StorageService.setMyWatchlistItem(show, add);
+          _snack(add ? 'Added to My Watchlist' : 'Removed from My Watchlist');
+        } catch (_) {
+          _snack('Couldn\'t update My Watchlist');
+        }
+      case _CalendarEpisodeAction.markWatched:
+      case _CalendarEpisodeAction.markUnwatched:
+        final watched = action == _CalendarEpisodeAction.markWatched;
+        final result = await WatchedActionCoordinator.setEpisodeWatched(
+          imdbId: imdbId,
+          seriesTitle: entry.showTitle,
+          season: entry.seasonNumber,
+          episode: entry.episodeNumber,
+          watched: watched,
+        );
+        _snack(
+          result.success
+              ? (watched ? 'Marked as watched' : 'Marked as unwatched')
+              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
+                    'didn\'t update',
+        );
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
   FocusNode _focusNodeForDay(DateTime day) {
     final normalized = _dateOnly(day);
     return _dayFocusNodes.putIfAbsent(
@@ -370,6 +567,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
           date: day,
           entries: entries,
           onEpisodeSelected: _handleEpisodeSelected,
+          onEpisodeOptions: (entry) =>
+              _openEpisodeOptions(entry, dayEntries: entries),
         ),
       ),
     );
@@ -1085,6 +1284,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
           focusNode: _focusNodeForDay(airingDay.day),
           onOpen: () => _openDaySheet(airingDay.day, airingDay.entries),
           onEpisodeOpen: _handleEpisodeSelected,
+          onEpisodeOptions: (entry) =>
+              _openEpisodeOptions(entry, dayEntries: airingDay.entries),
+          hold: _isTelevision ? _holdForDay(airingDay) : null,
+          holdFx: _holdFxForDay(airingDay.day),
           onArrowUp: index == 0
               ? () => _monthFocusNode.requestFocus()
               : () => _focusNodeForDay(days[index - 1].day).requestFocus(),
@@ -1185,6 +1388,15 @@ class _SelectorField<T> extends StatelessWidget {
   }
 }
 
+enum _CalendarEpisodeAction {
+  open,
+  showDay,
+  watchlistAdd,
+  watchlistRemove,
+  markWatched,
+  markUnwatched,
+}
+
 class _AiringDay {
   const _AiringDay({required this.day, required this.entries});
 
@@ -1203,6 +1415,9 @@ class _AiringDayCard extends StatelessWidget {
     required this.onArrowUp,
     required this.onArrowDown,
     this.onEpisodeOpen,
+    this.onEpisodeOptions,
+    this.hold,
+    this.holdFx,
     this.isTelevision = false,
   });
 
@@ -1222,6 +1437,14 @@ class _AiringDayCard extends StatelessWidget {
   /// goes to that episode instead of through the day sheet.
   final ValueChanged<TraktCalendarEntry>? onEpisodeOpen;
 
+  /// Hold / right-click on one episode row: the calendar's episode menu.
+  final ValueChanged<TraktCalendarEntry>? onEpisodeOptions;
+
+  /// TV hold-OK on the whole card (see the screen's `_holdForDay`) and the
+  /// ring it fills.
+  final TvHoldOk? hold;
+  final HoldFeedbackController? holdFx;
+
   @override
   Widget build(BuildContext context) {
     final accent = _accentFor(
@@ -1231,7 +1454,11 @@ class _AiringDayCard extends StatelessWidget {
     return Focus(
       focusNode: focusNode,
       onFocusChange: (focused) {
-        if (!focused) return;
+        if (!focused) {
+          hold?.reset();
+          holdFx?.cancel();
+          return;
+        }
         final ctx = focusNode.context;
         if (ctx != null) {
           Scrollable.ensureVisible(
@@ -1243,6 +1470,17 @@ class _AiringDayCard extends StatelessWidget {
         }
       },
       onKeyEvent: (_, event) {
+        final hold = this.hold;
+        if (hold != null &&
+            (isActivateKey(event.logicalKey) ||
+                event.logicalKey == LogicalKeyboardKey.space)) {
+          if (event is KeyDownEvent) {
+            holdFx?.start(hold.dwell);
+          } else if (event is KeyUpEvent) {
+            holdFx?.cancel();
+          }
+          return hold.handle(event);
+        }
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
         final key = event.logicalKey;
         if (key == LogicalKeyboardKey.arrowUp) {
@@ -1298,18 +1536,42 @@ class _AiringDayCard extends StatelessWidget {
                   ),
               ],
             ),
-            child: InkWell(
+            child: HoldFeedback(
+              controller: holdFx,
+              enabled: onEpisodeOptions != null,
               borderRadius: BorderRadius.circular(16),
-              onTap: onOpen,
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: _buildTvLayout(accent),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: onOpen,
+                onLongPress: onEpisodeOptions == null
+                    ? null
+                    : () {
+                        HapticFeedback.mediumImpact();
+                        _optionsForCard();
+                      },
+                onSecondaryTap: CardMenuGesture.secondaryClick(
+                  onEpisodeOptions == null ? null : _optionsForCard,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: _buildTvLayout(accent),
+                ),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  /// The whole card's menu: the episode's own for a one-episode day, else
+  /// the day sheet (each of its rows has a menu).
+  void _optionsForCard() {
+    if (entries.length == 1) {
+      onEpisodeOptions?.call(entries.first);
+    } else {
+      onOpen();
+    }
   }
 
   /// Phone + desktop layout, built like a settings group: a small caps date
@@ -1360,6 +1622,9 @@ class _AiringDayCard extends StatelessWidget {
                   onTap: onEpisodeOpen == null
                       ? onOpen
                       : () => onEpisodeOpen!(entry),
+                  onLongPress: onEpisodeOptions == null
+                      ? null
+                      : () => onEpisodeOptions!(entry),
                 ),
               if (entries.length > 3)
                 InkWell(
@@ -1737,7 +2002,11 @@ class _GroupEpisodeRow extends StatelessWidget {
     required this.app,
     required this.palette,
     required this.onTap,
+    this.onLongPress,
   });
+
+  /// Hold / right-click: the episode menu.
+  final VoidCallback? onLongPress;
 
   final TraktCalendarEntry entry;
 
@@ -1759,8 +2028,15 @@ class _GroupEpisodeRow extends StatelessWidget {
         'E${entry.episodeNumber.toString().padLeft(2, '0')}';
     final title = entry.episodeTitle?.trim();
     final subtitle = title == null || title.isEmpty ? code : '$code · $title';
-    return InkWell(
+    final row = InkWell(
       onTap: onTap,
+      onLongPress: onLongPress == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              onLongPress!();
+            },
+      onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
         child: Row(
@@ -1809,6 +2085,11 @@ class _GroupEpisodeRow extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return HoldFeedback(
+      enabled: onLongPress != null,
+      borderRadius: BorderRadius.zero,
+      child: row,
     );
   }
 }

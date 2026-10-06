@@ -414,7 +414,7 @@ class _StremioCardState extends State<_StremioCard>
           },
           // Touch/desktop counterpart of TV's hold-OK: the menu when there is
           // one, else the old long-press-to-play.
-          onLongPress: widget.onLongPress ?? widget.onQuickPlay,
+          onLongPress: _withHaptic(widget.onLongPress ?? widget.onQuickPlay),
           // Right-click is the pointer's way to the same menu.
           onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
@@ -424,16 +424,23 @@ class _StremioCardState extends State<_StremioCard>
           // RepaintBoundary so the focus pop (scale tween + shadow flip)
           // repaints only this card's layer, not the whole row viewport.
           child: RepaintBoundary(
-            child: widget.heroTag == null
-                ? posterCard
-                : Hero(
-                    tag: widget.heroTag!,
-                    // Card-side shuttle covers BOTH directions (the backdrop hero
-                    // defines none): the flight always shows the poster, growing
-                    // into the detail backdrop on push and shrinking home on pop.
-                    flightShuttleBuilder: _posterFlightShuttle,
-                    child: posterCard,
-                  ),
+            // Touch/mouse holds fill the same ring TV's hold-OK draws above.
+            child: HoldFeedback(
+              enabled: !widget.isTelevision &&
+                  (widget.onLongPress ?? widget.onQuickPlay) != null,
+              borderRadius: BorderRadius.circular(10),
+              child: widget.heroTag == null
+                  ? posterCard
+                  : Hero(
+                      tag: widget.heroTag!,
+                      // Card-side shuttle covers BOTH directions (the backdrop
+                      // hero defines none): the flight always shows the poster,
+                      // growing into the detail backdrop on push and shrinking
+                      // home on pop.
+                      flightShuttleBuilder: _posterFlightShuttle,
+                      child: posterCard,
+                    ),
+            ),
           ),
         ),
       ),
@@ -446,22 +453,11 @@ class _StremioCardState extends State<_StremioCard>
   Widget _holdLayer() {
     return Positioned.fill(
       child: IgnorePointer(
-        child: ColoredBox(
-          color: Colors.black.withValues(alpha: 0.42),
-          child: Center(
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: AnimatedBuilder(
-                animation: _holdController,
-                builder: (_, __) => CircularProgressIndicator(
-                  value: _holdController.value,
-                  strokeWidth: 3,
-                  backgroundColor: Colors.white.withValues(alpha: 0.22),
-                  valueColor: const AlwaysStoppedAnimation(kStremioFocusRing),
-                ),
-              ),
-            ),
+        child: AnimatedBuilder(
+          animation: _holdController,
+          builder: (_, __) => HoldProgressLayer(
+            progress: _holdController.value,
+            ringColor: kStremioFocusRing,
           ),
         ),
       ),
@@ -771,6 +767,8 @@ class _ArtPosterState extends State<_ArtPoster> {
   bool _hovered = false;
   bool _keyDown = false;
 
+  final HoldFeedbackController _holdFx = HoldFeedbackController();
+
   /// Held OK opens [_ArtPoster.onLongPress]; a short press still opens.
   late final TvHoldOk _hold = TvHoldOk(
     onTap: () => widget.onOpen(),
@@ -921,6 +919,7 @@ class _ArtPosterState extends State<_ArtPoster> {
         if (!f) {
           _keyDown = false;
           _hold.reset();
+          _holdFx.cancel();
         }
         if (f) {
           widget.onFocused?.call();
@@ -945,7 +944,14 @@ class _ArtPosterState extends State<_ArtPoster> {
       onKeyEvent: (node, event) {
         if (isActivateKey(event.logicalKey) ||
             event.logicalKey == LogicalKeyboardKey.space) {
-          if (widget.onLongPress != null) return _hold.handle(event);
+          if (widget.onLongPress != null) {
+            if (event is KeyDownEvent) {
+              _holdFx.start(_hold.dwell);
+            } else if (event is KeyUpEvent) {
+              _holdFx.cancel();
+            }
+            return _hold.handle(event);
+          }
           if (event is KeyDownEvent) {
             _keyDown = true;
             return KeyEventResult.handled;
@@ -972,13 +978,18 @@ class _ArtPosterState extends State<_ArtPoster> {
             if (DialogTapGuard.shouldIgnoreTap()) return;
             widget.onOpen();
           },
-          onLongPress: widget.onLongPress,
+          onLongPress: _withHaptic(widget.onLongPress),
           onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              posterCard,
+              HoldFeedback(
+                enabled: widget.onLongPress != null,
+                controller: _holdFx,
+                borderRadius: BorderRadius.circular(10),
+                child: posterCard,
+              ),
               if (widget.showTitle) ...[
                 const SizedBox(height: _kArtTitleGap),
                 Text(
@@ -1282,3 +1293,13 @@ class _ModeToggle extends StatelessWidget {
 /// torrent sources (own loading), renders them as [TorrentResultRow]s, and on
 /// tap plays via the isolated service with the FULL source list + content
 /// metadata (so the in-player Sources switcher + Continue Watching both work).
+
+/// Touch long-press with the buzz every hold in the app gives (Discover's
+/// tiles, the TV hold-OK). Null stays null so the gesture stays unarmed.
+VoidCallback? _withHaptic(VoidCallback? callback) {
+  if (callback == null) return null;
+  return () {
+    HapticFeedback.mediumImpact();
+    callback();
+  };
+}

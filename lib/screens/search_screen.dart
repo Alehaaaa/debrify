@@ -132,6 +132,7 @@ import '../widgets/add_source_picker_dialog.dart';
 import '../widgets/debrid_action_sheet.dart';
 import '../widgets/hero_trailer_backdrop.dart';
 import '../widgets/card_action_menu.dart';
+import '../widgets/hold_feedback.dart';
 import '../widgets/home/card_focus_rise.dart';
 import '../widgets/home/home_theme.dart';
 import '../widgets/home/row_tag_pill.dart';

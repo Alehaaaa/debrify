@@ -7,6 +7,7 @@ import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:debrify/widgets/card_action_menu.dart';
 import 'package:debrify/widgets/catalog_item_tile.dart';
+import 'package:debrify/widgets/hold_feedback.dart';
 import 'package:debrify/widgets/see_all/see_all_poster_grid.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -170,5 +171,89 @@ void main() {
     await tester.tap(find.text('Keep'));
     await tester.pumpAndSettle();
     expect(find.text('Delete download?'), findsNothing);
+  });
+
+  group('HoldFeedback', () {
+    Widget host() => _host(
+      Center(
+        child: HoldFeedback(
+          child: GestureDetector(
+            onLongPress: () {},
+            child: const SizedBox(width: 120, height: 180),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('a held press fills the ring; a tap never shows it', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host());
+      final center = tester.getCenter(find.byType(SizedBox).last);
+
+      // A quick tap: nothing drawn.
+      var gesture = await tester.startGesture(center);
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await gesture.up();
+      await tester.pump();
+
+      // A hold: the ring appears while the finger stays down…
+      gesture = await tester.startGesture(center);
+      await tester.pump(); // the ring's ticker starts on this frame
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // …and goes as soon as it lifts.
+      await gesture.up();
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('dragging away cancels the ring', (tester) async {
+      await tester.pumpWidget(host());
+      final center = tester.getCenter(find.byType(SizedBox).last);
+      final gesture = await tester.startGesture(center);
+      await tester.pump(const Duration(milliseconds: 200));
+      await gesture.moveBy(const Offset(0, 40));
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      await gesture.up();
+    });
+  });
+
+  testWidgets('Fix match lists only movies and shows and returns the pick', (
+    tester,
+  ) async {
+    StremioMeta? picked;
+    String? searched;
+    await tester.pumpWidget(
+      _host(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () async {
+              picked = await showFixMatchDialog(
+                context,
+                initialQuery: 'Some Movie',
+                search: (query) async {
+                  searched = query;
+                  return const [
+                    StremioMeta(id: 'tt1', type: 'movie', name: 'Some Movie'),
+                    StremioMeta(id: 'ch1', type: 'tv', name: 'Some Channel'),
+                  ];
+                },
+              );
+            },
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(searched, 'Some Movie');
+    expect(find.text('Some Channel'), findsNothing);
+    await tester.tap(find.widgetWithText(ListTile, 'Some Movie'));
+    await tester.pumpAndSettle();
+    expect(picked?.id, 'tt1');
   });
 }

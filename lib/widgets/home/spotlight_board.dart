@@ -24,6 +24,7 @@ import '../../utils/artwork_url.dart';
 import '../../utils/dominant_color.dart';
 import '../../utils/dialog_tap_guard.dart';
 import '../card_action_menu.dart';
+import '../hold_feedback.dart';
 import '../../utils/tv_keys.dart';
 import 'row_tag_pill.dart';
 import 'home_row_focus.dart';
@@ -3490,6 +3491,10 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     onHold: () => widget.card.onOptions?.call(),
   );
 
+  /// Draws the hold filling — from the pointer itself, or from [_hold]'s
+  /// dwell on TV.
+  final HoldFeedbackController _holdFx = HoldFeedbackController();
+
   /// Pointer hover — desktop's focus. Kept SEPARATE from [_f] and OR-ed at
   /// paint, so a pointer wandering off a card can never erase a real focus
   /// visual that a keyboard put there.
@@ -4019,9 +4024,19 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
         if (DialogTapGuard.shouldIgnoreTap()) return;
         c.onOpen();
       },
-      onLongPress: c.onOptions,
+      onLongPress: c.onOptions == null
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              c.onOptions!();
+            },
       onSecondaryTap: CardMenuGesture.secondaryClick(c.onOptions),
-      child: card,
+      child: HoldFeedback(
+        enabled: c.onOptions != null,
+        controller: _holdFx,
+        borderRadius: BorderRadius.circular(widget.radius),
+        child: card,
+      ),
     );
     final interactive = widget.hoverable
         ? MouseRegion(
@@ -4052,7 +4067,10 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
         }
         _loadFocusedDescription();
         _reportDesktopPreviewActivity(_previewActive);
-        if (!v) _hold.reset();
+        if (!v) {
+          _hold.reset();
+          _holdFx.cancel();
+        }
         if (v && context.findRenderObject() is RenderBox) {
           Scrollable.ensureVisible(
             context,
@@ -4071,7 +4089,14 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
       onKeyEvent: (_, e) {
         final k = e.logicalKey;
         if (!isActivateOrSpaceKey(k)) return KeyEventResult.ignored;
-        if (widget.dpad && c.onOptions != null) return _hold.handle(e);
+        if (widget.dpad && c.onOptions != null) {
+          if (e is KeyDownEvent) {
+            _holdFx.start(_hold.dwell);
+          } else if (e is KeyUpEvent) {
+            _holdFx.cancel();
+          }
+          return _hold.handle(e);
+        }
         if (e is KeyDownEvent) c.onOpen();
         // Own the complete activation sequence so repeats cannot bubble into
         // an ancestor shortcut after this card accepted the initial press.

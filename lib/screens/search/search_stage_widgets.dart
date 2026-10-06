@@ -892,7 +892,7 @@ class _TonightQueueRowState extends State<_TonightQueueRow>
       onKeyEvent: _onKey,
       child: GestureDetector(
         onTap: widget.onOpen,
-        onLongPress: widget.onLongPress,
+        onLongPress: _withHaptic(widget.onLongPress),
         onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
         behavior: HitTestBehavior.opaque,
         child: AnimatedContainer(

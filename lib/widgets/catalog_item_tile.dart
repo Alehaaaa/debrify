@@ -3,6 +3,7 @@ import 'metadata_presentation_mixin.dart';
 import 'dart:async';
 
 import 'card_action_menu.dart';
+import 'hold_feedback.dart';
 import 'recoverable_network_image.dart';
 import 'dart:math' as math;
 
@@ -126,6 +127,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
   bool _hovered = false;
   Timer? _longPressTimer;
   bool _longPressTriggered = false;
+  final HoldFeedbackController _holdFx = HoldFeedbackController();
   bool _keyDownReceived = false;
 
   bool get _active => _focused || _hovered;
@@ -489,6 +491,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       onFocusChange: (f) {
         setState(() => _focused = f);
         if (!f) {
+          _holdFx.cancel();
           _longPressTimer?.cancel();
           _longPressTriggered = false;
           _keyDownReceived = false;
@@ -531,14 +534,17 @@ class _CatalogItemTileState extends State<CatalogItemTile>
             _longPressTriggered = false;
             _longPressTimer?.cancel();
             if (widget.onLongPress != null) {
+              _holdFx.start(const Duration(milliseconds: 800));
               _longPressTimer = Timer(const Duration(milliseconds: 800), () {
                 _longPressTriggered = true;
+                _holdFx.cancel();
                 HapticFeedback.mediumImpact();
                 widget.onLongPress!();
               });
             }
             return KeyEventResult.handled;
           } else if (event is KeyUpEvent) {
+            _holdFx.cancel();
             _longPressTimer?.cancel();
             if (!_keyDownReceived) return KeyEventResult.handled;
             if (!_longPressTriggered) {
@@ -568,7 +574,13 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           // Isolate the tile's repaint: focus flips its shadow/ring/overlay,
           // and without a boundary each DPAD move repaints the whole grid
           // viewport layer instead of just the two affected tiles.
-          child: RepaintBoundary(child: card),
+          child: RepaintBoundary(
+            child: HoldFeedback(
+              enabled: widget.onLongPress != null,
+              controller: _holdFx,
+              child: card,
+            ),
+          ),
         ),
       ),
     );

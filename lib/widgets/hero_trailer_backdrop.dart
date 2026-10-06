@@ -1107,6 +1107,11 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     return KeyEventResult.ignored;
   }
 
+  /// Downward travel (px) of a swipe that started near the center of the
+  /// fullscreen trailer; null when no such swipe is in progress.
+  double? _dismissDrag;
+  static const double _dismissDistance = 120;
+
   Widget _buildForegroundControls(double t) {
     final interactive = t > 0.98;
     return Opacity(
@@ -1121,17 +1126,67 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
             children: [
               // Tap/click surface: reveal the chrome (re-arming the auto-hide),
               // or hide it immediately if it's already up.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (_controlsVisible) {
-                    _controlsTimer?.cancel();
-                    setState(() => _controlsVisible = false);
-                  } else {
-                    _showControlsTemporarily();
-                  }
-                },
-                child: const SizedBox.expand(),
+              //
+              // Swipe down from the middle of the picture closes the trailer,
+              // the gesture every fullscreen player on a phone answers to.
+              // Only drags that START in the central region count, so the
+              // edges stay free for the system's own swipes.
+              LayoutBuilder(
+                builder: (context, constraints) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_controlsVisible) {
+                      _controlsTimer?.cancel();
+                      setState(() => _controlsVisible = false);
+                    } else {
+                      _showControlsTemporarily();
+                    }
+                  },
+                  onVerticalDragStart: (details) {
+                    final p = details.localPosition;
+                    final w = constraints.maxWidth;
+                    final h = constraints.maxHeight;
+                    _dismissDrag =
+                        p.dx > w * 0.2 &&
+                            p.dx < w * 0.8 &&
+                            p.dy > h * 0.2 &&
+                            p.dy < h * 0.8
+                        ? 0
+                        : null;
+                  },
+                  onVerticalDragUpdate: (details) {
+                    final drag = _dismissDrag;
+                    if (drag == null) return;
+                    setState(() => _dismissDrag = drag + details.delta.dy);
+                  },
+                  onVerticalDragEnd: (details) {
+                    final drag = _dismissDrag;
+                    if (drag == null) return;
+                    final velocity = details.primaryVelocity ?? 0;
+                    setState(() => _dismissDrag = null);
+                    if (drag > _dismissDistance ||
+                        (drag > 24 && velocity > 700)) {
+                      HapticFeedback.lightImpact();
+                      widget.onRequestClose?.call();
+                    }
+                  },
+                  onVerticalDragCancel: () {
+                    if (_dismissDrag != null) {
+                      setState(() => _dismissDrag = null);
+                    }
+                  },
+                  // Follows the finger down as a darkening veil, so the
+                  // gesture reads as "pulling the trailer away" before it
+                  // commits.
+                  child: ColoredBox(
+                    color: Colors.black.withValues(
+                      alpha:
+                          ((_dismissDrag ?? 0) / (_dismissDistance * 2))
+                              .clamp(0.0, 0.5),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
               ),
               // Bottom scrim so controls stay legible over bright frames.
               if (_controlsVisible)

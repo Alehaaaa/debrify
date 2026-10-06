@@ -30,7 +30,17 @@ import 'download_manager_screen.dart';
 import 'merged_series_detail_screen.dart';
 export 'download_manager_screen.dart' hide DownloadManagerScreen;
 
-enum _DownloadCardAction { play, open, files, pause, resume, retry, delete }
+enum _DownloadCardAction {
+  play,
+  open,
+  files,
+  fixMatch,
+  resetMatch,
+  pause,
+  resume,
+  retry,
+  delete,
+}
 
 /// Downloads library: Home's page wash, header typography and white glass
 /// controls around Discover's own filter bar, poster grid and card settings.
@@ -145,6 +155,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final summary = _summary(group);
     _DownloadCardAction? action;
     try {
+      var manualMatch = false;
+      try {
+        manualMatch = await DownloadedMediaService.hasManualMatch(group);
+      } catch (_) {}
+      if (!mounted) return;
       action = await showCardActionMenu<_DownloadCardAction>(
         context,
         title: poster.name,
@@ -184,6 +199,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               description: series
                   ? 'Each downloaded episode, with its size and progress.'
                   : 'The file on this device, with its size.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.fixMatch,
+            icon: Icons.manage_search_rounded,
+            label: 'Fix match',
+            description: group.first.media?.isCatalogLinked == true
+                ? 'Wrong title? Search for the right one and refile it.'
+                : 'Find the title this is, for its art, details and '
+                      'episodes.',
+          ),
+          if (manualMatch)
+            const CardMenuAction(
+              value: _DownloadCardAction.resetMatch,
+              icon: Icons.undo_rounded,
+              label: 'Reset match',
+              description:
+                  'Forget the title you picked and use what the download '
+                  'says.',
             ),
           if (running.isNotEmpty)
             CardMenuAction(
@@ -244,6 +277,35 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             builder: (_) => DownloadedTitleScreen(items: group),
           ),
         );
+      case _DownloadCardAction.fixMatch:
+        final picked = await showFixMatchDialog(
+          context,
+          initialQuery: group.first.media?.isCatalogLinked == true
+              ? poster.name
+              : _searchableName(group.first),
+        );
+        if (picked == null || !mounted) break;
+        final id = picked.effectiveImdbId ?? picked.id;
+        try {
+          await DownloadedMediaService.rematch(
+            group,
+            id: id,
+            title: picked.name,
+            type: picked.type == 'series' ? 'series' : 'movie',
+            poster: picked.poster,
+            year: picked.year,
+          );
+          _snack('Filed under ${picked.name}');
+        } catch (_) {
+          _snack('Couldn\'t save the match. Try again.');
+        }
+      case _DownloadCardAction.resetMatch:
+        try {
+          await DownloadedMediaService.resetMatch(group);
+          _snack('Match reset');
+        } catch (_) {
+          _snack('Couldn\'t reset the match. Try again.');
+        }
       case _DownloadCardAction.pause:
         for (final e in running) {
           try {
@@ -1637,4 +1699,226 @@ class _GlassIconButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// A file name cut down to something a catalog search can match: no
+/// extension, no dots/underscores, and nothing from the first season/episode
+/// tag, year or quality marker on.
+String _searchableName(LocalDownload item) {
+  final media = item.media;
+  if (media != null && !media.title.contains('.')) return media.title;
+  var name = item.record.task.filename;
+  final dot = name.lastIndexOf('.');
+  if (dot > 0) name = name.substring(0, dot);
+  name = name.replaceAll(RegExp(r'[._]+'), ' ');
+  final cut = RegExp(
+    r'\b(s\d{1,2}e\d{1,3}|s\d{1,2}|\d{1,2}x\d{1,3}|(19|20)\d{2}|\d{3,4}p|'
+    r'web[ -]?dl|webrip|bluray|hdtv|x26[45]|hevc)\b',
+    caseSensitive: false,
+  ).firstMatch(name);
+  if (cut != null && cut.start > 0) name = name.substring(0, cut.start);
+  return name.replaceAll(RegExp(r'[\[\(\-]+\s*$'), '').trim();
+}
+
+/// Fix match: search the catalogs for the title a download really is.
+/// Returns the picked movie or series, or null when dismissed.
+@visibleForTesting
+Future<StremioMeta?> showFixMatchDialog(
+  BuildContext context, {
+  required String initialQuery,
+  Future<List<StremioMeta>> Function(String query)? search,
+}) {
+  return showDialog<StremioMeta>(
+    context: context,
+    builder: (_) => _FixMatchDialog(
+      initialQuery: initialQuery,
+      search: search ?? StremioService.instance.searchCatalogs,
+    ),
+  );
+}
+
+class _FixMatchDialog extends StatefulWidget {
+  final String initialQuery;
+  final Future<List<StremioMeta>> Function(String query) search;
+
+  const _FixMatchDialog({required this.initialQuery, required this.search});
+
+  @override
+  State<_FixMatchDialog> createState() => _FixMatchDialogState();
+}
+
+class _FixMatchDialogState extends State<_FixMatchDialog> {
+  late final TextEditingController _query = TextEditingController(
+    text: widget.initialQuery,
+  );
+  List<StremioMeta>? _results;
+  bool _searching = false;
+  String? _error;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialQuery.trim().isNotEmpty) _run();
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run() async {
+    final query = _query.text.trim();
+    if (query.isEmpty) return;
+    final generation = ++_generation;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final found = await widget.search(query);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _results = [
+          for (final m in found)
+            if (m.type == 'movie' || m.type == 'series') m,
+        ];
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _searching = false;
+        _error = 'Search failed. Check your connection and try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final results = _results;
+    return Dialog(
+      backgroundColor: app.sheetSurface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: app.shape.br(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 480,
+          maxHeight: size.height * 0.8,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Fix match',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the movie or show these files are.',
+                style: TextStyle(
+                  color: app.fade(app.core.tx, 0.55),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _query,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _run(),
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: 'Search',
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    onPressed: _run,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : _error != null || (results != null && results.isEmpty)
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          _error ?? 'No movies or shows found.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: app.fade(app.core.tx, 0.6)),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: results?.length ?? 0,
+                        itemBuilder: (context, i) {
+                          final m = results![i];
+                          final poster = m.poster;
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                            leading: ClipRRect(
+                              borderRadius: app.shape.br(6),
+                              child: SizedBox(
+                                width: 36,
+                                height: 54,
+                                child: poster == null || poster.isEmpty
+                                    ? ColoredBox(
+                                        color: app.fade(app.core.tx, 0.08),
+                                        child: const Icon(
+                                          Icons.movie_rounded,
+                                          size: 18,
+                                        ),
+                                      )
+                                    : CachedNetworkImage(
+                                        imageUrl: poster,
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: 108,
+                                        errorWidget: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                              ),
+                            ),
+                            title: Text(
+                              m.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                m.type == 'series' ? 'Series' : 'Movie',
+                                if (m.year != null && m.year!.isNotEmpty)
+                                  m.year!,
+                              ].join('  ·  '),
+                            ),
+                            onTap: () => Navigator.of(context).pop(m),
+                          );
+                        },
+                      ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

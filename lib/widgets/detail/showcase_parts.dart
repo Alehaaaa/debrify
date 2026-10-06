@@ -857,17 +857,10 @@ class ShowcaseIdentity extends StatelessWidget {
     if (m.isTelevision || !(m.trailerPlaying || m.trailerPromotable)) {
       return band;
     }
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: m.onTrailer,
-          ),
-        ),
-        band,
-      ],
-    );
+    // Only the art ABOVE the logo answers: below it sit the meta line,
+    // synopsis and buttons, where a miss of a few pixels shouldn't throw the
+    // page into a fullscreen trailer.
+    return _TrailerTapRegion(onTrailer: m.onTrailer, child: band);
   }
 
   /// The phone identity — the Apple phone idiom: everything centered and
@@ -1005,6 +998,98 @@ class ShowcaseIdentity extends StatelessWidget {
   }
 }
 
+/// The empty key art behind the Showcase identity, tappable to bring the
+/// rolling trailer forward — but only above the logo (see [_LogoAnchor]).
+class _TrailerTapRegion extends StatefulWidget {
+  final VoidCallback onTrailer;
+  final Widget child;
+
+  const _TrailerTapRegion({required this.onTrailer, required this.child});
+
+  @override
+  State<_TrailerTapRegion> createState() => _TrailerTapRegionState();
+}
+
+class _TrailerTapRegionState extends State<_TrailerTapRegion> {
+  final _LogoAnchor _anchor = _LogoAnchor();
+
+  @override
+  Widget build(BuildContext context) {
+    return _LogoAnchorScope(
+      anchor: _anchor,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                if (_anchor.isAbove(details.globalPosition)) {
+                  widget.onTrailer();
+                }
+              },
+            ),
+          ),
+          widget.child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Where the identity's logo slot sits, so a tap can be checked against it.
+class _LogoAnchor {
+  BuildContext? _logo;
+
+  /// True when [global] is above the logo's top edge — or when there is no
+  /// laid-out logo to measure against, which keeps the old whole-art tap.
+  bool isAbove(Offset global) {
+    final box = _logo?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return true;
+    return global.dy < box.localToGlobal(Offset.zero).dy;
+  }
+}
+
+class _LogoAnchorScope extends InheritedWidget {
+  final _LogoAnchor anchor;
+
+  const _LogoAnchorScope({required this.anchor, required super.child});
+
+  static _LogoAnchor? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<_LogoAnchorScope>()
+      ?.anchor;
+
+  @override
+  bool updateShouldNotify(_LogoAnchorScope oldWidget) =>
+      oldWidget.anchor != anchor;
+}
+
+/// Registers its subtree as the [_LogoAnchor]'s logo.
+class _LogoAnchorTarget extends StatefulWidget {
+  final Widget child;
+
+  const _LogoAnchorTarget({required this.child});
+
+  @override
+  State<_LogoAnchorTarget> createState() => _LogoAnchorTargetState();
+}
+
+class _LogoAnchorTargetState extends State<_LogoAnchorTarget> {
+  _LogoAnchor? _anchor;
+
+  @override
+  Widget build(BuildContext context) {
+    _anchor = _LogoAnchorScope.maybeOf(context);
+    _anchor?._logo = context;
+    return widget.child;
+  }
+
+  @override
+  void dispose() {
+    if (_anchor?._logo == context) _anchor!._logo = null;
+    super.dispose();
+  }
+}
+
 class _LogoOrTitle extends StatelessWidget {
   final String? url;
   final String name;
@@ -1048,46 +1133,48 @@ class _LogoOrTitle extends StatelessWidget {
     // compact marks alike, instead of a fixed box that left long ones tiny.
     // Capped to the available width so the centred phone identity never
     // overflows.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final slotWidth = min(
-          OpticalLogo.defaultMaxWidth * m.k,
-          constraints.maxWidth,
-        );
-        final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
-        return SizedBox(
-          width: slotWidth,
-          height: slotHeight,
-          child: Align(
-            alignment: alignment,
-            child: (url == null || url!.isEmpty)
-                ? FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: alignment,
-                    child: text,
-                  )
-                : CachedNetworkImage(
-                    imageUrl: url!,
-                    cacheManager: DebrifyImageCache.manager,
-                    // ~2x the widest slot so long logos stay crisp on HiDPI.
-                    memCacheWidth: 960,
-                    imageBuilder: (context, image) => OpticalLogo(
-                      image: image,
-                      alignment: alignment,
-                      maxWidth: slotWidth,
-                      maxHeight: slotHeight,
-                      area: OpticalLogo.defaultArea * m.k * m.k,
-                    ),
-                    placeholder: (_, __) => const SizedBox.expand(),
-                    errorWidget: (_, __, ___) => FittedBox(
+    return _LogoAnchorTarget(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final slotWidth = min(
+            OpticalLogo.defaultMaxWidth * m.k,
+            constraints.maxWidth,
+          );
+          final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
+          return SizedBox(
+            width: slotWidth,
+            height: slotHeight,
+            child: Align(
+              alignment: alignment,
+              child: (url == null || url!.isEmpty)
+                  ? FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: alignment,
                       child: text,
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: url!,
+                      cacheManager: DebrifyImageCache.manager,
+                      // ~2x the widest slot so long logos stay crisp on HiDPI.
+                      memCacheWidth: 960,
+                      imageBuilder: (context, image) => OpticalLogo(
+                        image: image,
+                        alignment: alignment,
+                        maxWidth: slotWidth,
+                        maxHeight: slotHeight,
+                        area: OpticalLogo.defaultArea * m.k * m.k,
+                      ),
+                      placeholder: (_, __) => const SizedBox.expand(),
+                      errorWidget: (_, __, ___) => FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: alignment,
+                        child: text,
+                      ),
                     ),
-                  ),
-          ),
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 }

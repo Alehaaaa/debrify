@@ -129,6 +129,7 @@ class DownloadedMediaService {
     for (final record in records) {
       final details = service.recordDetailsForTaskId(record.taskId);
       final media =
+          cache.manualFor(null, [record.taskId]) ??
           DownloadedMedia.fromMetadata(details?.meta) ??
           DownloadedMedia.fromFilename(
             record.task.filename,
@@ -220,11 +221,20 @@ class DownloadedMediaService {
         if (cached.media != null) otherProfileTitles.add(cached.media!);
         continue;
       }
+      // A Fix match the user made wins over everything the download or the
+      // file name says — for the file, or for the transfer that produced it.
+      final manual = cache.manualFor(path, [
+        for (final record in linked) record.taskId,
+      ]);
+      if (manual != null && cached?.manual != true) {
+        cache.put(path, manual, profile: owner, manual: true);
+      }
       final fromRecord = finishedMeta[path];
-      if (fromRecord != null) {
+      if (fromRecord != null && manual == null) {
         cache.put(path, fromRecord, profile: owner);
       }
       final media =
+          manual ??
           fromRecord ??
           cached?.media ??
           DownloadedMedia.fromFilename(
@@ -358,12 +368,91 @@ class DownloadedMediaService {
         await DownloadService.instance.deleteRecord(record);
       } catch (_) {}
     }
+    final cache = await _MediaCache.open();
     if (item.location.isNotEmpty && !item.location.startsWith('content://')) {
-      final cache = await _MediaCache.open();
       cache.remove(_norm(item.location));
-      await cache.save();
     }
+    for (final record in [item.record, ...item.linkedRecords]) {
+      cache.remove(_MediaCache.taskKey(record.taskId));
+    }
+    await cache.save();
   }
+
+  /// Fix match: file every item of a library entry under the title the user
+  /// picked. Episodes keep their own season/episode (from the old identity,
+  /// or read from the file name); a movie carries none. Stays put until
+  /// [resetMatch], whatever the download's own metadata says.
+  static Future<void> rematch(
+    List<LocalDownload> items, {
+    required String id,
+    required String title,
+    required String type,
+    String? poster,
+    String? year,
+  }) async {
+    final cache = await _MediaCache.open();
+    final owner = _activeProfile();
+    for (final item in items) {
+      final coordinates = type == 'series'
+          ? (
+              season: item.media?.season,
+              episode: item.media?.episode,
+            )
+          : null;
+      var season = coordinates?.season;
+      var episode = coordinates?.episode;
+      if (type == 'series' && (season == null || episode == null)) {
+        final guess = detectDownloadedEpisode(item.record.task.filename);
+        season ??= guess.season;
+        episode ??= guess.episode;
+      }
+      final media = DownloadedMedia(
+        id: id,
+        title: title,
+        type: type,
+        poster: poster,
+        year: year,
+        season: season,
+        episode: episode,
+      );
+      for (final key in _matchKeys(item)) {
+        cache.put(key, media, profile: owner, manual: true);
+      }
+    }
+    await cache.save();
+  }
+
+  /// Undo [rematch]: the items go back to what their download or file name
+  /// says on the next load.
+  static Future<void> resetMatch(List<LocalDownload> items) async {
+    final cache = await _MediaCache.open();
+    for (final item in items) {
+      for (final key in _matchKeys(item)) {
+        cache.remove(key);
+      }
+    }
+    await cache.save();
+  }
+
+  /// Whether any of [items] carries a user's Fix match. Reads the cache the
+  /// library load already opened (never disk): items come from a load, so
+  /// it is in memory whenever there is anything to find.
+  static Future<bool> hasManualMatch(List<LocalDownload> items) async {
+    final cache = _MediaCache.loaded;
+    if (cache == null) return false;
+    return items.any(
+      (item) => _matchKeys(item).any((key) => cache.entry(key)?.manual == true),
+    );
+  }
+
+  static List<String> _matchKeys(LocalDownload item) => [
+    if (item.location.isNotEmpty)
+      item.location.startsWith('content://')
+          ? item.location
+          : _norm(item.location),
+    if (!item.isScanned) _MediaCache.taskKey(item.record.taskId),
+    for (final record in item.linkedRecords) _MediaCache.taskKey(record.taskId),
+  ];
 
   static Future<void> play(BuildContext context, LocalDownload item) async {
     if (!item.isReady) return;
@@ -504,19 +593,40 @@ class _MediaCache {
     _opening = null;
   }
 
-  ({DownloadedMedia? media, String? profile})? entry(String path) {
+  ({DownloadedMedia? media, String? profile, bool manual})? entry(
+    String path,
+  ) {
     final raw = _entries[path];
     if (raw == null) return null;
     return (
       media: DownloadedMedia.fromMetadata(jsonEncode({'media': raw['media']})),
       profile: raw['profile'] as String?,
+      manual: raw['manual'] == true,
     );
+  }
+
+  /// The key a user's Fix match is kept under for a queue record, so the
+  /// choice reaches the file the transfer is still writing.
+  static String taskKey(String taskId) => 'task:$taskId';
+
+  /// A user-chosen identity for [path] or any of [taskIds], if one is set.
+  DownloadedMedia? manualFor(String? path, Iterable<String> taskIds) {
+    for (final key in [?path, for (final id in taskIds) taskKey(id)]) {
+      final e = entry(key);
+      if (e != null && e.manual && e.media != null) return e.media;
+    }
+    return null;
   }
 
   bool hasTitle(String id) =>
       _entries.values.any((e) => e['media'] is Map && e['media']['id'] == id);
 
-  void put(String path, DownloadedMedia media, {String? profile}) {
+  void put(
+    String path,
+    DownloadedMedia media, {
+    String? profile,
+    bool manual = false,
+  }) {
     final next = {
       'media': {
         'id': media.id,
@@ -528,6 +638,7 @@ class _MediaCache {
         'episode': media.episode,
       },
       'profile': profile,
+      if (manual) 'manual': true,
     };
     if (jsonEncode(_entries[path]) == jsonEncode(next)) return;
     _entries[path] = next;
@@ -543,6 +654,9 @@ class _MediaCache {
   void dropMissing() {
     final before = _entries.length;
     _entries.removeWhere((path, _) {
+      // Queue-record keys aren't files; they go with their record (see
+      // [DownloadedMediaService.remove]).
+      if (path.startsWith('task:')) return false;
       try {
         return !File(path).existsSync();
       } catch (_) {
