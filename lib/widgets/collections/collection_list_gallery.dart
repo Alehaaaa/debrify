@@ -9,6 +9,7 @@ import '../../services/debrify_image_cache.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
 import '../metadata_presentation_mixin.dart';
+import '../hold_feedback.dart';
 
 class CollectionListPreview {
   const CollectionListPreview({
@@ -236,145 +237,149 @@ class _GalleryCardState extends State<_GalleryCard> {
         child: Semantics(
           button: true,
           label: 'Open ${p.title}',
-          child: GestureDetector(
-            onTap: widget.onOpen,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              transform: Matrix4.translationValues(0, active ? -3 : 0, 0),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: app.core.tx.withValues(alpha: .06),
-                boxShadow: active
-                    ? [
-                        BoxShadow(
-                          color: (_artColor ?? app.core.tx).withValues(
-                            alpha: .22,
+          child: HoldFeedback(
+            borderRadius: BorderRadius.circular(18),
+            child: GestureDetector(
+              onTap: widget.onOpen,
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                transform: Matrix4.translationValues(0, active ? -3 : 0, 0),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: app.core.tx.withValues(alpha: .06),
+                  boxShadow: active
+                      ? [
+                          BoxShadow(
+                            color: (_artColor ?? app.core.tx).withValues(
+                              alpha: .22,
+                            ),
+                            blurRadius: 22,
                           ),
-                          blurRadius: 22,
-                        ),
-                      ]
-                    : [],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final item in p.items.take(3))
-                        Expanded(
-                          child: CollectionPreviewArt(
-                            key: ValueKey('${item.type}:${item.id}'),
-                            item: item,
-                          ),
-                        ),
-                    ],
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.transparent,
-                          app.seeAll.bg.withValues(alpha: .12),
-                          app.seeAll.bg.withValues(alpha: .96),
-                        ],
-                        stops: const [0, .4, 1],
-                      ),
-                    ),
-                  ),
-                  if (p.items.isEmpty)
-                    Center(
-                      child: Icon(
-                        p.failed
-                            ? Icons.cloud_off_outlined
-                            : Icons.collections_outlined,
-                        size: 40,
-                        color: app.core.tx.withValues(alpha: .25),
-                      ),
-                    ),
-                  Positioned(
-                    left: 20,
-                    right: 20,
-                    bottom: 18,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                        ]
+                      : [],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (_galleryLabel(p.title) case final label?) ...[
-                                Text(
-                                  label.$1,
-                                  style: TextStyle(
-                                    color: app.core.tx.withValues(alpha: .72),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                              ],
-                              Text(
-                                _galleryLabel(p.title)?.$2 ?? p.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: app.core.tx,
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              if (p.failed || p.loading) ...[
-                                const SizedBox(height: 8),
-                                Text(
-                                  p.failed ? 'Tap to retry' : 'Loading',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: app.core.tx.withValues(alpha: .65),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ],
+                        for (final item in p.items.take(3))
+                          Expanded(
+                            child: CollectionPreviewArt(
+                              key: ValueKey('${item.type}:${item.id}'),
+                              item: item,
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 20,
-                          color: app.core.tx.withValues(
-                            alpha: active ? .95 : .5,
-                          ),
-                        ),
                       ],
                     ),
-                  ),
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: app.core.tx.withValues(
-                              alpha: active ? .8 : .12,
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            app.seeAll.bg.withValues(alpha: .12),
+                            app.seeAll.bg.withValues(alpha: .96),
+                          ],
+                          stops: const [0, .4, 1],
+                        ),
+                      ),
+                    ),
+                    if (p.items.isEmpty)
+                      Center(
+                        child: Icon(
+                          p.failed
+                              ? Icons.cloud_off_outlined
+                              : Icons.collections_outlined,
+                          size: 40,
+                          color: app.core.tx.withValues(alpha: .25),
+                        ),
+                      ),
+                    Positioned(
+                      left: 20,
+                      right: 20,
+                      bottom: 18,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_galleryLabel(p.title)
+                                    case final label?) ...[
+                                  Text(
+                                    label.$1,
+                                    style: TextStyle(
+                                      color: app.core.tx.withValues(alpha: .72),
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                ],
+                                Text(
+                                  _galleryLabel(p.title)?.$2 ?? p.title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: app.core.tx,
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                if (p.failed || p.loading) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    p.failed ? 'Tap to retry' : 'Loading',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: app.core.tx.withValues(alpha: .65),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            width: active ? 1.5 : 1,
+                          ),
+                          const SizedBox(width: 10),
+                          Icon(
+                            Icons.chevron_right,
+                            size: 20,
+                            color: app.core.tx.withValues(
+                              alpha: active ? .95 : .5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: app.core.tx.withValues(
+                                alpha: active ? .8 : .12,
+                              ),
+                              width: active ? 1.5 : 1,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

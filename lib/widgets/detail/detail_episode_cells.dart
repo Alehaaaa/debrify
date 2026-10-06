@@ -10,6 +10,7 @@ import '../../utils/tv_keys.dart';
 import '../home/home_theme.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
 
 /// Whether RIGHT is an ADDITIONAL way into the per-episode options menu.
 ///
@@ -236,7 +237,7 @@ class _DetailEpisodeInteractionState extends State<DetailEpisodeInteraction> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
+        child: HoldFeedback(borderRadius: BorderRadius.circular(10), child: GestureDetector(
           onTap: widget.onPlay,
           onLongPress: () {
             HapticFeedback.mediumImpact();
@@ -248,7 +249,7 @@ class _DetailEpisodeInteractionState extends State<DetailEpisodeInteraction> {
           child: RepaintBoundary(
             child: widget.builder(context, _focused || _hovered),
           ),
-        ),
+        )),
       ),
     );
   }

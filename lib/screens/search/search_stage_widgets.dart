@@ -850,7 +850,10 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
         onLongPress: withHoldHaptic(widget.onLongPress),
         onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
+        child: HoldFeedback(
+          controller: _hold.ring,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOutCubic,
           height: h,
@@ -895,14 +898,6 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
                             ],
                           ),
                         ),
-                      Positioned.fill(
-                        child: HoldFeedback(
-                          controller: _hold.ring,
-                          ripple: false,
-                          borderRadius: BorderRadius.zero,
-                          child: const SizedBox.expand(),
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -968,6 +963,7 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

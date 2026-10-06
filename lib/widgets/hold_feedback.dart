@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -82,25 +83,28 @@ class HoldFeedbackController {
   void cancel() => _state?._cancelRing();
 }
 
-/// Press feedback for a card.
+/// Press feedback for a tile — the one every tile in the app wears.
 ///
-/// **Pointer** (touch, mouse): the ripple and highlight the calendar's rows
-/// get from their `InkWell` — a soft wash plus a circle spreading from the
-/// finger while it stays down, fading on release. Material ink can't do this
-/// for a poster card: ink paints on the Material *behind* the card, so opaque
-/// artwork hides it. This paints the same thing on top instead.
+/// **Pointer** (touch, mouse): a frosted-glass press. The tile sinks a few
+/// percent under the finger, and a lens of real backdrop blur — a frosted
+/// disc with a soft light tint and a bright glass rim — grows from the touch
+/// point while the finger stays down. On release the lens floods the tile
+/// and thaws away as the tile springs back. Painted on top of the tile
+/// (Material ink paints *behind* it, where opaque artwork hides it), and the
+/// blur only exists for the length of a press, so a resting grid costs
+/// nothing.
 ///
 /// The press is watched with a [Listener], so this never joins the gesture
-/// arena: the card's own [GestureDetector] still decides tap vs long-press.
-/// A drag past touch slop (a scroll) drops the ripple.
+/// arena: the tile's own [GestureDetector] still decides tap vs long-press.
+/// A drag past touch slop (a scroll) lets the press go without the flood.
 ///
-/// **TV**: a held OK has no pointer; the card's key handler drives the dim +
-/// filling ring Home's TV cards draw toward the moment the hold menu opens,
-/// through [controller].
+/// **TV**: a held OK has no pointer; the tile's key handler drives the dim +
+/// filling ring toward the moment the hold menu opens, through [controller]
+/// (see [CardHold]).
 class HoldFeedback extends StatefulWidget {
   final Widget child;
 
-  /// Draw the pointer ripple. Off where the card already has an `InkWell`.
+  /// Draw the pointer press. Off for TV-only surfaces.
   final bool ripple;
   final HoldFeedbackController? controller;
   final BorderRadius borderRadius;
@@ -119,22 +123,38 @@ class HoldFeedback extends StatefulWidget {
 
 class _HoldFeedbackState extends State<HoldFeedback>
     with TickerProviderStateMixin {
+  /// How far the tile sinks under a press.
+  static const double _sink = 0.03;
+
   /// TV hold ring (0 → 1 over the dwell).
   late final AnimationController _ring = AnimationController(vsync: this)
     ..addStatusListener((status) {
-      // The hold fired (the card opens its menu now); clear the ring.
+      // The hold fired (the tile opens its menu now); clear the ring.
       if (status == AnimationStatus.completed) _ring.value = 0;
     });
 
-  /// Ripple spread (0 → 1 covers the card). Slow while held, like ink's own
-  /// ripple, and hurried to full on release.
+  /// Lens growth while held (0 → 1 reaches the held size around the
+  /// finger — it never buries the tile).
   late final AnimationController _spread = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 600),
+    duration: const Duration(milliseconds: 360),
   );
 
-  /// Ripple + highlight fade-out after release (0 = fully shown).
-  late final AnimationController _fade = AnimationController(
+  /// Release flood (0 → 1: the lens sweeps the whole tile as it thaws).
+  late final AnimationController _flood = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+  );
+
+  /// Press depth: quick in, springy out.
+  late final AnimationController _depth = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 110),
+    reverseDuration: const Duration(milliseconds: 420),
+  );
+
+  /// Lens thaw after release (0 = fully frosted).
+  late final AnimationController _thaw = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 260),
   );
@@ -166,7 +186,9 @@ class _HoldFeedbackState extends State<HoldFeedback>
     if (widget.controller?._state == this) widget.controller!._state = null;
     _ring.dispose();
     _spread.dispose();
-    _fade.dispose();
+    _flood.dispose();
+    _depth.dispose();
+    _thaw.dispose();
     super.dispose();
   }
 
@@ -195,13 +217,15 @@ class _HoldFeedbackState extends State<HoldFeedback>
     _downAt = event.position;
     _origin = event.localPosition;
     _pressed = true;
-    _fade.value = 0;
+    _thaw.value = 0;
+    _flood.value = 0;
     _spread.forward(from: 0);
+    _depth.forward();
   }
 
   void _onMove(PointerMoveEvent event) {
     if (event.pointer != _pointer || _downAt == null) return;
-    // A scroll or drag, not a press: let the ripple go quietly.
+    // A scroll or drag, not a press: let it go without the flood.
     if ((event.position - _downAt!).distance > kTouchSlop) _release(fast: true);
   }
 
@@ -214,118 +238,227 @@ class _HoldFeedbackState extends State<HoldFeedback>
     _downAt = null;
     if (!_pressed) return;
     _pressed = false;
-    if (fast) {
-      _fade.forward(from: 0);
-      return;
-    }
-    // Finish the spread, then fade — so even a quick tap shows the ripple.
-    _spread
-        .animateTo(1, duration: const Duration(milliseconds: 160))
-        .whenCompleteOrCancel(() {
-          if (mounted && !_pressed) _fade.forward(from: 0);
-        });
+    _depth.reverse();
+    // A tap or a lift: the lens sweeps the tile while it thaws, so even a
+    // quick tap reads. A scroll just lets the glass melt where it is.
+    if (!fast) _flood.forward(from: 0);
+    _thaw.forward(from: 0);
   }
 
   @override
   Widget build(BuildContext context) {
     return Listener(
-      // Sees the press even where the card paints nothing hit-testable,
+      // Sees the press even where the tile paints nothing hit-testable,
       // without taking it from anything behind.
       behavior: HitTestBehavior.translucent,
       onPointerDown: _onDown,
       onPointerMove: _onMove,
       onPointerUp: _onEnd,
       onPointerCancel: _onEnd,
-      child: Stack(
-        fit: StackFit.passthrough,
-        children: [
-          widget.child,
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: Listenable.merge([_spread, _fade]),
-                builder: (context, _) {
-                  final visible =
-                      (_pressed || _spread.value > 0) && _fade.value < 1;
-                  if (!visible) return const SizedBox.shrink();
-                  return CustomPaint(
-                    painter: _RipplePainter(
+      child: AnimatedBuilder(
+        animation: _depth,
+        builder: (context, child) {
+          final d = _depth.status == AnimationStatus.reverse
+              ? Curves.easeOutBack.transform(_depth.value)
+              : Curves.easeOut.transform(_depth.value);
+          if (d == 0) return child!;
+          return Transform.scale(scale: 1 - _sink * d, child: child);
+        },
+        child: Stack(
+          fit: StackFit.passthrough,
+          children: [
+            widget.child,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_spread, _flood, _thaw]),
+                  builder: (context, _) {
+                    final visible =
+                        (_pressed || _spread.value > 0) && _thaw.value < 1;
+                    if (!visible) return const SizedBox.shrink();
+                    return _FrostLens(
                       origin: _origin,
-                      spread: Curves.easeOut.transform(_spread.value),
-                      opacity: 1 - _fade.value,
+                      grow: Curves.easeOutCubic.transform(_spread.value),
+                      flood: Curves.easeOutCubic.transform(_flood.value),
+                      strength: 1 - Curves.easeInCubic.transform(_thaw.value),
                       borderRadius: widget.borderRadius,
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedBuilder(
-                animation: _ring,
-                builder: (context, _) {
-                  final t = _ring.value;
-                  if (t == 0) return const SizedBox.shrink();
-                  return HoldProgressLayer(
-                    progress: t,
-                    borderRadius: widget.borderRadius,
-                  );
-                },
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedBuilder(
+                  animation: _ring,
+                  builder: (context, _) {
+                    final t = _ring.value;
+                    if (t == 0) return const SizedBox.shrink();
+                    return HoldProgressLayer(
+                      progress: t,
+                      borderRadius: widget.borderRadius,
+                    );
+                  },
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// The pressed wash plus the spreading circle, clipped to the card.
-class _RipplePainter extends CustomPainter {
+/// The frosted-glass lens: real backdrop blur clipped to a circle around
+/// [origin], a light radial tint, a sheen across the whole tile and a bright
+/// rim on the lens edge. [grow] (0 → 1) sizes it while held — a contained
+/// lens under the finger; [flood] (0 → 1) sweeps it to the tile's farthest
+/// corner on release; [strength] (1 → 0) thaws all of it together.
+class _FrostLens extends StatelessWidget {
   final Offset origin;
-  final double spread;
-  final double opacity;
+  final double grow;
+  final double flood;
+  final double strength;
   final BorderRadius borderRadius;
 
-  _RipplePainter({
+  /// The held lens: this share of the tile's short side, within bounds that
+  /// keep it a finger-sized glass on a phone tile and on a big desktop one.
+  static const double _heldShare = 0.45;
+  static const double _heldMin = 44;
+  static const double _heldMax = 120;
+  static const double _blur = 8;
+
+  const _FrostLens({
     required this.origin,
-    required this.spread,
-    required this.opacity,
+    required this.grow,
+    required this.flood,
+    required this.strength,
     required this.borderRadius,
   });
 
   @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = constraints.biggest;
+        final rect = Offset.zero & size;
+        // Far enough to reach the farthest corner, so the flood covers all.
+        final reach = [
+          rect.topLeft,
+          rect.topRight,
+          rect.bottomLeft,
+          rect.bottomRight,
+        ].map((c) => (c - origin).distance).reduce(math.max);
+        final held = (size.shortestSide * _heldShare).clamp(
+          _heldMin,
+          _heldMax,
+        );
+        final heldRadius = held * (0.35 + 0.65 * grow);
+        final radius = heldRadius + (reach - heldRadius) * flood;
+        final lens = Rect.fromCircle(center: origin, radius: radius);
+        return ClipRRect(
+          borderRadius: borderRadius,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              // Sheen: the whole tile catches a little light under the press.
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.10 * strength),
+                      Colors.white.withValues(alpha: 0.02 * strength),
+                    ],
+                  ),
+                ),
+              ),
+              // The lens: frosted backdrop + tint, clipped to the circle.
+              ClipOval(
+                clipper: _RectClipper(lens),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(
+                    sigmaX: _blur * strength,
+                    sigmaY: _blur * strength,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: Alignment(
+                          size.width == 0
+                              ? 0
+                              : (origin.dx / size.width) * 2 - 1,
+                          size.height == 0
+                              ? 0
+                              : (origin.dy / size.height) * 2 - 1,
+                        ),
+                        radius: size.shortestSide == 0
+                            ? 1
+                            : radius / size.shortestSide,
+                        colors: [
+                          Colors.white.withValues(alpha: 0.24 * strength),
+                          Colors.white.withValues(alpha: 0.08 * strength),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Glass rim.
+              CustomPaint(
+                painter: _RimPainter(
+                  lens: lens,
+                  alpha: 0.42 * strength * (1 - flood),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RectClipper extends CustomClipper<Rect> {
+  final Rect rect;
+
+  const _RectClipper(this.rect);
+
+  @override
+  Rect getClip(Size size) => rect;
+
+  @override
+  bool shouldReclip(_RectClipper oldClipper) => oldClipper.rect != rect;
+}
+
+class _RimPainter extends CustomPainter {
+  final Rect lens;
+  final double alpha;
+
+  const _RimPainter({required this.lens, required this.alpha});
+
+  @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    canvas.save();
-    canvas.clipRRect(borderRadius.toRRect(rect));
-    // Highlight: the whole card lifts a shade while pressed.
-    canvas.drawRect(
-      rect,
-      Paint()..color = Colors.white.withValues(alpha: 0.06 * opacity),
+    if (alpha <= 0) return;
+    canvas.drawOval(
+      lens.deflate(0.6),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..shader = LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: alpha),
+            Colors.white.withValues(alpha: alpha * 0.25),
+          ],
+        ).createShader(lens),
     );
-    // Ripple: grows from the finger to the farthest corner.
-    final reach = [
-      rect.topLeft,
-      rect.topRight,
-      rect.bottomLeft,
-      rect.bottomRight,
-    ].map((c) => (c - origin).distance).reduce(math.max);
-    canvas.drawCircle(
-      origin,
-      reach * (0.12 + 0.88 * spread),
-      Paint()..color = Colors.white.withValues(alpha: 0.16 * opacity),
-    );
-    canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_RipplePainter old) =>
-      old.origin != origin ||
-      old.spread != spread ||
-      old.opacity != opacity ||
-      old.borderRadius != borderRadius;
+  bool shouldRepaint(_RimPainter old) => old.lens != lens || old.alpha != alpha;
 }
 
 /// The TV hold overlay: a dim over the card and a ring filling to

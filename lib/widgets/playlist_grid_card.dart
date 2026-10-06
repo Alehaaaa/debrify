@@ -8,6 +8,7 @@ import '../theme/widgets/glass_surface.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/tv_keys.dart';
 import '../theme/app_motion.dart' show kMenuSheetAnimation;
+import 'hold_feedback.dart';
 
 /// Portrait playlist card optimized for grid layouts on desktop/tablet/mobile.
 ///
@@ -202,7 +203,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           }
           return KeyEventResult.ignored;
         },
-        child: GestureDetector(
+        child: HoldFeedback(borderRadius: BorderRadius.circular(12), child: GestureDetector(
           onTap: () => _showActionMenu(context),
           // Use TweenAnimationBuilder for smoother GPU-accelerated animations
           child: TweenAnimationBuilder<double>(
@@ -451,7 +452,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               ),
             ),
           ),
-        ),
+        )),
       ),
     );
   }

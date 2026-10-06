@@ -1520,12 +1520,13 @@ class _AiringDayCard extends StatelessWidget {
                   ),
               ],
             ),
-            // TV ring only: the InkWell below already ripples on touch.
+            // The frosted press on touch, the ring for a TV hold.
             child: HoldFeedback(
               controller: hold?.ring,
-              ripple: false,
               borderRadius: BorderRadius.circular(16),
               child: InkWell(
+                splashFactory: NoSplash.splashFactory,
+                highlightColor: Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
                 onTap: onOpen,
                 onLongPress: withHoldHaptic(
@@ -1609,7 +1610,9 @@ class _AiringDayCard extends StatelessWidget {
                       : () => onEpisodeOptions!(entry),
                 ),
               if (entries.length > 3)
-                InkWell(
+                HoldFeedback(borderRadius: BorderRadius.zero, child: InkWell(
+                  splashFactory: NoSplash.splashFactory,
+                  highlightColor: Colors.transparent,
                   onTap: onOpen,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -1636,7 +1639,7 @@ class _AiringDayCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                ),
+                )),
             ],
           ),
         ),
@@ -2010,7 +2013,9 @@ class _GroupEpisodeRow extends StatelessWidget {
         'E${entry.episodeNumber.toString().padLeft(2, '0')}';
     final title = entry.episodeTitle?.trim();
     final subtitle = title == null || title.isEmpty ? code : '$code · $title';
-    return InkWell(
+    return HoldFeedback(borderRadius: BorderRadius.zero, child: InkWell(
+      splashFactory: NoSplash.splashFactory,
+      highlightColor: Colors.transparent,
       onTap: onTap,
       onLongPress: withHoldHaptic(onLongPress),
       onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
@@ -2062,7 +2067,7 @@ class _GroupEpisodeRow extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 }
 

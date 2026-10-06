@@ -14,6 +14,7 @@ import '../../theme/app_theme_scope.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'styles/iptv_style.dart';
+import '../hold_feedback.dart';
 
 /// Matches a trailing resolution the M3U names embed, e.g. "(1080p)" / "(576i)".
 final RegExp _resExp = RegExp(r'\((\d{3,4}[pi])\)', caseSensitive: false);
@@ -542,14 +543,17 @@ class _IptvChannelRowState extends State<IptvChannelRow>
           setState(() => _hovered = false);
         },
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          // Touch/desktop counterpart of TV's hold-OK. The row had no
-          // long-press before, so this adds a gesture rather than
-          // reinterpreting one.
-          onLongPress: widget.onLongPress ?? widget.onOpenListPicker,
-          behavior: HitTestBehavior.opaque,
-          child: row,
+        child: HoldFeedback(
+          borderRadius: BorderRadius.circular(12),
+          child: GestureDetector(
+            onTap: widget.onTap,
+            // Touch/desktop counterpart of TV's hold-OK. The row had no
+            // long-press before, so this adds a gesture rather than
+            // reinterpreting one.
+            onLongPress: widget.onLongPress ?? widget.onOpenListPicker,
+            behavior: HitTestBehavior.opaque,
+            child: row,
+          ),
         ),
       ),
     );

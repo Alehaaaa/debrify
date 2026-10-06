@@ -186,12 +186,13 @@ void main() {
         ),
       ),
     );
+    // The frosted lens is real backdrop blur.
     Finder ripple() => find.descendant(
       of: find.byType(HoldFeedback),
-      matching: find.byType(CustomPaint),
+      matching: find.byType(BackdropFilter),
     );
 
-    testWidgets('a press ripples on top of the card and fades after', (
+    testWidgets('a press frosts the tile under the finger and thaws after', (
       tester,
     ) async {
       await tester.pumpWidget(host());
@@ -202,6 +203,16 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(ripple(), findsOneWidget);
+      // …and the tile sinks under the finger.
+      final sink = tester.widget<Transform>(
+        find
+            .descendant(
+              of: find.byType(HoldFeedback),
+              matching: find.byType(Transform),
+            )
+            .first,
+      );
+      expect(sink.transform.storage[0], lessThan(1)); // x scale
       // A pointer press never draws the TV ring.
       expect(find.byType(CircularProgressIndicator), findsNothing);
       await gesture.up();
@@ -209,7 +220,7 @@ void main() {
       expect(ripple(), findsNothing);
     });
 
-    testWidgets('scrolling away drops the ripple', (tester) async {
+    testWidgets('scrolling away lets the glass go', (tester) async {
       await tester.pumpWidget(host());
       final gesture = await tester.startGesture(
         tester.getCenter(find.byType(HoldFeedback)),
