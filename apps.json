@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/30bbdaaddf1f256b36478dea50521f1584ab5f56/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610060858",
+          "date": "2026-10-06T09:01:36Z",
+          "localizedDescription": "What's new:\n• One hold for every card: 500ms, ripple, tap feedback (30bbdaad)\n\nBuild 202610060858 from nextup@30bbdaa\nhttps://github.com/Alehaaaa/debrify/compare/47d633c...30bbdaa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-34-30bbdaa.ipa",
+          "size": 39861214,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610060848",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Detail: one page for every catalog title (23eaa594)\n\nBuild 202610042212 from nextup@23eaa59\nhttps://github.com/Alehaaaa/debrify/compare/6cbb890...23eaa59",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-24-23eaa59.ipa",
           "size": 39793405,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610042200",
-          "date": "2026-10-04T22:05:51Z",
-          "localizedDescription": "What's new:\n• Download flow: one question, clear feedback, series scopes (6cbb8904)\n\nBuild 202610042200 from nextup@6cbb890\nhttps://github.com/Alehaaaa/debrify/compare/55da851...6cbb890",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-23-6cbb890.ipa",
-          "size": 39813471,
           "minOSVersion": "14.0"
         }
       ],
