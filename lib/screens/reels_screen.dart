@@ -80,12 +80,16 @@ class ReelPlayback {
     required this.streams,
     required this.active,
     required this.volume,
+    this.paused = false,
   });
 
   final StremioMeta item;
   final YoutubeResolvedStreams? streams;
   final bool active;
   final double volume;
+
+  /// Tapped to pause: hold the frame, keep the player.
+  final bool paused;
 }
 
 class _ReelsScreenState extends State<ReelsScreen> {
@@ -94,15 +98,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
   static bool _muted = false;
 
   /// Confirmed titles kept queued past the one on screen, so a fling never
-  /// runs into the end of the feed. Each costs one request.
-  static const int _ahead = 3;
+  /// runs into the end of the feed. Each costs one TMDB request.
+  static const int _ahead = 6;
+
+  /// Reels past the one on screen whose clip is resolved ahead, so swiping
+  /// through several in a row lands on clips that start straight away. Each
+  /// costs one YouTube lookup.
+  static const int _streamsAhead = 3;
 
   /// How far the first reel must be pulled down to refresh it.
   static const double _refreshPull = 90;
-
-  /// How long a page must stay put before its clip is resolved: a fling
-  /// passes through pages faster than this and resolves none of them.
-  static const Duration _settle = Duration(milliseconds: 150);
 
   late final ReelsFeed _feed = widget.feed ?? ReelsFeed();
   final PageController _pages = PageController();
@@ -116,7 +121,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
   bool _exhausted = false;
   bool _refreshing = false;
   double _pull = 0;
-  Timer? _settleTimer;
+
+  /// The reel on screen is paused (a tap on the video). A new reel always
+  /// starts playing.
+  bool _paused = false;
+
+  bool _preparing = false;
+  bool _prepareAgain = false;
 
   bool get _current => mounted && ProfileRuntime.scope.value == _scope;
 
@@ -132,7 +143,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   @override
   void dispose() {
-    _settleTimer?.cancel();
     _pages.dispose();
     _focus.dispose();
     super.dispose();
@@ -149,7 +159,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
       if (need <= 0) return;
       final titles = await _feed.take(need);
       if (!_current) return;
-      final first = _reels.isEmpty;
       setState(() {
         _reels.addAll(titles.map(_Reel.new));
         if (titles.isEmpty) _exhausted = true;
@@ -157,17 +166,35 @@ class _ReelsScreenState extends State<ReelsScreen> {
       for (final title in titles) {
         unawaited(_loadWatchlist(title.item));
       }
-      if (first) _prepare();
+      _prepare();
     } finally {
       _filling = false;
     }
   }
 
-  /// Resolve the clip on screen, then the next one.
+  /// Resolve clips for the reel on screen first, then the next
+  /// [_streamsAhead] together. One pass at a time; a call while one is
+  /// running (the page moved, more titles arrived) re-runs it afterwards
+  /// against the new window.
   void _prepare() {
+    if (_preparing) {
+      _prepareAgain = true;
+      return;
+    }
+    _preparing = true;
     unawaited(() async {
-      await _resolve(_index);
-      await _resolve(_index + 1);
+      try {
+        do {
+          _prepareAgain = false;
+          final at = _index;
+          await _resolve(at);
+          await Future.wait([
+            for (var i = at + 1; i <= at + _streamsAhead; i++) _resolve(i),
+          ]);
+        } while (_prepareAgain && _current);
+      } finally {
+        _preparing = false;
+      }
     }());
   }
 
@@ -233,13 +260,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _onPage(int index) {
-    setState(() => _index = index);
+    setState(() {
+      _index = index;
+      _paused = false;
+    });
     HapticFeedback.selectionClick();
     unawaited(_fill());
-    _settleTimer?.cancel();
-    _settleTimer = Timer(_settle, () {
-      if (mounted && _index == index) _prepare();
-    });
+    _prepare();
+  }
+
+  void _togglePause() {
+    HapticFeedback.selectionClick();
+    setState(() => _paused = !_paused);
   }
 
   /// DPAD / keyboard: up and down move through the feed, OK opens the title.
@@ -389,6 +421,8 @@ class _ReelsScreenState extends State<ReelsScreen> {
               key: ValueKey(_watchKey(reel.item)),
               reel: reel,
               active: i == _index,
+              paused: i == _index && _paused,
+              onTogglePause: _togglePause,
               muted: _muted,
               inWatchlist: _inWatchlist[_watchKey(reel.item)] ?? false,
               onMute: _toggleMute,
@@ -444,6 +478,8 @@ class _ReelsScreenState extends State<ReelsScreen> {
 class _ReelPage extends StatelessWidget {
   final _Reel reel;
   final bool active;
+  final bool paused;
+  final VoidCallback onTogglePause;
   final bool muted;
   final bool inWatchlist;
   final VoidCallback onMute;
@@ -455,6 +491,8 @@ class _ReelPage extends StatelessWidget {
     super.key,
     required this.reel,
     required this.active,
+    required this.paused,
+    required this.onTogglePause,
     required this.muted,
     required this.inWatchlist,
     required this.onMute,
@@ -472,6 +510,7 @@ class _ReelPage extends StatelessWidget {
       streams: reel.streams,
       active: active,
       volume: muted ? 0 : 100,
+      paused: paused,
     );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
     final description = item.description?.trim();
@@ -479,7 +518,27 @@ class _ReelPage extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        playerBuilder?.call(playback) ?? _ReelPlayer(playback: playback),
+        // The video itself: a tap pauses or resumes it. The title, text and
+        // buttons above keep their own taps.
+        GestureDetector(
+          onTap: onTogglePause,
+          behavior: HitTestBehavior.opaque,
+          child:
+              playerBuilder?.call(playback) ?? _ReelPlayer(playback: playback),
+        ),
+        if (paused)
+          const IgnorePointer(
+            child: Center(
+              child: _GlassCircle(
+                size: 72,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 44,
+                ),
+              ),
+            ),
+          ),
         // Bottom scrim: the identity reads on any frame.
         const IgnorePointer(
           child: DecoratedBox(
@@ -666,6 +725,8 @@ class _ReelPlayer extends StatelessWidget {
         audioUrl: streams.audioUrl,
         muxedVideoUrl: streams.muxedPlaybackFallback,
         enabled: true,
+        // Paused holds the frame on the same player (no teardown, no reload).
+        suspended: playback.paused,
         ambientVolume: playback.volume,
         imageBlurSigma: 0,
         videoBlurSigma: 0,

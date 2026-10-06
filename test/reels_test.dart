@@ -179,7 +179,7 @@ void main() {
             playerBuilder: (p) => ColoredBox(
               key: ValueKey(
                 'player:${p.item.id}:${p.active}:${p.volume}:'
-                '${p.streams != null}',
+                '${p.streams != null}:${p.paused}',
               ),
               color: Colors.black,
             ),
@@ -191,7 +191,7 @@ void main() {
     setUp(() => resolved = []);
 
     Finder playing(String id, {double volume = 100}) =>
-        find.byKey(ValueKey('player:$id:true:$volume:true'));
+        find.byKey(ValueKey('player:$id:true:$volume:true:false'));
     String? activeId(WidgetTester tester) {
       for (final element in find.byType(ColoredBox).evaluate()) {
         final key = element.widget.key;
@@ -219,17 +219,48 @@ void main() {
       expect(find.textContaining('LESS', findRichText: true), findsOneWidget);
     });
 
-    testWidgets('streams are resolved only for the reel on screen and the '
-        'next one', (tester) async {
+    testWidgets('clips are ready three reels ahead, and the window moves '
+        'with every swipe', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb())));
       await tester.pumpAndSettle();
-      // Four titles queued (one on screen + three ahead), two resolved.
-      expect(resolved.length, 2);
+      // The reel on screen plus the next three.
+      expect(resolved.length, 4);
 
       await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
       await tester.pumpAndSettle();
-      // Landed on the second: it was already resolved; only the third is new.
-      expect(resolved.length, 3);
+      // Landed on a reel that was already resolved — it plays at once — and
+      // one more joins the window.
+      expect(playing(activeId(tester)!), findsOneWidget);
+      expect(resolved.length, 5);
+      expect(resolved.toSet().length, resolved.length);
+    });
+
+    testWidgets('tapping the video pauses and resumes; a new reel plays', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(feedFor(FakeTmdb())));
+      await tester.pumpAndSettle();
+      final id = activeId(tester)!;
+
+      await tester.tapAt(const Offset(200, 150));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey('player:$id:true:100.0:true:true')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+
+      await tester.tapAt(const Offset(200, 150));
+      await tester.pumpAndSettle();
+      expect(playing(id), findsOneWidget);
+
+      // Paused, then swiped on: the next reel starts playing.
+      await tester.tapAt(const Offset(200, 150));
+      await tester.pumpAndSettle();
+      await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
+      await tester.pumpAndSettle();
+      expect(playing(activeId(tester)!), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     });
 
     testWidgets('a clip that can\'t play moves on to the next reel', (
