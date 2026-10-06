@@ -80,51 +80,26 @@ class _StremioCard extends StatefulWidget {
 }
 
 class _StremioCardState extends State<_StremioCard>
-    with SingleTickerProviderStateMixin, MetadataPresentationMixin<_StremioCard> {
+    with MetadataPresentationMixin<_StremioCard> {
   @override
   StremioMeta get originalMetadata => widget.item;
   bool _focused = false;
   bool _hovered = false;
-  bool _keyDown = false;
   bool get _active => _focused || _hovered;
 
-  /// Hold-OK on TV (same 500ms as the IPTV channel row's hold-to-favourite) —
-  /// only armed on cards that have an [_StremioCard.onLongPress] menu. A short
-  /// press still opens the title. Driven by a controller so the focused card
-  /// can show the hold filling, making an otherwise-invisible gesture
-  /// discoverable.
-  static const _holdDuration = Duration(milliseconds: 500);
-  late final AnimationController _holdController = AnimationController(
-    vsync: this,
-    duration: _holdDuration,
+  /// OK opens; a held OK ([kHoldDuration]) opens the card's
+  /// [_StremioCard.onLongPress] menu, with the ring filling toward it so the
+  /// otherwise invisible gesture is discoverable.
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+    canHold: () => widget.onLongPress != null,
   );
-  bool _holdFired = false;
-  bool _holding = false;
-
-  bool get _holdEnabled => widget.isTelevision && widget.onLongPress != null;
-
-  @override
-  void initState() {
-    super.initState();
-    _holdController.addStatusListener((status) {
-      if (status != AnimationStatus.completed) return;
-      _holdFired = true;
-      if (mounted) setState(() => _holding = false);
-      _holdController.reset();
-      widget.onLongPress?.call();
-    });
-  }
 
   @override
   void dispose() {
-    _holdController.dispose();
+    _hold.reset();
     super.dispose();
-  }
-
-  /// Abandon an in-flight hold (focus left, or the key came back up).
-  void _cancelHold() {
-    _holdController.reset();
-    if (_holding && mounted) setState(() => _holding = false);
   }
 
   @override
@@ -303,9 +278,6 @@ class _StremioCardState extends State<_StremioCard>
             ),
           ),
         ),
-      // Hold-OK feedback: a dim scrim with a filling ring, shown only
-      // while OK is actually held down (so it costs nothing at rest).
-      if (_holding) _holdLayer(),
     ];
 
     final artCard = CollectionFocusGlow(
@@ -331,13 +303,9 @@ class _StremioCardState extends State<_StremioCard>
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) {
-          // Focus left mid-press — disarm, so a stray key-up can't open a card
-          // the user never pressed and a half-filled hold can't fire.
-          _keyDown = false;
-          _holdFired = false;
-          _cancelHold();
-        }
+        // Focus left mid-press — disarm, so a stray key-up can't open a card
+        // the user never pressed and a half-filled hold can't fire.
+        if (!f) _hold.reset();
         if (f) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -360,38 +328,7 @@ class _StremioCardState extends State<_StremioCard>
         }
       },
       onKeyEvent: (node, event) {
-        if (isActivateKey(event.logicalKey) ||
-            event.logicalKey == LogicalKeyboardKey.space) {
-          // Cards with a long-press menu (Continue Watching) tell a tap from a
-          // hold; every other card keeps the plain press-to-open path.
-          if (_holdEnabled) {
-            if (event is KeyDownEvent) {
-              _keyDown = true;
-              _holdFired = false;
-              setState(() => _holding = true);
-              _holdController.forward(from: 0);
-            } else if (event is KeyUpEvent) {
-              // A press this card actually started, released before the hold
-              // completed → open. A key-up with no matching key-down (focus
-              // arrived mid-press) is swallowed.
-              final wasPress = _keyDown && !_holdFired;
-              _keyDown = false;
-              _holdFired = false;
-              _cancelHold();
-              if (wasPress) widget.onOpen();
-            }
-            // Swallow auto-repeat while the key is held.
-            return KeyEventResult.handled;
-          }
-          if (event is KeyDownEvent) {
-            _keyDown = true;
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            if (_keyDown) widget.onOpen();
-            _keyDown = false;
-            return KeyEventResult.handled;
-          }
-        }
+        if (isActivateOrSpaceKey(event.logicalKey)) return _hold.handle(event);
         return KeyEventResult.ignored;
       },
       child: MouseRegion(
@@ -410,11 +347,13 @@ class _StremioCardState extends State<_StremioCard>
           // for. The dialog rows mark the key action; this drops its echo.
           onTap: () {
             if (DialogTapGuard.shouldIgnoreTap()) return;
-            widget.onOpen();
+            withTapFeedback(widget.onOpen)();
           },
           // Touch/desktop counterpart of TV's hold-OK: the menu when there is
           // one, else the old long-press-to-play.
-          onLongPress: widget.onLongPress ?? widget.onQuickPlay,
+          onLongPress: withHoldHaptic(widget.onLongPress ?? widget.onQuickPlay),
+          // Right-click is the pointer's way to the same menu.
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
           // No title beneath the poster — Stremio lets the artwork carry the
           // rail; the title lives on the hero (focused) and the detail page.
@@ -422,43 +361,22 @@ class _StremioCardState extends State<_StremioCard>
           // RepaintBoundary so the focus pop (scale tween + shadow flip)
           // repaints only this card's layer, not the whole row viewport.
           child: RepaintBoundary(
-            child: widget.heroTag == null
-                ? posterCard
-                : Hero(
-                    tag: widget.heroTag!,
-                    // Card-side shuttle covers BOTH directions (the backdrop hero
-                    // defines none): the flight always shows the poster, growing
-                    // into the detail backdrop on push and shrinking home on pop.
-                    flightShuttleBuilder: _posterFlightShuttle,
-                    child: posterCard,
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Hold-OK feedback layer — a dim scrim with a filling ring, shown only
-  /// while OK is actually held down (so it costs nothing at rest). Shared by
-  /// the poster and wide layer sets.
-  Widget _holdLayer() {
-    return Positioned.fill(
-      child: IgnorePointer(
-        child: ColoredBox(
-          color: Colors.black.withValues(alpha: 0.42),
-          child: Center(
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: AnimatedBuilder(
-                animation: _holdController,
-                builder: (_, __) => CircularProgressIndicator(
-                  value: _holdController.value,
-                  strokeWidth: 3,
-                  backgroundColor: Colors.white.withValues(alpha: 0.22),
-                  valueColor: const AlwaysStoppedAnimation(kStremioFocusRing),
-                ),
-              ),
+            // Touch/mouse holds fill the same ring TV's hold-OK draws above.
+            child: HoldFeedback(
+              ripple: !widget.isTelevision,
+              controller: _hold.ring,
+              borderRadius: BorderRadius.circular(10),
+              child: widget.heroTag == null
+                  ? posterCard
+                  : Hero(
+                      tag: widget.heroTag!,
+                      // Card-side shuttle covers BOTH directions (the backdrop
+                      // hero defines none): the flight always shows the poster,
+                      // growing into the detail backdrop on push and shrinking
+                      // home on pop.
+                      flightShuttleBuilder: _posterFlightShuttle,
+                      child: posterCard,
+                    ),
             ),
           ),
         ),
@@ -732,6 +650,10 @@ class _ArtPoster extends StatefulWidget {
   final FocusNode focusNode;
   final VoidCallback onOpen;
 
+  /// Optional card menu: long-press, right-click, or a held OK on TV. Null
+  /// keeps OK a plain open.
+  final VoidCallback? onLongPress;
+
   /// Fired when this card gains DPAD focus (TV only — see [_ArtPosterState]'s
   /// `onFocusChange`). The IPTV favourites rows use it to retune the hero's
   /// video region (boxed on classic, full-bleed on Canvas) to the focused
@@ -747,6 +669,7 @@ class _ArtPoster extends StatefulWidget {
     required this.isTelevision,
     required this.focusNode,
     required this.onOpen,
+    this.onLongPress,
     this.imageFit = BoxFit.cover,
     this.badge,
     this.live = false,
@@ -762,7 +685,19 @@ class _ArtPoster extends StatefulWidget {
 class _ArtPosterState extends State<_ArtPoster> {
   bool _focused = false;
   bool _hovered = false;
-  bool _keyDown = false;
+
+  /// OK opens; a held OK opens [_ArtPoster.onLongPress] when set.
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+    canHold: () => widget.onLongPress != null,
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
   bool get _active => _focused || _hovered;
 
   Widget _glyph() {
@@ -899,7 +834,7 @@ class _ArtPosterState extends State<_ArtPoster> {
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) _keyDown = false;
+        if (!f) _hold.reset();
         if (f) {
           widget.onFocused?.call();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -923,14 +858,7 @@ class _ArtPosterState extends State<_ArtPoster> {
       onKeyEvent: (node, event) {
         if (isActivateKey(event.logicalKey) ||
             event.logicalKey == LogicalKeyboardKey.space) {
-          if (event is KeyDownEvent) {
-            _keyDown = true;
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            if (_keyDown) widget.onOpen();
-            _keyDown = false;
-            return KeyEventResult.handled;
-          }
+          return _hold.handle(event);
         }
         return KeyEventResult.ignored;
       },
@@ -943,12 +871,23 @@ class _ArtPosterState extends State<_ArtPoster> {
         },
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: widget.onOpen,
+          onTap: () {
+            // Same echo guard as [_StremioCard]: a DPAD pick in the hold menu
+            // must not fall through and open this card underneath.
+            if (DialogTapGuard.shouldIgnoreTap()) return;
+            withTapFeedback(widget.onOpen)();
+          },
+          onLongPress: withHoldHaptic(widget.onLongPress),
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onLongPress),
           behavior: HitTestBehavior.opaque,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              posterCard,
+              HoldFeedback(
+                controller: _hold.ring,
+                borderRadius: BorderRadius.circular(10),
+                child: posterCard,
+              ),
               if (widget.showTitle) ...[
                 const SizedBox(height: _kArtTitleGap),
                 Text(

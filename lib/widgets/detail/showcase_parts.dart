@@ -18,6 +18,8 @@ import '../../theme/widgets/parallax_focus.dart';
 import '../../theme/widgets/themed_skeleton.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
+import '../card_action_menu.dart' show CardMenuGesture;
+import '../hold_feedback.dart';
 import '../../utils/wide_touch_scale.dart';
 import '../optical_logo.dart';
 import '../episodes_panel.dart';
@@ -857,17 +859,10 @@ class ShowcaseIdentity extends StatelessWidget {
     if (m.isTelevision || !(m.trailerPlaying || m.trailerPromotable)) {
       return band;
     }
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: m.onTrailer,
-          ),
-        ),
-        band,
-      ],
-    );
+    // Only the art ABOVE the logo answers: below it sit the meta line,
+    // synopsis and buttons, where a miss of a few pixels shouldn't throw the
+    // page into a fullscreen trailer.
+    return _TrailerTapRegion(onTrailer: m.onTrailer, child: band);
   }
 
   /// The phone identity — the Apple phone idiom: everything centered and
@@ -896,7 +891,7 @@ class ShowcaseIdentity extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           if ((m.synopsis ?? '').isNotEmpty) ...[
-            _ExpandableSynopsis(text: m.synopsis!),
+            ExpandableSynopsis(text: m.synopsis!),
             const SizedBox(height: 10),
           ] else if (m.detailsLoading) ...[
             const _TextSkeleton(lines: 2, centered: true),
@@ -1005,6 +1000,98 @@ class ShowcaseIdentity extends StatelessWidget {
   }
 }
 
+/// The empty key art behind the Showcase identity, tappable to bring the
+/// rolling trailer forward — but only above the logo (see [_LogoAnchor]).
+class _TrailerTapRegion extends StatefulWidget {
+  final VoidCallback onTrailer;
+  final Widget child;
+
+  const _TrailerTapRegion({required this.onTrailer, required this.child});
+
+  @override
+  State<_TrailerTapRegion> createState() => _TrailerTapRegionState();
+}
+
+class _TrailerTapRegionState extends State<_TrailerTapRegion> {
+  final _LogoAnchor _anchor = _LogoAnchor();
+
+  @override
+  Widget build(BuildContext context) {
+    return _LogoAnchorScope(
+      anchor: _anchor,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTapUp: (details) {
+                if (_anchor.isAbove(details.globalPosition)) {
+                  widget.onTrailer();
+                }
+              },
+            ),
+          ),
+          widget.child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Where the identity's logo slot sits, so a tap can be checked against it.
+class _LogoAnchor {
+  BuildContext? _logo;
+
+  /// True when [global] is above the logo's top edge — or when there is no
+  /// laid-out logo to measure against, which keeps the old whole-art tap.
+  bool isAbove(Offset global) {
+    final box = _logo?.findRenderObject();
+    if (box is! RenderBox || !box.attached || !box.hasSize) return true;
+    return global.dy < box.localToGlobal(Offset.zero).dy;
+  }
+}
+
+class _LogoAnchorScope extends InheritedWidget {
+  final _LogoAnchor anchor;
+
+  const _LogoAnchorScope({required this.anchor, required super.child});
+
+  static _LogoAnchor? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<_LogoAnchorScope>()
+      ?.anchor;
+
+  @override
+  bool updateShouldNotify(_LogoAnchorScope oldWidget) =>
+      oldWidget.anchor != anchor;
+}
+
+/// Registers its subtree as the [_LogoAnchor]'s logo.
+class _LogoAnchorTarget extends StatefulWidget {
+  final Widget child;
+
+  const _LogoAnchorTarget({required this.child});
+
+  @override
+  State<_LogoAnchorTarget> createState() => _LogoAnchorTargetState();
+}
+
+class _LogoAnchorTargetState extends State<_LogoAnchorTarget> {
+  _LogoAnchor? _anchor;
+
+  @override
+  Widget build(BuildContext context) {
+    _anchor = _LogoAnchorScope.maybeOf(context);
+    _anchor?._logo = context;
+    return widget.child;
+  }
+
+  @override
+  void dispose() {
+    if (_anchor?._logo == context) _anchor!._logo = null;
+    super.dispose();
+  }
+}
+
 class _LogoOrTitle extends StatelessWidget {
   final String? url;
   final String name;
@@ -1048,65 +1135,80 @@ class _LogoOrTitle extends StatelessWidget {
     // compact marks alike, instead of a fixed box that left long ones tiny.
     // Capped to the available width so the centred phone identity never
     // overflows.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final slotWidth = min(
-          OpticalLogo.defaultMaxWidth * m.k,
-          constraints.maxWidth,
-        );
-        final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
-        return SizedBox(
-          width: slotWidth,
-          height: slotHeight,
-          child: Align(
-            alignment: alignment,
-            child: (url == null || url!.isEmpty)
-                ? FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: alignment,
-                    child: text,
-                  )
-                : CachedNetworkImage(
-                    imageUrl: url!,
-                    cacheManager: DebrifyImageCache.manager,
-                    // ~2x the widest slot so long logos stay crisp on HiDPI.
-                    memCacheWidth: 960,
-                    imageBuilder: (context, image) => OpticalLogo(
-                      image: image,
-                      alignment: alignment,
-                      maxWidth: slotWidth,
-                      maxHeight: slotHeight,
-                      area: OpticalLogo.defaultArea * m.k * m.k,
-                    ),
-                    placeholder: (_, __) => const SizedBox.expand(),
-                    errorWidget: (_, __, ___) => FittedBox(
+    return _LogoAnchorTarget(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final slotWidth = min(
+            OpticalLogo.defaultMaxWidth * m.k,
+            constraints.maxWidth,
+          );
+          final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
+          return SizedBox(
+            width: slotWidth,
+            height: slotHeight,
+            child: Align(
+              alignment: alignment,
+              child: (url == null || url!.isEmpty)
+                  ? FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: alignment,
                       child: text,
+                    )
+                  : CachedNetworkImage(
+                      imageUrl: url!,
+                      cacheManager: DebrifyImageCache.manager,
+                      // ~2x the widest slot so long logos stay crisp on HiDPI.
+                      memCacheWidth: 960,
+                      imageBuilder: (context, image) => OpticalLogo(
+                        image: image,
+                        alignment: alignment,
+                        maxWidth: slotWidth,
+                        maxHeight: slotHeight,
+                        area: OpticalLogo.defaultArea * m.k * m.k,
+                      ),
+                      placeholder: (_, __) => const SizedBox.expand(),
+                      errorWidget: (_, __, ___) => FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: alignment,
+                        child: text,
+                      ),
                     ),
-                  ),
-          ),
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 }
 
-/// A left-aligned, two-line synopsis with an inline MORE affordance. Tapping
-/// expands in place; LESS stays at the end of the expanded copy so the control
-/// never consumes a row on its own.
-class _ExpandableSynopsis extends StatefulWidget {
+/// A left-aligned synopsis clamped to [maxLines] with an inline MORE
+/// affordance. Tapping expands in place; LESS stays at the end of the
+/// expanded copy so the control never consumes a row on its own. The detail
+/// page's identity uses it, and so does a Reel.
+class ExpandableSynopsis extends StatefulWidget {
   final String text;
-  const _ExpandableSynopsis({required this.text});
+  final int maxLines;
+
+  /// Body and MORE/LESS styles; null keeps the detail page's own.
+  final TextStyle? style;
+  final TextStyle? actionStyle;
+
+  const ExpandableSynopsis({
+    super.key,
+    required this.text,
+    this.maxLines = 2,
+    this.style,
+    this.actionStyle,
+  });
 
   @override
-  State<_ExpandableSynopsis> createState() => _ExpandableSynopsisState();
+  State<ExpandableSynopsis> createState() => _ExpandableSynopsisState();
 }
 
-class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
+class _ExpandableSynopsisState extends State<ExpandableSynopsis> {
   bool _open = false;
 
-  /// Fits a word-bound prefix plus the inline affordance into two lines. The
+  /// Fits a word-bound prefix plus the inline affordance into the clamp. The
   /// normal TextOverflow ellipsis cannot append a tappable span after its own
   /// ellipsis, so measure the composed text and choose that prefix ourselves.
   String _collapsedText({
@@ -1120,7 +1222,7 @@ class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
         text: TextSpan(text: '$value…\u00a0MORE', style: style),
         textDirection: textDirection,
         textScaler: textScaler,
-        maxLines: 2,
+        maxLines: widget.maxLines,
       )..layout(maxWidth: width);
       return !painter.didExceedMaxLines;
     }
@@ -1145,12 +1247,11 @@ class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
 
   @override
   Widget build(BuildContext context) {
-    final bodyStyle = _t(12.5, a: 0.78).copyWith(height: 1.5);
-    final actionStyle = _t(
-      10.5,
-      w: FontWeight.w700,
-      a: 0.9,
-    ).copyWith(letterSpacing: 0.8);
+    final bodyStyle =
+        widget.style ?? _t(12.5, a: 0.78).copyWith(height: 1.5);
+    final actionStyle =
+        widget.actionStyle ??
+        _t(10.5, w: FontWeight.w700, a: 0.9).copyWith(letterSpacing: 0.8);
     return LayoutBuilder(
       builder: (context, constraints) {
         final direction = Directionality.of(context);
@@ -1159,7 +1260,7 @@ class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
           text: TextSpan(text: widget.text, style: bodyStyle),
           textDirection: direction,
           textScaler: scaler,
-          maxLines: 2,
+          maxLines: widget.maxLines,
         )..layout(maxWidth: constraints.maxWidth);
         final truncated = full.didExceedMaxLines;
         final content = _open
@@ -1191,7 +1292,7 @@ class _ExpandableSynopsisState extends State<_ExpandableSynopsis> {
                 ],
               ),
               textAlign: TextAlign.left,
-              maxLines: _open ? null : 2,
+              maxLines: _open ? null : widget.maxLines,
               overflow: TextOverflow.clip,
             ),
           ),
@@ -2677,11 +2778,15 @@ class ShowcaseRecs extends StatelessWidget {
   final List<FocusNode> nodes;
   final void Function(StremioMeta)? onTap;
 
+  /// Hold / right-click on a title: its card menu. Null leaves it tap-only.
+  final void Function(StremioMeta)? onHold;
+
   const ShowcaseRecs({
     super.key,
     required this.items,
     required this.nodes,
     required this.onTap,
+    this.onHold,
   });
 
   @override
@@ -2700,6 +2805,7 @@ class ShowcaseRecs extends StatelessWidget {
           item: items[i],
           node: nodes[i],
           onTap: onTap,
+          onHold: onHold,
           width: m.poster,
           height: m.posterH,
         ),
@@ -2712,6 +2818,7 @@ class _Poster extends StatefulWidget {
   final StremioMeta item;
   final FocusNode node;
   final void Function(StremioMeta)? onTap;
+  final void Function(StremioMeta)? onHold;
   final double width;
   final double height;
 
@@ -2719,6 +2826,7 @@ class _Poster extends StatefulWidget {
     required this.item,
     required this.node,
     required this.onTap,
+    this.onHold,
     required this.width,
     required this.height,
   });
@@ -2729,6 +2837,19 @@ class _Poster extends StatefulWidget {
 
 class _PosterState extends State<_Poster> {
   bool _f = false;
+
+  /// OK opens; a held OK opens the title's menu (when there is one).
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onTap?.call(widget.item),
+    onHold: () => widget.onHold?.call(widget.item),
+    canHold: () => widget.onHold != null,
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2741,11 +2862,21 @@ class _PosterState extends State<_Poster> {
       onFocusChange: (v) {
         setState(() => _f = v);
         if (v) _keepVisible(context);
+        if (!v) _hold.reset();
       },
-      onKeyEvent: (_, e) => _activate(e, () => widget.onTap?.call(widget.item)),
+      onKeyEvent: (_, e) => widget.onHold != null &&
+              isActivateOrSpaceKey(e.logicalKey)
+          ? _hold.handle(e)
+          : _activate(e, () => widget.onTap?.call(widget.item)),
       child: _Hover(
         builder: (context, hovered) => GestureDetector(
           onTap: () => widget.onTap?.call(widget.item),
+          onLongPress: withHoldHaptic(
+            widget.onHold == null ? null : () => widget.onHold!(widget.item),
+          ),
+          onSecondaryTap: CardMenuGesture.secondaryClick(
+            widget.onHold == null ? null : () => widget.onHold!(widget.item),
+          ),
           // The band is taller than the card so the lift has somewhere to go,
           // and a horizontal ListView constrains its children to that height
           // TIGHTLY — without an Align the poster is stretched to the band
@@ -2755,21 +2886,27 @@ class _PosterState extends State<_Poster> {
             child: ParallaxFocus(
               focused: _f || hovered,
               radius: BorderRadius.circular(7),
-              child: ClipRRect(
+              child: HoldFeedback(
+                controller: _hold.ring,
+                ripple: widget.onHold != null,
                 borderRadius: BorderRadius.circular(7),
-                child: SizedBox(
-                  width: widget.width,
-                  height: widget.height,
-                  child: (url != null && url.isNotEmpty)
-                      ? CachedNetworkImage(
-                          imageUrl: url,
-                          fit: BoxFit.cover,
-                          cacheManager: DebrifyImageCache.manager,
-                          memCacheWidth: 300,
-                          placeholder: (_, __) => ColoredBox(color: slot),
-                          errorWidget: (_, __, ___) => ColoredBox(color: slot),
-                        )
-                      : ColoredBox(color: slot),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: SizedBox(
+                    width: widget.width,
+                    height: widget.height,
+                    child: (url != null && url.isNotEmpty)
+                        ? CachedNetworkImage(
+                            imageUrl: url,
+                            fit: BoxFit.cover,
+                            cacheManager: DebrifyImageCache.manager,
+                            memCacheWidth: 300,
+                            placeholder: (_, __) => ColoredBox(color: slot),
+                            errorWidget: (_, __, ___) =>
+                                ColoredBox(color: slot),
+                          )
+                        : ColoredBox(color: slot),
+                  ),
                 ),
               ),
             ),

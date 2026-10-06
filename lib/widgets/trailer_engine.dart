@@ -81,7 +81,13 @@ abstract class TrailerEngine {
 /// Unlike a Flutter Texture, the platform view's AVPlayer layer does not make
 /// the whole Flutter scene re-rasterise for each decoded frame.
 class PlatformViewTrailerEngine implements TrailerEngine {
-  PlatformViewTrailerEngine();
+  PlatformViewTrailerEngine({this.startPaused = false})
+    : _wantsPlay = !startPaused;
+
+  final bool startPaused;
+  bool _wantsPlay;
+  bool _ready = false;
+  double _wantedVolume = 0;
 
   @override
   bool get rendersUnderlay => false;
@@ -115,7 +121,11 @@ class PlatformViewTrailerEngine implements TrailerEngine {
       return;
     }
     if (!value.isInitialized) return;
-    if (!_firstFrame.isCompleted) _firstFrame.complete();
+    if (!_firstFrame.isCompleted &&
+        (!startPaused ||
+            (value.position > Duration.zero && !value.isBuffering))) {
+      _firstFrame.complete();
+    }
     if (_lastPlaying != value.isPlaying) {
       _lastPlaying = value.isPlaying;
       _playing.add(value.isPlaying);
@@ -140,24 +150,59 @@ class PlatformViewTrailerEngine implements TrailerEngine {
       videoPlayerOptions: vp.VideoPlayerOptions(mixWithOthers: true),
       viewType: vp.VideoViewType.platformView,
     );
+    _wantedVolume = volume;
     _controller = controller;
     controller.addListener(_onValue);
     await controller.initialize();
     if (_disposed || _detached) return;
     await controller.setLooping(loop);
-    await controller.setVolume((volume / 100).clamp(0.0, 1.0));
-    await controller.play();
+    if (_disposed || _detached) return;
+    if (startPaused) {
+      // initialize() only prepares metadata. Preroll the next reel silently
+      // until video advances, then park at its opening frame with the buffer
+      // retained. Queued controls cannot unmute it during this preparation.
+      await controller.setVolume(0);
+      if (_disposed || _detached) return;
+      await controller.play();
+      await _firstFrame.future.timeout(const Duration(seconds: 8));
+      if (_disposed || _detached) return;
+      await controller.pause();
+      await controller.seekTo(Duration.zero);
+      if (_disposed || _detached) return;
+    }
+    _ready = true;
+    await setVolume(_wantedVolume);
+    if (_disposed || _detached) return;
+    if (_wantsPlay) await controller.play();
   }
 
   @override
-  Future<void> setVolume(double volume) =>
-      _controller?.setVolume((volume / 100).clamp(0.0, 1.0)) ?? Future.value();
+  Future<void> setVolume(double volume) async {
+    _wantedVolume = volume;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.setVolume((volume / 100).clamp(0.0, 1.0));
+  }
+
   @override
-  Future<void> seek(Duration position) => _controller?.seekTo(position) ?? Future.value();
+  Future<void> seek(Duration position) async {
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.seekTo(position);
+  }
+
   @override
-  Future<void> play() => _controller?.play() ?? Future.value();
+  Future<void> play() async {
+    _wantsPlay = true;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.play();
+  }
+
   @override
-  Future<void> pause() => _controller?.pause() ?? Future.value();
+  Future<void> pause() async {
+    _wantsPlay = false;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.pause();
+  }
+
   @override
   void detach() => _detached = true;
   @override
@@ -203,10 +248,17 @@ class MediaKitTrailerEngine implements TrailerEngine {
   /// Asynchronous because `VideoController`'s constructor IS the output
   /// creation, so the wait has to happen before construction rather than
   /// inside it. See [VideoOutputLease] for why a second one aborts the process.
-  static Future<MediaKitTrailerEngine> create({bool reportPlaybackErrors = false}) async {
+  static Future<MediaKitTrailerEngine> create({
+    bool reportPlaybackErrors = false,
+    bool highResolution = false,
+  }) async {
     final lease = await VideoOutputLease.acquire(debugLabel: 'trailer');
     try {
-      return MediaKitTrailerEngine._(lease, reportPlaybackErrors);
+      return MediaKitTrailerEngine._(
+        lease,
+        reportPlaybackErrors,
+        highResolution,
+      );
     } catch (_) {
       // A throw here would strand the slot forever, and nothing else knows the
       // handle exists yet.
@@ -215,7 +267,11 @@ class MediaKitTrailerEngine implements TrailerEngine {
     }
   }
 
-  MediaKitTrailerEngine._(this._lease, this._reportPlaybackErrors) {
+  MediaKitTrailerEngine._(
+    this._lease,
+    this._reportPlaybackErrors,
+    bool highResolution,
+  ) {
     // Idempotent; the main player also initializes it, but guard in case the
     // trailer is the first media_kit surface in this session.
     MediaKitInit.ensureInitialized();
@@ -226,7 +282,15 @@ class MediaKitTrailerEngine implements TrailerEngine {
     _controller = mkv.VideoController(
       _player,
       configuration: PlatformUtil.isIosMobile
-          ? const mkv.VideoControllerConfiguration(width: 960, height: 540)
+          ? highResolution
+                ? const mkv.VideoControllerConfiguration(
+                    width: 1920,
+                    height: 1080,
+                  )
+                : const mkv.VideoControllerConfiguration(
+                    width: 960,
+                    height: 540,
+                  )
           : const mkv.VideoControllerConfiguration(),
     );
   }
@@ -383,20 +447,19 @@ class MediaKitTrailerEngine implements TrailerEngine {
   }
 
   @override
-  Widget buildVideo({required BoxFit fit, bool revealed = true}) =>
-      mkv.Video(
-        controller: _controller,
-        controls: null,
-        fit: fit,
-        // The package default is FilterQuality.low — bilinear. A portrait
-        // hero cover-crops a 1080p stream ~1.5× up, and low sampling is
-        // visibly soft at that scale; medium adds mipmaps for nearly free on
-        // phone/desktop GPUs. TV keeps the default: the tvOS hero renders
-        // 1:1-ish, and TV paint paths stay untouched on principle.
-        filterQuality: PlatformUtil.isTelevision
-            ? FilterQuality.low
-            : FilterQuality.medium,
-      );
+  Widget buildVideo({required BoxFit fit, bool revealed = true}) => mkv.Video(
+    controller: _controller,
+    controls: null,
+    fit: fit,
+    // The package default is FilterQuality.low — bilinear. A portrait
+    // hero cover-crops a 1080p stream ~1.5× up, and low sampling is
+    // visibly soft at that scale; medium adds mipmaps for nearly free on
+    // phone/desktop GPUs. TV keeps the default: the tvOS hero renders
+    // 1:1-ish, and TV paint paths stay untouched on principle.
+    filterQuality: PlatformUtil.isTelevision
+        ? FilterQuality.low
+        : FilterQuality.medium,
+  );
 }
 
 /// Immutable render state for the Exo texture (id + intrinsic video size).
@@ -434,6 +497,7 @@ class ExoTrailerEngine implements TrailerEngine {
 
   int? _textureId;
   bool _disposed = false;
+
   /// Native release happens once. The Exo path takes no video-output lease —
   /// it has its own decoder discipline and a different failure mode — so this
   /// stays a plain guard rather than joining a shared disposal future.

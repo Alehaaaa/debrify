@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../theme/app_theme_scope.dart';
+import '../card_action_menu.dart';
 import '../catalog_item_tile.dart';
 import 'discover_card_settings_scope.dart';
 import 'discover_shelf_scope.dart';
@@ -106,9 +107,16 @@ class SeeAllPosterGrid extends StatefulWidget {
 
   /// Open the detail page for an item (SELECT / tap).
   final void Function(StremioMeta item) onOpen;
+  final bool localOnly;
 
-  /// Optional long-press / Quick Play straight from the grid.
+  /// Optional long-press / Quick Play straight from the grid. Hold only
+  /// quick-plays when the grid has no options menu (see [onOptions]).
   final void Function(StremioMeta item)? onQuickPlay;
+
+  /// Opens the card's action menu (hold, hold-OK on TV, or right-click). When
+  /// null, a surrounding [CardOptionsScope] supplies one; with neither, hold
+  /// falls back to [onQuickPlay] and right-click does nothing.
+  final void Function(StremioMeta item)? onOptions;
 
   /// Fires when a tile gains focus — carries the focused item up to the host
   /// (the Discover two-pane detail rail listens to this).
@@ -155,8 +163,10 @@ class SeeAllPosterGrid extends StatefulWidget {
     required this.loadingMore,
     required this.exhausted,
     required this.onOpen,
+    this.localOnly = false,
     required this.onLoadMore,
     this.onQuickPlay,
+    this.onOptions,
     this.onItemFocused,
     this.showTypeBadge = true,
     this.showRatingBadge = true,
@@ -398,6 +408,33 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     return KeyEventResult.ignored;
   }
 
+  /// The card menu for this grid: the host's own [SeeAllPosterGrid.onOptions],
+  /// else the surrounding library's [CardOptionsScope] fed this grid's own
+  /// open / quick-play for the item.
+  void Function(StremioMeta item)? _resolveOptions() {
+    final own = widget.onOptions;
+    if (own != null) return own;
+    final scoped = CardOptionsScope.maybeOf(context);
+    if (scoped == null) return null;
+    final quickPlay = widget.onQuickPlay;
+    return (item) => scoped(
+      item,
+      open: () => widget.onOpen(item),
+      quickPlay: quickPlay == null ? null : () => quickPlay(item),
+    );
+  }
+
+  /// Hold opens the menu when there is one; otherwise it keeps the grid's
+  /// original hold-to-Quick-Play.
+  VoidCallback? _holdFor(
+    StremioMeta item,
+    void Function(StremioMeta item)? options,
+  ) {
+    if (options != null) return () => options(item);
+    final quickPlay = widget.onQuickPlay;
+    return quickPlay == null ? null : () => quickPlay(item);
+  }
+
   /// The STAGE shelf: one row of posters pinned to the bottom of the box the
   /// host gave us, with a position line above it. No per-poster title band —
   /// the identity block on the stage names the focused title at full size, and
@@ -409,6 +446,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
   }) {
     final app = AppThemeScope.of(context);
     final items = widget.items;
+    final options = _resolveOptions();
     return Align(
       alignment: Alignment.bottomLeft,
       child: Column(
@@ -500,6 +538,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                         skipTraversal: true,
                         onKeyEvent: (_, e) => _handleShelfArrows(index, e),
                         child: CatalogItemTile(
+                          localOnly: widget.localOnly,
                           item: item,
                           isTelevision: widget.isTelevision,
                           focusNode: index < _nodes.length
@@ -507,9 +546,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                               : null,
                           hasBoundSource: widget.isBound?.call(item) ?? false,
                           onOpen: () => widget.onOpen(item),
-                          onLongPress: widget.onQuickPlay == null
+                          onLongPress: _holdFor(item, options),
+                          onSecondaryTap: options == null
                               ? null
-                              : () => widget.onQuickPlay!(item),
+                              : () => options(item),
                           onFocused: () {
                             _focusIndex.value = index;
                             widget.onItemFocused?.call(item);
@@ -573,6 +613,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     final cols = m.columns;
     final titleH = m.titleHeight;
     const titleGap = SeeAllGridMetrics.titleGap;
+    final options = _resolveOptions();
 
     return CustomScrollView(
       controller: _scroll,
@@ -604,14 +645,16 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                   children: [
                     Expanded(
                       child: CatalogItemTile(
+                        localOnly: widget.localOnly,
                         item: item,
                         isTelevision: widget.isTelevision,
                         focusNode: index < _nodes.length ? _nodes[index] : null,
                         hasBoundSource: widget.isBound?.call(item) ?? false,
                         onOpen: () => widget.onOpen(item),
-                        onLongPress: widget.onQuickPlay == null
+                        onLongPress: _holdFor(item, options),
+                        onSecondaryTap: options == null
                             ? null
-                            : () => widget.onQuickPlay!(item),
+                            : () => options(item),
                         onFocused: widget.onItemFocused == null
                             ? null
                             : () => widget.onItemFocused!(item),

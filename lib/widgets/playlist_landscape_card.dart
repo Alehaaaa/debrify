@@ -7,6 +7,7 @@ import '../theme/widgets/glass_surface.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/tv_keys.dart';
 import '../theme/app_motion.dart' show kMenuSheetAnimation;
+import 'hold_feedback.dart';
 
 /// Landscape playlist card optimized for Android TV horizontal scrolling.
 ///
@@ -226,7 +227,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           }
           return KeyEventResult.ignored;
         },
-        child: GestureDetector(
+        child: HoldFeedback(borderRadius: BorderRadius.circular(12), child: GestureDetector(
           onTap: () => _showActionMenu(context),
           child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -285,7 +286,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 ),
               ),
           ),
-        ),
+        )),
       ),
     );
   }

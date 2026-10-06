@@ -775,8 +775,9 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       icon: Icons.touch_app_rounded,
                       title: 'Hold to Quick Play',
                       subtitle:
-                          'Play immediately when holding a Continue Watching '
-                          'card instead of showing the action menu',
+                          'Play immediately when holding a title card on Home '
+                          'or Discover instead of showing the action menu. '
+                          'Right-click still opens the menu.',
                       subtitleMaxLines: 2,
                       value: _holdToQuickPlay,
                       onChanged: (value) async {

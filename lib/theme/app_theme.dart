@@ -1934,7 +1934,7 @@ abstract final class AppThemes {
     wait: WaitTokens.legacy,
     density: DensityTokens.legacy,
     sound: SoundTokens.legacy,
-    // cw_card_menu, the two detail quick-action sheets, the episode sheet
+    // card_action_menu, the two detail quick-action sheets, the episode sheet
     sheetSurface: const Color(0xFF141019),
     home: HomeTokens(
       bg: const Color(0xFF0D0B1A), // HomeTheme.bg

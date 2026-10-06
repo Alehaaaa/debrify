@@ -27,10 +27,18 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
 
   StremioMeta? get originalMetadata;
   bool get prioritizeMetadata => false;
-  Future<MetadataPresentation> _present(StremioMeta item, MetadataPreferences prefs,
-      bool Function() relevant, {bool hero = false}) {
-    Future<MetadataPresentation> action() => metadataProvider.present(item,
-        preferences: prefs, isRelevant: relevant);
+  bool get allowMetadataNetwork => true;
+  Future<MetadataPresentation> _present(
+    StremioMeta item,
+    MetadataPreferences prefs,
+    bool Function() relevant, {
+    bool hero = false,
+  }) {
+    Future<MetadataPresentation> action() => metadataProvider.present(
+      item,
+      preferences: prefs,
+      isRelevant: relevant,
+    );
     return hero || prioritizeMetadata
         ? TmdbMetadataRepository.withHeroPriority(action) : action();
   }
@@ -43,7 +51,9 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     final cooldown = TmdbMetadataRepository.instance.cooldownRemaining;
     if (cooldown == Duration.zero) return backoff;
     // Spread the wake-ups so every waiting card doesn't hit TMDB at once.
-    final jitter = Duration(milliseconds: 250 + (identityHashCode(this) % 1500));
+    final jitter = Duration(
+      milliseconds: 250 + (identityHashCode(this) % 1500),
+    );
     final afterCooldown = cooldown + jitter;
     return afterCooldown > backoff ? afterCooldown : backoff;
   }
@@ -70,6 +80,7 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
 
   /// Cards must not paint an unrelated provider while their policy resolves.
   bool metadataArtworkPending(MetadataCategory category) =>
+      allowMetadataNetwork &&
       originalMetadata != null &&
       (originalMetadata!.type == 'movie' ||
           originalMetadata!.type == 'series') &&
@@ -176,6 +187,7 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     List<StremioMeta> items,
     Future<void> Function(StremioMeta, MetadataPreferences) warmArtwork,
   ) async {
+    if (!allowMetadataNetwork) return;
     _cancelPreloadDelays();
     final generation = ++_preloadGeneration;
     final scope = ProfileRuntime.scope.value;
@@ -199,18 +211,31 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
             var result = cached != null && cached.expires.isAfter(DateTime.now())
                 ? cached.value
                 : await _present(item, prefs, relevant, hero: true);
-            for (var attempt = 1; result.retryable && attempt <= _maxRetries && relevant(); attempt++) {
-              DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'hero_preload_retry',
-                  fields: {'slot': index, 'attempt': attempt});
+            for (
+              var attempt = 1;
+              result.retryable && attempt <= _maxRetries && relevant();
+              attempt++
+            ) {
+              DiagnosticLog.instance.recordEvent(
+                source: 'metadata',
+                event: 'hero_preload_retry',
+                fields: {'slot': index, 'attempt': attempt},
+              );
               await _preloadDelay(_retryDelay(attempt));
               if (!relevant()) return;
               result = await _present(item, prefs, relevant, hero: true);
             }
             if (!relevant()) return;
             _storePresentation(item, result);
-            DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'hero_preload',
-              fields: {'slot': index, 'elapsed_ms': timer.elapsedMilliseconds,
-                'retryable': result.retryable});
+            DiagnosticLog.instance.recordEvent(
+              source: 'metadata',
+              event: 'hero_preload',
+              fields: {
+                'slot': index,
+                'elapsed_ms': timer.elapsedMilliseconds,
+                'retryable': result.retryable,
+              },
+            );
             await warmArtwork(result.item, prefs);
           } catch (_) {
             // A speculative request must not surface errors or block the reel.
@@ -235,16 +260,22 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
-  void _storePresentation(StremioMeta original, MetadataPresentation presentation) {
+  void _storePresentation(
+    StremioMeta original,
+    MetadataPresentation presentation,
+  ) {
     if (presentation.retryable || presentation.unavailable.isNotEmpty) return;
-    _resolved[original] = (value: presentation,
-        expires: DateTime.now().add(const Duration(minutes: 60)));
+    _resolved[original] = (
+      value: presentation,
+      expires: DateTime.now().add(const Duration(minutes: 60)),
+    );
     while (_resolved.length > 1024) {
       _resolved.remove(_resolved.keys.first);
     }
   }
 
   Future<void> _resolveMetadata() async {
+    if (!allowMetadataNetwork) return;
     final timing = Stopwatch()..start();
     final generation = ++_metadataGeneration;
     final original = originalMetadata;
@@ -260,8 +291,11 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
           (cached != null && cached.expires.isAfter(DateTime.now())
               ? cached.value
               : null) ??
-          await _present(original, prefs,
-            () => mounted && generation == _metadataGeneration);
+          await _present(
+            original,
+            prefs,
+            () => mounted && generation == _metadataGeneration,
+          );
       if (!mounted ||
           generation != _metadataGeneration ||
           !identical(originalMetadata, original)) {
@@ -270,7 +304,10 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
       DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'presentation_ready',
         fields: {'elapsed_ms': timing.elapsedMilliseconds, 'retryable': presentation.retryable,
           'cache_hit': cached != null && cached.expires.isAfter(DateTime.now()),
-          'attempt': _attempt, 'missing': presentation.unavailable.length});
+          'attempt': _attempt,
+          'missing': presentation.unavailable.length,
+        },
+      );
       _storePresentation(original, presentation);
       _resolvedOnce = true;
       if (presentation.retryable && _attempt < _maxRetries) {

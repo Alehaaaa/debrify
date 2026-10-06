@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'package:file/file.dart';
+import 'package:file/local.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -17,6 +20,10 @@ import 'offline_title_store.dart';
 /// default manager's store — a URL cached by one is not visible to the other.
 class DebrifyImageCache {
   DebrifyImageCache._();
+
+  @visibleForTesting
+  static CacheManager offlineManagerForTesting(Config config) =>
+      _OfflineAwareCacheManager(config);
 
   /// Reclaim legacy orphan files and enforce budgets even if the user does
   /// not visit the surfaces that used these stores in the previous session.
@@ -72,6 +79,28 @@ class _OfflineAwareCacheManager extends CacheManager {
   static const _pinnedAge = Duration(days: 3650);
 
   @override
+  Future<File> getSingleFile(
+    String url, {
+    String? key,
+    Map<String, String>? headers,
+  }) async {
+    final saved = await OfflineTitleStore.instance.imageFile(url);
+    if (saved != null) return const LocalFileSystem().file(saved.path);
+    final cached =
+        await getFileFromCache(key ?? url) ??
+        await DefaultCacheManager().getFileFromCache(key ?? url);
+    if (cached != null &&
+        await cached.file.exists() &&
+        (OfflineTitleStore.instance.isPinned(
+              OfflineTitleStore.instance.activeImageOwner,
+            ) ||
+            cached.validTill.isAfter(DateTime.now()))) {
+      return cached.file;
+    }
+    return super.getSingleFile(url, key: key, headers: headers);
+  }
+
+  @override
   Stream<FileResponse> getFileStream(
     String url, {
     String? key,
@@ -81,32 +110,25 @@ class _OfflineAwareCacheManager extends CacheManager {
     final store = OfflineTitleStore.instance;
     final saved = await store.imageFile(url);
     if (saved != null) {
-      final cacheKey = key ?? url;
-      FileInfo? cached;
-      try {
-        cached = await getFileFromCache(cacheKey);
-        if (cached != null && !await cached.file.exists()) cached = null;
-        if (cached == null) {
-          final file = await putFile(
-            url,
-            await saved.readAsBytes(),
-            key: cacheKey,
-            maxAge: _pinnedAge,
-            fileExtension: saved.path.split('.').last,
-          );
-          cached = FileInfo(
-            file,
-            FileSource.Cache,
-            DateTime.now().add(_pinnedAge),
-            url,
-          );
-        }
-      } catch (_) {
-        cached = null;
-      }
-      if (cached != null) {
-        // Saved art is served as-is: no revalidation, so no network needed.
-        yield cached;
+      // Pinned art belongs to the durable offline store, not SQLite/LRU.
+      // Serve it directly even when the evictable cache is empty or damaged.
+      yield FileInfo(
+        const LocalFileSystem().file(saved.path),
+        FileSource.Cache,
+        DateTime.now().add(_pinnedAge),
+        url,
+      );
+      return;
+    }
+
+    // Older shelves used DefaultCacheManager. Reuse those files when the
+    // shared cache has no copy; do not lose artwork at the cache transition.
+    final cacheKey = key ?? url;
+    final shared = await getFileFromCache(cacheKey);
+    if (shared == null || !await shared.file.exists()) {
+      final legacy = await DefaultCacheManager().getFileFromCache(cacheKey);
+      if (legacy != null && await legacy.file.exists()) {
+        yield legacy;
         return;
       }
     }

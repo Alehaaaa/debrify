@@ -11,12 +11,14 @@ import '../services/downloads/title_download_summary.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
+import '../services/trakt/trakt_episode_model.dart';
 import '../theme/app_theme_controller.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../theme/theme_core_resolver.dart';
 import '../theme/theme_overrides.dart';
 import '../utils/artwork_url.dart';
+import '../widgets/card_action_menu.dart';
 import '../widgets/detail/detail_identity.dart';
 import '../widgets/detail/detail_style.dart';
 import '../widgets/detail/theme/detail_theme.dart';
@@ -28,6 +30,18 @@ import '../widgets/see_all/stremio_dropdown.dart';
 import 'download_manager_screen.dart';
 import 'merged_series_detail_screen.dart';
 export 'download_manager_screen.dart' hide DownloadManagerScreen;
+
+enum _DownloadCardAction {
+  play,
+  open,
+  files,
+  fixMatch,
+  resetMatch,
+  pause,
+  resume,
+  retry,
+  delete,
+}
 
 /// Downloads library: Home's page wash, header typography and white glass
 /// controls around Discover's own filter bar, poster grid and card settings.
@@ -109,6 +123,276 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
   TitleDownloadSummary _summary(List<LocalDownload> items) =>
       TitleDownloadSummary.of(items, live: _progress);
+
+  bool _menuOpen = false;
+
+  /// Hold / right-click on a library poster: play the download, open it, look
+  /// at its files, steer the transfers still running, or delete it.
+  Future<void> _showOptions(
+    StremioMeta poster,
+    List<LocalDownload> group,
+  ) async {
+    if (_menuOpen) return;
+    _menuOpen = true;
+    final ready = sortDownloads(group.where((e) => e.isReady));
+    final pending = group.where((e) => !e.isReady).toList();
+    final running = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.running ||
+            e.record.status == TaskStatus.enqueued ||
+            e.record.status == TaskStatus.waitingToRetry)
+          e,
+    ];
+    final paused = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.paused) e,
+    ];
+    final failed = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.failed) e,
+    ];
+    final series = group.first.media?.type == 'series';
+    final homeDetail = opensHomeDetail(group);
+    final first = ready.isEmpty ? null : ready.first.media;
+    final firstEpisode =
+        series && first?.season != null && first?.episode != null
+        ? 'S${first!.season.toString().padLeft(2, '0')}'
+              'E${first.episode.toString().padLeft(2, '0')}'
+        : null;
+    final summary = _summary(group);
+    _DownloadCardAction? action;
+    try {
+      var manualMatch = false;
+      try {
+        manualMatch = await DownloadedMediaService.hasManualMatch(group);
+      } catch (_) {}
+      if (!mounted) return;
+      action = await showCardActionMenu<_DownloadCardAction>(
+        context,
+        title: poster.name,
+        isTelevision: false,
+        posterUrl: poster.poster,
+        subtitle: [
+          if (group.length > 1) '${group.length} files',
+          summary.inFlight
+              ? (summary.status ?? 'Downloading')
+              : 'On this device',
+        ].join('  ·  '),
+        actions: [
+          if (ready.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.play,
+              icon: Icons.play_arrow_rounded,
+              label: firstEpisode == null ? 'Play' : 'Play $firstEpisode',
+              description: series
+                  ? 'Start the first downloaded episode, offline.'
+                  : 'Play the downloaded file, offline.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.open,
+            icon: homeDetail
+                ? Icons.info_outline_rounded
+                : Icons.folder_open_rounded,
+            label: homeDetail ? 'Details' : 'Open download',
+            description: homeDetail
+                ? 'The title page, with Play wired to the files on this device.'
+                : 'Every file of this download and its progress.',
+          ),
+          if (homeDetail)
+            CardMenuAction(
+              value: _DownloadCardAction.files,
+              icon: Icons.folder_open_rounded,
+              label: 'Downloaded files',
+              description: series
+                  ? 'Each downloaded episode, with its size and progress.'
+                  : 'The file on this device, with its size.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.fixMatch,
+            icon: Icons.manage_search_rounded,
+            label: 'Fix match',
+            description: group.first.media?.isCatalogLinked == true
+                ? 'Wrong title? Search for the right one and refile it.'
+                : 'Find the title this is, for its art, details and '
+                      'episodes.',
+          ),
+          if (manualMatch)
+            const CardMenuAction(
+              value: _DownloadCardAction.resetMatch,
+              icon: Icons.undo_rounded,
+              label: 'Reset match',
+              description:
+                  'Forget the title you picked and use what the download '
+                  'says.',
+            ),
+          if (running.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.pause,
+              icon: Icons.pause_rounded,
+              label: 'Pause',
+              description: running.length == 1
+                  ? 'Pause this download. Resume it any time.'
+                  : 'Pause the ${running.length} downloads still running.',
+            ),
+          if (paused.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.resume,
+              icon: Icons.play_circle_outline_rounded,
+              label: 'Resume',
+              description: paused.length == 1
+                  ? 'Carry on from where this download stopped.'
+                  : 'Carry on with the ${paused.length} paused downloads.',
+            ),
+          if (failed.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.retry,
+              icon: Icons.refresh_rounded,
+              label: 'Retry',
+              description: failed.length == 1
+                  ? 'Restart the download that failed.'
+                  : 'Restart the ${failed.length} downloads that failed.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.delete,
+            icon: Icons.delete_outline_rounded,
+            label: group.length == 1
+                ? 'Delete download'
+                : 'Delete ${group.length} downloads',
+            description:
+                'Removes it from this device. You can download it '
+                'again later.',
+            destructive: true,
+          ),
+        ],
+      );
+    } finally {
+      _menuOpen = false;
+    }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _DownloadCardAction.play:
+        try {
+          await DownloadedMediaService.play(context, ready.first);
+        } catch (_) {
+          _snack('Could not open this download.');
+        }
+      case _DownloadCardAction.open:
+        await openDownloadedItem(context, group);
+      case _DownloadCardAction.files:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DownloadedTitleScreen(items: group),
+          ),
+        );
+      case _DownloadCardAction.fixMatch:
+        final picked = await showFixMatchDialog(
+          context,
+          initialQuery: group.first.media?.isCatalogLinked == true
+              ? poster.name
+              : _searchableName(group.first),
+        );
+        if (picked == null || !mounted) break;
+        final id = picked.effectiveImdbId ?? picked.id;
+        try {
+          await DownloadedMediaService.rematch(
+            group,
+            id: id,
+            title: picked.name,
+            type: picked.type == 'series' ? 'series' : 'movie',
+            poster: picked.poster,
+            year: picked.year,
+          );
+          _snack('Filed under ${picked.name}');
+        } catch (_) {
+          _snack('Couldn\'t save the match. Try again.');
+        }
+      case _DownloadCardAction.resetMatch:
+        try {
+          await DownloadedMediaService.resetMatch(group);
+          _snack('Match reset');
+        } catch (_) {
+          _snack('Couldn\'t reset the match. Try again.');
+        }
+      case _DownloadCardAction.pause:
+        for (final e in running) {
+          try {
+            await DownloadService.instance.pause(e.record.task);
+          } catch (_) {}
+        }
+      case _DownloadCardAction.resume:
+      case _DownloadCardAction.retry:
+        var ok = true;
+        for (final e
+            in action == _DownloadCardAction.resume ? paused : failed) {
+          try {
+            ok = await DownloadService.instance.resume(e.record.task) && ok;
+          } catch (_) {
+            ok = false;
+          }
+        }
+        if (!ok) _snack('Could not restart every download. Try again later.');
+      case _DownloadCardAction.delete:
+        await _deleteGroup(poster.name, group);
+    }
+    if (mounted) _refresh();
+  }
+
+  Future<void> _deleteGroup(String title, List<LocalDownload> group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          group.length == 1
+              ? 'Delete download?'
+              : 'Delete ${group.length} downloads?',
+        ),
+        content: Text(
+          group.length == 1
+              ? 'Delete “$title” from this device? You can download it again later.'
+              : 'Delete every downloaded file of “$title” from this device? '
+                    'You can download them again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    var failed = false;
+    try {
+      // Same profile recheck as the download page: only touch queue records
+      // the active profile owns. (Scanned files were already filtered.)
+      final owned = {
+        for (final record in await DownloadService.instance.allRecords())
+          record.taskId,
+      };
+      for (final item in group) {
+        if (!item.isScanned && !owned.contains(item.record.taskId)) continue;
+        try {
+          await DownloadedMediaService.remove(item);
+        } catch (_) {
+          failed = true;
+        }
+      }
+    } catch (_) {
+      failed = true;
+    }
+    if (failed) _snack('Could not remove every file. Try again.');
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -272,6 +556,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         showRatings: DiscoverPrefs.showRatings,
                         showTitles: DiscoverPrefs.showTitles,
                         child: SeeAllPosterGrid(
+                          localOnly: true,
                           items: posters,
                           isTelevision: false,
                           loadingMore: false,
@@ -290,6 +575,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             await openDownloadedItem(context, groups[item.id]!);
                             _refresh();
                           },
+                          onOptions: (item) =>
+                              _showOptions(item, groups[item.id]!),
                         ),
                       ),
               ),
@@ -362,6 +649,16 @@ Future<void> openDownloadedItem(
     // there isn't one. A specific episode that isn't on the device says so;
     // a general Play starts the first downloaded file.
     if (season != null && episode != null && media.type == 'series') {
+      final local = ready
+          .where(
+            (item) =>
+                item.media?.season == season && item.media?.episode == episode,
+          )
+          .firstOrNull;
+      if (local != null) {
+        await DownloadedMediaService.play(ctx, local);
+        return;
+      }
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           content: Text(
@@ -378,21 +675,30 @@ Future<void> openDownloadedItem(
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (routeContext) => MergedDetailScreen(
-        item: StremioMeta(
-          id: media.id,
-          imdbId: media.id.startsWith('tt') ? media.id : null,
-          type: media.type,
-          name: media.title,
-          poster: saved?.poster ?? media.poster,
-          background: saved?.background,
-          logo: saved?.logo,
-          year: media.year ?? saved?.year,
-        ),
+        localOnly: true,
+        item:
+            saved ??
+            StremioMeta(
+              id: media.id,
+              imdbId: media.id.startsWith('tt') ? media.id : null,
+              type: media.type,
+              name: media.title,
+              poster: media.poster,
+              year: media.year,
+            ),
         addon: addon,
-        // The full details (summary, rating, art) — from the network, or
-        // from the copy kept for the download when offline.
-        metaEnricher: (id, type) =>
-            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+        seasonsLoader: media.type == 'series'
+            ? () => downloadedSeasons(ready)
+            : null,
+        watchProgressLoader: () =>
+            StorageService.getEpisodeWatchProgressByImdbId(media.id),
+        onPlayEpisode: (episode) => playFallback(
+          routeContext,
+          season: episode.season,
+          episode: episode.number,
+        ),
+        // Details and artwork come from the saved snapshot. Online refresh
+        // belongs to the background offline-store warm, not this local page.
         // Only the episodes on the device, not the whole series.
         episodeFilter: media.type == 'series'
             ? (season, episode) => ready.any(
@@ -426,6 +732,50 @@ Future<void> openDownloadedItem(
 
 /// The user's Cinemeta install when present, else the stock one — the
 /// detail page only needs it for metadata.
+/// Every available file remains reachable even without a cached episode list.
+@visibleForTesting
+Future<List<TraktSeason>> downloadedSeasons(List<LocalDownload> items) async {
+  if (items.isEmpty) return const [];
+  final id = items.first.media?.id;
+  final saved = await OfflineTitleStore.instance.read(
+    id,
+    OfflineTitleStore.videos,
+  );
+  final videos = saved is List
+      ? saved.whereType<Map>().toList()
+      : const <Map>[];
+  final seasons = <int, Map<int, TraktEpisode>>{};
+  for (final item in items.where((item) => item.isReady)) {
+    final media = item.media;
+    final season = media?.season;
+    final number = media?.episode;
+    if (season == null || number == null) continue;
+    final info = videos
+        .where(
+          (video) =>
+              video['season'] == season &&
+              (video['episode'] ?? video['number']) == number,
+        )
+        .firstOrNull;
+    seasons.putIfAbsent(season, () => {})[number] = TraktEpisode(
+      season: season,
+      number: number,
+      title: info?['title'] as String? ?? 'Episode $number',
+      overview: info?['overview'] as String?,
+      thumbnailUrl: info?['thumbnail'] as String?,
+    );
+  }
+  return [
+    for (final entry in seasons.entries)
+      TraktSeason(
+        number: entry.key,
+        episodeCount: entry.value.length,
+        episodes: entry.value.values.toList()
+          ..sort((a, b) => a.number.compareTo(b.number)),
+      ),
+  ]..sort(seasonsSpecialsLast);
+}
+
 Future<StremioAddon> _metadataAddon() => OfflineTitleStore.cinemetaAddon();
 
 /// Opens metadata reached from a downloaded title (a similar title or a
@@ -524,25 +874,28 @@ Future<DownloadedTitleDetails> _loadTitleDetails(LocalDownload first) async {
   if (media == null || !media.isCatalogLinked) {
     return (meta: null, videos: const <Map<String, dynamic>>[]);
   }
-  StremioMeta? meta;
-  var videos = const <Map<String, dynamic>>[];
-  try {
-    meta = await StremioService.instance.fetchMetaDetails(
-      imdbId: media.id,
-      type: media.type,
-    );
-  } catch (_) {}
-  if (media.type == 'series') {
-    try {
-      videos =
-          await StremioService.instance.fetchSeriesMeta(
-            await _metadataAddon(),
-            media.id,
-          ) ??
-          const [];
-    } catch (_) {}
-  }
-  return (meta: meta, videos: videos);
+  final store = OfflineTitleStore.instance;
+  final saved = await store.read(
+    media.id,
+    '${OfflineTitleStore.meta}:${media.type}',
+  );
+  final snapshot = PageSnapshot.fromJson(
+    await store.read(media.id, OfflineTitleStore.page),
+  );
+  final savedVideos = await store.read(media.id, OfflineTitleStore.videos);
+  return (
+    meta:
+        snapshot?.meta ??
+        (saved is Map
+            ? StremioMeta.fromJson(Map<String, dynamic>.from(saved))
+            : null),
+    videos: savedVideos is List
+        ? [
+            for (final video in savedVideos)
+              if (video is Map) Map<String, dynamic>.from(video),
+          ]
+        : const <Map<String, dynamic>>[],
+  );
 }
 
 class DownloadedTitleScreen extends StatefulWidget {
@@ -574,9 +927,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
       final items = await DownloadedMediaService.load(includeTransfers: true);
       if (!mounted || revision != _revision) return;
       setState(
-        () => _items = items
-            .where((e) => e.groupKey == widget.items.first.groupKey)
-            .toList(),
+        () => _items = items.where((e) => e.groupKey == _groupKey).toList(),
       );
       if (_items.isEmpty) Navigator.of(context).pop();
     } catch (_) {}
@@ -596,7 +947,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   Future<void> _loadDetails() async {
     try {
       final details = await (widget.detailsLoader ?? _loadTitleDetails)(
-        widget.items.first,
+        _items.first,
       );
       if (!mounted) return;
       setState(() {
@@ -624,6 +975,7 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   void initState() {
     super.initState();
     _items = [...widget.items];
+    _groupKey = widget.items.first.groupKey;
     unawaited(_loadDetails());
     _statusSub = DownloadService.instance.statusStream.listen((_) => _reload());
     _moveSub = DownloadService.instance.moveProgressStream.listen((e) {
@@ -637,6 +989,52 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
   }
 
   final Set<String> _retrying = {};
+
+  /// Which library entry this page shows — follows a Fix match to the title
+  /// the files were refiled under.
+  late String _groupKey;
+
+  /// Fix match from the download page itself: refile every file here under
+  /// the title the user picks, then show it as that title.
+  Future<void> _fixMatch() async {
+    final first = _items.first;
+    final picked = await showFixMatchDialog(
+      context,
+      initialQuery: first.media?.isCatalogLinked == true
+          ? first.media!.title
+          : _searchableName(first),
+    );
+    if (picked == null || !mounted) return;
+    final type = picked.type == 'series' ? 'series' : 'movie';
+    final id = picked.effectiveImdbId ?? picked.id;
+    try {
+      await DownloadedMediaService.rematch(
+        _items,
+        id: id,
+        title: picked.name,
+        type: type,
+        poster: picked.poster,
+        year: picked.year,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t save the match. Try again.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    _groupKey = '$type:$id';
+    _episodes.clear();
+    _meta = null;
+    await _reload();
+    if (!mounted || _items.isEmpty) return;
+    unawaited(_loadDetails());
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Filed under ${picked.name}')));
+  }
 
   /// Restarts a failed download — from where it stopped when the platform
   /// kept resume data, otherwise from its saved record.
@@ -852,15 +1250,24 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
             child: ListView(
               padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
               children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Tooltip(
-                    message: 'Back',
-                    child: DetailRoundButton(
-                      icon: Icons.arrow_back_rounded,
-                      onTap: () => Navigator.of(context).maybePop(),
+                Row(
+                  children: [
+                    Tooltip(
+                      message: 'Back',
+                      child: DetailRoundButton(
+                        icon: Icons.arrow_back_rounded,
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
                     ),
-                  ),
+                    const Spacer(),
+                    Tooltip(
+                      message: 'Fix match',
+                      child: DetailRoundButton(
+                        icon: Icons.manage_search_rounded,
+                        onTap: _fixMatch,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 24),
                 Wrap(
@@ -1420,4 +1827,226 @@ class _GlassIconButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// A file name cut down to something a catalog search can match: no
+/// extension, no dots/underscores, and nothing from the first season/episode
+/// tag, year or quality marker on.
+String _searchableName(LocalDownload item) {
+  final media = item.media;
+  if (media != null && !media.title.contains('.')) return media.title;
+  var name = item.record.task.filename;
+  final dot = name.lastIndexOf('.');
+  if (dot > 0) name = name.substring(0, dot);
+  name = name.replaceAll(RegExp(r'[._]+'), ' ');
+  final cut = RegExp(
+    r'\b(s\d{1,2}e\d{1,3}|s\d{1,2}|\d{1,2}x\d{1,3}|(19|20)\d{2}|\d{3,4}p|'
+    r'web[ -]?dl|webrip|bluray|hdtv|x26[45]|hevc)\b',
+    caseSensitive: false,
+  ).firstMatch(name);
+  if (cut != null && cut.start > 0) name = name.substring(0, cut.start);
+  return name.replaceAll(RegExp(r'[\[\(\-]+\s*$'), '').trim();
+}
+
+/// Fix match: search the catalogs for the title a download really is.
+/// Returns the picked movie or series, or null when dismissed.
+@visibleForTesting
+Future<StremioMeta?> showFixMatchDialog(
+  BuildContext context, {
+  required String initialQuery,
+  Future<List<StremioMeta>> Function(String query)? search,
+}) {
+  return showDialog<StremioMeta>(
+    context: context,
+    builder: (_) => _FixMatchDialog(
+      initialQuery: initialQuery,
+      search: search ?? StremioService.instance.searchCatalogs,
+    ),
+  );
+}
+
+class _FixMatchDialog extends StatefulWidget {
+  final String initialQuery;
+  final Future<List<StremioMeta>> Function(String query) search;
+
+  const _FixMatchDialog({required this.initialQuery, required this.search});
+
+  @override
+  State<_FixMatchDialog> createState() => _FixMatchDialogState();
+}
+
+class _FixMatchDialogState extends State<_FixMatchDialog> {
+  late final TextEditingController _query = TextEditingController(
+    text: widget.initialQuery,
+  );
+  List<StremioMeta>? _results;
+  bool _searching = false;
+  String? _error;
+  int _generation = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialQuery.trim().isNotEmpty) _run();
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _run() async {
+    final query = _query.text.trim();
+    if (query.isEmpty) return;
+    final generation = ++_generation;
+    setState(() {
+      _searching = true;
+      _error = null;
+    });
+    try {
+      final found = await widget.search(query);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _results = [
+          for (final m in found)
+            if (m.type == 'movie' || m.type == 'series') m,
+        ];
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _searching = false;
+        _error = 'Search failed. Check your connection and try again.';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final results = _results;
+    return Dialog(
+      backgroundColor: app.sheetSurface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      shape: RoundedRectangleBorder(borderRadius: app.shape.br(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 480,
+          maxHeight: size.height * 0.8,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Fix match',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the movie or show these files are.',
+                style: TextStyle(
+                  color: app.fade(app.core.tx, 0.55),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _query,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _run(),
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: 'Search',
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    onPressed: _run,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : _error != null || (results != null && results.isEmpty)
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          _error ?? 'No movies or shows found.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: app.fade(app.core.tx, 0.6)),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: results?.length ?? 0,
+                        itemBuilder: (context, i) {
+                          final m = results![i];
+                          final poster = m.poster;
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                            leading: ClipRRect(
+                              borderRadius: app.shape.br(6),
+                              child: SizedBox(
+                                width: 36,
+                                height: 54,
+                                child: poster == null || poster.isEmpty
+                                    ? ColoredBox(
+                                        color: app.fade(app.core.tx, 0.08),
+                                        child: const Icon(
+                                          Icons.movie_rounded,
+                                          size: 18,
+                                        ),
+                                      )
+                                    : CachedNetworkImage(
+                                        imageUrl: poster,
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: 108,
+                                        errorWidget: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                              ),
+                            ),
+                            title: Text(
+                              m.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                m.type == 'series' ? 'Series' : 'Movie',
+                                if (m.year != null && m.year!.isNotEmpty)
+                                  m.year!,
+                              ].join('  ·  '),
+                            ),
+                            onTap: () => Navigator.of(context).pop(m),
+                          );
+                        },
+                      ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

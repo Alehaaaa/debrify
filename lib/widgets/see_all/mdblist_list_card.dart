@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../services/mdblist/mdblist_list_source.dart';
 import '../../theme/app_theme_scope.dart';
+import '../hold_feedback.dart';
 
 /// A single MDBList "list" rendered as a 2:3 gradient card — the same footprint
 /// as the poster cards, but for a *collection* (which has no artwork): a list
@@ -38,7 +39,7 @@ class MdblistListCard extends StatelessWidget {
     // so cap the text scaling for this compact tile.
     return MediaQuery.withClampedTextScaling(
       maxScaleFactor: 1.2,
-      child: GestureDetector(
+      child: HoldFeedback(borderRadius: BorderRadius.circular(12), child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
@@ -109,7 +110,7 @@ class MdblistListCard extends StatelessWidget {
           ],
           ),
         ),
-      ),
+      )),
     );
   }
 }

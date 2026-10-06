@@ -51,6 +51,13 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
     icon: Icons.explore_rounded,
   ),
   SidebarDestination(
+    id: 'reels',
+    tabIndex: MainTab.reels,
+    defaultLabel: 'Reels',
+    section: 'Main',
+    icon: Icons.slow_motion_video_rounded,
+  ),
+  SidebarDestination(
     id: 'calendar',
     tabIndex: MainTab.calendar,
     defaultLabel: 'Calendar',

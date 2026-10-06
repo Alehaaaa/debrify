@@ -158,6 +158,8 @@ void main() {
     expect(find.text('DOWNLOAD FAILED'), findsOneWidget);
     expect(find.byTooltip('Retry download'), findsOneWidget);
     expect(find.byTooltip('Remove download'), findsOneWidget);
+    // The page can refile the download under the right title.
+    expect(find.byTooltip('Fix match'), findsOneWidget);
     await tester.tap(find.byTooltip('Remove download'));
     await tester.pumpAndSettle();
     expect(find.text('Delete download?'), findsOneWidget);

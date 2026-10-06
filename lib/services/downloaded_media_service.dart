@@ -127,8 +127,13 @@ class DownloadedMediaService {
     if (debugRecords != null) {
       records = await debugRecords!();
     } else {
-      await service.initialize();
+      await service.initializeLibrary();
       records = await service.allRecords();
+      unawaited(
+        service.initialize().catchError((Object error) {
+          debugPrint('Downloads: transfer startup deferred ($error)');
+        }),
+      );
     }
     final cache = await _MediaCache.open();
 
@@ -142,6 +147,7 @@ class DownloadedMediaService {
     for (final record in records) {
       final details = service.recordDetailsForTaskId(record.taskId);
       final media =
+          cache.manualFor(null, [record.taskId]) ??
           DownloadedMedia.fromMetadata(details?.meta) ??
           DownloadedMedia.fromFilename(
             record.task.filename,
@@ -232,8 +238,16 @@ class DownloadedMediaService {
         if (cached.media != null) otherProfileTitles.add(cached.media!);
         continue;
       }
+      // A Fix match the user made wins over everything the download or the
+      // file name says — for the file, or for the transfer that produced it.
+      final manual = cache.manualFor(path, [
+        for (final record in linked) record.taskId,
+      ]);
+      if (manual != null && cached?.manual != true) {
+        cache.put(path, manual, profile: owner, manual: true);
+      }
       final fromRecord = finishedMeta[path];
-      if (fromRecord != null) {
+      if (fromRecord != null && manual == null) {
         cache.put(path, fromRecord, profile: owner);
       }
       final guessed = DownloadedMedia.fromFilename(
@@ -241,11 +255,18 @@ class DownloadedMediaService {
         packName: _packName(path, folders),
       );
       var media =
-          fromRecord ?? cached?.media ?? guessed ?? _movieCandidate(path);
+          manual ??
+          fromRecord ??
+          cached?.media ??
+          guessed ??
+          _movieCandidate(path);
       // Files copied into the download folder do not have a queue record.
       // Resolve their parsed title once, then keep the result in the same
       // path cache used for completed torrent downloads.
-      if (linked.isEmpty && cached?.media == null && media != null) {
+      if (manual == null &&
+          linked.isEmpty &&
+          cached?.media == null &&
+          media != null) {
         final resolved = await _resolveManualMedia(media, p.basename(path));
         if (resolved != null) {
           media = resolved;
@@ -429,11 +450,14 @@ class DownloadedMediaService {
         await DownloadService.instance.deleteRecord(record);
       } catch (_) {}
     }
+    final cache = await _MediaCache.open();
     if (item.location.isNotEmpty && !item.location.startsWith('content://')) {
-      final cache = await _MediaCache.open();
       cache.remove(_norm(item.location));
-      await cache.save();
     }
+    for (final record in [item.record, ...item.linkedRecords]) {
+      cache.remove(_MediaCache.taskKey(record.taskId));
+    }
+    await cache.save();
   }
 
   /// Tidy only folders owned by the configured download roots. This avoids
@@ -597,19 +621,38 @@ class _MediaCache {
     _opening = null;
   }
 
-  ({DownloadedMedia? media, String? profile})? entry(String path) {
+  ({DownloadedMedia? media, String? profile, bool manual})? entry(String path) {
     final raw = _entries[path];
     if (raw == null) return null;
     return (
       media: DownloadedMedia.fromMetadata(jsonEncode({'media': raw['media']})),
       profile: raw['profile'] as String?,
+      manual: raw['manual'] == true,
     );
+  }
+
+  /// The key a user's Fix match is kept under for a queue record, so the
+  /// choice reaches the file the transfer is still writing.
+  static String taskKey(String taskId) => 'task:$taskId';
+
+  /// A user-chosen identity for [path] or any of [taskIds], if one is set.
+  DownloadedMedia? manualFor(String? path, Iterable<String> taskIds) {
+    for (final key in [?path, for (final id in taskIds) taskKey(id)]) {
+      final e = entry(key);
+      if (e != null && e.manual && e.media != null) return e.media;
+    }
+    return null;
   }
 
   bool hasTitle(String id) =>
       _entries.values.any((e) => e['media'] is Map && e['media']['id'] == id);
 
-  void put(String path, DownloadedMedia media, {String? profile}) {
+  void put(
+    String path,
+    DownloadedMedia media, {
+    String? profile,
+    bool manual = false,
+  }) {
     final next = {
       'media': {
         'id': media.id,
@@ -621,6 +664,7 @@ class _MediaCache {
         'episode': media.episode,
       },
       'profile': profile,
+      if (manual) 'manual': true,
     };
     if (jsonEncode(_entries[path]) == jsonEncode(next)) return;
     _entries[path] = next;
@@ -636,6 +680,9 @@ class _MediaCache {
   void dropMissing() {
     final before = _entries.length;
     _entries.removeWhere((path, _) {
+      // Queue-record keys aren't files; they go with their record (see
+      // [DownloadedMediaService.remove]).
+      if (path.startsWith('task:')) return false;
       try {
         return !File(path).existsSync();
       } catch (_) {

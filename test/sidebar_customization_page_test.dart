@@ -115,7 +115,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.select);
     await tester.pumpAndSettle();
 
-    for (var i = 0; i < 10; i++) {
+    // From the second row down to the last (Settings), however many
+    // destinations the catalog holds.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
@@ -137,7 +139,8 @@ void main() {
       reason: 'editor viewport $editorRect did not reveal row $settingsRect',
     );
 
-    for (var i = 0; i < 10; i++) {
+    // Back up to the second row.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
     }
@@ -154,7 +157,8 @@ void main() {
       reason: 'editor viewport did not reveal the earlier row $searchRect',
     );
 
-    for (var i = 0; i < 10; i++) {
+    // Down to the last row again, then one more to Reset.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }

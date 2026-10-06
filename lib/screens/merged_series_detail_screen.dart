@@ -63,6 +63,8 @@ import '../services/simkl/simkl_menu_helpers.dart';
 import '../services/mdblist/mdblist_models.dart';
 import '../services/mdblist/mdblist_menu_helpers.dart';
 import '../widgets/tracker_brand_marks.dart';
+import '../widgets/card_action_menu.dart' show CardOptionsHandler;
+import '../widgets/hold_feedback.dart';
 import 'episodes_screen.dart' show kCatalogDetailRouteName;
 import 'settings/detail_page_style_page.dart' show effectiveDetailPageStyle;
 import '../theme/app_theme_controller.dart';
@@ -88,6 +90,7 @@ class MergedDetailScreen extends StatefulWidget {
   final StremioMeta item;
   final StremioAddon addon;
   final bool isTelevision;
+  final bool localOnly;
   final bool showQuickPlay;
   final bool isTraktSource;
   final bool isMdblistSource;
@@ -175,6 +178,11 @@ class MergedDetailScreen extends StatefulWidget {
   /// screen receives).
   final Future<List<StremioMeta>> Function()? recommendationsLoader;
   final void Function(StremioMeta recommendation)? onRecommendationTap;
+
+  /// Hold / right-click on a More Like This title. Handed the card's own open
+  /// (the same path a tap takes), so the menu's Details row does exactly
+  /// what tapping the card does.
+  final CardOptionsHandler? onRecommendationOptions;
   final Future<StremioMeta?> Function(String imdbId, String type)? metaEnricher;
 
   /// Shared-element tag from the board cell that opened this page: the tapped
@@ -218,6 +226,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.resumeInfoLoader,
     this.onBrowse,
     this.isTelevision = false,
+    this.localOnly = false,
     this.showQuickPlay = true,
     this.isTraktSource = false,
     this.isMdblistSource = false,
@@ -244,6 +253,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.onMdblistRate,
     this.recommendationsLoader,
     this.onRecommendationTap,
+    this.onRecommendationOptions,
     this.metaEnricher,
     this.heroTag,
     this.seasonsLoader,
@@ -288,6 +298,17 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     });
   }
   ParentsGuideResult? _parentsGuide;
+  /// [MergedDetailScreen.onRecommendationOptions] for one title, or null when
+  /// the rail is tap-only.
+  void Function(StremioMeta)? get _recommendationOptions {
+    final options = widget.onRecommendationOptions;
+    if (options == null || widget.onRecommendationTap == null) return null;
+    return (item) => options(
+      _recommendationOriginals[item] ?? item,
+      open: () => _openMetadataRecommendation(item),
+    );
+  }
+
   void _openMetadataRecommendation(StremioMeta item) {
     final onOpen = widget.onRecommendationTap;
     if (onOpen != null)
@@ -458,8 +479,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   );
 
   @override
+  bool get allowMetadataNetwork => !widget.localOnly;
+
+  @override
   StremioMeta get originalMetadata {
     final base = _enriched ?? widget.item;
+    if (widget.localOnly) return base;
     // Memoized: the presentation mixin compares this by identity, so a fresh
     // object per read would restart metadata resolution on every rebuild.
     if (!identical(base, _logoSeedSource)) {
@@ -605,13 +630,17 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     _downloads; // start watching this title's downloads
     // One TMDB call for credits, recommendations, trailers and availability
     // instead of one each (no-op when TMDB isn't a selected provider).
-    unawaited(MetadataProviderService.instance.prefetchTitle(widget.item));
+    if (!widget.localOnly) {
+      unawaited(MetadataProviderService.instance.prefetchTitle(widget.item));
+    }
     unawaited(_restoreOffline());
     StorageService.trackingSourceRevision.addListener(
       _onMovieProgressPolicyChanged,
     );
     StorageService.movieFinishedRevision.addListener(_loadLocalMovieFinished);
-    MdblistService.instance.watchedRevision.addListener(_loadLocalMovieFinished);
+    MdblistService.instance.watchedRevision.addListener(
+      _loadLocalMovieFinished,
+    );
     AnalyticsService.screenView('series_detail');
     MainPageBridge.addPlaybackReturnListener(_onPlaybackReturned);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -700,17 +729,20 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     unawaited(_guardPlay(() async {
       if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
           season: promised?.season ?? _resumeSeason ?? widget.initialSeason,
-          episode: promised?.episode ?? _resumeEpisode ?? widget.initialEpisode)) return;
-      if (mounted) await widget.onResume(promised);
-    }));
+          episode: promised?.episode ?? _resumeEpisode ?? widget.initialEpisode,
+        ))
+          return;
+        if (mounted) await widget.onResume(promised);
+      }),
+    );
   }
 
   bool _seriesCompleted = false;
 
   /// Local downloads for this title — drives the Download button.
-  late final DownloadedTitleWatcher _downloads =
-      DownloadedTitleWatcher(_item.imdbId ?? _item.id)
-        ..addListener(_onDownloadsChanged);
+  late final DownloadedTitleWatcher _downloads = DownloadedTitleWatcher(
+    _item.imdbId ?? _item.id,
+  )..addListener(_onDownloadsChanged);
 
   void _onDownloadsChanged() {
     if (!mounted) return;
@@ -945,24 +977,43 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _quickPlayEpisode(AdvancedSearchSelection selection) {
     final play = widget.onQuickPlay;
     if (play == null) return;
-    unawaited(_guardPlay(() async {
-      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
-          season: selection.season, episode: selection.episode)) return;
-      if (mounted) await play(selection);
-    }));
+    unawaited(
+      _guardPlay(() async {
+        if (await DownloadedMediaService.playMatching(
+          context,
+          _item.imdbId ?? _item.id,
+          season: selection.season,
+          episode: selection.episode,
+        ))
+          return;
+        if (mounted) await play(selection);
+      }),
+    );
   }
 
   void _playDirectEpisode(TraktEpisode episode) {
     final play = widget.onPlayEpisode;
     if (play == null) return;
-    unawaited(_guardPlay(() async {
-      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
-          season: episode.season, episode: episode.number)) return;
-      if (mounted) await play(episode);
-    }));
+    unawaited(
+      _guardPlay(() async {
+        if (await DownloadedMediaService.playMatching(
+          context,
+          _item.imdbId ?? _item.id,
+          season: episode.season,
+          episode: episode.number,
+        ))
+          return;
+        if (mounted) await play(episode);
+      }),
+    );
   }
 
   Future<void> _loadShowcaseOpeningData() async {
+    if (widget.localOnly) {
+      await _restoreOffline();
+      if (mounted) setState(() => _showcaseOpeningDataReady = true);
+      return;
+    }
     try {
       await Future.wait<void>([
         _loadBoundSources(),
@@ -1407,8 +1458,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     StorageService.trackingSourceRevision.removeListener(
       _onMovieProgressPolicyChanged,
     );
-    StorageService.movieFinishedRevision.removeListener(_loadLocalMovieFinished);
-    MdblistService.instance.watchedRevision.removeListener(_loadLocalMovieFinished);
+    StorageService.movieFinishedRevision.removeListener(
+      _loadLocalMovieFinished,
+    );
+    MdblistService.instance.watchedRevision.removeListener(
+      _loadLocalMovieFinished,
+    );
     appRouteObserver.unsubscribe(this);
     MainPageBridge.removePlaybackReturnListener(_onPlaybackReturned);
     _infoScroll.dispose();
@@ -1422,6 +1477,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   Future<void> _loadEnrichedMeta() async {
+    if (widget.localOnly) return;
     final enrich = widget.metaEnricher;
     final item = widget.item;
     final imdbId = item.effectiveImdbId;
@@ -1496,6 +1552,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   Future<void> _loadTrailer() async {
+    if (widget.localOnly) return;
     final generation = ++_trailerGeneration;
     final scope = ProfileRuntime.scope.value;
     final policyRevision = MetadataPreferencesService.revision.value;
@@ -1557,7 +1614,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       try {
         // This is a continuously composited backdrop, not the standalone
         // player. Keep iOS within its ambient decode/upload budget.
-        streams = await YoutubeService.resolveStreams(
+        streams = await YoutubeService.resolvePreviewStreams(
           ytId,
           maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
           preferVp9: !PlatformUtil.isIosMobile,
@@ -1611,9 +1668,11 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     final want = _trailerForeground && mounted;
     if (want == _trailerImmersive) return;
     _trailerImmersive = want;
-    unawaited(SystemChrome.setEnabledSystemUIMode(
-      want ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-    ));
+    unawaited(
+      SystemChrome.setEnabledSystemUIMode(
+        want ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+      ),
+    );
   }
 
   void _exitTrailerForeground() {
@@ -1724,7 +1783,10 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
     YoutubeResolvedStreams? streams;
     try {
-      streams = await YoutubeService.resolveStreams(ytId);
+      streams = await YoutubeService.resolveStreams(
+        ytId,
+        includeMetadata: false,
+      );
     } catch (_) {
       streams = null;
     }
@@ -1790,6 +1852,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   Future<void> _loadImdbEnrichment() async {
+    if (widget.localOnly) return;
     final generation = _detailsMetadataGeneration;
     final scope = ProfileRuntime.scope.value;
     final revision = MetadataPreferencesService.revision.value;
@@ -1817,6 +1880,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   Future<void> _loadParentsGuide() async {
+    if (widget.localOnly) return;
     final imdbId = _item.effectiveImdbId;
     if (imdbId == null) return;
     try {
@@ -1828,6 +1892,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   Future<void> _loadRecommendations() async {
+    if (widget.localOnly) return;
     final generation = _detailsMetadataGeneration;
     final scope = ProfileRuntime.scope.value;
     final revision = MetadataPreferencesService.revision.value;
@@ -2114,21 +2179,21 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                             duration: const Duration(milliseconds: 420),
                             curve: Curves.easeInOutCubic,
                             child: SafeArea(
-                            child: Padding(
-                              padding: EdgeInsets.all(
-                                widget.isTelevision ? 20 : 8,
-                              ),
-                              child: _circleButton(
-                                Icons.arrow_back_rounded,
-                                () => Navigator.of(context).maybePop(),
-                                tooltip: 'Back',
-                                focusNode: _backButtonFocusNode,
-                                // Square themes (Noir, Concrete, Phosphor,
-                                // Blueprint) cannot be forced into a circle.
-                                theme: _themedBody ? _theme : null,
+                              child: Padding(
+                                padding: EdgeInsets.all(
+                                  widget.isTelevision ? 20 : 8,
+                                ),
+                                child: _circleButton(
+                                  Icons.arrow_back_rounded,
+                                  () => Navigator.of(context).maybePop(),
+                                  tooltip: 'Back',
+                                  focusNode: _backButtonFocusNode,
+                                  // Square themes (Noir, Concrete, Phosphor,
+                                  // Blueprint) cannot be forced into a circle.
+                                  theme: _themedBody ? _theme : null,
+                                ),
                               ),
                             ),
-                          ),
                           ),
                         ),
                       ],
@@ -2351,6 +2416,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       onRecommendationTap: widget.onRecommendationTap == null
           ? null
           : _openMetadataRecommendation,
+      onRecommendationOptions: _recommendationOptions,
       onAmbientStill: (url) {
         if (!mounted || _focusedStillUrl == url) return;
         setState(() => _focusedStillUrl = url);
@@ -3818,11 +3884,18 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   Widget _castTile(CastMember m) => _CastTile(member: m, fallback: _glass2);
 
-  Widget _recCard(StremioMeta rec) => _RecCard(
-    rec: rec,
-    fallback: _glass2,
-    onTap: () => _openMetadataRecommendation(rec),
-  );
+  Widget _recCard(StremioMeta rec) {
+    final options = _recommendationOptions;
+    return HoldableTile(
+      onTap: () => _openMetadataRecommendation(rec),
+      onHold: options == null ? null : () => options(rec),
+      child: _RecCard(
+        rec: rec,
+        fallback: _glass2,
+        onTap: () => _openMetadataRecommendation(rec),
+      ),
+    );
+  }
 
   Widget _sectionLabel(String s) => Text(
     s.toUpperCase(),

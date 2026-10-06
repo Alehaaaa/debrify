@@ -8,6 +8,7 @@ import '../utils/tv_keys.dart';
 import 'detail/theme/detail_theme.dart';
 import 'trakt/trakt_menu_helpers.dart';
 import 'home/home_theme.dart';
+import 'hold_feedback.dart';
 
 /// OTT episode card. A big 16:9 still (play / resume bar / badge live on the
 /// image), with the title/meta/synopsis on the solid card — below the still
@@ -166,43 +167,48 @@ class _EpisodeTileState extends State<EpisodeTile> {
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: _primary,
-          behavior: HitTestBehavior.opaque,
-          child: AnimatedScale(
-            duration: _fx,
-            curve: Curves.easeOutCubic,
-            scale: _active ? 1.012 : 1.0,
-            child: AnimatedContainer(
+        child: HoldFeedback(
+          borderRadius: BorderRadius.circular(16),
+          child: GestureDetector(
+            onTap: _primary,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedScale(
               duration: _fx,
-              decoration: BoxDecoration(
-                color: const Color(0xFF14141C),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: _active
-                      ? _t.focus
-                      : Colors.white.withValues(alpha: 0.06),
-                  width: _active ? 2.5 : 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: _active ? 0.55 : 0.3),
-                    blurRadius: _active ? 28 : 12,
-                    offset: const Offset(0, 10),
+              curve: Curves.easeOutCubic,
+              scale: _active ? 1.012 : 1.0,
+              child: AnimatedContainer(
+                duration: _fx,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF14141C),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _active
+                        ? _t.focus
+                        : Colors.white.withValues(alpha: 0.06),
+                    width: _active ? 2.5 : 1,
                   ),
-                  if (_active)
+                  boxShadow: [
                     BoxShadow(
-                      color: _t.fade(_t.focus, 0.38),
-                      blurRadius: 32,
-                      spreadRadius: 1,
+                      color: Colors.black.withValues(
+                        alpha: _active ? 0.55 : 0.3,
+                      ),
+                      blurRadius: _active ? 28 : 12,
+                      offset: const Offset(0, 10),
                     ),
-                ],
-              ),
-              child: LayoutBuilder(
-                builder: (context, c) {
-                  final wide = c.maxWidth >= 560;
-                  return wide ? _horizontal() : _vertical();
-                },
+                    if (_active)
+                      BoxShadow(
+                        color: _t.fade(_t.focus, 0.38),
+                        blurRadius: 32,
+                        spreadRadius: 1,
+                      ),
+                  ],
+                ),
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final wide = c.maxWidth >= 560;
+                    return wide ? _horizontal() : _vertical();
+                  },
+                ),
               ),
             ),
           ),

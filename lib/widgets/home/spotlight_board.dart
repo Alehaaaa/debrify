@@ -23,6 +23,8 @@ import '../../theme/widgets/parallax_focus.dart';
 import '../../utils/artwork_url.dart';
 import '../../utils/dominant_color.dart';
 import '../../utils/dialog_tap_guard.dart';
+import '../card_action_menu.dart';
+import '../hold_feedback.dart';
 import '../../utils/tv_keys.dart';
 import 'row_tag_pill.dart';
 import 'home_row_focus.dart';
@@ -3484,7 +3486,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
   /// DPAD centre is a key gesture, not a pointer long-press. Keep the short
   /// press for opening Details, but let a held press reach the card's options
   /// action (Continue Watching's preference-aware Play/Remove handler).
-  late final TvHoldOk _hold = TvHoldOk(
+  late final CardHold _hold = CardHold(
     onTap: () => widget.card.onOpen(),
     onHold: () => widget.card.onOptions?.call(),
   );
@@ -4016,10 +4018,15 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     final tappable = GestureDetector(
       onTap: () {
         if (DialogTapGuard.shouldIgnoreTap()) return;
-        c.onOpen();
+        withTapFeedback(c.onOpen)();
       },
-      onLongPress: c.onOptions,
-      child: card,
+      onLongPress: withHoldHaptic(c.onOptions),
+      onSecondaryTap: CardMenuGesture.secondaryClick(c.onOptions),
+      child: HoldFeedback(
+        controller: _hold.ring,
+        borderRadius: BorderRadius.circular(widget.radius),
+        child: card,
+      ),
     );
     final interactive = widget.hoverable
         ? MouseRegion(

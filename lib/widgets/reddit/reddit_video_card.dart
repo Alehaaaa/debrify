@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/reddit_service.dart';
 import '../../utils/tv_keys.dart';
+import '../hold_feedback.dart';
 
 /// Card widget for displaying a Reddit video post
 class RedditVideoCard extends StatefulWidget {
@@ -87,12 +88,11 @@ class _RedditVideoCardState extends State<RedditVideoCard> {
         }
         return KeyEventResult.ignored;
       },
-      child: GestureDetector(
+      child: Padding(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), child: HoldFeedback(borderRadius: BorderRadius.circular(12), child: GestureDetector(
         onTap: widget.onTap,
         onLongPress: widget.onDownload,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(12),
@@ -290,7 +290,7 @@ class _RedditVideoCardState extends State<RedditVideoCard> {
             ],
           ),
         ),
-      ),
+      ))),
     );
   }
 }

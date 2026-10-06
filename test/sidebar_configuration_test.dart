@@ -21,6 +21,7 @@ void main() {
       'search',
       'home',
       'discover',
+      'reels',
       'calendar',
       'downloads',
       'iptv',

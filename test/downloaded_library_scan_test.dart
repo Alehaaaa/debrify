@@ -42,24 +42,27 @@ void main() {
     if (await cacheFile.exists()) await cacheFile.delete();
   });
 
-  test('finished downloads are the video files in the download folder', () async {
-    await File(p.join(root.path, 'Show.S01E01.1080p.mkv')).writeAsString('x');
-    await File(p.join(root.path, 'Show.S01E02.1080p.mkv')).writeAsString('x');
-    await File(p.join(root.path, 'notes.txt')).writeAsString('x');
-    await File(p.join(root.path, '.hidden.mkv')).writeAsString('x');
-    final pack = await Directory(p.join(root.path, 'Show Season 1')).create();
-    await File(p.join(pack.path, 'Show.S01E03.mkv')).writeAsString('x');
+  test(
+    'finished downloads are the video files in the download folder',
+    () async {
+      await File(p.join(root.path, 'Show.S01E01.1080p.mkv')).writeAsString('x');
+      await File(p.join(root.path, 'Show.S01E02.1080p.mkv')).writeAsString('x');
+      await File(p.join(root.path, 'notes.txt')).writeAsString('x');
+      await File(p.join(root.path, '.hidden.mkv')).writeAsString('x');
+      final pack = await Directory(p.join(root.path, 'Show Season 1')).create();
+      await File(p.join(pack.path, 'Show.S01E03.mkv')).writeAsString('x');
 
-    final items = await DownloadedMediaService.load(includeTransfers: true);
-    final names = items.map((e) => e.record.task.filename).toSet();
-    expect(names, {
-      'Show.S01E01.1080p.mkv',
-      'Show.S01E02.1080p.mkv',
-      'Show.S01E03.mkv',
-    });
-    expect(items.every((e) => e.isReady && e.isScanned), isTrue);
-    expect(items.map((e) => e.media?.episode).toSet(), {1, 2, 3});
-  });
+      final items = await DownloadedMediaService.load(includeTransfers: true);
+      final names = items.map((e) => e.record.task.filename).toSet();
+      expect(names, {
+        'Show.S01E01.1080p.mkv',
+        'Show.S01E02.1080p.mkv',
+        'Show.S01E03.mkv',
+      });
+      expect(items.every((e) => e.isReady && e.isScanned), isTrue);
+      expect(items.map((e) => e.media?.episode).toSet(), {1, 2, 3});
+    },
+  );
 
   test('a cached identity links a file to its catalog title', () async {
     final file = File(p.join(root.path, 'Some.Movie.2024.mkv'));
@@ -120,15 +123,67 @@ void main() {
     expect(rows.map((e) => e.record.taskId).toSet(), {'t3', 't4'});
   });
 
-  test('a load requested mid-scan sees files that arrive after it began', () async {
-    final first = DownloadedMediaService.load();
-    await File(p.join(root.path, 'Late.S01E01.mkv')).writeAsString('x');
-    final second = DownloadedMediaService.load();
-    await first;
-    final items = await second;
-    expect(
-      items.map((e) => e.record.task.filename),
-      contains('Late.S01E01.mkv'),
+  test(
+    'a load requested mid-scan sees files that arrive after it began',
+    () async {
+      final first = DownloadedMediaService.load();
+      await File(p.join(root.path, 'Late.S01E01.mkv')).writeAsString('x');
+      final second = DownloadedMediaService.load();
+      await first;
+      final items = await second;
+      expect(
+        items.map((e) => e.record.task.filename),
+        contains('Late.S01E01.mkv'),
+      );
+    },
+  );
+
+  test(
+    'Fix match refiles a scanned file and survives reloads until reset',
+    () async {
+      await File(p.join(root.path, 'Wrong.Name.S02E05.mkv')).writeAsString('x');
+      var items = await DownloadedMediaService.load();
+      expect(items.single.media?.isCatalogLinked, isFalse);
+
+      await DownloadedMediaService.rematch(
+        items,
+        id: 'tt777',
+        title: 'Right Show',
+        type: 'series',
+        poster: 'https://example.com/p.jpg',
+      );
+      expect(await DownloadedMediaService.hasManualMatch(items), isTrue);
+
+      // A fresh read from disk, not the in-memory cache.
+      DownloadedMediaService.debugResetCache();
+      items = await DownloadedMediaService.load();
+      final media = items.single.media!;
+      expect(media.id, 'tt777');
+      expect(media.title, 'Right Show');
+      expect(media.type, 'series');
+      // The episode keeps its own coordinates.
+      expect((media.season, media.episode), (2, 5));
+
+      await DownloadedMediaService.resetMatch(items);
+      DownloadedMediaService.debugResetCache();
+      items = await DownloadedMediaService.load();
+      expect(items.single.media?.id, isNot('tt777'));
+      expect(await DownloadedMediaService.hasManualMatch(items), isFalse);
+    },
+  );
+
+  test('Fix match on a movie drops episode coordinates', () async {
+    await File(p.join(root.path, 'Film.S01E01.mkv')).writeAsString('x');
+    final items = await DownloadedMediaService.load();
+    await DownloadedMediaService.rematch(
+      items,
+      id: 'tt1',
+      title: 'A Film',
+      type: 'movie',
     );
+    final reloaded = await DownloadedMediaService.load();
+    expect(reloaded.single.media?.type, 'movie');
+    expect(reloaded.single.media?.season, isNull);
+    expect(reloaded.single.media?.episode, isNull);
   });
 }

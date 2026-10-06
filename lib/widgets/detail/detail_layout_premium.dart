@@ -15,6 +15,7 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
 
 /// The five showcase layouts developed after the original detail-page set.
 ///
@@ -1206,11 +1207,17 @@ class _DetailPremiumState extends State<DetailPremium> {
                 trapRight: index == recs.length - 1,
                 trapUp: true,
                 onUp: _m.focus.focusEntry,
-                child: _PremiumRecCard(
-                  rec: recs[index],
-                  width: width,
-                  focusNode: _recNode(index),
+                child: HoldableTile(
                   onTap: () => _m.onRecommendationTap!(recs[index]),
+                  onHold: _m.onRecommendationOptions == null
+                      ? null
+                      : () => _m.onRecommendationOptions!(recs[index]),
+                  child: _PremiumRecCard(
+                    rec: recs[index],
+                    width: width,
+                    focusNode: _recNode(index),
+                    onTap: () => _m.onRecommendationTap!(recs[index]),
+                  ),
                 ),
               ),
             ),
@@ -1237,10 +1244,16 @@ class _DetailPremiumState extends State<DetailPremium> {
         trapDown: index == recs.length - 1,
         onLeft: _m.focus.focusEntry,
         onUp: _m.focus.focusEntry,
-        child: _PremiumRecRow(
-          rec: recs[index],
-          focusNode: _recNode(index),
+        child: HoldableTile(
           onTap: () => _m.onRecommendationTap!(recs[index]),
+          onHold: _m.onRecommendationOptions == null
+              ? null
+              : () => _m.onRecommendationOptions!(recs[index]),
+          child: _PremiumRecRow(
+            rec: recs[index],
+            focusNode: _recNode(index),
+            onTap: () => _m.onRecommendationTap!(recs[index]),
+          ),
         ),
       ),
     );

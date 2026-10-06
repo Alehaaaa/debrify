@@ -212,6 +212,10 @@ class DetailModel {
   final VoidCallback? onManageSources;
   final void Function(StremioMeta)? onRecommendationTap;
 
+  /// Hold / right-click on a More Like This title: its card menu (the same
+  /// one Home's tiles open). Null leaves the rail tap-only.
+  final void Function(StremioMeta)? onRecommendationOptions;
+
   /// Filmstrip pushes the focused episode's still here; the shell paints it as
   /// an ambient layer. Null clears it.
   final void Function(String?) onAmbientStill;
@@ -283,6 +287,7 @@ class DetailModel {
     this.onTrackersTertiary,
     this.onManageSources,
     required this.onRecommendationTap,
+    this.onRecommendationOptions,
     required this.onAmbientStill,
     this.onDepth,
     required this.focus,

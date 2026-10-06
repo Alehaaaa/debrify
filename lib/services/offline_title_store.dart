@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:path/path.dart' as p;
 
 import '../models/downloaded_media.dart';
@@ -317,13 +318,21 @@ class OfflineTitleStore {
     final dir = _dir;
     if (dir == null || !isPinned(id)) return;
     final existing = _images[url];
-    if (existing != null) {
+    if (existing != null &&
+        await File(p.join(dir.path, 'images', existing.file)).exists()) {
       if (existing.owners.add(id)) await _saveIndex();
       return;
     }
     try {
+      final cached = source == null
+          ? (await DebrifyImageCache.manager.getFileFromCache(url) ??
+                await DefaultCacheManager().getFileFromCache(url))
+          : null;
       final from =
-          source ?? (await DebrifyImageCache.manager.getSingleFile(url)).path;
+          source ??
+          (cached != null && await cached.file.exists()
+              ? cached.file.path
+              : (await DebrifyImageCache.manager.getSingleFile(url)).path);
       final name = '${sha1.convert(utf8.encode(url))}${_extension(url, from)}';
       final target = File(p.join(dir.path, 'images', name));
       await target.parent.create(recursive: true);
@@ -381,6 +390,10 @@ class OfflineTitleStore {
   /// existing copy stays.
   Future<void> _warm(DownloadedMedia media) async {
     if (debugSkipWarm || !_warmed.add(media.id)) return;
+    // Save shelf artwork before any catalog/enrichment request. A new download
+    // can be browsed offline even if the full background warm never finishes.
+    unawaited(pinImage(media.id, media.poster));
+    unawaited(pinImage(media.id, highQualityArtworkUrl(media.poster)));
     final savedAt = await _savedAt(media.id, page);
     if (savedAt != null &&
         DateTime.now().millisecondsSinceEpoch - savedAt <

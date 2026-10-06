@@ -6,6 +6,7 @@ import '../../services/youtube_service.dart';
 import '../../theme/app_theme_scope.dart';
 import '../browse/brand_accent.dart';
 import '../../utils/tv_keys.dart';
+import '../hold_feedback.dart';
 
 /// Vertical grid card for a YouTube video: 16:9 thumbnail on top, then a
 /// channel-avatar + title + meta block below. Mirrors the app's premium
@@ -138,7 +139,7 @@ class _YoutubeVideoCardState extends State<YoutubeVideoCard> {
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
-        child: GestureDetector(
+        child: HoldFeedback(borderRadius: BorderRadius.circular(14), child: GestureDetector(
           onTap: widget.onTap,
           onLongPress: widget.onDownload,
           behavior: HitTestBehavior.opaque,
@@ -289,7 +290,7 @@ class _YoutubeVideoCardState extends State<YoutubeVideoCard> {
               ),
             ],
           ),
-        ),
+        )),
       ),
     );
   }

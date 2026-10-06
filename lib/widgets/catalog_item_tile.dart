@@ -1,7 +1,8 @@
 import '../models/metadata_preferences.dart';
 import 'metadata_presentation_mixin.dart';
-import 'dart:async';
 
+import 'card_action_menu.dart';
+import 'hold_feedback.dart';
 import 'recoverable_network_image.dart';
 import 'dart:math' as math;
 
@@ -10,7 +11,6 @@ import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
 import '../services/debrify_image_cache.dart';
-import '../services/offline_title_store.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/widgets/parallax_focus.dart';
@@ -23,18 +23,24 @@ import 'movie_watched_badge.dart';
 
 /// Poster-first grid tile for catalog and search results.
 ///
-/// Tap (or D-pad SELECT) calls [onOpen]. A long-press calls [onLongPress]
-/// (used to Quick Play straight from the grid). Description, year, genres
+/// Tap (or D-pad SELECT) calls [onOpen]. A long-press (or a held SELECT on
+/// TV) calls [onLongPress] — a library's card menu, or Quick Play where there
+/// is none — and a right-click calls [onSecondaryTap]. Description, year, genres
 /// and per-item actions live on the detail screen — the grid stays clean.
 class CatalogItemTile extends StatefulWidget {
   final StremioMeta item;
+  final bool localOnly;
   final bool isTelevision;
   final FocusNode? focusNode;
   final bool hasBoundSource;
   final VoidCallback onOpen;
 
-  /// Optional long-press action (Quick Play). When null, long-press is a no-op.
+  /// Optional long-press action (the card menu, or Quick Play). When null,
+  /// long-press is a no-op.
   final VoidCallback? onLongPress;
+
+  /// Optional right-click action — the card menu on pointer devices.
+  final VoidCallback? onSecondaryTap;
 
   /// Fires when this tile *gains* DPAD/hover focus — the hook the Discover
   /// two-pane detail rail uses to know which item to preview. Not called on
@@ -90,11 +96,13 @@ class CatalogItemTile extends StatefulWidget {
   const CatalogItemTile({
     super.key,
     required this.item,
+    this.localOnly = false,
     required this.isTelevision,
     required this.focusNode,
     required this.hasBoundSource,
     required this.onOpen,
     this.onLongPress,
+    this.onSecondaryTap,
     this.onFocused,
     this.progress,
     this.downloadProgress,
@@ -115,18 +123,25 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     with MetadataPresentationMixin<CatalogItemTile> {
   @override
   StremioMeta get originalMetadata => widget.item;
+  @override
+  bool get allowMetadataNetwork => !widget.localOnly;
   bool _focused = false;
   bool _hovered = false;
-  Timer? _longPressTimer;
-  bool _longPressTriggered = false;
-  bool _keyDownReceived = false;
+  /// OK opens; a held OK opens [CatalogItemTile.onLongPress] when set.
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+    canHold: () => widget.onLongPress != null,
+  );
 
   bool get _active => _focused || _hovered;
 
   Widget _watchedBadge({bool compact = false}) => ValueListenableBuilder<int>(
     valueListenable: StremioService.instance.catalogProgressRevision,
     builder: (context, _, child) => FutureBuilder<String?>(
-      future: StremioService.instance.restoredCatalogProgressIdentity(widget.item),
+      future: StremioService.instance.restoredCatalogProgressIdentity(
+        widget.item,
+      ),
       builder: (context, snapshot) {
       // Use original provenance, not metadata-provider enrichment.
       final id = snapshot.data;
@@ -143,7 +158,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
 
   @override
   void dispose() {
-    _longPressTimer?.cancel();
+    _hold.reset();
     super.dispose();
   }
 
@@ -185,9 +200,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           imageUrl: poster,
           // A downloaded title's saved poster lives with the shared image
           // cache, which can serve it offline.
-          cacheManager: OfflineTitleStore.instance.hasImage(poster)
-              ? DebrifyImageCache.manager
-              : null,
+          cacheManager: DebrifyImageCache.manager,
           fit: BoxFit.cover,
           color: blend?.$1,
           colorBlendMode: blend?.$2,
@@ -481,11 +494,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) {
-          _longPressTimer?.cancel();
-          _longPressTriggered = false;
-          _keyDownReceived = false;
-        }
+        if (!f) _hold.reset();
         if (f) {
           widget.onFocused?.call();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -517,31 +526,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         }
       },
       onKeyEvent: (node, event) {
-        if (isActivateKey(event.logicalKey) ||
-            event.logicalKey == LogicalKeyboardKey.space) {
-          if (event is KeyDownEvent) {
-            _keyDownReceived = true;
-            _longPressTriggered = false;
-            _longPressTimer?.cancel();
-            if (widget.onLongPress != null) {
-              _longPressTimer = Timer(const Duration(milliseconds: 800), () {
-                _longPressTriggered = true;
-                HapticFeedback.mediumImpact();
-                widget.onLongPress!();
-              });
-            }
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            _longPressTimer?.cancel();
-            if (!_keyDownReceived) return KeyEventResult.handled;
-            if (!_longPressTriggered) {
-              widget.onOpen();
-            }
-            _longPressTriggered = false;
-            _keyDownReceived = false;
-            return KeyEventResult.handled;
-          }
-        }
+        if (isActivateOrSpaceKey(event.logicalKey)) return _hold.handle(event);
         return KeyEventResult.ignored;
       },
       child: MouseRegion(
@@ -549,18 +534,16 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: widget.onOpen,
-          onLongPress: widget.onLongPress == null
-              ? null
-              : () {
-                  HapticFeedback.mediumImpact();
-                  widget.onLongPress!();
-                },
+          onTap: withTapFeedback(widget.onOpen),
+          onLongPress: withHoldHaptic(widget.onLongPress),
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onSecondaryTap),
           behavior: HitTestBehavior.opaque,
           // Isolate the tile's repaint: focus flips its shadow/ring/overlay,
           // and without a boundary each DPAD move repaints the whole grid
           // viewport layer instead of just the two affected tiles.
-          child: RepaintBoundary(child: card),
+          child: RepaintBoundary(
+            child: HoldFeedback(controller: _hold.ring, child: card),
+          ),
         ),
       ),
     );
@@ -643,9 +626,7 @@ class _ProgressBar extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(
-            color: Colors.black.withValues(alpha: home ? 0.45 : 0.55),
-          ),
+          ColoredBox(color: Colors.black.withValues(alpha: home ? 0.45 : 0.55)),
           FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: value,
