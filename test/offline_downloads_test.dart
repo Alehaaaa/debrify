@@ -84,9 +84,7 @@ void main() {
             'state': 'complete',
             'destPath': file.path,
             'meta': jsonEncode({
-              'id': 'tt123',
-              'title': 'Saved Movie',
-              'type': 'movie',
+              'media': {'id': 'tt123', 'title': 'Saved Movie', 'type': 'movie'},
             }),
           },
         }),

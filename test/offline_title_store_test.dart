@@ -1,13 +1,29 @@
 import 'dart:io';
 
 import 'package:debrify/models/downloaded_media.dart';
+import 'package:debrify/services/debrify_image_cache.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:file/file.dart' as cache_files;
 import 'package:debrify/services/imdb_enrichment_service.dart';
 import 'package:debrify/services/imdb_parents_guide_service.dart';
 import 'package:debrify/services/offline_title_store.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+class _UnusedFileSystem implements FileSystem {
+  @override
+  Future<cache_files.File> createFile(String name) =>
+      throw StateError('Offline art must bypass the temporary cache');
+}
+
+class _NoNetwork extends FileService {
+  @override
+  Future<FileServiceResponse> get(String url, {Map<String, String>? headers}) =>
+      throw StateError('Offline art must never download');
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory dir;
   final store = OfflineTitleStore.instance;
 
@@ -40,6 +56,34 @@ void main() {
     expect(store.isPinned(movie.id), isTrue);
     expect(await store.read(movie.id, OfflineTitleStore.meta), {'name': 'x'});
   });
+
+  test(
+    'saved art is served directly after restart without temporary-cache writes or HTTP',
+    () async {
+      const url = 'https://unused.test/poster.jpg';
+      final source = await File(
+        '${dir.path}/source.jpg',
+      ).writeAsBytes([1, 2, 3]);
+      await store.updatePinned([movie]);
+      await store.pinImage(movie.id, url, source: source.path);
+      OfflineTitleStore.debugReset();
+      final manager = DebrifyImageCache.offlineManagerForTesting(
+        Config(
+          'offline-only-test',
+          repo: JsonCacheInfoRepository(path: '${dir.path}/empty-cache.json'),
+          fileSystem: _UnusedFileSystem(),
+          fileService: _NoNetwork(),
+        ),
+      );
+      addTearDown(manager.dispose);
+      final responses = await manager.getFileStream(url).toList();
+      expect(responses, hasLength(1));
+      final image = responses.single as FileInfo;
+      expect(image.source, FileSource.Cache);
+      expect(await image.file.readAsBytes(), [1, 2, 3]);
+      expect(await (await manager.getSingleFile(url)).readAsBytes(), [1, 2, 3]);
+    },
+  );
 
   test('unlinked files are never pinned', () async {
     await store.updatePinned([

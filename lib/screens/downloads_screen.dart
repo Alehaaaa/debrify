@@ -643,6 +643,16 @@ Future<void> openDownloadedItem(
     // there isn't one. A specific episode that isn't on the device says so;
     // a general Play starts the first downloaded file.
     if (season != null && episode != null && media.type == 'series') {
+      final local = ready
+          .where(
+            (item) =>
+                item.media?.season == season && item.media?.episode == episode,
+          )
+          .firstOrNull;
+      if (local != null) {
+        await DownloadedMediaService.play(ctx, local);
+        return;
+      }
       ScaffoldMessenger.of(ctx).showSnackBar(
         SnackBar(
           content: Text(

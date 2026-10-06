@@ -1305,7 +1305,7 @@ class DownloadService {
         bool dontAskAgain = false;
         proceed =
             await showModalBottomSheet<bool>(
-sheetAnimationStyle: kMenuSheetAnimation,
+              sheetAnimationStyle: kMenuSheetAnimation,
               context: context,
               isScrollControlled: true,
               backgroundColor: const Color(0xFF0B1220),
@@ -4586,6 +4586,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     await _loadRecords();
     await _restorePaused();
     await _restorePending();
+    _libraryInitialization = Future<void>.value();
     if (Platform.isAndroid) {
       await _reconcileWithNative();
     } else {
