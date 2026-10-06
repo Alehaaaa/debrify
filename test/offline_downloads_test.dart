@@ -210,6 +210,7 @@ void main() {
             addon: StremioAddon(
               id: 'unused',
               name: 'Unused',
+              baseUrl: '',
               manifestUrl: '',
               resources: const [],
               types: const [],

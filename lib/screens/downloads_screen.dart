@@ -677,10 +677,8 @@ Future<void> openDownloadedItem(
               imdbId: media.id.startsWith('tt') ? media.id : null,
               type: media.type,
               name: media.title,
-              poster: saved?.poster ?? media.poster,
-              background: saved?.background,
-              logo: saved?.logo,
-              year: media.year ?? saved?.year,
+              poster: media.poster,
+              year: media.year,
             ),
         addon: addon,
         seasonsLoader: media.type == 'series'
@@ -693,10 +691,8 @@ Future<void> openDownloadedItem(
           season: episode.season,
           episode: episode.number,
         ),
-        // The full details (summary, rating, art) — from the network, or
-        // from the copy kept for the download when offline.
-        metaEnricher: (id, type) =>
-            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+        // Details and artwork come from the saved snapshot. Online refresh
+        // belongs to the background offline-store warm, not this local page.
         // Only the episodes on the device, not the whole series.
         episodeFilter: media.type == 'series'
             ? (season, episode) => ready.any(

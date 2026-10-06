@@ -3262,6 +3262,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MainTab.home,
         MainTab.discover,
         MainTab.reels,
+        MainTab.downloads,
         MainTab.iptv,
         MainTab.youtube,
         MainTab.stremioTv,

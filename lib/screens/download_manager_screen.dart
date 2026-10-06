@@ -29,8 +29,8 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  late final StreamSubscription<TaskProgressUpdate> _progressSub;
-  late final StreamSubscription<TaskStatusUpdate> _statusSub;
+  StreamSubscription<TaskProgressUpdate>? _progressSub;
+  StreamSubscription<TaskStatusUpdate>? _statusSub;
   StreamSubscription? _bytesSub;
 
   List<TaskRecord> _records = [];
@@ -68,7 +68,11 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
   }
 
   Future<void> _init() async {
-    await DownloadService.instance.initialize();
+    await DownloadService.instance.initializeLibrary();
+    if (!mounted) return;
+    unawaited(DownloadService.instance.initialize().catchError((Object error) {
+      debugPrint('Downloads: transfer startup deferred ($error)');
+    }));
 
     _progressSub = DownloadService.instance.progressStream.listen((update) {
       setState(() {
@@ -295,8 +299,8 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     }
     _addButtonFocusNode.dispose();
     _tabController.dispose();
-    _progressSub.cancel();
-    _statusSub.cancel();
+    _progressSub?.cancel();
+    _statusSub?.cancel();
     _bytesSub?.cancel();
     super.dispose();
   }
@@ -2545,7 +2549,11 @@ class _TorrentDownloadDetailScreenState extends State<TorrentDownloadDetailScree
   }
 
   Future<void> _init() async {
-    await DownloadService.instance.initialize();
+    await DownloadService.instance.initializeLibrary();
+    if (!mounted) return;
+    unawaited(DownloadService.instance.initialize().catchError((Object error) {
+      debugPrint('Downloads: transfer startup deferred ($error)');
+    }));
     _progressSub = DownloadService.instance.progressStream.listen((update) {
       if (!mounted) return;
       setState(() {
