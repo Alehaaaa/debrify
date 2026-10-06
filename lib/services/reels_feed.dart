@@ -105,8 +105,9 @@ class ReelsFeed {
               !_failedClips.contains(clip.key) && clip.key != title.clipKey,
         )
         .toList();
-    if (choices.isEmpty)
+    if (choices.isEmpty) {
       return _failedClips.contains(title.clipKey) ? null : title;
+    }
     final clip = choices[_random.nextInt(choices.length)];
     return ReelTitle(item: title.item, clipKey: clip.key, clipName: clip.name);
   }

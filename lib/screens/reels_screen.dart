@@ -129,6 +129,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   final FocusNode _focus = FocusNode(debugLabel: 'reels');
   final Object? _scope = ProfileRuntime.scope.value;
   final List<_Reel> _reels = [];
+  final Set<String> _postersPrepared = {};
   final Map<String, bool> _inWatchlist = {};
 
   int _index = 0;
@@ -215,6 +216,26 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// must never hold up the current reel or the rest of the look-ahead window.
   void _prepare() {
     for (var i = _index; i <= _index + _streamsAhead; i++) {
+      if (i < _reels.length) {
+        final item = _reels[i].item;
+        final still = item.background ?? item.poster;
+        if (still != null && still.isNotEmpty && _postersPrepared.add(still)) {
+          unawaited(
+            precacheImage(
+              ResizeImage.resizeIfNeeded(
+                1920,
+                null,
+                CachedNetworkImageProvider(
+                  still,
+                  cacheManager: DebrifyImageCache.manager,
+                ),
+              ),
+              context,
+              onError: (_, _) {},
+            ),
+          );
+        }
+      }
       unawaited(_resolve(i));
     }
   }
@@ -917,6 +938,7 @@ class ReelVideoSurface extends StatelessWidget {
                 : CachedNetworkImage(
                     key: ValueKey(still),
                     imageUrl: still,
+                    memCacheWidth: 1920,
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     fadeInDuration: Duration.zero,
