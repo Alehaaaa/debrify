@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/f1532e2d6541cb2523ff48d161d7ff1783724074/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/47d633c9cda94acb954808e7406d819d276750ef/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610060848",
+          "date": "2026-10-06T08:53:00Z",
+          "localizedDescription": "What's new:\n• Hold overlay everywhere, calendar menus, trailer gestures, Fix match (47d633c9)\n\nBuild 202610060848 from nextup@47d633c\nhttps://github.com/Alehaaaa/debrify/compare/f1532e2...47d633c",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-33-47d633c.ipa",
+          "size": 39838030,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610060755",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Download flow: one question, clear feedback, series scopes (6cbb8904)\n\nBuild 202610042200 from nextup@6cbb890\nhttps://github.com/Alehaaaa/debrify/compare/55da851...6cbb890",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-23-6cbb890.ipa",
           "size": 39813471,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610042144",
-          "date": "2026-10-04T21:50:29Z",
-          "localizedDescription": "What's new:\n• Player: double-tap centre to play/pause, touch lock (55da8512)\n• Player: publish playback to the OS media controls (6c7ebc34)\n• Remove golden failure images committed by mistake (c75454a8)\n\nBuild 202610042144 from nextup@55da851\nhttps://github.com/Alehaaaa/debrify/compare/26ad18d...55da851",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-22-55da851.ipa",
-          "size": 39780273,
           "minOSVersion": "14.0"
         }
       ],
