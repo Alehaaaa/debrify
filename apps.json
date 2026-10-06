@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/36a7d8c1c4be3a918dffbf785757a84e2f65949a/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610061419",
+          "date": "2026-10-06T14:21:57Z",
+          "localizedDescription": "What's new:\n• Fix iOS reel startup and prepare the next clip before swipe (36a7d8c1)\n\nBuild 202610061419 from nextup@36a7d8c\nhttps://github.com/Alehaaaa/debrify/compare/4accf10...36a7d8c",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-41-36a7d8c.ipa",
+          "size": 39889356,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610061334",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Player: one loader for streams, clean pinch, HUD back after options (477056be)\n• Player: downloaded files skip the stream startup screen (c3b74a23)\n\nBuild 202610050557 from nextup@477056b\nhttps://github.com/Alehaaaa/debrify/compare/2afe126...477056b",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-30-477056b.ipa",
           "size": 39815842,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610042313",
-          "date": "2026-10-04T23:18:15Z",
-          "localizedDescription": "What's new:\n• Test: one detail page wires Rewatch now (2afe1267)\n\nBuild 202610042313 from nextup@2afe126\nhttps://github.com/Alehaaaa/debrify/compare/2a06fe9...2afe126",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-28-2afe126.ipa",
-          "size": 39816895,
           "minOSVersion": "14.0"
         }
       ],
