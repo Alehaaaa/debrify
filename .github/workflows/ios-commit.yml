@@ -18,6 +18,14 @@ on:
 permissions:
   contents: write
 
+# A newer push to the same branch supersedes the build in flight: cancel it
+# rather than queue a second macOS runner for an IPA nobody will install.
+# (Publishing is safe to cut short — the source branch is swapped by an
+# atomic git push, and the next build republishes.)
+concurrency:
+  group: ios-commit-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   RELEASE_TAG: ios-commits
   SOURCE_BRANCH: sidestore
