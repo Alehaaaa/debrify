@@ -13,6 +13,7 @@ import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
 import '../services/storage_service.dart';
 import '../services/youtube_service.dart';
+import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
 import '../widgets/hero_trailer_backdrop.dart';
 import '../widgets/trailer_engine.dart';
@@ -367,7 +368,8 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _paused = !_paused);
   }
 
-  /// DPAD / keyboard: up and down move through the feed, OK opens the title.
+  /// DPAD / keyboard: up/down move through the feed, Space pauses the clip,
+  /// and OK opens the title.
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
@@ -383,7 +385,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
       }
       return KeyEventResult.handled;
     }
-    if (isActivateOrSpaceKey(key)) {
+    if (key == LogicalKeyboardKey.space) {
+      _togglePause();
+      return KeyEventResult.handled;
+    }
+    if (isActivateKey(key)) {
       if (_index < _reels.length) _open(_reels[_index].item);
       return KeyEventResult.handled;
     }
@@ -550,7 +556,12 @@ class _ReelsScreenState extends State<ReelsScreen> {
               key: ValueKey('$i:${_watchKey(reel.item)}'),
               reel: reel,
               active: i == _index,
-              prewarm: false,
+              // AVPlayer can keep the current clip and the next one prepared
+              // together, so an iOS swipe has a frame ready at the page edge.
+              // Desktop uses one media_kit output and keeps the next URL and
+              // poster warm instead; attempting a second decoder would stall
+              // both during the handoff.
+              prewarm: PlatformUtil.isIosMobile && i == _index + 1,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
@@ -951,9 +962,13 @@ class ReelVideoSurface extends StatelessWidget {
             imageUrl: null,
             videoUrl: streams?.playUrl,
             audioUrl: streams?.audioUrl,
-            enabled: playback.active && streams != null && !playback.failed,
+            enabled:
+                (playback.active || playback.prewarm) &&
+                streams != null &&
+                !playback.failed,
             highResolutionVideo: true,
             suspended: !playback.active || playback.paused,
+            freezeFrame: playback.paused,
             decorative: false,
             fadeDuration: Duration.zero,
             engineFactory: engineFactory,
@@ -1052,8 +1067,9 @@ class _ReelSynopsis extends StatelessWidget {
   );
 }
 
-/// The title as its logo; the name in type when there is no logo (or it
-/// fails to load).
+/// The title as its logo; the name in type only when no logo is available.
+/// A logo's slot is fixed before its request completes, avoiding a flash of
+/// text followed by a layout shift when the artwork arrives.
 class _ReelTitle extends StatelessWidget {
   final StremioMeta item;
 
@@ -1076,8 +1092,14 @@ class _ReelTitle extends StatelessWidget {
     );
     final logo = item.logo;
     if (logo == null || logo.isEmpty) return text;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 230, maxHeight: 84),
+    final logoSlot = SizedBox(
+      width: 230,
+      height: 84,
+      child: Align(alignment: Alignment.bottomLeft, child: text),
+    );
+    return SizedBox(
+      width: 230,
+      height: 84,
       child: CachedNetworkImage(
         imageUrl: logo,
         fit: BoxFit.contain,
@@ -1085,8 +1107,10 @@ class _ReelTitle extends StatelessWidget {
         cacheManager: DebrifyImageCache.manager,
         memCacheWidth: 690,
         fadeInDuration: const Duration(milliseconds: 150),
-        placeholder: (_, _) => text,
-        errorWidget: (_, _, _) => text,
+        // Keep the reserved logo space blank while it loads. Rendering the
+        // title here makes it vanish and reflow once the image arrives.
+        placeholder: (_, _) => const SizedBox.expand(),
+        errorWidget: (_, _, _) => logoSlot,
       ),
     );
   }

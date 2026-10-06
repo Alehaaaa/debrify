@@ -144,6 +144,10 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// discipline, URL-change restarts — applies unchanged.
   final bool live;
 
+  /// Pauses the decoder but leaves its last rendered frame visible. Used by
+  /// full-screen clips, where falling back to a poster on pause is jarring.
+  final bool freezeFrame;
+
   /// Non-null for a muted collection tile: no intro skip, small texture, and
   /// playback only while this token owns ambient video.
   final Object? focusPreviewOwner;
@@ -191,6 +195,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.ambientVolume = _defaultAmbientVolume,
     this.heroTag,
     this.live = false,
+    this.freezeFrame = false,
     this.focusPreviewOwner,
     this.httpHeaders,
     this.engineFactory,
@@ -321,7 +326,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// trailer fades back to the still (a frozen frame of a compressed stream
   /// reads as blocky, full-screen) while its player waits, paused, underneath.
   bool get _showVideo =>
-      _videoVisible && (!widget.suspended || widget.foreground);
+      _videoVisible &&
+      (!widget.suspended || widget.foreground || widget.freezeFrame);
 
   /// TV (Android) gets the native ExoPlayer engine — libmpv stutters decoding
   /// the trailer on weak TV SoCs. By default (pref on) it renders in underlay
@@ -370,7 +376,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       );
     }
     return await MediaKitTrailerEngine.create(
-      reportPlaybackErrors: widget.focusPreviewOwner != null || !widget.decorative,
+      reportPlaybackErrors:
+          widget.focusPreviewOwner != null || !widget.decorative,
       highResolution: widget.highResolutionVideo,
     );
   }
@@ -423,7 +430,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         widget.videoUrl != oldWidget.videoUrl ||
         widget.audioUrl != oldWidget.audioUrl ||
         widget.muxedVideoUrl != oldWidget.muxedVideoUrl;
-    if (urlChanged || (!oldWidget.enabled && widget.enabled)) _completed = false;
+    if (urlChanged || (!oldWidget.enabled && widget.enabled))
+      _completed = false;
     if (urlChanged || widget.enabled != oldWidget.enabled) {
       if (!_canPlay) {
         _teardownPlayer();
@@ -446,6 +454,16 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         if (!_pausedByUser && !_covered && !_appPaused) _engine!.play();
       } else if (_canPlay && !_covered && !_appPaused) {
         _scheduleStart();
+      }
+    }
+
+    // Unlike a backgrounded ambient trailer, a paused full-screen clip should
+    // remain on its last frame instead of revealing the poster underneath.
+    if (widget.freezeFrame != oldWidget.freezeFrame && _engine != null) {
+      if (widget.freezeFrame) {
+        _engine!.pause();
+      } else if (!widget.suspended && !_covered && !_appPaused) {
+        _engine!.play();
       }
     }
 

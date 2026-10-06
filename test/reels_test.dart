@@ -8,6 +8,7 @@ import 'package:debrify/services/youtube_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -435,6 +436,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(playing(activeId(tester)!), findsOneWidget);
       expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    });
+
+    testWidgets('Space pauses and resumes the active reel', (tester) async {
+      await tester.pumpWidget(host(feedFor(FakeTmdb())));
+      await tester.pumpAndSettle();
+      final id = activeId(tester)!;
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(ValueKey('player:$id:true:100.0:true:true')),
+        findsOneWidget,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
+      expect(playing(id), findsOneWidget);
     });
 
     testWidgets(

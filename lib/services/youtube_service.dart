@@ -136,6 +136,18 @@ class YoutubeResolvedStreams {
 
   bool get hasPlayable => playUrl != null && playUrl!.isNotEmpty;
 
+  /// Pixel height of the URL selected for playback, when the manifest reports
+  /// it. A null result means the source did not identify its selected format;
+  /// callers should treat that as unknown rather than assuming it is low-res.
+  int? get playbackHeight {
+    final url = playUrl;
+    if (url == null) return null;
+    for (final quality in qualities) {
+      if (quality.videoUrl == url) return quality.height;
+    }
+    return url == downloadUrl ? downloadHeight : null;
+  }
+
   /// A single-file playback fallback only when it is known to contain audio.
   /// [downloadUrl] itself may still be video-only in the rare no-muxed-stream
   /// case so downloads can retain their existing best-effort behavior.

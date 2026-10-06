@@ -66,6 +66,48 @@ void main() {
     },
   );
 
+  testWidgets('pausing a reel keeps its rendered video frame visible', (
+    tester,
+  ) async {
+    final engine = _TextureFirstFrameEngine();
+    final item = StremioMeta(id: 'tt1234', type: 'movie', name: 'Scene');
+    const streams = YoutubeResolvedStreams(
+      playUrl: 'https://example.invalid/hd.mp4',
+    );
+    Widget host(bool paused) => MaterialApp(
+      home: ReelVideoSurface(
+        playback: ReelPlayback(
+          item: item,
+          streams: streams,
+          active: true,
+          paused: paused,
+          volume: 100,
+        ),
+        onPlaybackFailed: () {},
+        engineFactory: () async => engine,
+        poster: const ColoredBox(color: Colors.blue),
+      ),
+    );
+
+    await tester.pumpWidget(host(false));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    await tester.pump();
+    final videoOpacity = find.descendant(
+      of: find.byType(HeroTrailerBackdrop),
+      matching: find.byType(AnimatedOpacity),
+    );
+    expect(tester.widget<AnimatedOpacity>(videoOpacity).opacity, 1);
+
+    await tester.pumpWidget(host(true));
+    await tester.pump();
+    expect(engine.pauseCalls, greaterThan(0));
+    expect(tester.widget<AnimatedOpacity>(videoOpacity).opacity, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
     'high-resolution reel hands the decoder to the next visible page',
     (tester) async {

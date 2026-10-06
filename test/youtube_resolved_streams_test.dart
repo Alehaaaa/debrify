@@ -169,6 +169,27 @@ void main() {
   });
 
   group('YoutubeResolvedStreams.muxedPlaybackFallback', () {
+    test('reports the selected adaptive stream height', () {
+      const streams = YoutubeResolvedStreams(
+        playUrl: 'https://example.com/720.mp4',
+        qualities: [
+          YoutubeQuality(height: 720, videoUrl: 'https://example.com/720.mp4'),
+        ],
+      );
+
+      expect(streams.playbackHeight, 720);
+    });
+
+    test('reports the selected muxed stream height', () {
+      const streams = YoutubeResolvedStreams(
+        playUrl: 'https://example.com/360.mp4',
+        downloadUrl: 'https://example.com/360.mp4',
+        downloadHeight: 360,
+      );
+
+      expect(streams.playbackHeight, 360);
+    });
+
     test('returns a download URL known to contain audio', () {
       const streams = YoutubeResolvedStreams(
         playUrl: 'https://example.com/video-only.mp4',

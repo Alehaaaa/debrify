@@ -118,6 +118,72 @@ class DownloadedMediaService {
       ? ProfileRuntime.capture().profileId
       : null;
 
+  /// Files every item under the catalog title selected by the user.
+  static Future<void> rematch(
+    List<LocalDownload> items, {
+    required String id,
+    required String title,
+    required String type,
+    String? poster,
+    String? year,
+  }) async {
+    final cache = await _MediaCache.open();
+    final owner = _activeProfile();
+    for (final item in items) {
+      final coordinates = type == 'series'
+          ? (season: item.media?.season, episode: item.media?.episode)
+          : null;
+      var season = coordinates?.season;
+      var episode = coordinates?.episode;
+      if (type == 'series' && (season == null || episode == null)) {
+        final guess = detectDownloadedEpisode(item.record.task.filename);
+        season ??= guess.season;
+        episode ??= guess.episode;
+      }
+      final media = DownloadedMedia(
+        id: id,
+        title: title,
+        type: type,
+        poster: poster,
+        year: year,
+        season: season,
+        episode: episode,
+      );
+      for (final key in _matchKeys(item)) {
+        cache.put(key, media, profile: owner, manual: true);
+      }
+    }
+    await cache.save();
+  }
+
+  /// Removes a user-selected match so normal recognition resumes on reload.
+  static Future<void> resetMatch(List<LocalDownload> items) async {
+    final cache = await _MediaCache.open();
+    for (final item in items) {
+      for (final key in _matchKeys(item)) {
+        cache.remove(key);
+      }
+    }
+    await cache.save();
+  }
+
+  static Future<bool> hasManualMatch(List<LocalDownload> items) async {
+    final cache = _MediaCache.loaded;
+    if (cache == null) return false;
+    return items.any(
+      (item) => _matchKeys(item).any((key) => cache.entry(key)?.manual == true),
+    );
+  }
+
+  static List<String> _matchKeys(LocalDownload item) => [
+    if (item.location.isNotEmpty)
+      item.location.startsWith('content://')
+          ? item.location
+          : _norm(item.location),
+    if (!item.isScanned) _MediaCache.taskKey(item.record.taskId),
+    for (final record in item.linkedRecords) _MediaCache.taskKey(record.taskId),
+  ];
+
   static String _norm(String path) => p.normalize(path);
 
   static Future<List<LocalDownload>> _load() async {
