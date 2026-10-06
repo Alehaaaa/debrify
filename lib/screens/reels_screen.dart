@@ -4,7 +4,6 @@ import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
@@ -229,8 +228,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
     } catch (_) {
       streams = null;
     }
-    if (!_current || !_reels.contains(reel) || reel.revision != revision)
+    if (!_current || !_reels.contains(reel) || reel.revision != revision) {
       return;
+    }
     setState(() {
       if (streams != null && streams.hasPlayable) {
         reel.streams = streams;
@@ -295,8 +295,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (!_current ||
         reel.revision != revision ||
         reel.state != _ClipState.ready ||
-        !_reels.contains(reel))
+        !_reels.contains(reel)) {
       return;
+    }
     setState(() {
       reel.state = _ClipState.failed;
       reel.streams = null;
@@ -325,7 +326,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       }
       return KeyEventResult.handled;
     }
-    if (event is KeyDownEvent && isActivateOrSpaceKey(key)) {
+    if (isActivateOrSpaceKey(key)) {
       if (_index < _reels.length) _open(_reels[_index].item);
       return KeyEventResult.handled;
     }
@@ -336,8 +337,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (_movingByKey ||
         index < 0 ||
         index >= _reels.length ||
-        !_pages.hasClients)
+        !_pages.hasClients) {
       return;
+    }
     _movingByKey = true;
     unawaited(
       _pages

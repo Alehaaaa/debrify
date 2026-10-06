@@ -410,15 +410,15 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   }
 
   @override
-  void didUpdateWidget(covariant HeroTrailerBackdrop old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(covariant HeroTrailerBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
     final urlChanged =
-        widget.videoUrl != old.videoUrl ||
-        widget.audioUrl != old.audioUrl ||
-        widget.muxedVideoUrl != old.muxedVideoUrl;
-    if (urlChanged || (!old.enabled && widget.enabled)) _completed = false;
-    if (urlChanged || widget.enabled != old.enabled) {
+        widget.videoUrl != oldWidget.videoUrl ||
+        widget.audioUrl != oldWidget.audioUrl ||
+        widget.muxedVideoUrl != oldWidget.muxedVideoUrl;
+    if (urlChanged || (!oldWidget.enabled && widget.enabled)) _completed = false;
+    if (urlChanged || widget.enabled != oldWidget.enabled) {
       if (!_canPlay) {
         _teardownPlayer();
       } else if (urlChanged && _engine != null) {
@@ -431,7 +431,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     }
 
     // Scrolled out of view / back: pause and resume the SAME player.
-    if (widget.suspended != old.suspended) {
+    if (widget.suspended != oldWidget.suspended) {
       if (widget.suspended) {
         _startTimer?.cancel();
         _startTimer = null;
@@ -446,12 +446,12 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // Ambient volume retarget (the Home hero's takeover swell) — applied to
     // the live engine without any restart. No-op while foregrounded (full
     // volume) or user-muted; _applyVolume handles both.
-    if (widget.ambientVolume != old.ambientVolume && _engine != null) {
+    if (widget.ambientVolume != oldWidget.ambientVolume && _engine != null) {
       _applyVolume(foreground: widget.foreground);
     }
 
     // Foreground promotion / demotion.
-    if (widget.foreground != old.foreground) {
+    if (widget.foreground != oldWidget.foreground) {
       if (widget.foreground && _engine != null) {
         _enterForeground();
       } else if (widget.foreground) {
@@ -811,8 +811,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         !_videoVisible ||
         _duration <= Duration.zero ||
         (_playing && _lastPos < _duration) ||
-        _lastPos < _duration - const Duration(milliseconds: 250))
+        _lastPos < _duration - const Duration(milliseconds: 250)) {
       return;
+    }
     _completed = true;
     _teardownPlayer();
     if (widget.foreground) {
@@ -1030,7 +1031,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
           ? HeroTrailerBackdrop._sharpStillWidth
           : (widget.imageBlurSigma <= 0 ? 96 : 480),
       filterQuality: FilterQuality.medium,
-      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => const SizedBox.shrink(),
     );
     if (widget.sharpStill || widget.imageBlurSigma <= 0) return image;
     return ImageFiltered(
