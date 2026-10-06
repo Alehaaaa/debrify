@@ -1,0 +1,41 @@
+name: Offline startup and downloads tests
+
+on:
+  push:
+    branches: ['nextup']
+  pull_request:
+    paths:
+      - 'lib/main.dart'
+      - 'lib/services/*download*.dart'
+      - 'lib/services/*offline*.dart'
+      - 'lib/services/startup_connection.dart'
+      - 'lib/services/debrify_image_cache.dart'
+      - 'lib/services/app_migration_service.dart'
+      - 'lib/screens/downloads_screen.dart'
+      - 'lib/screens/merged_series_detail_screen.dart'
+      - 'lib/widgets/app_initializer.dart'
+      - 'lib/widgets/catalog_item_tile.dart'
+      - 'lib/widgets/metadata_presentation_mixin.dart'
+      - 'lib/widgets/see_all/see_all_poster_grid.dart'
+      - 'test/offline_downloads_test.dart'
+      - 'test/startup_connection_test.dart'
+      - 'test/offline_title_store_test.dart'
+      - 'test/launch_animation/launch_initializer_test.dart'
+      - '.github/workflows/offline-startup-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.8'
+          channel: 'stable'
+          cache: true
+      - run: flutter pub get
+      - run: flutter test test/startup_connection_test.dart test/offline_downloads_test.dart test/offline_title_store_test.dart test/downloaded_title_screen_test.dart test/downloaded_library_scan_test.dart test/download_service_generated_file_test.dart test/launch_animation/launch_initializer_test.dart test/startup_local_file_test.dart test/profiles/profile_essential_addon_seeding_test.dart
+      - run: flutter analyze --no-fatal-infos lib/main.dart lib/services/startup_connection.dart lib/widgets/app_initializer.dart lib/services/app_migration_service.dart lib/services/download_service.dart lib/services/downloaded_media_service.dart lib/services/offline_title_store.dart lib/services/debrify_image_cache.dart lib/widgets/catalog_item_tile.dart lib/widgets/metadata_presentation_mixin.dart lib/widgets/see_all/see_all_poster_grid.dart lib/screens/downloads_screen.dart lib/screens/merged_series_detail_screen.dart test/startup_connection_test.dart test/offline_downloads_test.dart test/launch_animation/launch_initializer_test.dart

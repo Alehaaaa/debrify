@@ -114,8 +114,13 @@ class DownloadedMediaService {
     if (debugRecords != null) {
       records = await debugRecords!();
     } else {
-      await service.initialize();
+      await service.initializeLibrary();
       records = await service.allRecords();
+      unawaited(
+        service.initialize().catchError((Object error) {
+          debugPrint('Downloads: transfer startup deferred ($error)');
+        }),
+      );
     }
     final cache = await _MediaCache.open();
 
@@ -394,10 +399,7 @@ class DownloadedMediaService {
     final owner = _activeProfile();
     for (final item in items) {
       final coordinates = type == 'series'
-          ? (
-              season: item.media?.season,
-              episode: item.media?.episode,
-            )
+          ? (season: item.media?.season, episode: item.media?.episode)
           : null;
       var season = coordinates?.season;
       var episode = coordinates?.episode;
@@ -593,9 +595,7 @@ class _MediaCache {
     _opening = null;
   }
 
-  ({DownloadedMedia? media, String? profile, bool manual})? entry(
-    String path,
-  ) {
+  ({DownloadedMedia? media, String? profile, bool manual})? entry(String path) {
     final raw = _entries[path];
     if (raw == null) return null;
     return (

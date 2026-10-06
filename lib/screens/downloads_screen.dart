@@ -11,6 +11,7 @@ import '../services/downloads/title_download_summary.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
+import '../services/trakt/trakt_episode_model.dart';
 import '../theme/app_theme_controller.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/shipped_themes.dart' show effectiveDetailTheme;
@@ -549,6 +550,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                         showRatings: DiscoverPrefs.showRatings,
                         showTitles: DiscoverPrefs.showTitles,
                         child: SeeAllPosterGrid(
+                          localOnly: true,
                           items: posters,
                           isTelevision: false,
                           loadingMore: false,
@@ -657,17 +659,30 @@ Future<void> openDownloadedItem(
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (routeContext) => MergedDetailScreen(
-        item: StremioMeta(
-          id: media.id,
-          imdbId: media.id.startsWith('tt') ? media.id : null,
-          type: media.type,
-          name: media.title,
-          poster: saved?.poster ?? media.poster,
-          background: saved?.background,
-          logo: saved?.logo,
-          year: media.year ?? saved?.year,
-        ),
+        localOnly: true,
+        item:
+            saved ??
+            StremioMeta(
+              id: media.id,
+              imdbId: media.id.startsWith('tt') ? media.id : null,
+              type: media.type,
+              name: media.title,
+              poster: saved?.poster ?? media.poster,
+              background: saved?.background,
+              logo: saved?.logo,
+              year: media.year ?? saved?.year,
+            ),
         addon: addon,
+        seasonsLoader: media.type == 'series'
+            ? () => downloadedSeasons(ready)
+            : null,
+        watchProgressLoader: () =>
+            StorageService.getEpisodeWatchProgressByImdbId(media.id),
+        onPlayEpisode: (episode) => playFallback(
+          routeContext,
+          season: episode.season,
+          episode: episode.number,
+        ),
         // The full details (summary, rating, art) — from the network, or
         // from the copy kept for the download when offline.
         metaEnricher: (id, type) =>
@@ -705,6 +720,50 @@ Future<void> openDownloadedItem(
 
 /// The user's Cinemeta install when present, else the stock one — the
 /// detail page only needs it for metadata.
+/// Every available file remains reachable even without a cached episode list.
+@visibleForTesting
+Future<List<TraktSeason>> downloadedSeasons(List<LocalDownload> items) async {
+  if (items.isEmpty) return const [];
+  final id = items.first.media?.id;
+  final saved = await OfflineTitleStore.instance.read(
+    id,
+    OfflineTitleStore.videos,
+  );
+  final videos = saved is List
+      ? saved.whereType<Map>().toList()
+      : const <Map>[];
+  final seasons = <int, Map<int, TraktEpisode>>{};
+  for (final item in items.where((item) => item.isReady)) {
+    final media = item.media;
+    final season = media?.season;
+    final number = media?.episode;
+    if (season == null || number == null) continue;
+    final info = videos
+        .where(
+          (video) =>
+              video['season'] == season &&
+              (video['episode'] ?? video['number']) == number,
+        )
+        .firstOrNull;
+    seasons.putIfAbsent(season, () => {})[number] = TraktEpisode(
+      season: season,
+      number: number,
+      title: info?['title'] as String? ?? 'Episode $number',
+      overview: info?['overview'] as String?,
+      thumbnailUrl: info?['thumbnail'] as String?,
+    );
+  }
+  return [
+    for (final entry in seasons.entries)
+      TraktSeason(
+        number: entry.key,
+        episodeCount: entry.value.length,
+        episodes: entry.value.values.toList()
+          ..sort((a, b) => a.number.compareTo(b.number)),
+      ),
+  ]..sort(seasonsSpecialsLast);
+}
+
 Future<StremioAddon> _metadataAddon() => OfflineTitleStore.cinemetaAddon();
 
 /// Opens metadata reached from a downloaded title (a similar title or a
@@ -803,25 +862,28 @@ Future<DownloadedTitleDetails> _loadTitleDetails(LocalDownload first) async {
   if (media == null || !media.isCatalogLinked) {
     return (meta: null, videos: const <Map<String, dynamic>>[]);
   }
-  StremioMeta? meta;
-  var videos = const <Map<String, dynamic>>[];
-  try {
-    meta = await StremioService.instance.fetchMetaDetails(
-      imdbId: media.id,
-      type: media.type,
-    );
-  } catch (_) {}
-  if (media.type == 'series') {
-    try {
-      videos =
-          await StremioService.instance.fetchSeriesMeta(
-            await _metadataAddon(),
-            media.id,
-          ) ??
-          const [];
-    } catch (_) {}
-  }
-  return (meta: meta, videos: videos);
+  final store = OfflineTitleStore.instance;
+  final saved = await store.read(
+    media.id,
+    '${OfflineTitleStore.meta}:${media.type}',
+  );
+  final snapshot = PageSnapshot.fromJson(
+    await store.read(media.id, OfflineTitleStore.page),
+  );
+  final savedVideos = await store.read(media.id, OfflineTitleStore.videos);
+  return (
+    meta:
+        snapshot?.meta ??
+        (saved is Map
+            ? StremioMeta.fromJson(Map<String, dynamic>.from(saved))
+            : null),
+    videos: savedVideos is List
+        ? [
+            for (final video in savedVideos)
+              if (video is Map) Map<String, dynamic>.from(video),
+          ]
+        : const <Map<String, dynamic>>[],
+  );
 }
 
 class DownloadedTitleScreen extends StatefulWidget {

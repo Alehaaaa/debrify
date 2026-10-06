@@ -15,6 +15,7 @@ import '../services/remote_control/remote_command_router.dart';
 import '../utils/platform_util.dart';
 import '../widgets/initial_setup_flow.dart';
 import '../main.dart';
+import '../services/startup_connection.dart';
 
 /// How long the corner spinner takes to fade out on TV. Shared so the widget's
 /// fade and _finishSplash's wait for it can never drift apart.
@@ -35,6 +36,7 @@ class AppInitializer extends StatefulWidget {
 class _AppInitializerState extends State<AppInitializer>
     with TickerProviderStateMixin {
   bool _onboardingComplete = false;
+  bool _offlineLaunch = false;
   // True once the splash overlay has fully faded off MainPage. Until then the
   // splash keeps animating ON TOP of the (already-mounted, already-loading)
   // main shell, so the user never sees the Home board's own loading state on
@@ -148,6 +150,7 @@ class _AppInitializerState extends State<AppInitializer>
       if (mounted) unawaited(_startReveal());
     });
 
+    unawaited(StartupConnection.check());
     _checkInitializationStatus();
   }
 
@@ -195,10 +198,8 @@ class _AppInitializerState extends State<AppInitializer>
     }
 
     try {
-      // Returning users only pay two prefs reads here. The unseeded-addon
-      // path does network manifest fetches — time-box those so a slow or
-      // offline network can't hold the splash; seeding continues in the
-      // background and is retried next launch if it didn't finish.
+      // Version state is local. Essential addon seeding runs in the
+      // background and can never keep the interactive shell behind a splash.
       await AppMigrationService.runMigrations().timeout(
         const Duration(seconds: 4),
       );
@@ -227,10 +228,23 @@ class _AppInitializerState extends State<AppInitializer>
 
     if (!mounted) return;
 
+    // Reachability runs in parallel with local initialization and the ident.
+    // Offline (or too slow to answer) enters the local library immediately.
+    _offlineLaunch = !await StartupConnection.check();
+    if (!mounted) return;
+    if (_offlineLaunch) MainPageBridge.cancelIptvStartupChannel();
+
     // Hold the splash only until the reveal animation finishes (it runs
     // concurrently with the init work above) — replaces the old fixed
     // 2300ms/1700ms delays.
-    await _waitForReveal();
+    if (_offlineLaunch) {
+      await _launchReady.future;
+      if (!mounted) return;
+      _revealController.stop(canceled: false);
+      _revealController.value = 1;
+    } else {
+      await _waitForReveal();
+    }
     if (!mounted) return;
 
     if (!hasCompleted) {
@@ -247,14 +261,17 @@ class _AppInitializerState extends State<AppInitializer>
         _holdingForHome = true;
       });
       _idleController.repeat();
-      if (MainPageBridge.homeBoardReady.value) {
+      if (_offlineLaunch || MainPageBridge.homeBoardReady.value) {
         _finishSplash();
       } else {
         MainPageBridge.homeBoardReady.addListener(_onHomeBoardReady);
         // Safety valve: if the board never settles (hung network with no
         // timeout of its own, or a future tab-order change breaking the
         // signal), don't strand the user on the splash.
-        _homeReadyTimeout = Timer(const Duration(seconds: 10), _finishSplash);
+        _homeReadyTimeout = Timer(
+          Duration(milliseconds: _isAndroidTv ? 2000 : 800),
+          _finishSplash,
+        );
       }
     }
   }
@@ -479,7 +496,9 @@ class _AppInitializerState extends State<AppInitializer>
         Opacity(
           opacity: _isAndroidTv && !_paintHomeBehindSplash ? 0 : 1,
           child: RepaintBoundary(
-            child: widget.homeBuilder?.call(context) ?? const MainPage(),
+            child:
+                widget.homeBuilder?.call(context) ??
+                MainPage(initialTab: _offlineLaunch ? MainTab.downloads : null),
           ),
         ),
         if (!_splashDone)

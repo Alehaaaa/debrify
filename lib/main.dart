@@ -80,6 +80,7 @@ import 'services/simkl/simkl_service.dart';
 import 'services/trakt/trakt_service.dart';
 import 'services/mdblist/mdblist_service.dart';
 import 'widgets/app_initializer.dart';
+import 'services/startup_connection.dart';
 
 import 'widgets/animated_background.dart';
 import 'services/main_page_bridge.dart';
@@ -606,6 +607,7 @@ Future<void> _continueApplicationStartup() async {
   // This common path is also entered after registry recovery and interactive
   // Linux vault unlock; both must receive the same native lock authority as a
   // normal bootstrap.
+  unawaited(StartupConnection.check());
   ProfileNativeLockBridge.initialize();
   // Resume a crash-interrupted CircleAdoption before any profile database or
   // preference warm can observe a half-copied target generation.
@@ -1278,7 +1280,9 @@ class _DebrifyAppState extends State<DebrifyApp> {
 }
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key});
+  const MainPage({super.key, this.initialTab});
+
+  final int? initialTab;
 
   @override
   State<MainPage> createState() => _MainPageState();
@@ -1379,9 +1383,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   // that owns the launch is the one that mounts. Resolved in main() before
   // runApp precisely so this initializer can read it; tab 13 is unconditional
   // in _computeVisibleNavIndices, so it can never be swallowed.
-  int _selectedIndex = MainPageBridge.hasPendingIptvStartup
-      ? MainTab.iptv
-      : MainTab.home;
+  late int _selectedIndex =
+      widget.initialTab ??
+      (MainPageBridge.hasPendingIptvStartup ? MainTab.iptv : MainTab.home);
 
   // Phone nav chrome: 'classic' (bottom bar, default) vs 'floating' (the
   // glass button). Nothing renders until the pref is read — a one-frame
@@ -3987,8 +3991,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                               i != _kSearchTabIndex,
                         )
                         .toList();
-                MainPageBridge.searchTabInNav =
-                    nonTvIndices.contains(_kSearchTabIndex);
+                MainPageBridge.searchTabInNav = nonTvIndices.contains(
+                  _kSearchTabIndex,
+                );
                 final nonTvSelected = nonTvIndices.indexOf(_selectedIndex);
                 // Touch tablets (iPad / Android tablet in landscape) get the
                 // wider rail. True desktop keeps the slim rail.

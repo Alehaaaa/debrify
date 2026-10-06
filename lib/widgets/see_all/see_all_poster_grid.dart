@@ -107,6 +107,7 @@ class SeeAllPosterGrid extends StatefulWidget {
 
   /// Open the detail page for an item (SELECT / tap).
   final void Function(StremioMeta item) onOpen;
+  final bool localOnly;
 
   /// Optional long-press / Quick Play straight from the grid. Hold only
   /// quick-plays when the grid has no options menu (see [onOptions]).
@@ -162,6 +163,7 @@ class SeeAllPosterGrid extends StatefulWidget {
     required this.loadingMore,
     required this.exhausted,
     required this.onOpen,
+    this.localOnly = false,
     required this.onLoadMore,
     this.onQuickPlay,
     this.onOptions,
@@ -536,6 +538,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                         skipTraversal: true,
                         onKeyEvent: (_, e) => _handleShelfArrows(index, e),
                         child: CatalogItemTile(
+                          localOnly: widget.localOnly,
                           item: item,
                           isTelevision: widget.isTelevision,
                           focusNode: index < _nodes.length
@@ -642,6 +645,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                   children: [
                     Expanded(
                       child: CatalogItemTile(
+                        localOnly: widget.localOnly,
                         item: item,
                         isTelevision: widget.isTelevision,
                         focusNode: index < _nodes.length ? _nodes[index] : null,

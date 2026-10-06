@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
@@ -72,6 +73,21 @@ class _OfflineAwareCacheManager extends CacheManager {
   static const _pinnedAge = Duration(days: 3650);
 
   @override
+  Future<File> getSingleFile(
+    String url, {
+    String? key,
+    Map<String, String>? headers,
+  }) async {
+    final saved = await OfflineTitleStore.instance.imageFile(url);
+    if (saved != null) return saved;
+    final cached =
+        await getFileFromCache(key ?? url) ??
+        await DefaultCacheManager().getFileFromCache(key ?? url);
+    if (cached != null && await cached.file.exists()) return cached.file;
+    return super.getSingleFile(url, key: key, headers: headers);
+  }
+
+  @override
   Stream<FileResponse> getFileStream(
     String url, {
     String? key,
@@ -107,6 +123,17 @@ class _OfflineAwareCacheManager extends CacheManager {
       if (cached != null) {
         // Saved art is served as-is: no revalidation, so no network needed.
         yield cached;
+        return;
+      }
+    }
+    // Older shelves used DefaultCacheManager. Reuse those files when the
+    // shared cache has no copy; do not lose artwork at the cache transition.
+    final cacheKey = key ?? url;
+    final shared = await getFileFromCache(cacheKey);
+    if (shared == null || !await shared.file.exists()) {
+      final legacy = await DefaultCacheManager().getFileFromCache(cacheKey);
+      if (legacy != null && await legacy.file.exists()) {
+        yield legacy;
         return;
       }
     }

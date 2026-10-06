@@ -11,7 +11,6 @@ import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
 import '../services/debrify_image_cache.dart';
-import '../services/offline_title_store.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/widgets/parallax_focus.dart';
@@ -30,6 +29,7 @@ import 'movie_watched_badge.dart';
 /// and per-item actions live on the detail screen — the grid stays clean.
 class CatalogItemTile extends StatefulWidget {
   final StremioMeta item;
+  final bool localOnly;
   final bool isTelevision;
   final FocusNode? focusNode;
   final bool hasBoundSource;
@@ -96,6 +96,7 @@ class CatalogItemTile extends StatefulWidget {
   const CatalogItemTile({
     super.key,
     required this.item,
+    this.localOnly = false,
     required this.isTelevision,
     required this.focusNode,
     required this.hasBoundSource,
@@ -122,6 +123,8 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     with MetadataPresentationMixin<CatalogItemTile> {
   @override
   StremioMeta get originalMetadata => widget.item;
+  @override
+  bool get allowMetadataNetwork => !widget.localOnly;
   bool _focused = false;
   bool _hovered = false;
   /// OK opens; a held OK opens [CatalogItemTile.onLongPress] when set.
@@ -136,7 +139,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
   Widget _watchedBadge({bool compact = false}) => ValueListenableBuilder<int>(
     valueListenable: StremioService.instance.catalogProgressRevision,
     builder: (context, _, child) => FutureBuilder<String?>(
-      future: StremioService.instance.restoredCatalogProgressIdentity(widget.item),
+      future: StremioService.instance.restoredCatalogProgressIdentity(
+        widget.item,
+      ),
       builder: (context, snapshot) {
       // Use original provenance, not metadata-provider enrichment.
       final id = snapshot.data;
@@ -195,9 +200,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           imageUrl: poster,
           // A downloaded title's saved poster lives with the shared image
           // cache, which can serve it offline.
-          cacheManager: OfflineTitleStore.instance.hasImage(poster)
-              ? DebrifyImageCache.manager
-              : null,
+          cacheManager: DebrifyImageCache.manager,
           fit: BoxFit.cover,
           color: blend?.$1,
           colorBlendMode: blend?.$2,
@@ -539,10 +542,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           // and without a boundary each DPAD move repaints the whole grid
           // viewport layer instead of just the two affected tiles.
           child: RepaintBoundary(
-            child: HoldFeedback(
-              controller: _hold.ring,
-              child: card,
-            ),
+            child: HoldFeedback(controller: _hold.ring, child: card),
           ),
         ),
       ),
@@ -626,9 +626,7 @@ class _ProgressBar extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(
-            color: Colors.black.withValues(alpha: home ? 0.45 : 0.55),
-          ),
+          ColoredBox(color: Colors.black.withValues(alpha: home ? 0.45 : 0.55)),
           FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: value,

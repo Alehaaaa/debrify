@@ -111,7 +111,8 @@ class DownloadService {
   }
 
   bool _started = false;
-  bool _initializing = false;
+  Future<void>? _initialization;
+  Future<void>? _libraryInitialization;
   bool _profileViewAttached = true;
   bool _profileViewWasStarted = false;
   bool _profileSwitchInProgress = false;
@@ -326,7 +327,7 @@ class DownloadService {
     int? season,
     int? episode,
   }) async {
-    await initialize();
+    await initializeLibrary();
     for (final record in _records.values) {
       if (record['state'] != 'complete') continue;
       final raw = record['meta'];
@@ -1526,10 +1527,34 @@ sheetAnimationStyle: kMenuSheetAnimation,
     }
   }
 
-  Future<void> initialize() async {
-    if (_started) return;
-    if (_initializing) return;
-    _initializing = true;
+  /// Local-only preparation, safe in airplane mode and while resuming tasks
+  /// waits on a slow provider. Library scans and local playback use this path.
+  Future<void> initializeLibrary() {
+    return _libraryInitialization ??= _initializeLibrary().catchError((
+      Object error,
+    ) {
+      _libraryInitialization = null;
+      throw error;
+    });
+  }
+
+  Future<void> _initializeLibrary() async {
+    if (Platform.isAndroid) await AndroidDownloadHistory.instance.initialize();
+    await _loadRecords();
+    await _importLegacyQueuesOnce();
+    await _restorePaused();
+    await _restorePending();
+  }
+
+  Future<void> initialize() {
+    if (_started) return Future<void>.value();
+    return _initialization ??= _initialize().whenComplete(() {
+      _initialization = null;
+    });
+  }
+
+  Future<void> _initialize() async {
+    await initializeLibrary();
 
     await _ensureNotificationPermission();
     // Track connectivity for transient handling and auto-resume
@@ -1842,11 +1867,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
       await FileDownloader().resumeFromBackground();
     }
 
-    // Restore any pending queue persisted from a previous run
-    await _loadRecords();
-    await _importLegacyQueuesOnce();
-    await _restorePaused();
-    await _restorePending();
+    // The local queue was loaded before any platform/network work above.
     debugPrint('DL INIT: loaded records count=${_records.length}');
     // On non-Android: try to resume tasks on startup
     if (!Platform.isAndroid) {
@@ -2043,7 +2064,6 @@ sheetAnimationStyle: kMenuSheetAnimation,
       }
     }
     _started = true;
-    _initializing = false;
     // Kick the scheduler once at startup in case capacity is free
     unawaited(_reevaluateQueue());
   }
@@ -4522,9 +4542,12 @@ sheetAnimationStyle: kMenuSheetAnimation,
   /// Detaches only the active profile's process-local projection. Platform
   /// workers and plugin tasks continue running under their immutable owner.
   Future<void> prepareProfileSwitch() async {
-    _profileViewWasStarted = _started;
+    _profileViewWasStarted = _started || _libraryInitialization != null;
     _profileSwitchInProgress = true;
-    if (!_started) return;
+    final local = _libraryInitialization;
+    if (local != null) await local;
+    _libraryInitialization = null;
+    if (!_profileViewWasStarted) return;
     _profileViewAttached = false;
     while (_reevaluating) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
