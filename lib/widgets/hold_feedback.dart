@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/ui_feedback.dart';
+import 'card_action_menu.dart';
 import '../utils/tv_keys.dart';
 
 /// The one hold recogniser for a card: OK opens on release (with the app's
@@ -513,6 +514,79 @@ class HoldProgressLayer extends StatelessWidget {
               backgroundColor: Colors.white.withValues(alpha: 0.22),
               valueColor: AlwaysStoppedAnimation(ringColor),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Gives an existing tappable tile the app's hold: a held press opens
+/// [onHold] (touch long-press with the hold buzz, right-click, or a held OK
+/// on TV), with the frosted press while it's held. The tile keeps its own tap.
+///
+/// For tiles drawn by their own `InkWell` (or anything that activates through
+/// the app's shortcuts): on TV the activation key reaches this wrapper's
+/// [Focus] on its way up from the focused tile, before any shortcut turns it
+/// into a tap, so [CardHold] can tell a press from a hold and call [onTap]
+/// itself. The tile's Material splash is turned off underneath, so the glass
+/// is the only press it shows. With [onHold] null this adds nothing.
+class HoldableTile extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onTap;
+  final VoidCallback? onHold;
+  final BorderRadius borderRadius;
+
+  const HoldableTile({
+    super.key,
+    required this.child,
+    required this.onTap,
+    required this.onHold,
+    this.borderRadius = const BorderRadius.all(Radius.circular(12)),
+  });
+
+  @override
+  State<HoldableTile> createState() => _HoldableTileState();
+}
+
+class _HoldableTileState extends State<HoldableTile> {
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onHold?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onHold = widget.onHold;
+    if (onHold == null) return widget.child;
+    final theme = Theme.of(context);
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onFocusChange: (focused) {
+        if (!focused) _hold.reset();
+      },
+      onKeyEvent: (_, event) => isActivateOrSpaceKey(event.logicalKey)
+          ? _hold.handle(event)
+          : KeyEventResult.ignored,
+      child: GestureDetector(
+        onLongPress: withHoldHaptic(onHold),
+        onSecondaryTap: CardMenuGesture.secondaryClick(onHold),
+        child: HoldFeedback(
+          controller: _hold.ring,
+          borderRadius: widget.borderRadius,
+          child: Theme(
+            data: theme.copyWith(
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: Colors.transparent,
+            ),
+            child: widget.child,
           ),
         ),
       ),

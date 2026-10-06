@@ -14374,6 +14374,16 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 // Native TMDB titles can navigate even without IMDb recommendations.
                 onRecommendationTap: (rec) =>
                     _openItem(rec, rec.sourceAddon ?? addon),
+                // The title menu Home's tiles open, over the detail page.
+                onRecommendationOptions: (rec, {required open, quickPlay}) =>
+                    _openTitleCardMenu(
+                      rec,
+                      addon: rec.sourceAddon ?? addon,
+                      open: open,
+                      quickPlay: _pikpakOnly
+                          ? null
+                          : () => _onCatalogPlay(rec, rec.sourceAddon ?? addon),
+                    ),
                 metaEnricher: (id, type) =>
                     _stremio.fetchMetaDetails(imdbId: id, type: type),
               );

@@ -12,6 +12,7 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
 
 /// **Dossier** — a fixed identity card on the left that never scrolls, and the
 /// whole right side given to the episode list.
@@ -458,9 +459,15 @@ class _DetailDossierState extends State<DetailDossier> {
                 scrollDirection: Axis.horizontal,
                 itemCount: recs.length.clamp(0, 12),
                 separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, i) => _RecPoster(
-                  rec: recs[i],
+                itemBuilder: (context, i) => HoldableTile(
                   onTap: () => m.onRecommendationTap!(recs[i]),
+                  onHold: m.onRecommendationOptions == null
+                      ? null
+                      : () => m.onRecommendationOptions!(recs[i]),
+                  child: _RecPoster(
+                    rec: recs[i],
+                    onTap: () => m.onRecommendationTap!(recs[i]),
+                  ),
                 ),
               ),
             ),

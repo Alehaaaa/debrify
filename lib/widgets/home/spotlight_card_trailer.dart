@@ -1,14 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../../models/metadata_preferences.dart';
 import '../../models/stremio_addon.dart';
 import '../../services/collection_focus_playback.dart';
-import '../../services/imdb_trailer_service.dart';
-import '../../services/metadata_preferences_service.dart';
-import '../../services/metadata_provider_service.dart';
 import '../../services/profiles/profile_runtime.dart';
-import '../../services/stremio_service.dart';
+import '../../services/title_trailer_resolver.dart';
 import '../../services/youtube_service.dart';
 import '../hero_trailer_backdrop.dart';
 
@@ -51,41 +47,10 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
 
   Future<void> _resolve() async {
     try {
-      final item = widget.item;
-      final prefs = await MetadataPreferencesService.loadForBackground(
+      final streams = await resolveTitleTrailer(
+        widget.item,
         isCurrent: () => _current,
       );
-      if (prefs == null || !_current) return;
-      final imdb = item.effectiveImdbId;
-      final candidates = await MetadataProviderService.instance.trailers(
-        item,
-        () async {
-          if ((item.trailerYtId ?? '').isNotEmpty) return item.trailerYtId;
-          if (imdb == null || !_current) return null;
-          return (await StremioService.instance.fetchMetaDetails(
-            imdbId: imdb,
-            type: item.type,
-          ))?.trailerYtId;
-        },
-        preferences: prefs,
-      );
-      if (!_current) return;
-      final youtubeId = candidates.firstOrNull?.key;
-      var streams = youtubeId == null
-          ? null
-          : await YoutubeService.resolveStreams(
-              youtubeId,
-              maxHeightOverride: 480,
-              preferVp9: false,
-            );
-      if (!_current) return;
-      if ((streams == null || !streams.hasPlayable) &&
-          imdb != null &&
-          (prefs.provider(MetadataCategory.trailers) ==
-                  MetadataPreferences.current ||
-              prefs.fallback)) {
-        streams = await ImdbTrailerService.resolveTrailer(imdb, maxHeight: 480);
-      }
       if (!_current || _failed || streams == null || !streams.hasPlayable) return;
       if (ModalRoute.of(context)?.isCurrent == false ||
           (WidgetsBinding.instance.lifecycleState != null &&

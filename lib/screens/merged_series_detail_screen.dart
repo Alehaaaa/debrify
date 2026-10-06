@@ -63,6 +63,8 @@ import '../services/simkl/simkl_menu_helpers.dart';
 import '../services/mdblist/mdblist_models.dart';
 import '../services/mdblist/mdblist_menu_helpers.dart';
 import '../widgets/tracker_brand_marks.dart';
+import '../widgets/card_action_menu.dart' show CardOptionsHandler;
+import '../widgets/hold_feedback.dart';
 import 'episodes_screen.dart' show kCatalogDetailRouteName;
 import 'settings/detail_page_style_page.dart' show effectiveDetailPageStyle;
 import '../theme/app_theme_controller.dart';
@@ -175,6 +177,11 @@ class MergedDetailScreen extends StatefulWidget {
   /// screen receives).
   final Future<List<StremioMeta>> Function()? recommendationsLoader;
   final void Function(StremioMeta recommendation)? onRecommendationTap;
+
+  /// Hold / right-click on a More Like This title. Handed the card's own open
+  /// (the same path a tap takes), so the menu's Details row does exactly
+  /// what tapping the card does.
+  final CardOptionsHandler? onRecommendationOptions;
   final Future<StremioMeta?> Function(String imdbId, String type)? metaEnricher;
 
   /// Shared-element tag from the board cell that opened this page: the tapped
@@ -244,6 +251,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.onMdblistRate,
     this.recommendationsLoader,
     this.onRecommendationTap,
+    this.onRecommendationOptions,
     this.metaEnricher,
     this.heroTag,
     this.seasonsLoader,
@@ -288,6 +296,17 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     });
   }
   ParentsGuideResult? _parentsGuide;
+  /// [MergedDetailScreen.onRecommendationOptions] for one title, or null when
+  /// the rail is tap-only.
+  void Function(StremioMeta)? get _recommendationOptions {
+    final options = widget.onRecommendationOptions;
+    if (options == null || widget.onRecommendationTap == null) return null;
+    return (item) => options(
+      _recommendationOriginals[item] ?? item,
+      open: () => _openMetadataRecommendation(item),
+    );
+  }
+
   void _openMetadataRecommendation(StremioMeta item) {
     final onOpen = widget.onRecommendationTap;
     if (onOpen != null)
@@ -2351,6 +2370,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       onRecommendationTap: widget.onRecommendationTap == null
           ? null
           : _openMetadataRecommendation,
+      onRecommendationOptions: _recommendationOptions,
       onAmbientStill: (url) {
         if (!mounted || _focusedStillUrl == url) return;
         setState(() => _focusedStillUrl = url);
@@ -3818,11 +3838,18 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   Widget _castTile(CastMember m) => _CastTile(member: m, fallback: _glass2);
 
-  Widget _recCard(StremioMeta rec) => _RecCard(
-    rec: rec,
-    fallback: _glass2,
-    onTap: () => _openMetadataRecommendation(rec),
-  );
+  Widget _recCard(StremioMeta rec) {
+    final options = _recommendationOptions;
+    return HoldableTile(
+      onTap: () => _openMetadataRecommendation(rec),
+      onHold: options == null ? null : () => options(rec),
+      child: _RecCard(
+        rec: rec,
+        fallback: _glass2,
+        onTap: () => _openMetadataRecommendation(rec),
+      ),
+    );
+  }
 
   Widget _sectionLabel(String s) => Text(
     s.toUpperCase(),

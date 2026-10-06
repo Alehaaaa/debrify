@@ -10,6 +10,7 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
 
 /// **Marquee** — full-bleed artwork with the identity anchored bottom-left and
 /// the season laid out as a horizontal rail of wide episode cards.
@@ -376,11 +377,17 @@ class _DetailMarqueeState extends State<DetailMarquee> {
                 trapRight: i == recs.length - 1,
                 trapUp: true,
                 onUp: () => m.focus.focusEntry(),
-                child: _RecCard(
-                  rec: recs[i],
-                  width: cardW,
-                  focusNode: _recNode(i),
+                child: HoldableTile(
                   onTap: () => m.onRecommendationTap!(recs[i]),
+                  onHold: m.onRecommendationOptions == null
+                      ? null
+                      : () => m.onRecommendationOptions!(recs[i]),
+                  child: _RecCard(
+                    rec: recs[i],
+                    width: cardW,
+                    focusNode: _recNode(i),
+                    onTap: () => m.onRecommendationTap!(recs[i]),
+                  ),
                 ),
               ),
             ),

@@ -11,6 +11,7 @@ import 'package:debrify/widgets/hold_feedback.dart';
 import 'package:debrify/widgets/see_all/see_all_poster_grid.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Widget _host(Widget child) => MaterialApp(
@@ -299,5 +300,62 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Some Movie'));
     await tester.pumpAndSettle();
     expect(picked?.id, 'tt1');
+  });
+
+  group('HoldableTile', () {
+    Widget host({required VoidCallback onTap, VoidCallback? onHold}) => _host(
+      Center(
+        child: HoldableTile(
+          onTap: onTap,
+          onHold: onHold,
+          child: SizedBox(
+            width: 100,
+            height: 150,
+            child: Material(child: InkWell(autofocus: true, onTap: onTap)),
+          ),
+        ),
+      ),
+    );
+
+    testWidgets('tap opens, hold and right-click open the menu', (
+      tester,
+    ) async {
+      var taps = 0, holds = 0;
+      await tester.pumpWidget(host(onTap: () => taps++, onHold: () => holds++));
+      await tester.tap(find.byType(InkWell));
+      await tester.pumpAndSettle();
+      expect((taps, holds), (1, 0));
+      await tester.longPress(find.byType(InkWell));
+      await tester.pumpAndSettle();
+      expect((taps, holds), (1, 1));
+      await _rightClick(tester, find.byType(InkWell));
+      await tester.pumpAndSettle();
+      expect((taps, holds), (1, 2));
+    });
+
+    testWidgets('a held OK opens the menu; a short OK opens the tile', (
+      tester,
+    ) async {
+      var taps = 0, holds = 0;
+      await tester.pumpWidget(host(onTap: () => taps++, onHold: () => holds++));
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect((taps, holds), (1, 0));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect((taps, holds), (1, 1));
+    });
+
+    testWidgets('without a menu it is the plain tile', (tester) async {
+      var taps = 0;
+      await tester.pumpWidget(host(onTap: () => taps++));
+      expect(find.byType(HoldFeedback), findsNothing);
+      await tester.tap(find.byType(InkWell));
+      expect(taps, 1);
+    });
   });
 }

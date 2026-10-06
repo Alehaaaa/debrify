@@ -39,6 +39,7 @@ import 'screens/profiles/profile_gate.dart';
 import 'screens/profiles/linux_vault_screen.dart';
 import 'screens/profiles/profile_recovery_screen.dart';
 import 'screens/downloads_screen.dart';
+import 'screens/reels_screen.dart';
 import 'screens/trakt_calendar_screen.dart';
 import 'screens/magic_tv_screen.dart';
 import 'screens/stremio_tv/stremio_tv_screen.dart';
@@ -1420,6 +1421,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// are all spoken for, and the phone reaches search from the Home board.
   static const List<int> _phoneNavDefaultOrder = [
     18,
+    MainTab.reels,
     13,
     16,
     2,
@@ -1531,6 +1533,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     4, 5, 6, 10, 11, 12, // cloud providers (CloudScaffold)
     13, 14, // IPTV, YouTube (BrowseScreen)
     15, 17, 18, // Home, Search, Discover (SearchScreen)
+    MainTab.reels, // full-bleed clips; keeps its own text clear of insets
     16, // Cloud hub
   };
 
@@ -1578,6 +1581,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     'Search', // 17: dedicated search tab (TV + sidebar layouts)
     'Discover', // 18: source-dropdown browser (Continue Watching / Trakt / …)
     'Calendar', // 19: Trakt/Simkl calendar (visible when either is connected)
+    'Reels', // 20: vertical feed of trailer clips
   ];
 
   final List<IconData> _icons = [
@@ -1601,6 +1605,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     Icons.search_rounded, // 17: Search
     Icons.explore_rounded, // 18: Discover
     Icons.calendar_month_rounded, // 19: Calendar (Trakt/Simkl)
+    Icons.slow_motion_video_rounded, // 20: Reels
   ];
 
   /// Tab index → bridge back-handler key, in ONE place. Every path that
@@ -1982,6 +1987,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             MainTab.iptv => ProfileFeature.iptv,
             MainTab.youtube => ProfileFeature.youtube,
             MainTab.discover ||
+            MainTab.reels ||
             MainTab.calendar => ProfileFeature.trackersAndDiscovery,
             _ => null,
           };
@@ -3205,6 +3211,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MainTab.search,
         MainTab.home,
         MainTab.discover,
+        MainTab.reels,
         MainTab.downloads,
         MainTab.iptv,
         MainTab.youtube,
@@ -3250,6 +3257,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MainTab.search,
         MainTab.home,
         MainTab.discover,
+        MainTab.reels,
         MainTab.iptv,
         MainTab.youtube,
         MainTab.stremioTv,
@@ -3264,6 +3272,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       MainTab.search,
       MainTab.home,
       MainTab.discover,
+      MainTab.reels,
       MainTab.downloads,
       MainTab.iptv,
       MainTab.youtube,
@@ -3296,6 +3305,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 0: // Home
       case 2: // Downloads
       case 19: // Trakt/Simkl Calendar
+      case MainTab.reels:
         return 'Main';
       case 13: // IPTV
       case 14: // YouTube
@@ -3389,6 +3399,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         return SearchScreen(isTelevision: _isAndroidTv, discoverMode: true);
       case 19: // Calendar (gated on Trakt OR Simkl auth in the nav below)
         return const TraktCalendarScreen();
+      case MainTab.reels:
+        return ReelsScreen(isTelevision: _isAndroidTv);
       default:
         return _pages[index];
     }

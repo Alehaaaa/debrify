@@ -1518,6 +1518,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                           'showcase-rec',
                         ),
                         onTap: m.onRecommendationTap,
+                        onHold: m.onRecommendationOptions,
                       ),
                     ),
                   for (final row in _extraRows)
