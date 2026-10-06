@@ -153,6 +153,102 @@ void main() {
       expect(await feedFor(FakeTmdb()).take(4), isEmpty);
     });
 
+    test(
+      'startup searches beyond six titles and queues confirmed clips',
+      () async {
+        final tmdb = FakeTmdb();
+        var checked = 0;
+        final feed = ReelsFeed(
+          configured: true,
+          language: 'en-US',
+          random: math.Random(1),
+          get: (path, query) async {
+            final data = await tmdb.get(path, query);
+            if (!path.endsWith('/popular') && ++checked <= 7) {
+              data['videos'] = {'results': []};
+            }
+            return data;
+          },
+        );
+        expect(await feed.take(1), hasLength(1));
+        expect(checked, 8);
+        expect(feed.lastRequestFailed, isFalse);
+      },
+    );
+
+    test(
+      'transient failures preserve candidates for a successful retry',
+      () async {
+        final tmdb = FakeTmdb();
+        var offline = true;
+        final feed = ReelsFeed(
+          configured: true,
+          language: 'en-US',
+          random: math.Random(1),
+          get: (path, query) async {
+            if (offline && !path.endsWith('/popular'))
+              throw StateError('offline');
+            return tmdb.get(path, query);
+          },
+        );
+        expect(await feed.take(1), isEmpty);
+        expect(feed.lastRequestFailed, isTrue);
+        offline = false;
+        expect(await feed.take(1), hasLength(1));
+        expect(feed.lastRequestFailed, isFalse);
+      },
+    );
+
+    test(
+      'continuous playback cycles after genuine catalog exhaustion',
+      () async {
+        final feed = feedFor(FakeTmdb());
+        final titles = <ReelTitle>[];
+        for (var i = 0; i < 40; i++) {
+          final next = await feed.take(1, allowRepeat: true);
+          expect(next, hasLength(1));
+          titles.add(next.single);
+        }
+        expect(titles.take(8).map((t) => t.item.id).toSet(), hasLength(8));
+        expect(titles, hasLength(40));
+      },
+    );
+
+    test(
+      'catalog replay picks another scene when the title has more clips',
+      () async {
+        final tmdb = FakeTmdb();
+        final feed = ReelsFeed(
+          configured: true,
+          language: 'en-US',
+          random: math.Random(1),
+          get: (path, query) async {
+            final data = await tmdb.get(path, query);
+            if (!path.endsWith('/popular')) {
+              final id = path.split('/').last;
+              (data['videos']['results'] as List).add({
+                'site': 'YouTube',
+                'type': 'Clip',
+                'official': true,
+                'key': 'more${id.padLeft(7, '0')}',
+                'name': 'Another scene',
+              });
+            }
+            return data;
+          },
+        );
+        final first = await feed.take(8, allowRepeat: true);
+        final original = {
+          for (final title in first) title.item.id: title.clipKey,
+        };
+        final replay = await feed.take(8, allowRepeat: true);
+        expect(replay, hasLength(8));
+        for (final title in replay) {
+          expect(title.clipKey, isNot(original[title.item.id]));
+        }
+      },
+    );
+
     test('without TMDB there is nothing to ask', () async {
       final tmdb = FakeTmdb();
       expect(await feedFor(tmdb, configured: false).take(3), isEmpty);
@@ -445,6 +541,64 @@ void main() {
       await tester.pumpAndSettle();
       expect(activeId(tester), isNot(before));
     });
+
+    testWidgets('empty feed retries after a connection failure', (
+      tester,
+    ) async {
+      final tmdb = FakeTmdb();
+      var offline = true;
+      final feed = ReelsFeed(
+        configured: true,
+        language: 'en-US',
+        random: math.Random(1),
+        get: (path, query) async {
+          if (offline) throw StateError('offline');
+          return tmdb.get(path, query);
+        },
+      );
+      await tester.pumpWidget(host(feed));
+      await tester.pumpAndSettle();
+      expect(find.text('Retry feed'), findsOneWidget);
+      offline = false;
+      await tester.tap(find.text('Retry feed'));
+      await tester.pumpAndSettle();
+      expect(playing(activeId(tester)!), findsOneWidget);
+      expect(find.text('Retry feed'), findsNothing);
+    });
+
+    testWidgets(
+      'a sparse search window keeps scanning instead of ending the feed',
+      (tester) async {
+        final tmdb = FakeTmdb();
+        var checked = 0;
+        final feed = ReelsFeed(
+          configured: true,
+          language: 'en-US',
+          random: math.Random(1),
+          get: (path, query) async {
+            if (path.endsWith('/popular')) {
+              final page = int.parse(query['page']!);
+              return {
+                'total_pages': 1,
+                'results': page == 1 && path.startsWith('movie')
+                    ? [
+                        for (var i = 0; i < 80; i++) {'id': 3000 + i},
+                      ]
+                    : [],
+              };
+            }
+            final data = await tmdb.get(path, query);
+            if (++checked <= 70) data['videos'] = {'results': []};
+            return data;
+          },
+        );
+        await tester.pumpWidget(host(feed));
+        await tester.pumpAndSettle();
+        expect(checked, greaterThan(64));
+        expect(playing(activeId(tester)!), findsOneWidget);
+        expect(find.text('No clips right now'), findsNothing);
+      },
+    );
 
     testWidgets('without TMDB it says so instead of spinning', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb(), configured: false)));

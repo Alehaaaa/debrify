@@ -250,10 +250,15 @@ class MediaKitTrailerEngine implements TrailerEngine {
   /// inside it. See [VideoOutputLease] for why a second one aborts the process.
   static Future<MediaKitTrailerEngine> create({
     bool reportPlaybackErrors = false,
+    bool highResolution = false,
   }) async {
     final lease = await VideoOutputLease.acquire(debugLabel: 'trailer');
     try {
-      return MediaKitTrailerEngine._(lease, reportPlaybackErrors);
+      return MediaKitTrailerEngine._(
+        lease,
+        reportPlaybackErrors,
+        highResolution,
+      );
     } catch (_) {
       // A throw here would strand the slot forever, and nothing else knows the
       // handle exists yet.
@@ -262,7 +267,11 @@ class MediaKitTrailerEngine implements TrailerEngine {
     }
   }
 
-  MediaKitTrailerEngine._(this._lease, this._reportPlaybackErrors) {
+  MediaKitTrailerEngine._(
+    this._lease,
+    this._reportPlaybackErrors,
+    bool highResolution,
+  ) {
     // Idempotent; the main player also initializes it, but guard in case the
     // trailer is the first media_kit surface in this session.
     MediaKitInit.ensureInitialized();
@@ -273,7 +282,15 @@ class MediaKitTrailerEngine implements TrailerEngine {
     _controller = mkv.VideoController(
       _player,
       configuration: PlatformUtil.isIosMobile
-          ? const mkv.VideoControllerConfiguration(width: 960, height: 540)
+          ? highResolution
+                ? const mkv.VideoControllerConfiguration(
+                    width: 1920,
+                    height: 1080,
+                  )
+                : const mkv.VideoControllerConfiguration(
+                    width: 960,
+                    height: 540,
+                  )
           : const mkv.VideoControllerConfiguration(),
     );
   }

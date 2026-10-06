@@ -3,7 +3,6 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
@@ -15,7 +14,6 @@ import '../services/reels_feed.dart';
 import '../services/storage_service.dart';
 import '../services/youtube_service.dart';
 import '../utils/tv_keys.dart';
-import '../utils/platform_util.dart';
 import '../widgets/hero_trailer_backdrop.dart';
 
 enum _ClipState { idle, resolving, ready, failed }
@@ -150,8 +148,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// starts playing.
   bool _paused = false;
 
-  bool get _nativePrewarm => !kIsWeb && PlatformUtil.isIosMobile;
-
   bool get _current => mounted && ProfileRuntime.scope.value == _scope;
 
   @override
@@ -183,20 +179,36 @@ class _ReelsScreenState extends State<ReelsScreen> {
         if (need <= 0) break;
         // Publish the first title immediately; don't make its playback wait
         // for the entire look-ahead batch to finish fetching metadata.
-        final titles = await _feed.take(_reels.isEmpty ? 1 : need);
+        final titles = await _feed.take(
+          _reels.isEmpty ? 1 : need,
+          allowRepeat: true,
+        );
         if (!_current) return;
         setState(() {
           _reels.addAll(titles.map(_Reel.new));
-          if (titles.isEmpty) _exhausted = true;
+          if (titles.isEmpty) {
+            _exhausted = _feed.lastRequestFailed || _feed.exhausted;
+          }
         });
         for (final title in titles) {
           unawaited(_loadWatchlist(title.item));
         }
         _prepare();
+        if (titles.isEmpty && !_exhausted) {
+          // Yield between bounded search windows without declaring a sparse
+          // page to be the end of the catalog.
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+        }
       }
     } finally {
       _filling = false;
     }
+  }
+
+  void _retryFeed() {
+    if (!_current || _filling) return;
+    setState(() => _exhausted = false);
+    unawaited(_fill());
   }
 
   /// Independent requests: a slow lookup for a reel already swiped past
@@ -221,7 +233,8 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     reel.title.clipKey,
                     // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
                     // more lines than a card preview.
-                    maxHeightOverride: 720,
+                    maxHeightOverride: 1080,
+                    preferMuxed: false,
                     preferVp9: false,
                   ))
               .timeout(const Duration(seconds: 30));
@@ -263,7 +276,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _refreshing = true);
     HapticFeedback.mediumImpact();
     try {
-      final titles = await _feed.take(1);
+      final titles = await _feed.take(1, allowRepeat: true);
       if (!_current || titles.isEmpty) return;
       setState(() {
         final reel = _Reel(titles.first);
@@ -460,7 +473,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (_reels.isEmpty) {
       body = Center(
         child: _exhausted
-            ? _EmptyReels(needsTmdb: !_feed.available)
+            ? _EmptyReels(
+                needsTmdb: !_feed.available,
+                connectionFailed: _feed.lastRequestFailed,
+                onRetry: _feed.available ? _retryFeed : null,
+              )
             : const CircularProgressIndicator(color: Colors.white),
       );
     } else {
@@ -468,9 +485,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
         onNotification: _onScroll,
         child: PageView.builder(
           controller: _pages,
-          // Mount the neighboring page so AVPlayer can initialize before it
-          // becomes visible. TV/desktop retain the single decoder policy.
-          allowImplicitScrolling: _nativePrewarm,
+          // Upcoming URLs resolve ahead; keep the high-resolution decoder
+          // exclusive to the visible page on platforms with one output slot.
+          allowImplicitScrolling: false,
           scrollDirection: Axis.vertical,
           // The bounce is what lets the first reel be pulled down.
           // Use our single-gesture snapper, rather than adding PageView's own
@@ -483,10 +500,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
             final reel = _reels[i];
             final revision = reel.revision;
             return _ReelPage(
-              key: ValueKey(_watchKey(reel.item)),
+              key: ValueKey('$i:${_watchKey(reel.item)}'),
               reel: reel,
               active: i == _index,
-              prewarm: _nativePrewarm && (i == _index || i == _index + 1),
+              prewarm: false,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
@@ -514,6 +531,20 @@ class _ReelsScreenState extends State<ReelsScreen> {
           fit: StackFit.expand,
           children: [
             body,
+            if (_reels.isNotEmpty &&
+                _index == _reels.length - 1 &&
+                _exhausted &&
+                _feed.lastRequestFailed)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 16,
+                left: 24,
+                right: 24,
+                child: FilledButton.icon(
+                  onPressed: _retryFeed,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry loading more clips'),
+                ),
+              ),
             // Pull-to-refresh on the first reel.
             if (_refreshing || pull > 0)
               Positioned(
@@ -877,11 +908,13 @@ class _ReelPlayer extends StatelessWidget {
         imageUrl: still,
         videoUrl: streams.playUrl,
         audioUrl: streams.audioUrl,
-        muxedVideoUrl: streams.muxedPlaybackFallback,
-        enabled: true,
+        // Adaptive H.264 + AAC avoids YouTube's 360p muxed ceiling.
+        // The single decoder is released when this page leaves the screen.
+        enabled: playback.active,
+        highResolutionVideo: true,
         // Paused holds the frame on the same player (no teardown, no reload).
         suspended: !playback.active || playback.paused,
-        prewarm: playback.prewarm,
+        prewarm: false,
         decorative: false,
         fadeDuration: Duration.zero,
         onPlaybackFailed: onPlaybackFailed,
@@ -1092,8 +1125,14 @@ class _GlassCircle extends StatelessWidget {
 class _EmptyReels extends StatelessWidget {
   /// This build has no TMDB access, where every clip comes from.
   final bool needsTmdb;
+  final bool connectionFailed;
+  final VoidCallback? onRetry;
 
-  const _EmptyReels({required this.needsTmdb});
+  const _EmptyReels({
+    required this.needsTmdb,
+    required this.connectionFailed,
+    this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1121,14 +1160,23 @@ class _EmptyReels extends StatelessWidget {
             needsTmdb
                 ? 'This build has no TMDB access, where Reels finds its '
                       'clips.'
-                : 'Clips couldn\'t be loaded. Check your connection and try '
-                      'again later.',
+                : connectionFailed
+                ? 'Clips couldn\'t be loaded. Check your connection and retry.'
+                : 'No scene clips found in these titles. Search more titles to continue.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.6),
               fontSize: 13,
             ),
           ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry feed'),
+            ),
+          ],
         ],
       ),
     );

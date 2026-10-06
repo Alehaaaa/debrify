@@ -7,6 +7,7 @@ on:
       - 'lib/widgets/hero_trailer_backdrop.dart'
       - 'lib/widgets/trailer_engine.dart'
       - 'lib/services/youtube_service.dart'
+      - 'lib/services/reels_feed.dart'
       - 'test/youtube_resolved_streams_test.dart'
       - 'test/reels_test.dart'
       - 'test/hero_trailer_backdrop_test.dart'
@@ -29,4 +30,4 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test test/reels_test.dart test/hero_trailer_backdrop_test.dart test/youtube_resolved_streams_test.dart
-      - run: flutter analyze lib/screens/reels_screen.dart lib/widgets/hero_trailer_backdrop.dart lib/widgets/trailer_engine.dart lib/services/youtube_service.dart test/youtube_resolved_streams_test.dart test/reels_test.dart test/hero_trailer_backdrop_test.dart
+      - run: flutter analyze lib/screens/reels_screen.dart lib/widgets/hero_trailer_backdrop.dart lib/widgets/trailer_engine.dart lib/services/youtube_service.dart lib/services/reels_feed.dart test/youtube_resolved_streams_test.dart test/reels_test.dart test/hero_trailer_backdrop_test.dart

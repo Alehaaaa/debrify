@@ -7,6 +7,50 @@ import 'package:debrify/widgets/hero_trailer_backdrop.dart';
 import 'package:debrify/widgets/trailer_engine.dart';
 
 void main() {
+  testWidgets(
+    'high-resolution reel hands the decoder to the next visible page',
+    (tester) async {
+      final engines = <_PendingFirstFrameEngine>[];
+      Widget host(int page) => MaterialApp(
+        home: Stack(
+          children: [
+            for (var i = 0; i < 2; i++)
+              HeroTrailerBackdrop(
+                key: ValueKey(i),
+                imageUrl: null,
+                videoUrl: 'https://example.invalid/video-$i.mp4',
+                audioUrl: 'https://example.invalid/audio-$i.m4a',
+                platformViewOverride: false,
+                enabled: page == i,
+                suspended: page != i,
+                highResolutionVideo: true,
+                decorative: false,
+                startDelay: Duration.zero,
+                engineFactory: () async {
+                  final engine = _PendingFirstFrameEngine();
+                  engines.add(engine);
+                  return engine;
+                },
+              ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(host(0));
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(engines, hasLength(1));
+      expect(engines.first.openedAudio, 'https://example.invalid/audio-0.m4a');
+      await tester.pumpWidget(host(1));
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(engines.first.disposed, isTrue);
+      expect(engines, hasLength(2));
+      expect(engines.last.openedUrl, 'https://example.invalid/video-1.mp4');
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
   testWidgets('iOS opens the muxed URL instead of rejecting it as stale', (
     tester,
   ) async {

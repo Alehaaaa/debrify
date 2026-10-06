@@ -64,6 +64,10 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// Ignored by engines that require the single video-output lease.
   final bool prewarm;
 
+  /// Fullscreen reels need a full HD video output instead of the small
+  /// ambient backdrop canvas. Uses one serialized decoder.
+  final bool highResolutionVideo;
+
   /// Reels are intentional video playback, not reduced-motion decoration.
   final bool decorative;
   final Duration fadeDuration;
@@ -172,6 +176,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.foreground = false,
     this.suspended = false,
     this.prewarm = false,
+    this.highResolutionVideo = false,
     this.decorative = true,
     this.fadeDuration = const Duration(milliseconds: 650),
     this.platformViewOverride,
@@ -365,7 +370,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       );
     }
     return await MediaKitTrailerEngine.create(
-      reportPlaybackErrors: widget.focusPreviewOwner != null,
+      reportPlaybackErrors: widget.focusPreviewOwner != null || !widget.decorative,
+      highResolution: widget.highResolutionVideo,
     );
   }
 

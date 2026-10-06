@@ -166,12 +166,12 @@ class _StreamSelection {
   });
 
   _StreamSelection withoutMuxedFallback() => _StreamSelection(
-        playUrl: playUrl,
-        audioUrl: audioUrl,
-        qualities: qualities,
-        bestMuxedUrl: null,
-        bestMuxedHeight: null,
-      );
+    playUrl: playUrl,
+    audioUrl: audioUrl,
+    qualities: qualities,
+    bestMuxedUrl: null,
+    bestMuxedHeight: null,
+  );
 }
 
 /// Service for searching and resolving YouTube videos fully on-device.
@@ -194,8 +194,7 @@ class YoutubeService {
       '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
   // Public InnerTube web-client key + context (well-known constants).
-  static const String _innertubeKey =
-      'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+  static const String _innertubeKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
   static const String _clientName = 'WEB';
   static const String _clientVersion = '2.20240101.00.00';
   static const Duration _httpTimeout = Duration(seconds: 15);
@@ -206,25 +205,30 @@ class YoutubeService {
   // ============== Search (InnerTube) ==============
 
   static Map<String, dynamic> get _context => {
-        'client': {
-          'clientName': _clientName,
-          'clientVersion': _clientVersion,
-          'hl': 'en',
-          'gl': 'US',
-        },
-      };
+    'client': {
+      'clientName': _clientName,
+      'clientVersion': _clientVersion,
+      'hl': 'en',
+      'gl': 'US',
+    },
+  };
 
   static Future<Map<String, dynamic>> _innertube(
-      String endpoint, Map<String, dynamic> body) async {
+    String endpoint,
+    Map<String, dynamic> body,
+  ) async {
     final uri = Uri.parse(
-        'https://www.youtube.com/youtubei/v1/$endpoint?key=$_innertubeKey&prettyPrint=false');
+      'https://www.youtube.com/youtubei/v1/$endpoint?key=$_innertubeKey&prettyPrint=false',
+    );
     final resp = await http
-        .post(uri,
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': _userAgent,
-            },
-            body: json.encode({'context': _context, ...body}))
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': _userAgent,
+          },
+          body: json.encode({'context': _context, ...body}),
+        )
         .timeout(_httpTimeout);
 
     if (resp.statusCode != 200) {
@@ -262,8 +266,8 @@ class YoutubeService {
         // response belong to unrelated UI chrome (filters, topbar, hotkeys).
         final contItem = node['continuationItemRenderer'];
         if (contItem is Map) {
-          final token = contItem['continuationEndpoint']?['continuationCommand']
-              ?['token'];
+          final token =
+              contItem['continuationEndpoint']?['continuationCommand']?['token'];
           if (token is String) continuation = token;
         }
         for (final v in node.values) {
@@ -298,9 +302,11 @@ class YoutubeService {
     final title = _readText(vr['title']);
     if (title == null || title.isEmpty) return null;
 
-    final author = _readText(vr['ownerText']) ?? _readText(vr['longBylineText']) ?? '';
+    final author =
+        _readText(vr['ownerText']) ?? _readText(vr['longBylineText']) ?? '';
     final lengthText = vr['lengthText']?['simpleText']?.toString();
-    final viewsText = vr['viewCountText']?['simpleText']?.toString() ??
+    final viewsText =
+        vr['viewCountText']?['simpleText']?.toString() ??
         _readText(vr['viewCountText']);
     final published = vr['publishedTimeText']?['simpleText']?.toString();
 
@@ -322,7 +328,9 @@ class YoutubeService {
     if (simple is String) return simple;
     final runs = node['runs'];
     if (runs is List) {
-      return runs.map((r) => r is Map ? (r['text']?.toString() ?? '') : '').join();
+      return runs
+          .map((r) => r is Map ? (r['text']?.toString() ?? '') : '')
+          .join();
     }
     return null;
   }
@@ -392,11 +400,17 @@ class YoutubeService {
     final ids = <String>{};
     for (final entry in _resolveCache.entries) {
       final streams = entry.value.streams;
-      if ([streams.playUrl, streams.audioUrl, streams.downloadUrl].contains(url)) {
+      if ([
+        streams.playUrl,
+        streams.audioUrl,
+        streams.downloadUrl,
+      ].contains(url)) {
         ids.add(entry.key.split('#').first);
       }
     }
-    for (final id in ids) { invalidateStreams(id); }
+    for (final id in ids) {
+      invalidateStreams(id);
+    }
   }
 
   /// Reels and trailers already have title metadata. Return playable streams
@@ -405,12 +419,13 @@ class YoutubeService {
     String videoId, {
     int? maxHeightOverride,
     bool preferVp9 = false,
+    bool? preferMuxed,
   }) => resolveStreams(
     videoId,
     maxHeightOverride: maxHeightOverride ?? ambientTrailerMaxHeight,
     preferVp9: preferVp9,
     includeMetadata: false,
-    preferMuxed: PlatformUtil.isIosMobile,
+    preferMuxed: preferMuxed ?? PlatformUtil.isIosMobile,
   );
 
   static const Duration _resolveCacheTtl = Duration(minutes: 10);
@@ -684,6 +699,8 @@ class YoutubeService {
       _StreamSelection? selection;
       _StreamSelection? usableWithoutMuxedFallback;
       String? adaptiveClient;
+      _StreamSelection? muxedOnlyFallback;
+      String? muxedClient;
       for (final (label, clients) in rungs) {
         yt_explode.StreamManifest manifest;
         try {
@@ -722,15 +739,21 @@ class YoutubeService {
         if (!usability.primary &&
             usability.muxedFallback &&
             candidate.bestMuxedUrl != null) {
-          selection = _StreamSelection(
+          final fallback = _StreamSelection(
             playUrl: candidate.bestMuxedUrl!,
             audioUrl: null,
             qualities: const [],
             bestMuxedUrl: candidate.bestMuxedUrl,
             bestMuxedHeight: candidate.bestMuxedHeight,
           );
-          selectedClient = label;
-          break;
+          if (preferMuxed) {
+            selection = fallback;
+            selectedClient = label;
+            break;
+          }
+          muxedOnlyFallback ??= fallback;
+          muxedClient ??= label;
+          continue;
         }
         if (!usability.primary) {
           debugPrint(
@@ -748,6 +771,17 @@ class YoutubeService {
           );
           continue;
         }
+        // Some clients expose only format 18 (360p), even for HD uploads.
+        // A high-resolution caller must try the other clients before accepting
+        // that low-resolution source. Keep it as a playable final fallback.
+        if (!preferMuxed &&
+            candidate.audioUrl == null &&
+            candidate.bestMuxedHeight != null &&
+            candidate.bestMuxedHeight! < maxHeight) {
+          muxedOnlyFallback ??= candidate;
+          muxedClient ??= label;
+          continue;
+        }
         if (label != 'androidVr') {
           // The line that matters in a user's log: which fallback saved this.
           debugPrint('YoutubeService: $videoId resolved via [$label]');
@@ -759,6 +793,10 @@ class YoutubeService {
       if (selection == null && usableWithoutMuxedFallback != null) {
         selection = usableWithoutMuxedFallback;
         selectedClient = adaptiveClient!;
+      }
+      if (selection == null && muxedOnlyFallback != null) {
+        selection = muxedOnlyFallback;
+        selectedClient = muxedClient!;
       }
       if (selection == null) {
         debugPrint('YoutubeService: $videoId — every client rung failed');
