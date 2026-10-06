@@ -29,6 +29,15 @@
       "versions": [
         {
           "version": "0.10.0.1",
+          "buildVersion": "202610061334",
+          "date": "2026-10-06T13:39:32Z",
+          "localizedDescription": "What's new:\n• Reels: tap to pause, clips start on arrival, deeper buffer\n\nBuild 202610061334 from nextup@4accf10\nhttps://github.com/Alehaaaa/debrify/commit/4accf10dde738e55821fd4a610392202cf540dc4",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-40-4accf10.ipa",
+          "size": 39886034,
+          "minOSVersion": "14.0"
+        },
+        {
+          "version": "0.10.0.1",
           "buildVersion": "202610061312",
           "date": "2026-10-06T13:16:33Z",
           "localizedDescription": "What's new:\n• Reels: tap to pause, clips start on arrival, deeper buffer (4accf10d)\n• Reels: official scene clips from TMDB, fast feed on few requests (66f17f99)\n\nBuild 202610061312 from nextup@4accf10\nhttps://github.com/Alehaaaa/debrify/compare/8f58c96...4accf10",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Test: one detail page wires Rewatch now (2afe1267)\n\nBuild 202610042313 from nextup@2afe126\nhttps://github.com/Alehaaaa/debrify/compare/2a06fe9...2afe126",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-28-2afe126.ipa",
           "size": 39816895,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610042249",
-          "date": "2026-10-04T22:53:02Z",
-          "localizedDescription": "What's new:\n• Background downloads; a clean player HUD with a glass play button (2a06fe9e)\n\nBuild 202610042249 from nextup@2a06fe9\nhttps://github.com/Alehaaaa/debrify/compare/16408d2...2a06fe9",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-27-2a06fe9.ipa",
-          "size": 39816888,
           "minOSVersion": "14.0"
         }
       ],
