@@ -12,6 +12,8 @@ import '../services/offline_title_store.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
 import '../services/storage_service.dart';
+import '../services/simkl/simkl_service.dart';
+import '../services/trakt/trakt_service.dart';
 import '../services/youtube_service.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
@@ -29,8 +31,24 @@ class _Reel {
   YoutubeResolvedStreams? streams;
   _ClipState state = _ClipState.idle;
   int revision = 0;
+  Duration position = Duration.zero;
+  DateTime? leftAt;
 
   StremioMeta get item => title.item;
+}
+
+class _ReelsSession {
+  const _ReelsSession({
+    required this.scope,
+    required this.feed,
+    required this.reels,
+    required this.index,
+  });
+
+  final Object? scope;
+  final ReelsFeed feed;
+  final List<_Reel> reels;
+  final int index;
 }
 
 /// Reels: a vertical feed of official scene clips, one title per screen.
@@ -88,6 +106,8 @@ class ReelPlayback {
     required this.volume,
     this.paused = false,
     this.prewarm = false,
+    this.initialPosition,
+    this.onPosition,
     this.failed = false,
     this.onPlaybackFailed,
   });
@@ -104,12 +124,15 @@ class ReelPlayback {
 
   /// Tapped to pause: hold the frame, keep the player.
   final bool paused;
+  final Duration? initialPosition;
+  final ValueChanged<Duration>? onPosition;
 }
 
 class _ReelsScreenState extends State<ReelsScreen> {
   /// Sound on or off, for the whole feed — kept for the app session so the
   /// choice survives leaving the tab.
   static bool _muted = false;
+  static _ReelsSession? _session;
 
   /// Confirmed titles kept queued past the one on screen, so a fling never
   /// runs into the end of the feed. Each costs one TMDB request.
@@ -123,13 +146,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// How far the first reel must be pulled down to refresh it.
   static const double _refreshPull = 90;
 
-  late final ReelsFeed _feed = widget.feed ?? ReelsFeed();
+  late final ReelsFeed _feed;
   // The feed owns its index. Restoring an unrelated PageStorage offset would
   // put the visible page and the selected player out of sync on tab re-entry.
-  final PageController _pages = PageController(keepPage: false);
+  late final PageController _pages;
   final FocusNode _focus = FocusNode(debugLabel: 'reels');
   final Object? _scope = ProfileRuntime.scope.value;
-  final List<_Reel> _reels = [];
+  late final List<_Reel> _reels;
   final Set<String> _postersPrepared = {};
   final Map<String, bool> _inWatchlist = {};
 
@@ -155,6 +178,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
   @override
   void initState() {
     super.initState();
+    final saved = widget.feed == null && _session?.scope == _scope
+        ? _session
+        : null;
+    _feed = saved?.feed ?? widget.feed ?? ReelsFeed();
+    _reels = saved?.reels ?? [];
+    _index = saved?.index ?? 0;
+    _pages = PageController(initialPage: _index, keepPage: false);
+    // Returning from the detail page restores the frame without resuming audio
+    // or motion behind the user.
+    _paused = saved != null;
     if (!_feed.available) {
       _exhausted = true;
       return;
@@ -164,6 +197,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   @override
   void dispose() {
+    if (widget.feed == null) {
+      _session = _ReelsSession(
+        scope: _scope,
+        feed: _feed,
+        reels: _reels,
+        index: _index,
+      );
+    }
     _pages.dispose();
     _focus.dispose();
     super.dispose();
@@ -186,13 +227,19 @@ class _ReelsScreenState extends State<ReelsScreen> {
           allowRepeat: true,
         );
         if (!_current) return;
+        final unseen = await Future.wait([
+          for (final title in titles)
+            _isWatched(title.item).then((watched) => watched ? null : title),
+        ]);
+        if (!_current) return;
+        final playable = [for (final title in unseen) ?title];
         setState(() {
-          _reels.addAll(titles.map(_Reel.new));
+          _reels.addAll(playable.map(_Reel.new));
           if (titles.isEmpty) {
             _exhausted = _feed.lastRequestFailed || _feed.exhausted;
           }
         });
-        for (final title in titles) {
+        for (final title in playable) {
           unawaited(_loadWatchlist(title.item));
         }
         _prepare();
@@ -320,6 +367,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   void _onPage(int index) {
     if (index == _index) return;
+    final previous = _reels[_index];
+    previous.leftAt = DateTime.now();
+    final next = _reels[index];
+    final leftAt = next.leftAt;
+    if (leftAt != null &&
+        DateTime.now().difference(leftAt) > const Duration(seconds: 5)) {
+      next.position = Duration.zero;
+    }
+    next.leftAt = null;
     setState(() {
       _index = index;
       _paused = false;
@@ -497,6 +553,32 @@ class _ReelsScreenState extends State<ReelsScreen> {
     }
   }
 
+  /// A double tap is intentionally one-way: it is a quick "save this" action,
+  /// so it must never remove something the user had already saved.
+  void _addToWatchlist(StremioMeta item) {
+    if (_inWatchlist[_watchKey(item)] ?? false) return;
+    unawaited(_toggleWatchlist(item));
+  }
+
+  /// Do not surface a title already completed by either connected tracker.
+  /// Both services return null for disconnected/temporarily unavailable
+  /// accounts, which deliberately leaves the candidate in the feed.
+  Future<bool> _isWatched(StremioMeta item) async {
+    final imdb = item.effectiveImdbId;
+    if (imdb == null) return false;
+    try {
+      final statuses = await Future.wait([
+        TraktService.instance.fetchTitleStatus(imdb, item.type),
+        SimklService.instance.fetchTitleStatus(imdb, contentType: item.type),
+      ]);
+      final trakt = statuses[0] as TraktTitleStatus?;
+      final simkl = statuses[1] as SimklTitleStatus?;
+      return trakt?.titleWatched == true || simkl?.currentStatus == 'completed';
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _toggleMute() {
     HapticFeedback.selectionClick();
     setState(() => _muted = !_muted);
@@ -507,6 +589,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
   void _open(StremioMeta item) {
     final imdb = item.effectiveImdbId;
     if (imdb == null) return;
+    // Preserve the current frame and the queue while Home owns the detail
+    // route. The recreated Reels page restores this session paused.
+    setState(() => _paused = true);
+    _session = _ReelsSession(
+      scope: _scope,
+      feed: _feed,
+      reels: _reels,
+      index: _index,
+    );
     MainPageBridge.pendingCatalogDetailOpen = {
       'imdbId': imdb,
       'type': item.type,
@@ -571,7 +662,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
               inWatchlist: _inWatchlist[_watchKey(reel.item)] ?? false,
               onMute: _toggleMute,
               onWatchlist: () => _toggleWatchlist(reel.item),
+              onAddToWatchlist: () => _addToWatchlist(reel.item),
               onOpen: () => _open(reel.item),
+              onPosition: (position) => reel.position = position,
               playerBuilder: widget.playerBuilder,
             );
           },
@@ -702,7 +795,9 @@ class _ReelPage extends StatefulWidget {
   final bool inWatchlist;
   final VoidCallback onMute;
   final VoidCallback onWatchlist;
+  final VoidCallback onAddToWatchlist;
   final VoidCallback onOpen;
+  final ValueChanged<Duration> onPosition;
   final Widget Function(ReelPlayback playback)? playerBuilder;
 
   const _ReelPage({
@@ -719,7 +814,9 @@ class _ReelPage extends StatefulWidget {
     required this.inWatchlist,
     required this.onMute,
     required this.onWatchlist,
+    required this.onAddToWatchlist,
     required this.onOpen,
+    required this.onPosition,
     required this.playerBuilder,
   });
 
@@ -729,6 +826,9 @@ class _ReelPage extends StatefulWidget {
 
 class _ReelPageState extends State<_ReelPage>
     with AutomaticKeepAliveClientMixin {
+  DateTime? _lastTapAt;
+  Offset? _lastTapPosition;
+
   @override
   bool get wantKeepAlive => widget.prewarm;
 
@@ -736,6 +836,29 @@ class _ReelPageState extends State<_ReelPage>
   void didUpdateWidget(covariant _ReelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.prewarm != oldWidget.prewarm) updateKeepAlive();
+  }
+
+  void _recognizeDoubleTap(PointerDownEvent event) {
+    final now = DateTime.now();
+    final previousAt = _lastTapAt;
+    final previousPosition = _lastTapPosition;
+    final isDoubleTap =
+        previousAt != null &&
+        previousPosition != null &&
+        now.difference(previousAt) <= const Duration(milliseconds: 300) &&
+        (event.position - previousPosition).distanceSquared <= 1600;
+    _lastTapAt = isDoubleTap ? null : now;
+    _lastTapPosition = isDoubleTap ? null : event.position;
+    if (isDoubleTap) widget.onAddToWatchlist();
+  }
+
+  void _cancelTapIfDragged(PointerMoveEvent event) {
+    final position = _lastTapPosition;
+    if (position != null &&
+        (event.position - position).distanceSquared > 1600) {
+      _lastTapAt = null;
+      _lastTapPosition = null;
+    }
   }
 
   @override
@@ -751,6 +874,8 @@ class _ReelPageState extends State<_ReelPage>
       volume: widget.muted ? 0 : 100,
       paused: widget.paused,
       prewarm: widget.prewarm && reel.state != _ClipState.failed,
+      initialPosition: reel.position > Duration.zero ? reel.position : null,
+      onPosition: widget.onPosition,
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
     );
@@ -762,15 +887,23 @@ class _ReelPageState extends State<_ReelPage>
       children: [
         // The video itself: a tap pauses or resumes it. The title, text and
         // buttons above keep their own taps.
-        GestureDetector(
-          onTap: widget.onTogglePause,
-          behavior: HitTestBehavior.opaque,
-          child:
-              widget.playerBuilder?.call(playback) ??
-              ReelVideoSurface(
-                playback: playback,
-                onPlaybackFailed: widget.onPlaybackFailed,
-              ),
+        Listener(
+          onPointerDown: _recognizeDoubleTap,
+          onPointerMove: _cancelTapIfDragged,
+          child: GestureDetector(
+            // Keep the pause gesture immediate. GestureDetector delays onTap
+            // while it waits to rule out a double tap, which made a normal
+            // reel tap feel unresponsive. The Listener above recognizes the
+            // second tap without joining this gesture arena.
+            onTap: widget.onTogglePause,
+            behavior: HitTestBehavior.opaque,
+            child:
+                widget.playerBuilder?.call(playback) ??
+                ReelVideoSurface(
+                  playback: playback,
+                  onPlaybackFailed: widget.onPlaybackFailed,
+                ),
+          ),
         ),
         if (playback.failed && widget.active)
           Center(
@@ -969,6 +1102,8 @@ class ReelVideoSurface extends StatelessWidget {
             highResolutionVideo: true,
             suspended: !playback.active || playback.paused,
             freezeFrame: playback.paused,
+            initialPosition: playback.initialPosition,
+            onPlaybackPosition: playback.onPosition,
             decorative: false,
             fadeDuration: Duration.zero,
             engineFactory: engineFactory,

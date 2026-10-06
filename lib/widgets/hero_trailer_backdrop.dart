@@ -148,6 +148,14 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// full-screen clips, where falling back to a poster on pause is jarring.
   final bool freezeFrame;
 
+  /// Resume this clip at a saved position after its decoder was handed to
+  /// another reel. Null/zero starts normally.
+  final Duration? initialPosition;
+
+  /// Latest decoded playback position. Decorative callers can ignore it;
+  /// Reels use it to resume after a page or detail-screen handoff.
+  final ValueChanged<Duration>? onPlaybackPosition;
+
   /// Non-null for a muted collection tile: no intro skip, small texture, and
   /// playback only while this token owns ambient video.
   final Object? focusPreviewOwner;
@@ -196,6 +204,8 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.heroTag,
     this.live = false,
     this.freezeFrame = false,
+    this.initialPosition,
+    this.onPlaybackPosition,
     this.focusPreviewOwner,
     this.httpHeaders,
     this.engineFactory,
@@ -609,13 +619,20 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       if (!mounted || _engine != engine || _videoVisible) return;
       _firstFrameTimer?.cancel();
       _firstFrameTimer = null;
+      // Resume a reel before applying the decorative trailer intro skip.
+      final resumeAt = widget.initialPosition;
+      if (resumeAt != null && resumeAt > Duration.zero) {
+        engine.seek(resumeAt);
+        _position = resumeAt;
+      }
       // Jump past the intro/rating card so the ambient loop shows footage.
       // Skip only when the clip is comfortably longer than the cut (or its
       // duration isn't known yet — trailers are minutes long, so assume it is).
       final dur = _duration;
       final longEnough =
           dur == Duration.zero || dur > const Duration(seconds: 8);
-      if (widget.skipIntro &&
+      if ((resumeAt == null || resumeAt <= Duration.zero) &&
+          widget.skipIntro &&
           widget.focusPreviewOwner == null &&
           !widget.live &&
           !widget.foreground &&
@@ -649,6 +666,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         engine.seek(_introSkip);
       }
       _lastPos = p;
+      widget.onPlaybackPosition?.call(p);
       _finishIfEnded();
       // Don't snap the thumb back to stale positions mid-drag. And only
       // REBUILD for it when the seek bar is actually on screen (foreground):

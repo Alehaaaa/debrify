@@ -9,18 +9,32 @@ import 'package:http/http.dart' as http;
 class StartupConnection {
   StartupConnection._();
   static Future<bool>? _pending;
+  static bool? _lastKnownOnline;
+  static bool _offlineLaunch = false;
   static const deadline = Duration(milliseconds: 1200);
+
+  /// Null until launch reachability has resolved; screens should not guess.
+  static bool get isKnownOffline => _offlineLaunch;
+
+  /// Records the launch decision after the initializer has committed to the
+  /// local/offline shell. A stray reachability probe must not flip live UI.
+  static void setOfflineLaunch(bool offline) => _offlineLaunch = offline;
 
   @visibleForTesting
   static Future<List<ConnectivityResult>> Function()? connectivityOverride;
   @visibleForTesting
   static http.Client Function()? clientOverride;
 
-  static Future<bool> check() => _pending ??= _check();
+  static Future<bool> check() => _pending ??= _check().then((online) {
+    _lastKnownOnline = online;
+    return online;
+  });
 
   @visibleForTesting
   static void reset() {
     _pending = null;
+    _lastKnownOnline = null;
+    _offlineLaunch = false;
     connectivityOverride = null;
     clientOverride = null;
   }

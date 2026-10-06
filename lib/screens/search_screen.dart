@@ -18,6 +18,7 @@ import '../widgets/collections/collection_focus_art.dart';
 import '../widgets/collections/collection_focus_glow.dart';
 import '../widgets/see_all/discover_browsing_input.dart';
 import '../services/home_catalog_refresh.dart';
+import '../services/startup_connection.dart';
 import '../services/home_return_cache.dart';
 import '../services/home_load_deadline.dart';
 import '../services/home_load_progress.dart';
@@ -45,6 +46,7 @@ import 'package:flutter/services.dart';
 
 import '../models/advanced_search_selection.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/app_theme.dart';
 import '../theme/artwork_accent.dart';
 import '../utils/home_rail_metrics.dart';
 import '../utils/platform_util.dart';
@@ -16881,6 +16883,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
     // bloom below.
     final glassHome = _heroTrailerActive;
     final app = AppThemeScope.of(context);
+    final offlineLibrary =
+        StartupConnection.isKnownOffline && !widget.searchMode;
     // Discover's See-All panels (and any other poster grid on this screen)
     // open the same title-card menu Home's rows use on hold / right-click.
     return CardOptionsScope(
@@ -16904,7 +16908,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
           //  • Home-New board on desktop/mobile classic — keeps a persistent
           //    search bar above the board; the separate Search tab is an
           //    additional way in on TV and sidebar layouts, not a replacement.
-          child: widget.discoverMode
+          child: offlineLibrary
+              ? SafeArea(child: _buildOfflineLibraryMessage(app))
+              : widget.discoverMode
               ? SafeArea(child: _buildDiscover())
               : (widget.isTelevision && !widget.searchMode)
               ? SafeArea(child: _buildBoard())
@@ -16923,6 +16929,31 @@ sheetAnimationStyle: kMenuSheetAnimation,
       ),
     );
   }
+
+  Widget _buildOfflineLibraryMessage(AppTheme app) => Center(
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.wifi_off_rounded,
+              size: 46, color: app.fade(app.core.tx, 0.5)),
+          const SizedBox(height: 16),
+          Text('You’re offline',
+              style: TextStyle(
+                  color: app.core.tx, fontSize: 20, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Text(
+            widget.discoverMode
+                ? 'Discover needs a connection to browse new titles. Your downloaded titles are still available.'
+                : 'Home will refresh when you’re back online. Your downloaded titles are still available.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: app.fade(app.core.tx, 0.68), height: 1.4),
+          ),
+        ],
+      ),
+    ),
+  );
 
   /// Off-TV Home while Spotlight is selected: one branch, two states.
   ///

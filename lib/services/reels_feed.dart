@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import '../models/stremio_addon.dart';
 import 'metadata_preferences_service.dart';
+import 'simkl/simkl_list_source.dart';
 import 'tmdb_metadata_repository.dart';
+import 'trakt/trakt_list_source.dart';
 
 /// One TMDB request: `path` plus query, the JSON answer.
 typedef ReelsTmdbGet =
@@ -10,6 +13,9 @@ typedef ReelsTmdbGet =
       String path,
       Map<String, String> query,
     );
+
+/// External discovery rows (Trakt/SIMKL) to blend into the TMDB queue.
+typedef ReelsSourceLoad = Future<List<StremioMeta>> Function();
 
 /// A title ready for the feed: its details and the official clip to play.
 class ReelTitle {
@@ -49,15 +55,20 @@ class ReelsFeed {
     bool? configured,
     String? language,
     math.Random? random,
+    ReelsSourceLoad? sourceLoad,
   }) : _get =
            get ??
            ((path, query) => TmdbMetadataRepository.instance.get(path, query)),
        available = configured ?? TmdbMetadataRepository.instance.configured,
        _language = language,
-       _random = random ?? math.Random();
+       _random = random ?? math.Random(),
+       // Test feeds provide their own TMDB getter and must stay entirely
+       // deterministic/offline. Production blends connected discovery sources.
+       _sourceLoad = sourceLoad ?? (get == null ? _loadSourceItems : null);
 
   final ReelsTmdbGet _get;
   final math.Random _random;
+  final ReelsSourceLoad? _sourceLoad;
   String? _language;
 
   /// False when this build has no TMDB access (no clips to find).
@@ -89,6 +100,7 @@ class ReelsFeed {
   final List<(String, ReelTitle)> _ready = [];
   bool _requestFailed = false;
   final Set<String> _failedClips = {};
+  bool _sourceLoaded = false;
 
   void excludeClip(String key) => _failedClips.add(key);
   void allowClip(String key) => _failedClips.remove(key);
@@ -121,6 +133,11 @@ class ReelsFeed {
   Future<List<ReelTitle>> take(int count, {bool allowRepeat = false}) async {
     if (!available || count <= 0) return const [];
     final language = _language ??= await _loadLanguage();
+    // Provider rows arrive in the background: waiting for 48 IMDb lookups
+    // before the first reel would make opening Reels feel slower than the
+    // previous TMDB-only feed. TMDB starts immediately; source candidates
+    // join the same pools as soon as they have been normalized.
+    if (!_sourceLoaded) unawaited(_loadSources(language));
     _requestFailed = false;
     final found = <ReelTitle>[];
     void drainReady() {
@@ -179,6 +196,99 @@ class ReelsFeed {
       drainReady();
     }
     return found;
+  }
+
+  /// Merge provider discovery with TMDB before selecting candidates. Every
+  /// source is normalized through TMDB's IMDb lookup, so all three sources
+  /// share the same `(type, tmdbId)` identity and duplicates cannot reach the
+  /// clip resolver. Shuffle each type's pool after insertion: providers do
+  /// not get a fixed first/last segment in the reel sequence.
+  Future<void> _loadSources(String language) async {
+    if (_sourceLoaded) return;
+    _sourceLoaded = true;
+    final load = _sourceLoad;
+    if (load == null) return;
+    try {
+      final items = await load();
+      final unique = <String, StremioMeta>{
+        for (final item in items)
+          if (item.effectiveImdbId case final String imdb
+              when imdb.startsWith('tt'))
+            imdb.toLowerCase(): item,
+      };
+      // Keep this bounded: it is a seed that mixes with TMDB pages, not a
+      // bulk import that delays the first playable reel.
+      final seeds = unique.values.toList()..shuffle(_random);
+      final resolved = await Future.wait([
+        for (final item in seeds.take(48)) _resolveSourceItem(item, language),
+      ]);
+      for (final candidate in resolved) {
+        if (candidate == null) continue;
+        _pool[candidate.$1]!.add(candidate.$2);
+      }
+      for (final pool in _pool.values) {
+        pool.shuffle(_random);
+      }
+    } catch (_) {
+      // Discovery providers are optional. TMDB remains a fully working feed
+      // when either account is disconnected or a provider request fails.
+    }
+  }
+
+  Future<(String, Map<String, dynamic>)?> _resolveSourceItem(
+    StremioMeta item,
+    String language,
+  ) async {
+    final imdb = item.effectiveImdbId;
+    if (imdb == null) return null;
+    try {
+      final data = await _get('find/$imdb', {
+        'external_source': 'imdb_id',
+        'language': language,
+      });
+      final type = item.type == 'series' ? 'tv' : 'movie';
+      final results = data[type == 'tv' ? 'tv_results' : 'movie_results'];
+      if (results is! List) return null;
+      for (final row in results) {
+        if (row is Map<String, dynamic> && row['id'] is int) {
+          return (type, row);
+        }
+      }
+    } catch (_) {
+      // A single stale external ID must not mark the whole TMDB catalog down.
+    }
+    return null;
+  }
+
+  static Future<List<StremioMeta>> _loadSourceItems() async {
+    Future<List<StremioMeta>> safeTrakt() async {
+      try {
+        final result = await TraktListSource.instance.loadList(
+          TraktListChoice.builtin(TraktSeeAllList.recommendations),
+          preview: true,
+        );
+        return result.items;
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    Future<List<StremioMeta>> safeSimkl() async {
+      try {
+        // SIMKL does not expose its web-only personalised recommendations in
+        // the public API. Its ranked discovery list is the closest supported
+        // source and is kept distinct until the common IMDb dedupe above.
+        final result = await SimklListSource.instance.loadList(
+          SimklSeeAllList.topRated,
+        );
+        return result.items;
+      } catch (_) {
+        return const [];
+      }
+    }
+
+    final results = await Future.wait([safeTrakt(), safeSimkl()]);
+    return [...results[0], ...results[1]];
   }
 
   /// The next unseen list row, alternating movie / show.

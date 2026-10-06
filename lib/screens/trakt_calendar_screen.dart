@@ -19,6 +19,7 @@ import '../widgets/hold_feedback.dart';
 import '../models/stremio_addon.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
+import '../services/startup_connection.dart';
 import '../services/watched_action_coordinator.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
@@ -628,6 +629,25 @@ sheetAnimationStyle: kMenuSheetAnimation,
   }
 
   Widget _buildBody(bool isWide, AppTheme app) {
+    if (StartupConnection.isKnownOffline) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.wifi_off_rounded,
+                size: 46, color: app.fade(app.core.tx, 0.5)),
+            const SizedBox(height: 16),
+            Text('You’re offline',
+                style: TextStyle(
+                    color: app.core.tx, fontSize: 20, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Text('Calendar updates need a connection. Try again when you’re back online.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: app.fade(app.core.tx, 0.68), height: 1.4)),
+          ]),
+        ),
+      );
+    }
     if (!_isAuth) {
       // Only reachable when neither tracker is connected (the default source is
       // whichever IS connected), so phrase it for both.
@@ -1547,14 +1567,10 @@ class _AiringDayCard extends StatelessWidget {
     );
   }
 
-  /// The whole card's menu: the episode's own for a one-episode day, else
-  /// the day sheet (each of its rows has a menu).
+  /// A hold always opens the title actions, like Home/Discover. For a busy
+  /// day the menu includes "Everything airing that day" to reach the sheet.
   void _optionsForCard() {
-    if (entries.length == 1) {
-      onEpisodeOptions?.call(entries.first);
-    } else {
-      onOpen();
-    }
+    if (entries.isNotEmpty) onEpisodeOptions?.call(entries.first);
   }
 
   /// Phone + desktop layout, built like a settings group: a small caps date

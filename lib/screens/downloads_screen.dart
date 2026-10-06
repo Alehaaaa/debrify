@@ -58,7 +58,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   final Map<String, double> _progress = {};
   StreamSubscription? _status, _moves, _progressSub;
   Timer? _folderPoll;
-  bool _loading = true;
+  // The empty local library is immediately useful; a scan can populate it
+  // without pretending a network request is in progress.
+  bool _loading = false;
   String? _error;
   String _filter = 'All', _availability = 'All';
   int _generation = 0;

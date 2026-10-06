@@ -231,6 +231,7 @@ class _AppInitializerState extends State<AppInitializer>
     // Reachability runs in parallel with local initialization and the ident.
     // Offline (or too slow to answer) enters the local library immediately.
     _offlineLaunch = !await StartupConnection.check();
+    StartupConnection.setOfflineLaunch(_offlineLaunch);
     if (!mounted) return;
     if (_offlineLaunch) MainPageBridge.cancelIptvStartupChannel();
 

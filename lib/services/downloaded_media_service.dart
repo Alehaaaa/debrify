@@ -11,6 +11,7 @@ import 'download_service.dart';
 import 'profiles/profile_runtime.dart';
 import 'local_playback_resume_resolver.dart';
 import 'offline_title_store.dart';
+import 'startup_connection.dart';
 import 'movie_metadata_service.dart';
 import 'tvmaze_service.dart';
 import 'video_player_launcher.dart';
@@ -195,11 +196,15 @@ class DownloadedMediaService {
     } else {
       await service.initializeLibrary();
       records = await service.allRecords();
-      unawaited(
-        service.initialize().catchError((Object error) {
-          debugPrint('Downloads: transfer startup deferred ($error)');
-        }),
-      );
+      // An offline library is entirely local. Do not wake the transfer runtime
+      // just to look for background work that cannot progress.
+      if (!StartupConnection.isKnownOffline) {
+        unawaited(
+          service.initialize().catchError((Object error) {
+            debugPrint('Downloads: transfer startup deferred ($error)');
+          }),
+        );
+      }
     }
     final cache = await _MediaCache.open();
 
@@ -391,6 +396,7 @@ class DownloadedMediaService {
     DownloadedMedia parsed,
     String filename,
   ) async {
+    if (StartupConnection.isKnownOffline) return null;
     try {
       if (parsed.type == 'series') {
         final show = await TVMazeService.searchShow(parsed.title);
