@@ -15,6 +15,7 @@ import '../services/storage_service.dart';
 import '../services/youtube_service.dart';
 import '../utils/tv_keys.dart';
 import '../widgets/hero_trailer_backdrop.dart';
+import '../widgets/trailer_engine.dart';
 
 enum _ClipState { idle, resolving, ready, failed }
 
@@ -44,8 +45,7 @@ class _Reel {
 /// reel shows already known (see [ReelsFeed] — one TMDB request per title),
 /// so a reel paints its backdrop the moment it's on screen. The clip's stream
 /// is resolved for the reel on screen and a bounded look-ahead window.
-/// iOS also prepares the next paused native player; other platforms retain
-/// one decoder.
+/// Only the visible high-resolution reel owns the decoder.
 class ReelsScreen extends StatefulWidget {
   final bool isTelevision;
 
@@ -250,17 +250,20 @@ class _ReelsScreenState extends State<ReelsScreen> {
         reel.state = _ClipState.ready;
       } else {
         reel.state = _ClipState.failed;
+        _feed.excludeClip(reel.title.clipKey);
       }
     });
+    _discardFailedAhead();
   }
 
   /// Loading can change a clip, never the page. In particular, failed clips
-  /// remain navigable in both directions instead of cascading auto-skips.
+  /// stay in place for retry. Future failures are discarded without navigation.
   void _retry(_Reel reel) {
     if (!_current || reel.state != _ClipState.failed) return;
     final index = _reels.indexOf(reel);
     if (index < 0) return;
     YoutubeService.invalidateStreams(reel.title.clipKey);
+    _feed.allowClip(reel.title.clipKey);
     setState(() {
       reel.revision++;
       reel.streams = null;
@@ -314,7 +317,27 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() {
       reel.state = _ClipState.failed;
       reel.streams = null;
+      _feed.excludeClip(reel.title.clipKey);
     });
+    _discardFailedAhead();
+  }
+
+  /// Remove only failed future pages. Never rebase the visible item or a
+  /// live gesture; postponed removals run after scrolling settles.
+  void _discardFailedAhead() {
+    if (!_current ||
+        _dragPage != null ||
+        (_pages.hasClients && _pages.position.isScrollingNotifier.value)) {
+      return;
+    }
+    final failed = _reels
+        .skip(_index + 1)
+        .where((reel) => reel.state == _ClipState.failed)
+        .toList();
+    if (failed.isEmpty) return;
+    setState(() => _reels.removeWhere(failed.contains));
+    unawaited(_fill());
+    _prepare();
   }
 
   void _togglePause() {
@@ -375,6 +398,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
     }
     if (n is ScrollEndNotification) {
       _dragPage = null;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _discardFailedAhead(),
+      );
       if (_refreshArmed && _index == 0) unawaited(_refreshFirst());
       _refreshArmed = false;
       if (_pull != 0) setState(() => _pull = 0);
@@ -709,7 +735,7 @@ class _ReelPageState extends State<_ReelPage>
           behavior: HitTestBehavior.opaque,
           child:
               widget.playerBuilder?.call(playback) ??
-              _ReelPlayer(
+              ReelVideoSurface(
                 playback: playback,
                 onPlaybackFailed: widget.onPlaybackFailed,
               ),
@@ -860,36 +886,66 @@ class _ReelPageState extends State<_ReelPage>
   }
 }
 
-/// The clip, looping, full-bleed. Only the reel on screen plays. The next
-/// iOS reel retains a paused prepared player; all other reels show a still.
-class _ReelPlayer extends StatelessWidget {
+/// A stable poster layer with video painted above it only after first frame.
+/// Resolving a URL never replaces or re-decodes the poster widget.
+class ReelVideoSurface extends StatelessWidget {
   final ReelPlayback playback;
-
   final VoidCallback onPlaybackFailed;
+  final Widget? poster;
+  final Future<TrailerEngine> Function()? engineFactory;
 
-  const _ReelPlayer({required this.playback, required this.onPlaybackFailed});
+  const ReelVideoSurface({
+    super.key,
+    required this.playback,
+    required this.onPlaybackFailed,
+    this.poster,
+    this.engineFactory,
+  });
 
   @override
   Widget build(BuildContext context) {
     final item = playback.item;
     final still = item.background ?? item.poster;
     final streams = playback.streams;
-    if ((!playback.active && !playback.prewarm) || streams == null) {
-      final image = still == null
-          ? const SizedBox.shrink()
-          : CachedNetworkImage(
-              imageUrl: still,
-              fit: BoxFit.cover,
-              cacheManager: DebrifyImageCache.manager,
-              fadeInDuration: Duration.zero,
-              errorWidget: (_, _, _) => const SizedBox.shrink(),
-            );
-      if (!playback.active || playback.failed) return image;
-      // On screen, clip still on its way: the still, and a quiet spinner.
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          image,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // This element stays mounted through resolution, playback and errors.
+        poster ??
+            (still == null
+                ? const SizedBox.shrink()
+                : CachedNetworkImage(
+                    key: ValueKey(still),
+                    imageUrl: still,
+                    fit: BoxFit.cover,
+                    cacheManager: DebrifyImageCache.manager,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
+                    useOldImageOnUrlChange: true,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  )),
+        IgnorePointer(
+          child: HeroTrailerBackdrop(
+            imageUrl: null,
+            videoUrl: streams?.playUrl,
+            audioUrl: streams?.audioUrl,
+            enabled: playback.active && streams != null && !playback.failed,
+            highResolutionVideo: true,
+            suspended: !playback.active || playback.paused,
+            decorative: false,
+            fadeDuration: Duration.zero,
+            engineFactory: engineFactory,
+            onPlaybackFailed: onPlaybackFailed,
+            ambientVolume: playback.volume,
+            imageBlurSigma: 0,
+            videoBlurSigma: 0,
+            startDelay: Duration.zero,
+            firstFrameTimeout: const Duration(seconds: 15),
+            repeat: true,
+            skipIntro: false,
+          ),
+        ),
+        if (playback.active && streams == null && !playback.failed)
           const Center(
             child: SizedBox(
               width: 28,
@@ -900,35 +956,7 @@ class _ReelPlayer extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      );
-    }
-    return IgnorePointer(
-      child: HeroTrailerBackdrop(
-        imageUrl: still,
-        videoUrl: streams.playUrl,
-        audioUrl: streams.audioUrl,
-        // Adaptive H.264 + AAC avoids YouTube's 360p muxed ceiling.
-        // The single decoder is released when this page leaves the screen.
-        enabled: playback.active,
-        highResolutionVideo: true,
-        // Paused holds the frame on the same player (no teardown, no reload).
-        suspended: !playback.active || playback.paused,
-        prewarm: false,
-        decorative: false,
-        fadeDuration: Duration.zero,
-        onPlaybackFailed: onPlaybackFailed,
-        ambientVolume: playback.volume,
-        imageBlurSigma: 0,
-        videoBlurSigma: 0,
-        sharpStill: true,
-        startDelay: Duration.zero,
-        firstFrameTimeout: const Duration(seconds: 15),
-        // A reel loops until you swipe on, like any short-video feed — and
-        // a scene clip starts on the scene, so nothing is skipped.
-        repeat: true,
-        skipIntro: false,
-      ),
+      ],
     );
   }
 }

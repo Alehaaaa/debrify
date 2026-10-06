@@ -250,6 +250,20 @@ void main() {
       },
     );
 
+    test(
+      'discarded failed clip is not recycled by continuous playback',
+      () async {
+        final feed = feedFor(FakeTmdb());
+        final first = (await feed.take(1)).single;
+        feed.excludeClip(first.clipKey);
+        for (var i = 0; i < 30; i++) {
+          final next = await feed.take(1, allowRepeat: true);
+          expect(next, hasLength(1));
+          expect(next.single.clipKey, isNot(first.clipKey));
+        }
+      },
+    );
+
     test('without TMDB there is nothing to ask', () async {
       final tmdb = FakeTmdb();
       expect(await feedFor(tmdb, configured: false).take(3), isEmpty);
@@ -427,12 +441,14 @@ void main() {
       'failed clips never advance or prevent going back; retry stays put',
       (tester) async {
         var recover = false;
+        String? firstKey;
         await tester.pumpWidget(
           host(
             feedFor(FakeTmdb()),
             resolver: (key) async {
               resolved.add(key);
-              return recover ? _clip : null;
+              firstKey ??= key;
+              return recover || key != firstKey ? _clip : null;
             },
           ),
         );
@@ -512,6 +528,43 @@ void main() {
           tester.widget<PageView>(find.byType(PageView)).controller!.page,
           0,
         );
+      },
+    );
+
+    testWidgets(
+      'a failed upcoming clip is removed without moving the current page',
+      (tester) async {
+        final pending = Completer<YoutubeResolvedStreams?>();
+        var calls = 0;
+        String? failedKey;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) {
+              if (++calls == 2) {
+                failedKey = key;
+                return pending.future;
+              }
+              return Future.value(_clip);
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        final pages = tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!;
+        pending.complete(null);
+        await tester.pumpAndSettle();
+        expect(pages.page, 0);
+        expect(activeId(tester), first);
+        expect(playing(first), findsOneWidget);
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
+        await tester.pumpAndSettle();
+        final failedId = 'tt${int.parse(failedKey!.substring(4))}';
+        expect(activeId(tester), isNot(failedId));
+        expect(pages.page, 1);
+        expect(playing(activeId(tester)!), findsOneWidget);
       },
     );
 

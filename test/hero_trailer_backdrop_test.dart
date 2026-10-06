@@ -4,9 +4,68 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:debrify/widgets/hero_trailer_backdrop.dart';
+import 'package:debrify/screens/reels_screen.dart';
+import 'package:debrify/services/youtube_service.dart';
+import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/widgets/trailer_engine.dart';
 
 void main() {
+  testWidgets(
+    'reel keeps the same poster from resolving through first video frame',
+    (tester) async {
+      final engine = _PendingFirstFrameEngine();
+      final item = StremioMeta(id: 'tt1234', type: 'movie', name: 'Scene');
+      Widget host(YoutubeResolvedStreams? streams) => MaterialApp(
+        home: ReelVideoSurface(
+          playback: ReelPlayback(
+            item: item,
+            streams: streams,
+            active: true,
+            volume: 100,
+          ),
+          onPlaybackFailed: () {},
+          engineFactory: () async => engine,
+          poster: const ColoredBox(
+            key: ValueKey('reel-poster'),
+            color: Colors.blue,
+          ),
+        ),
+      );
+      await tester.pumpWidget(host(null));
+      final posterElement = tester.element(
+        find.byKey(const ValueKey('reel-poster')),
+      );
+      await tester.pumpWidget(
+        host(
+          const YoutubeResolvedStreams(
+            playUrl: 'https://example.invalid/hd.mp4',
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(
+        tester.element(find.byKey(const ValueKey('reel-poster'))),
+        same(posterElement),
+      );
+      final videoOpacity = find.descendant(
+        of: find.byType(HeroTrailerBackdrop),
+        matching: find.byType(AnimatedOpacity),
+      );
+      expect(tester.widget<AnimatedOpacity>(videoOpacity).opacity, 0);
+      engine._firstFrame.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(tester.widget<AnimatedOpacity>(videoOpacity).opacity, 1);
+      expect(
+        tester.element(find.byKey(const ValueKey('reel-poster'))),
+        same(posterElement),
+      );
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    },
+  );
+
   testWidgets(
     'high-resolution reel hands the decoder to the next visible page',
     (tester) async {
@@ -352,4 +411,9 @@ class _PendingFirstFrameEngine implements TrailerEngine {
     buildVideoCalls++;
     return const SizedBox.expand();
   }
+}
+
+class _TextureFirstFrameEngine extends _PendingFirstFrameEngine {
+  @override
+  bool get rendersUnderlay => false;
 }

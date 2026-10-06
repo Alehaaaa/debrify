@@ -88,6 +88,28 @@ class ReelsFeed {
   final Set<String> _visited = {};
   final List<(String, ReelTitle)> _ready = [];
   bool _requestFailed = false;
+  final Set<String> _failedClips = {};
+
+  void excludeClip(String key) => _failedClips.add(key);
+  void allowClip(String key) => _failedClips.remove(key);
+
+  ReelTitle? _playableVariant(
+    String key,
+    ReelTitle title, {
+    bool alternate = false,
+  }) {
+    if (!alternate && !_failedClips.contains(title.clipKey)) return title;
+    final choices = (_clipsByTitle[key] ?? const [])
+        .where(
+          (clip) =>
+              !_failedClips.contains(clip.key) && clip.key != title.clipKey,
+        )
+        .toList();
+    if (choices.isEmpty)
+      return _failedClips.contains(title.clipKey) ? null : title;
+    final clip = choices[_random.nextInt(choices.length)];
+    return ReelTitle(item: title.item, clipKey: clip.key, clipName: clip.name);
+  }
 
   /// Distinguish unavailable metadata from a search that found no scene clips.
   bool get lastRequestFailed => _requestFailed;
@@ -102,7 +124,9 @@ class ReelsFeed {
     final found = <ReelTitle>[];
     void drainReady() {
       while (_ready.isNotEmpty && found.length < count) {
-        final (key, title) = _ready.removeAt(0);
+        final (key, candidate) = _ready.removeAt(0);
+        final title = _playableVariant(key, candidate);
+        if (title == null) continue;
         if (_shown.add(key)) {
           found.add(title);
           _known[key] = title;
@@ -148,23 +172,8 @@ class ReelsFeed {
       final replay = _known.entries.toList()..shuffle(_random);
       for (final entry in replay) {
         _shown.remove(entry.key);
-        final previous = entry.value;
-        final options = (_clipsByTitle[entry.key] ?? const [])
-            .where((clip) => clip.key != previous.clipKey)
-            .toList();
-        final alternate = options.isEmpty
-            ? null
-            : options[_random.nextInt(options.length)];
-        _ready.add((
-          entry.key,
-          alternate == null
-              ? previous
-              : ReelTitle(
-                  item: previous.item,
-                  clipKey: alternate.key,
-                  clipName: alternate.name,
-                ),
-        ));
+        final title = _playableVariant(entry.key, entry.value, alternate: true);
+        if (title != null) _ready.add((entry.key, title));
       }
       drainReady();
     }
@@ -277,7 +286,7 @@ class ReelsFeed {
           ),
           background: TmdbMetadataRepository.image(
             data['backdrop_path'],
-            size: 'w1280',
+            size: 'original',
           ),
           logo: _logo(data['images'], lang),
           description: (data['overview'] as String?)?.trim(),

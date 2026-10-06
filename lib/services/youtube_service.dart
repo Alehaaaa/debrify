@@ -165,6 +165,13 @@ class _StreamSelection {
     required this.bestMuxedHeight,
   });
 
+  int? get playbackHeight {
+    for (final quality in qualities) {
+      if (quality.videoUrl == playUrl) return quality.height;
+    }
+    return bestMuxedHeight;
+  }
+
   _StreamSelection withoutMuxedFallback() => _StreamSelection(
     playUrl: playUrl,
     audioUrl: audioUrl,
@@ -701,6 +708,8 @@ class YoutubeService {
       String? adaptiveClient;
       _StreamSelection? muxedOnlyFallback;
       String? muxedClient;
+      _StreamSelection? lowerQualityFallback;
+      String? lowerQualityClient;
       for (final (label, clients) in rungs) {
         yt_explode.StreamManifest manifest;
         try {
@@ -751,8 +760,12 @@ class YoutubeService {
             selectedClient = label;
             break;
           }
-          muxedOnlyFallback ??= fallback;
-          muxedClient ??= label;
+          if (muxedOnlyFallback == null ||
+              (fallback.playbackHeight ?? 0) >
+                  (muxedOnlyFallback.playbackHeight ?? 0)) {
+            muxedOnlyFallback = fallback;
+            muxedClient = label;
+          }
           continue;
         }
         if (!usability.primary) {
@@ -764,22 +777,29 @@ class YoutubeService {
         if (!usability.muxedFallback) {
           // Keep the working adaptive pair as a last resort, but try the next
           // client for a muxed URL that single-URL players can actually open.
-          usableWithoutMuxedFallback ??= candidate.withoutMuxedFallback();
-          adaptiveClient ??= label;
+          if (usableWithoutMuxedFallback == null ||
+              (candidate.playbackHeight ?? 0) >
+                  (usableWithoutMuxedFallback.playbackHeight ?? 0)) {
+            usableWithoutMuxedFallback = candidate.withoutMuxedFallback();
+            adaptiveClient = label;
+          }
           debugPrint(
             'YoutubeService: $videoId [$label] muxed fallback returned 403',
           );
           continue;
         }
-        // Some clients expose only format 18 (360p), even for HD uploads.
+        // Clients can expose a low-resolution muxed or adaptive subset, even for HD uploads.
         // A high-resolution caller must try the other clients before accepting
         // that low-resolution source. Keep it as a playable final fallback.
         if (!preferMuxed &&
-            candidate.audioUrl == null &&
-            candidate.bestMuxedHeight != null &&
-            candidate.bestMuxedHeight! < maxHeight) {
-          muxedOnlyFallback ??= candidate;
-          muxedClient ??= label;
+            candidate.playbackHeight != null &&
+            candidate.playbackHeight! < maxHeight) {
+          if (lowerQualityFallback == null ||
+              candidate.playbackHeight! >
+                  (lowerQualityFallback.playbackHeight ?? 0)) {
+            lowerQualityFallback = candidate;
+            lowerQualityClient = label;
+          }
           continue;
         }
         if (label != 'androidVr') {
@@ -790,13 +810,23 @@ class YoutubeService {
         selectedClient = label;
         break;
       }
-      if (selection == null && usableWithoutMuxedFallback != null) {
-        selection = usableWithoutMuxedFallback;
-        selectedClient = adaptiveClient!;
-      }
-      if (selection == null && muxedOnlyFallback != null) {
-        selection = muxedOnlyFallback;
-        selectedClient = muxedClient!;
+      if (selection == null) {
+        final fallbacks =
+            <(_StreamSelection, String)>[
+              if (lowerQualityFallback != null)
+                (lowerQualityFallback, lowerQualityClient!),
+              if (usableWithoutMuxedFallback != null)
+                (usableWithoutMuxedFallback, adaptiveClient!),
+              if (muxedOnlyFallback != null) (muxedOnlyFallback, muxedClient!),
+            ]..sort(
+              (a, b) => (b.$1.playbackHeight ?? 0).compareTo(
+                a.$1.playbackHeight ?? 0,
+              ),
+            );
+        if (fallbacks.isNotEmpty) {
+          selection = fallbacks.first.$1;
+          selectedClient = fallbacks.first.$2;
+        }
       }
       if (selection == null) {
         debugPrint('YoutubeService: $videoId — every client rung failed');
