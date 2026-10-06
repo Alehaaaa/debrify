@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/8f58c961ca97961aeb8cfe8a06e876994c607d42/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/4accf10dde738e55821fd4a610392202cf540dc4/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610061312",
+          "date": "2026-10-06T13:16:33Z",
+          "localizedDescription": "What's new:\n• Reels: tap to pause, clips start on arrival, deeper buffer (4accf10d)\n• Reels: official scene clips from TMDB, fast feed on few requests (66f17f99)\n\nBuild 202610061312 from nextup@4accf10\nhttps://github.com/Alehaaaa/debrify/compare/8f58c96...4accf10",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-40-4accf10.ipa",
+          "size": 39885221,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610061255",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Background downloads; a clean player HUD with a glass play button (2a06fe9e)\n\nBuild 202610042249 from nextup@2a06fe9\nhttps://github.com/Alehaaaa/debrify/compare/16408d2...2a06fe9",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-27-2a06fe9.ipa",
           "size": 39816888,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610042240",
-          "date": "2026-10-04T22:44:52Z",
-          "localizedDescription": "What's new:\n• Player: frosted-glass dock in the chosen palette, pinch framing (16408d2f)\n\nBuild 202610042240 from nextup@16408d2\nhttps://github.com/Alehaaaa/debrify/compare/a93ee6b...16408d2",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-26-16408d2.ipa",
-          "size": 39815805,
           "minOSVersion": "14.0"
         }
       ],
