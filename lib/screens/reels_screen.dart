@@ -12,43 +12,48 @@ import '../services/offline_title_store.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
 import '../services/storage_service.dart';
-import '../services/stremio_service.dart';
-import '../services/title_trailer_resolver.dart';
 import '../services/youtube_service.dart';
 import '../utils/tv_keys.dart';
 import '../widgets/detail/showcase_parts.dart' show ExpandableSynopsis;
 import '../widgets/hero_trailer_backdrop.dart';
 
-/// A clip ready to show: the title (with its full details) and its trailer.
+/// A reel in the feed: the title, its clip, and that clip's stream once
+/// it has been resolved (only ever for the reel on screen and the next one).
 class _Reel {
-  _Reel(this.item, this.streams);
+  _Reel(this.title);
 
-  final StremioMeta item;
-  final YoutubeResolvedStreams streams;
+  final ReelTitle title;
+  YoutubeResolvedStreams? streams;
+  bool resolving = false;
+  bool failed = false;
+
+  StremioMeta get item => title.item;
 }
 
-/// Reels: a vertical feed of trailer clips, one title per screen.
+/// Reels: a vertical feed of official scene clips, one title per screen.
 ///
 /// Swipe up for the next title, down for the previous; pulling down on the
 /// first one swaps it for a fresh title. Each reel plays its clip full-bleed
-/// with the title's logo, genres and an expandable description at the
-/// bottom-left, and on the right a mute toggle and an Add to My Watchlist
-/// button. Tapping the title opens its full page (and Back returns here).
+/// with the title's logo, the clip's name, genres and an expandable
+/// description at the bottom-left, and on the right a mute toggle and an Add
+/// to My Watchlist button. Tapping the title opens its full page (and Back
+/// returns here).
 ///
-/// Only the reel on screen holds a decoder; the next couple of titles are
-/// resolved ahead, and a title whose clip can't be found never reaches the
-/// screen.
+/// Built to scroll fast on few requests: titles arrive with everything a
+/// reel shows already known (see [ReelsFeed] — one TMDB request per title),
+/// so a reel paints its backdrop the moment it's on screen. The clip's stream
+/// is resolved only for the reel that settles on screen and the one after
+/// it; reels flung past are never resolved at all. Only the reel on screen
+/// holds a decoder.
 class ReelsScreen extends StatefulWidget {
   final bool isTelevision;
 
-  /// Test seams. Production uses the Cinemeta feed, the shared trailer
-  /// resolver and the catalog's full-details fetch.
+  /// Test seams. Production uses the TMDB clip feed and the app's YouTube
+  /// stream resolver.
   @visibleForTesting
   final ReelsFeed? feed;
   @visibleForTesting
-  final Future<YoutubeResolvedStreams?> Function(StremioMeta item)? resolver;
-  @visibleForTesting
-  final Future<StremioMeta?> Function(StremioMeta item)? details;
+  final Future<YoutubeResolvedStreams?> Function(String clipKey)? resolver;
 
   /// Test seam: what plays behind a reel. Production uses
   /// [HeroTrailerBackdrop].
@@ -60,7 +65,6 @@ class ReelsScreen extends StatefulWidget {
     this.isTelevision = false,
     this.feed,
     this.resolver,
-    this.details,
     this.playerBuilder,
   });
 
@@ -68,7 +72,8 @@ class ReelsScreen extends StatefulWidget {
   State<ReelsScreen> createState() => _ReelsScreenState();
 }
 
-/// What one reel's player is asked to do.
+/// What one reel's player is asked to do. [streams] is null until the clip
+/// has been resolved.
 class ReelPlayback {
   const ReelPlayback({
     required this.item,
@@ -78,7 +83,7 @@ class ReelPlayback {
   });
 
   final StremioMeta item;
-  final YoutubeResolvedStreams streams;
+  final YoutubeResolvedStreams? streams;
   final bool active;
   final double volume;
 }
@@ -88,11 +93,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// choice survives leaving the tab.
   static bool _muted = false;
 
-  /// How many resolved reels to keep queued past the one on screen.
-  static const int _ahead = 2;
+  /// Confirmed titles kept queued past the one on screen, so a fling never
+  /// runs into the end of the feed. Each costs one request.
+  static const int _ahead = 3;
 
   /// How far the first reel must be pulled down to refresh it.
   static const double _refreshPull = 90;
+
+  /// How long a page must stay put before its clip is resolved: a fling
+  /// passes through pages faster than this and resolves none of them.
+  static const Duration _settle = Duration(milliseconds: 150);
 
   late final ReelsFeed _feed = widget.feed ?? ReelsFeed();
   final PageController _pages = PageController();
@@ -106,17 +116,23 @@ class _ReelsScreenState extends State<ReelsScreen> {
   bool _exhausted = false;
   bool _refreshing = false;
   double _pull = 0;
+  Timer? _settleTimer;
 
   bool get _current => mounted && ProfileRuntime.scope.value == _scope;
 
   @override
   void initState() {
     super.initState();
+    if (!_feed.available) {
+      _exhausted = true;
+      return;
+    }
     unawaited(_fill());
   }
 
   @override
   void dispose() {
+    _settleTimer?.cancel();
     _pages.dispose();
     _focus.dispose();
     super.dispose();
@@ -124,96 +140,93 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   // ── feed ───────────────────────────────────────────────────────────────
 
-  /// The next title with a playable clip, with its full details — or null
-  /// when the catalogs have run dry.
-  Future<_Reel?> _nextReel() async {
-    while (_current) {
-      final candidate = await _feed.next();
-      if (candidate == null) return null;
-      final item = await _withDetails(candidate);
-      if (!_current) return null;
-      YoutubeResolvedStreams? streams;
-      try {
-        streams =
-            await (widget.resolver?.call(item) ??
-                resolveTitleTrailer(
-                  item,
-                  isCurrent: () => _current,
-                  // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
-                  // more lines than a card preview.
-                  maxHeight: 720,
-                ));
-      } catch (_) {
-        streams = null;
-      }
-      // No clip, no reel: on to the next title before anyone sees this one.
-      if (streams != null) return _Reel(item, streams);
-    }
-    return null;
-  }
-
-  /// Catalog rows are previews; the reel wants the logo, genres and the
-  /// whole description, which the full details carry.
-  Future<StremioMeta> _withDetails(StremioMeta item) async {
-    final complete =
-        (item.logo ?? '').isNotEmpty &&
-        (item.description ?? '').isNotEmpty &&
-        (item.genres ?? const []).isNotEmpty;
-    if (complete) return item;
-    try {
-      final imdb = item.effectiveImdbId;
-      final details =
-          await (widget.details?.call(item) ??
-              (imdb == null
-                  ? Future<StremioMeta?>.value()
-                  : StremioService.instance.fetchMetaDetails(
-                      imdbId: imdb,
-                      type: item.type,
-                    )));
-      if (details == null) return item;
-      final addon = item.sourceAddon;
-      return addon == null ? details : details.withSourceAddon(addon);
-    } catch (_) {
-      return item;
-    }
-  }
-
-  /// Keep [_ahead] reels queued past the one on screen.
+  /// Keep [_ahead] titles queued past the one on screen.
   Future<void> _fill() async {
     if (_filling || _exhausted) return;
     _filling = true;
     try {
-      while (_current && _reels.length - _index - 1 < _ahead) {
-        final reel = await _nextReel();
-        if (!_current) return;
-        if (reel == null) {
-          setState(() => _exhausted = true);
-          return;
-        }
-        setState(() => _reels.add(reel));
-        unawaited(_loadWatchlist(reel.item));
+      final need = _index + 1 + _ahead - _reels.length;
+      if (need <= 0) return;
+      final titles = await _feed.take(need);
+      if (!_current) return;
+      final first = _reels.isEmpty;
+      setState(() {
+        _reels.addAll(titles.map(_Reel.new));
+        if (titles.isEmpty) _exhausted = true;
+      });
+      for (final title in titles) {
+        unawaited(_loadWatchlist(title.item));
       }
+      if (first) _prepare();
     } finally {
       _filling = false;
     }
   }
 
+  /// Resolve the clip on screen, then the next one.
+  void _prepare() {
+    unawaited(() async {
+      await _resolve(_index);
+      await _resolve(_index + 1);
+    }());
+  }
+
+  Future<void> _resolve(int index) async {
+    if (index < 0 || index >= _reels.length) return;
+    final reel = _reels[index];
+    if (reel.streams != null || reel.failed || reel.resolving) return;
+    reel.resolving = true;
+    YoutubeResolvedStreams? streams;
+    try {
+      streams =
+          await (widget.resolver?.call(reel.title.clipKey) ??
+              YoutubeService.resolveStreams(
+                reel.title.clipKey,
+                // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
+                // more lines than a card preview.
+                maxHeightOverride: 720,
+                preferVp9: false,
+              ));
+    } catch (_) {
+      streams = null;
+    }
+    if (!_current) return;
+    setState(() {
+      reel.resolving = false;
+      if (streams != null && streams.hasPlayable) {
+        reel.streams = streams;
+      } else {
+        reel.failed = true;
+      }
+    });
+    // The clip on screen can't play: don't leave the viewer on a still.
+    // (After the frame: the very first reel can fail before the feed's
+    // page view has been laid out.)
+    if (reel.failed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _reels.indexOf(reel) == _index) _go(_index + 1);
+      });
+    }
+  }
+
   /// Pull-down on the first reel: swap it for a fresh title.
   Future<void> _refreshFirst() async {
-    if (_refreshing) return;
+    if (_refreshing || !_feed.available) return;
     setState(() => _refreshing = true);
     HapticFeedback.mediumImpact();
     try {
-      final reel = await _nextReel();
-      if (!_current || reel == null) return;
+      final titles = await _feed.take(1);
+      if (!_current || titles.isEmpty) return;
       setState(() {
+        final reel = _Reel(titles.first);
         if (_reels.isEmpty) {
           _reels.add(reel);
         } else {
           _reels[0] = reel;
         }
       });
-      unawaited(_loadWatchlist(reel.item));
+      unawaited(_loadWatchlist(titles.first.item));
+      if (_index == 0) _prepare();
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -223,6 +236,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _index = index);
     HapticFeedback.selectionClick();
     unawaited(_fill());
+    _settleTimer?.cancel();
+    _settleTimer = Timer(_settle, () {
+      if (mounted && _index == index) _prepare();
+    });
   }
 
   /// DPAD / keyboard: up and down move through the feed, OK opens the title.
@@ -230,7 +247,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (event is KeyUpEvent) return KeyEventResult.ignored;
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.arrowDown) {
-      if (_index < _reels.length - 1) _go(_index + 1);
+      _go(_index + 1);
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowUp) {
@@ -248,11 +265,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
     return KeyEventResult.ignored;
   }
 
-  void _go(int index) => _pages.animateToPage(
-    index,
-    duration: const Duration(milliseconds: 320),
-    curve: Curves.easeOutCubic,
-  );
+  void _go(int index) {
+    if (index < 0 || index >= _reels.length || !_pages.hasClients) return;
+    _pages.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   bool _onScroll(ScrollNotification n) {
     if (n.depth != 0 || _index != 0) return false;
@@ -350,7 +370,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (_reels.isEmpty) {
       body = Center(
         child: _exhausted
-            ? const _EmptyReels()
+            ? _EmptyReels(needsTmdb: !_feed.available)
             : const CircularProgressIndicator(color: Colors.white),
       );
     } else {
@@ -455,6 +475,7 @@ class _ReelPage extends StatelessWidget {
     );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
     final description = item.description?.trim();
+    final clipName = reel.title.clipName;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -491,6 +512,35 @@ class _ReelPage extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 child: _ReelTitle(item: item),
               ),
+              // Which moment this is.
+              if (clipName.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.movie_creation_outlined,
+                      size: 14,
+                      color: Color(0xCCFFFFFF),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        clipName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xCCFFFFFF),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 6),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (genres.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -568,7 +618,8 @@ class _ReelPage extends StatelessWidget {
 }
 
 /// The clip, looping, full-bleed. Only the reel on screen plays; the others
-/// show their still, so one decoder serves the whole feed.
+/// show their still (as does this one until its clip is resolved), so one
+/// decoder serves the whole feed.
 class _ReelPlayer extends StatelessWidget {
   final ReelPlayback playback;
 
@@ -578,8 +629,9 @@ class _ReelPlayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final item = playback.item;
     final still = item.background ?? item.poster;
-    if (!playback.active) {
-      return still == null
+    final streams = playback.streams;
+    if (!playback.active || streams == null) {
+      final image = still == null
           ? const SizedBox.shrink()
           : CachedNetworkImage(
               imageUrl: still,
@@ -588,8 +640,25 @@ class _ReelPlayer extends StatelessWidget {
               fadeInDuration: Duration.zero,
               errorWidget: (_, _, _) => const SizedBox.shrink(),
             );
+      if (!playback.active) return image;
+      // On screen, clip still on its way: the still, and a quiet spinner.
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          image,
+          const Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: Color(0xCCFFFFFF),
+              ),
+            ),
+          ),
+        ],
+      );
     }
-    final streams = playback.streams;
     return IgnorePointer(
       child: HeroTrailerBackdrop(
         imageUrl: still,
@@ -603,8 +672,10 @@ class _ReelPlayer extends StatelessWidget {
         sharpStill: true,
         startDelay: Duration.zero,
         firstFrameTimeout: const Duration(seconds: 15),
-        // A reel loops until you swipe on, like any short-video feed.
+        // A reel loops until you swipe on, like any short-video feed — and
+        // a scene clip starts on the scene, so nothing is skipped.
         repeat: true,
+        skipIntro: false,
       ),
     );
   }
@@ -731,7 +802,10 @@ class _GlassCircle extends StatelessWidget {
 }
 
 class _EmptyReels extends StatelessWidget {
-  const _EmptyReels();
+  /// This build has no TMDB access, where every clip comes from.
+  final bool needsTmdb;
+
+  const _EmptyReels({required this.needsTmdb});
 
   @override
   Widget build(BuildContext context) {
@@ -746,9 +820,9 @@ class _EmptyReels extends StatelessWidget {
             color: Colors.white.withValues(alpha: 0.4),
           ),
           const SizedBox(height: 14),
-          const Text(
-            'No clips right now',
-            style: TextStyle(
+          Text(
+            needsTmdb ? 'Clips need TMDB' : 'No clips right now',
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -756,8 +830,11 @@ class _EmptyReels extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Trailers couldn\'t be loaded. Check your connection and try '
-            'again later.',
+            needsTmdb
+                ? 'This build has no TMDB access, where Reels finds its '
+                      'clips.'
+                : 'Clips couldn\'t be loaded. Check your connection and try '
+                      'again later.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.6),

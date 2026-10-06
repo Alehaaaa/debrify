@@ -144,6 +144,11 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// Only decorative video artwork repeats. Finite trailers play once.
   final bool repeat;
 
+  /// Jump past the first seconds (a trailer's studio/rating card) when the
+  /// ambient loop starts and restarts. Off for footage that begins on the
+  /// scene itself — a Reel's clip.
+  final bool skipIntro;
+
   const HeroTrailerBackdrop({
     super.key,
     required this.imageUrl,
@@ -168,6 +173,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.httpHeaders,
     this.engineFactory,
     this.repeat = false,
+    this.skipIntro = true,
   });
 
   /// See [ambientVolume]. 70% — audible but under the UI, matching the Home
@@ -551,7 +557,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       final dur = _duration;
       final longEnough =
           dur == Duration.zero || dur > const Duration(seconds: 8);
-      if (widget.focusPreviewOwner == null &&
+      if (widget.skipIntro &&
+          widget.focusPreviewOwner == null &&
           !widget.live &&
           !widget.foreground &&
           longEnough) {
@@ -573,7 +580,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     _posSub = engine.positionStream.listen((p) {
       // Loop restart (position wrapped back to the start) → skip the intro
       // again. Ambient only: never fight a manual scrub or foreground seek.
-      if (widget.repeat && widget.focusPreviewOwner == null &&
+      if (widget.repeat && widget.skipIntro &&
+          widget.focusPreviewOwner == null &&
           !widget.live &&
           !widget.foreground &&
           !_scrubbing &&
