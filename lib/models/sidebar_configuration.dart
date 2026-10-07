@@ -24,7 +24,7 @@ class SidebarDestination {
 }
 
 /// Every destination that can appear in the Android TV or wide-window
-/// sidebar, in the exact order used before sidebar customization existed.
+/// sidebar, in the default order shown for new sidebar configurations.
 /// Availability is still decided by MainPage's integration/profile policy;
 /// this catalog only controls the relative order of destinations that survive
 /// that filtering.
@@ -44,18 +44,18 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
     icon: Icons.home_rounded,
   ),
   SidebarDestination(
-    id: 'discover',
-    tabIndex: MainTab.discover,
-    defaultLabel: 'Discover',
-    section: 'Main',
-    icon: Icons.explore_rounded,
-  ),
-  SidebarDestination(
     id: 'reels',
     tabIndex: MainTab.reels,
     defaultLabel: 'Reels',
     section: 'Main',
     icon: Icons.slow_motion_video_rounded,
+  ),
+  SidebarDestination(
+    id: 'discover',
+    tabIndex: MainTab.discover,
+    defaultLabel: 'Discover',
+    section: 'Main',
+    icon: Icons.explore_rounded,
   ),
   SidebarDestination(
     id: 'calendar',

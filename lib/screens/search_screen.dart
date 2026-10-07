@@ -16,6 +16,7 @@ import '../services/metadata_preferences_service.dart';
 import '../services/metadata_provider_service.dart';
 import '../widgets/collections/collection_focus_art.dart';
 import '../widgets/collections/collection_focus_glow.dart';
+import '../widgets/watchlist_added_bubble.dart';
 import '../widgets/see_all/discover_browsing_input.dart';
 import '../services/home_catalog_refresh.dart';
 import '../services/startup_connection.dart';
@@ -6186,7 +6187,11 @@ class _SearchScreenState extends State<SearchScreen>
           );
           if (!mounted) return;
           HapticFeedback.mediumImpact();
-          _snack(add ? 'Added to My Watchlist' : 'Removed from My Watchlist');
+          if (add) {
+            showWatchlistAddedBubble(context);
+          } else {
+            _snack('Removed from My Watchlist');
+          }
           await _loadMyWatchlist();
         } catch (_) {
           _snack('Couldn\'t update My Watchlist');

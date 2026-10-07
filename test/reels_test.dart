@@ -336,13 +336,8 @@ void main() {
       expect(find.textContaining('MORE', findRichText: true), findsOneWidget);
       await tester.tap(find.textContaining('MORE', findRichText: true));
       await tester.pumpAndSettle();
-      expect(find.byTooltip('Close description'), findsOneWidget);
-      await tester.tap(find.byTooltip('Close description'));
-      await tester.pumpAndSettle();
-      // The collapsed description must pass vertical swipes to the feed.
-      await tester.fling(find.text('MORE'), const Offset(0, -400), 2000);
-      await tester.pumpAndSettle();
-      expect(activeId(tester), isNot(id));
+      expect(find.textContaining('LESS', findRichText: true), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
     });
 
     testWidgets('action rail only clears navigation in floating mode', (
@@ -381,6 +376,31 @@ void main() {
       expect(resolved.toSet().length, resolved.length);
     });
 
+    testWidgets(
+      'the next clip prepares its first frame as soon as it enters the swipe',
+      (tester) async {
+        var sawPreparedFrame = false;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            onPlayer: (playback) {
+              sawPreparedFrame |= playback.prewarm && playback.streams != null;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final gesture = await tester.startGesture(const Offset(200, 450));
+        // Clear Flutter's touch slop, then cross the 2% preparation threshold.
+        await gesture.moveBy(const Offset(0, -60));
+        await tester.pump();
+
+        expect(sawPreparedFrame, isTrue);
+        await gesture.up();
+        await tester.pumpAndSettle();
+      },
+    );
+
     testWidgets('a pending look-ahead request does not block a later swipe', (
       tester,
     ) async {
@@ -418,6 +438,9 @@ void main() {
       final id = activeId(tester)!;
 
       await tester.tapAt(const Offset(200, 150));
+      // A short recognition window keeps a quick double-tap from flashing
+      // the pause overlay before it adds the title to the watchlist.
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
       expect(
         find.byKey(ValueKey('player:$id:true:100.0:true:true')),
@@ -426,6 +449,7 @@ void main() {
       expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
 
       await tester.tapAt(const Offset(200, 150));
+      await tester.pump(const Duration(milliseconds: 200));
       await tester.pumpAndSettle();
       expect(playing(id), findsOneWidget);
 
@@ -598,9 +622,10 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Add to My Watchlist'));
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 100));
       expect(find.byTooltip('Remove from My Watchlist'), findsOneWidget);
-      expect(find.text('Added to My Watchlist'), findsOneWidget);
+      expect(find.bySemanticsLabel('Added to My Watchlist'), findsOneWidget);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('pulling the first reel down swaps it for a new title', (

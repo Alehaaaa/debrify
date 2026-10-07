@@ -590,7 +590,8 @@ class _M {
   double get captionBlock => compact ? 40.0 : 0;
 }
 
-class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentationMixin<SpotlightBoard> {
+class SpotlightBoardState extends State<SpotlightBoard>
+    with MetadataPresentationMixin<SpotlightBoard>, TickerProviderStateMixin<SpotlightBoard> {
   final Set<_CardState> _visibleCards = {};
   final Set<BuildContext> _scrollingSources = {};
   Size? _selectionViewport;
@@ -961,6 +962,41 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   // The incoming compact hero enters from the direction the reel travelled.
   // Keeping this as state lets swipes, dots, and keyboard paging agree.
   int _heroSlideDirection = 1;
+
+  // ── continuous swipe (touch) ───────────────────────────────────────────
+  //
+  // The hero follows the finger: the outgoing title's art and identity drag
+  // out while the incoming one's drag in beside it, and release snaps to the
+  // nearer title. Selection (`_heroId`) changes only once the snap settles.
+  //
+  // Only the art and identity exist twice mid-swipe. The hero's focus node,
+  // the dots and the trailer host are singletons and stay with the current
+  // title; the incoming title is a non-interactive preview until it lands.
+
+  /// Horizontal offset of the current title, in pixels. Negative: the next
+  /// title is coming in from the right. Exactly 0 at rest.
+  late final AnimationController _heroSwipe =
+      AnimationController.unbounded(vsync: this);
+
+  /// The hero's width, captured at layout. One title is one width of travel.
+  double _heroSwipeWidth = 0;
+
+  /// A drag or its snap is in progress.
+  bool _heroSwiping = false;
+
+  /// Bumped by every new drag, snap and dispose, so a snap interrupted by a
+  /// re-grab (or by teardown) never lands.
+  int _heroSwipeGen = 0;
+
+  /// This swipe paused a rolling trailer, and owes it a resume if cancelled.
+  bool _heroSwipePausedTrailer = false;
+
+  /// The title a swipe just landed on. It is already where it belongs, so
+  /// the compact hero's entrance slide must not play on top of it.
+  String? _heroLandedBySwipe;
+
+  @visibleForTesting
+  double get heroSwipeOffset => _heroSwipe.value;
   int _row = -1; // -1 = the hero owns the cursor
   final Map<int, int> _col = {};
 
@@ -1077,7 +1113,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   }
 
   /// Dot tap / swipe target: show slide [i] and restart the clock.
-  void _jumpTo(int i) {
+  void _jumpTo(int i, {bool landedBySwipe = false}) {
     if (i < 0 || i >= widget.hero.length) return;
     if (widget.hero[i].id == _heroId) return;
     final current = _heroIndex;
@@ -1089,10 +1125,237 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     setState(() {
       _heroSlideDirection = direction;
       _heroId = widget.hero[i].id;
+      _heroLandedBySwipe = landedBySwipe ? widget.hero[i].id : null;
     });
     refreshMetadataPresentation();
     _probe();
     _restartCadence();
+    _warmHeroNeighbours();
+  }
+
+  // ── continuous swipe ───────────────────────────────────────────────────
+
+  /// The title that would come in for a drag of [dx]: next when dragging
+  /// left, previous when dragging right. The reel wraps.
+  StremioMeta? _heroNeighbour(double dx) {
+    final n = widget.hero.length;
+    if (n < 2 || dx == 0) return null;
+    return widget.hero[(_heroIndex + (dx < 0 ? 1 : -1) + n) % n];
+  }
+
+  /// Decode the previous and next titles' art at the hero's own cache key,
+  /// so the first frame a swipe reveals is the picture, never placeholder
+  /// ground.
+  void _warmHeroNeighbours() {
+    if (widget.dpad || !mounted) return;
+    final n = widget.hero.length;
+    if (n < 2) return;
+    final i = _heroIndex;
+    for (final step in n == 2 ? const [1] : const [1, -1]) {
+      final url = _heroArt(widget.hero[(i + step + n) % n]);
+      if (url != null && url.isNotEmpty) unawaited(_warmHeroImage(url));
+    }
+  }
+
+  void _onHeroSwipeStart(DragStartDetails details) {
+    if (widget.hero.length < 2 || _heroSwipeWidth <= 0) return;
+    _heroSwipeGen++;
+    _heroSwipe.stop(); // re-grabbing a snap continues from where it is
+    if (_heroSwiping) return;
+    _heroSwiping = true;
+    // A trailer about to start would start under a moving hero.
+    _cadence?.cancel();
+    _cadence = null;
+    // Only the current title ever has a decoder. A rolling trailer pauses
+    // and slides out with its art; it resumes if the swipe is cancelled.
+    final suspend = widget.onTrailerSuspend;
+    if (_rolling && suspend != null && !_trailerSuspended) {
+      _heroSwipePausedTrailer = true;
+      suspend(true);
+    }
+    _warmHeroNeighbours();
+  }
+
+  void _onHeroSwipeUpdate(DragUpdateDetails details) {
+    if (!_heroSwiping) return;
+    final w = _heroSwipeWidth;
+    _heroSwipe.value =
+        (_heroSwipe.value + (details.primaryDelta ?? details.delta.dx))
+            .clamp(-w, w);
+  }
+
+  void _onHeroSwipeEnd(DragEndDetails details) {
+    if (!_heroSwiping) return;
+    final v = details.primaryVelocity ?? 0;
+    final x = _heroSwipe.value;
+    var direction = 0;
+    if (v.abs() >= 120) {
+      // A flick pages however short it was — the threshold the reel had.
+      direction = v < 0 ? 1 : -1;
+    } else if (x.abs() > _heroSwipeWidth * .35) {
+      direction = x < 0 ? 1 : -1;
+    }
+    _settleHeroSwipe(direction);
+  }
+
+  /// A tap opens the showcased title — but not one caught mid-snap, which
+  /// is a grab, not a choice.
+  void _onHeroTap() {
+    if (_heroSwiping) return;
+    if (widget.heroAddon != null) _openHero();
+  }
+
+  void _onHeroSwipeCancel() {
+    if (_heroSwiping) _settleHeroSwipe(0);
+  }
+
+  /// Snap to the nearer title: [direction] 1 = next, -1 = previous,
+  /// 0 = back to the current one.
+  void _settleHeroSwipe(int direction) {
+    final w = _heroSwipeWidth;
+    final target = -direction * w;
+    final gen = ++_heroSwipeGen;
+    void land() {
+      if (!mounted || gen != _heroSwipeGen) return;
+      _finishHeroSwipe(direction);
+    }
+
+    final remaining = (target - _heroSwipe.value).abs();
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion || remaining < .5 || w <= 0) {
+      _heroSwipe.value = target;
+      land();
+      return;
+    }
+    _heroSwipe
+        .animateTo(
+          target,
+          duration: Duration(milliseconds: (140 + 200 * remaining / w).round()),
+          curve: Curves.easeOutCubic,
+        )
+        .whenCompleteOrCancel(land);
+  }
+
+  void _finishHeroSwipe(int direction) {
+    final pausedTrailer = _heroSwipePausedTrailer;
+    _heroSwipePausedTrailer = false;
+    _heroSwiping = false;
+    if (direction == 0) {
+      _heroSwipe.value = 0;
+      if (pausedTrailer) {
+        widget.onTrailerSuspend?.call(false);
+      } else if (!_scrolledAway) {
+        _restartCadence();
+      }
+      return;
+    }
+    final n = widget.hero.length;
+    if (n < 2) {
+      _heroSwipe.value = 0;
+      return;
+    }
+    // The incoming title already sits exactly where it lands: swap the
+    // selection and drop the offset in the same frame. `_jumpTo` stops the
+    // paused trailer and re-arms the cadence for the new title.
+    final next = (_heroIndex + direction + n) % n;
+    _heroSwipe.value = 0;
+    _jumpTo(next, landedBySwipe: true);
+  }
+
+  /// Lays the current title and, mid-swipe, the incoming one side by side.
+  ///
+  /// The child list keeps a stable, keyed shape so [current] — which holds
+  /// the drag recognizer and the trailer host — is never remounted by a
+  /// swipe starting or ending.
+  Widget _heroSwipeStage({
+    required Widget current,
+    required Widget Function(StremioMeta item) incoming,
+  }) {
+    if (widget.dpad) return current;
+    return AnimatedBuilder(
+      animation: _heroSwipe,
+      child: current,
+      builder: (context, current) {
+        final dx = _heroSwipe.value;
+        final w = _heroSwipeWidth;
+        final other = w > 0 ? _heroNeighbour(dx) : null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (other != null)
+              Transform.translate(
+                key: const ValueKey('spotlight-hero-incoming'),
+                offset: Offset(dx < 0 ? dx + w : dx - w, 0),
+                child: IgnorePointer(
+                  child: ExcludeFocus(
+                    child: ExcludeSemantics(
+                      child: KeyedSubtree(
+                        key: ValueKey('spotlight-hero-incoming-${other.id}'),
+                        child: incoming(other),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            Transform.translate(
+              key: const ValueKey('spotlight-hero-current'),
+              offset: Offset(dx, 0),
+              child: current,
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// The identity side [item] will get once it is showing — the same rule
+  /// as [_flip], read without memoising it.
+  bool _flipForItem(StremioMeta item) {
+    if (metadataArtworkPending(MetadataCategory.backgrounds)) return false;
+    final url = _heroArt(item);
+    return url != null &&
+        (_leftThird[url] ?? 0) > SpotlightBoard.leftThirdBusy;
+  }
+
+  /// The hero picture for [item]. Shared by the current title and the
+  /// incoming swipe preview, so both resolve the SAME image cache entry and
+  /// the landing frame cannot flash.
+  Widget _heroArtImage(
+    StremioMeta item,
+    Color ground, {
+    required int posterCacheWidth,
+  }) {
+    final url = _heroArt(item);
+    if (url == null || url.isEmpty) return const SizedBox.shrink();
+    final posterUrl = _heroPoster(item);
+    return CachedNetworkImage(
+      imageUrl: url,
+      key: ValueKey(url),
+      fit: BoxFit.cover,
+      cacheManager: DebrifyImageCache.manager,
+      // Decode at the PANEL's resolution off-TV — a guessed constant was
+      // under a 1080-class phone's (or a retina desktop's) physical width,
+      // so the one full-bleed image on the screen was the soft one. TV keeps
+      // 1400: its panels sit behind the box's own upscaler and the decode
+      // budget there is the tighter constraint (see TvHeroArtworkQuality).
+      memCacheWidth: _heroDecodeWidth,
+      fadeInDuration: _heroImageFadeIn,
+      fadeOutDuration: _heroImageFadeOut,
+      placeholder: (_, __) => ColoredBox(color: ground),
+      // The derived metahub URL is a GUESS — when it 404s (no still for that
+      // title), fall back to the poster: a soft hero beats a blank one.
+      errorWidget: (_, __, ___) =>
+          (posterUrl != null && posterUrl.isNotEmpty && posterUrl != url)
+              ? CachedNetworkImage(
+                  imageUrl: posterUrl,
+                  fit: BoxFit.cover,
+                  cacheManager: DebrifyImageCache.manager,
+                  memCacheWidth: posterCacheWidth,
+                  placeholder: (_, __) => ColoredBox(color: ground),
+                  errorWidget: (_, __, ___) => ColoredBox(color: ground),
+                )
+              : ColoredBox(color: ground),
+    );
   }
 
   void _onArtDone() {
@@ -1192,6 +1455,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
       _probe();
       _restartCadence();
       _preloadHeroes();
+      _warmHeroNeighbours();
     });
   }
 
@@ -1311,6 +1575,8 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
 
   @override
   void dispose() {
+    _heroSwipeGen++; // an in-flight snap's cancel callback must not land
+    _heroSwipe.dispose();
     _cancelWarmups();
     _veilMetricsRevision.dispose();
     widget.heroNode.removeListener(_onHeroFocus);
@@ -1440,11 +1706,15 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     if (widget.hero[next].id == _heroId) return;
     _stopRolling();
     _dwelledHeroId = null;
-    setState(() => _heroId = widget.hero[next].id);
+    setState(() {
+      _heroId = widget.hero[next].id;
+      _heroLandedBySwipe = null;
+    });
     refreshMetadataPresentation();
     ParallaxTravel.note(Offset(delta.toDouble(), 0));
     _probe();
     _restartCadence();
+    _warmHeroNeighbours();
   }
 
   @override
@@ -2101,16 +2371,43 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
       return Stack(
         fit: StackFit.expand,
         children: [
-          ClipRect(
-            child: TweenAnimationBuilder<double>(
-              key: ValueKey('spotlight-slide-${item.id}'),
-              tween: Tween(begin: _heroSlideDirection * .10, end: 0),
-              duration: const Duration(milliseconds: 320),
-              curve: Curves.easeOutCubic,
-              child: _heroCompact(m, includeDots: false),
-              builder: (context, x, child) => FractionalTranslation(
-                translation: Offset(x, 0),
-                child: child,
+          // The swipe surface sits OUTSIDE the sliding stage: mid-snap the
+          // outgoing title has mostly left, and a finger landing on the
+          // incoming one must still catch the hero.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragStart: _onHeroSwipeStart,
+            onHorizontalDragUpdate: _onHeroSwipeUpdate,
+            onHorizontalDragEnd: _onHeroSwipeEnd,
+            onHorizontalDragCancel: _onHeroSwipeCancel,
+            onTap: _onHeroTap,
+            child: ClipRect(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  _heroSwipeWidth = constraints.maxWidth;
+                  return _heroSwipeStage(
+                    current: TweenAnimationBuilder<double>(
+                      key: ValueKey('spotlight-slide-${item.id}'),
+                      // Dots and keys slide the new title in a little; a swipe
+                      // already carried it all the way.
+                      tween: Tween(
+                        begin: _heroLandedBySwipe == item.id
+                            ? 0.0
+                            : _heroSlideDirection * .10,
+                        end: 0,
+                      ),
+                      duration: const Duration(milliseconds: 320),
+                      curve: Curves.easeOutCubic,
+                      child: _heroCompact(m, includeDots: false),
+                      builder: (context, x, child) => FractionalTranslation(
+                        translation: Offset(x, 0),
+                        child: child,
+                      ),
+                    ),
+                    incoming: (other) =>
+                        _heroCompact(m, includeDots: false, preview: other),
+                  );
+                },
               ),
             ),
           ),
@@ -2134,14 +2431,19 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   /// exactly (the seam rule), swipe paging, tappable dots. No description
   /// line and no side-flip heuristic: there is no "side" when the stack is
   /// centered.
-  Widget _heroCompact(_M m, {bool includeDots = true}) {
-    final item = _heroItem;
+  ///
+  /// [preview] draws another title in the same layout, for the incoming side
+  /// of a swipe: no trailer, no gestures.
+  Widget _heroCompact(
+    _M m, {
+    bool includeDots = true,
+    StremioMeta? preview,
+  }) {
+    final item = preview ?? _heroItem;
     if (item == null) return const SizedBox.shrink();
-    final url = _heroArt(item);
-    final posterUrl = _heroPoster(item);
     final app = AppThemeScope.of(context);
     final ground = SpotlightBoard.groundOf(app);
-    final rolling = _rolling;
+    final rolling = preview == null && _rolling;
     // The compact hero is in the scroll flow but the animated Home scenery is
     // pinned behind it. Its former opaque ground stop created a visible seam
     // at the first shelf. Fade the hero's own bed out over its lower third so
@@ -2153,19 +2455,7 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     // otherwise the image-to-background boundary reads as a hard dark band.
     final iosBlend = PlatformUtil.isIosMobile;
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (details) {
-        final v = details.primaryVelocity ?? 0;
-        if (v.abs() < 120) return;
-        _jumpTo((_heroIndex + (v < 0 ? 1 : -1) + widget.hero.length) %
-            widget.hero.length);
-      },
-      onTap: () {
-        final addon = widget.heroAddon;
-        if (addon != null) _openHero();
-      },
-      child: Stack(
+    final body = Stack(
         fit: StackFit.expand,
         children: [
           AnimatedBuilder(
@@ -2206,44 +2496,14 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (url != null && url.isNotEmpty)
-                  CachedNetworkImage(
-                      imageUrl: url,
-                      key: ValueKey(url),
-                      fit: BoxFit.cover,
-                      cacheManager: DebrifyImageCache.manager,
-              // Decode at the PANEL's resolution, not a guessed constant —
-              // 900 was under a 1080-class phone's physical width (390 × 3),
-              // so the one full-bleed image on the screen was the soft one.
-              // Clamped: metahub art tops out around 1920.
-              memCacheWidth: _heroDecodeWidth,
-              fadeInDuration: _heroImageFadeIn,
-              fadeOutDuration: _heroImageFadeOut,
-              placeholder: (_, __) => ColoredBox(color: ground),
-              // Same guess-404 fallback as the wide backdrop: derived
-              // metahub art can miss, and the poster beats a blank hero.
-              errorWidget: (_, __, ___) =>
-                  (posterUrl != null &&
-                          posterUrl.isNotEmpty &&
-                          posterUrl != url)
-                      ? CachedNetworkImage(
-                          imageUrl: posterUrl,
-                          fit: BoxFit.cover,
-                          cacheManager: DebrifyImageCache.manager,
-                          // The tall compact band crops a 2:3 poster far
-                          // less than a backdrop, but 900 was still under a
-                          // 1080-class phone's physical width.
-                          memCacheWidth: 1280,
-                          placeholder: (_, __) => ColoredBox(color: ground),
-                          errorWidget: (_, __, ___) =>
-                              ColoredBox(color: ground),
-                        )
-                      : ColoredBox(color: ground),
-                  ),
+                // The tall compact band crops a 2:3 poster far less than a
+                // backdrop, but 900 was still under a 1080-class phone's
+                // physical width.
+                _heroArtImage(item, ground, posterCacheWidth: 1280),
           // The trailer, when the host supplies one. This was mounted only in
           // the WIDE hero — so the phone resolved a stream into a layer that
           // was never in the tree, which read as "trailers don't load".
-                if (widget.trailer != null)
+                if (preview == null && widget.trailer != null)
                   Positioned.fill(child: widget.trailer!),
               ],
             ),
@@ -2326,8 +2586,8 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
             child: _identityCompact(item, m, includeDots: includeDots),
           ),
         ],
-      ),
-    );
+      );
+    return body;
   }
 
   Widget _identityCompact(
@@ -2391,19 +2651,19 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     // This surface must live HERE, in the list, not on the backdrop: the
     // Scrollable in front of the backdrop claims every pointer in its
     // viewport, so a tap layer down there would never hear anything.
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (details) {
-        final v = details.primaryVelocity ?? 0;
-        if (v.abs() < 120 || widget.hero.length < 2) return;
-        _jumpTo((_heroIndex + (v < 0 ? 1 : -1) + widget.hero.length) %
-            widget.hero.length);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _heroSwipeWidth = constraints.maxWidth;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: _onHeroSwipeStart,
+          onHorizontalDragUpdate: _onHeroSwipeUpdate,
+          onHorizontalDragEnd: _onHeroSwipeEnd,
+          onHorizontalDragCancel: _onHeroSwipeCancel,
+          onTap: _onHeroTap,
+          child: wide,
+        );
       },
-      onTap: () {
-        final addon = widget.heroAddon;
-        if (addon != null) _openHero();
-      },
-      child: wide,
     );
   }
 
@@ -2447,8 +2707,6 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
   Widget _heroBackdropContent(double heroH) {
     final item = _heroItem;
     if (item == null) return const SizedBox.shrink();
-    final url = _heroArt(item);
-    final posterUrl = _heroPoster(item);
     final flip = _flip;
     // Both scrims below were tuned against a STILL, where they only have to
     // keep white text off busy artwork. Left at that strength over a moving
@@ -2474,81 +2732,62 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (url != null && url.isNotEmpty)
-          CachedNetworkImage(
-            imageUrl: url,
-            key: ValueKey(url),
-            fit: BoxFit.cover,
-            cacheManager: DebrifyImageCache.manager,
-            // Decode at the PANEL's resolution off-TV, same as the compact
-            // hero — 1400 flat was under a retina desktop's physical width,
-            // so the one full-bleed image on the screen was the soft one.
-            // TV keeps the 1400: its panels sit behind the box's own
-            // upscaler and the decode budget there is the tighter constraint
-            // (see TvHeroArtworkQuality).
-            memCacheWidth: _heroDecodeWidth,
-            fadeInDuration: _heroImageFadeIn,
-            fadeOutDuration: _heroImageFadeOut,
-            placeholder: (_, __) => ColoredBox(color: ground),
-            // The derived metahub URL is a GUESS — when it 404s (no still
-            // for that title), fall back to the poster rather than a flat
-            // ground: a soft hero beats a blank one.
-            errorWidget: (_, __, ___) =>
-                (posterUrl != null &&
-                        posterUrl.isNotEmpty &&
-                        posterUrl != url)
-                    ? CachedNetworkImage(
-                        imageUrl: posterUrl,
-                        fit: BoxFit.cover,
-                        cacheManager: DebrifyImageCache.manager,
-                        memCacheWidth: 1400,
-                        placeholder: (_, __) => ColoredBox(color: ground),
-                        errorWidget: (_, __, ___) =>
-                            ColoredBox(color: ground),
-                      )
-                    : ColoredBox(color: ground),
+        // The art (and the trailer over it) follows a touch swipe; the
+        // incoming title's art slides in beside it. The scrims below stay
+        // pinned — they are the panel's, not the title's.
+        _heroSwipeStage(
+          current: Stack(
+            fit: StackFit.expand,
+            children: [
+              _heroArtImage(item, ground, posterCacheWidth: 1400),
+              // Mounted whenever the HOST supplies one — never gated on this
+              // board's own `_rolling`.
+              //
+              // Gating it here kept the layer alive after the host tore the
+              // trailer down (`_clearHeroTrailer` on playback launch), so its
+              // media_kit engine was still holding a VideoOutput when the
+              // player created its own. Two VideoOutputs is SIGABRT on tvOS —
+              // the crash was at `enableHardwareAcceleration`, in the second
+              // one's constructor.
+              //
+              // The host already owns this lifecycle for every other board;
+              // the board's job is the cadence, and only the cadence.
+              if (widget.trailer != null)
+                Positioned.fill(child: widget.trailer!),
+            ],
           ),
-        // Mounted whenever the HOST supplies one — never gated on this
-        // board's own `_rolling`.
-        //
-        // Gating it here kept the layer alive after the host tore the trailer
-        // down (`_clearHeroTrailer` on playback launch), so its media_kit
-        // engine was still holding a VideoOutput when the player created its
-        // own. Two VideoOutputs is SIGABRT on tvOS — the crash was at
-        // `enableHardwareAcceleration`, in the second one's constructor.
-        //
-        // The host already owns this lifecycle for every other board; the
-        // board's job is the cadence, and only the cadence.
-        if (widget.trailer != null) Positioned.fill(child: widget.trailer!),
+          incoming: (other) =>
+              _heroArtImage(other, ground, posterCacheWidth: 1400),
+        ),
         // The identity scrim, on whichever side the text is. Pinned WITH the
         // art rather than scrolling with the text it serves: it covers that
         // side's full height, so the identity stays on scrimmed picture for
         // its whole upward travel — and a scrim that translated away with
         // the list would drag its visible edge up the artwork.
-        IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: flip ? const Alignment(1, -0.2) : const Alignment(-1, -0.2),
-                end: flip ? const Alignment(-1, 0.2) : const Alignment(1, 0.2),
-                colors: rolling
-                    ? const [
-                        Color(0x9E000000),
-                        Color(0x66000000),
-                        Color(0x1C000000),
-                        Color(0x00000000),
-                      ]
-                    : const [
-                        Color(0xE0000000),
-                        Color(0xA8000000),
-                        Color(0x2E000000),
-                        Color(0x00000000),
-                      ],
-                stops: const [0, 0.26, 0.52, 0.68],
-              ),
-            ),
+        // Mid-swipe toward a title whose identity sits on the OTHER side,
+        // the two scrims crossfade with the drag instead of snapping over
+        // at the landing.
+        if (widget.dpad)
+          _identityScrim(flip, rolling)
+        else
+          AnimatedBuilder(
+            animation: _heroSwipe,
+            builder: (context, _) {
+              final dx = _heroSwipe.value;
+              final w = _heroSwipeWidth;
+              final other = w > 0 ? _heroNeighbour(dx) : null;
+              final otherFlip = other == null ? flip : _flipForItem(other);
+              if (otherFlip == flip) return _identityScrim(flip, rolling);
+              final p = (dx.abs() / w).clamp(0.0, 1.0);
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  Opacity(opacity: 1 - p, child: _identityScrim(flip, rolling)),
+                  Opacity(opacity: p, child: _identityScrim(otherFlip, false)),
+                ],
+              );
+            },
           ),
-        ),
         // Fades into the SHELF GROUND, not into black — a scrim landing on a
         // colour the page never paints leaves a visible seam where the hero
         // ends.
@@ -2631,6 +2870,34 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     );
   }
 
+  /// The legibility scrim on the identity's side of the wide hero.
+  static Widget _identityScrim(bool flip, bool rolling) {
+    return IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: flip ? const Alignment(1, -0.2) : const Alignment(-1, -0.2),
+                end: flip ? const Alignment(-1, 0.2) : const Alignment(1, 0.2),
+                colors: rolling
+                    ? const [
+                        Color(0x9E000000),
+                        Color(0x66000000),
+                        Color(0x1C000000),
+                        Color(0x00000000),
+                      ]
+                    : const [
+                        Color(0xE0000000),
+                        Color(0xA8000000),
+                        Color(0x2E000000),
+                        Color(0x00000000),
+                      ],
+                stops: const [0, 0.26, 0.52, 0.68],
+              ),
+            ),
+          ),
+        );
+  }
+
   /// One alpha-in-the-colour fill. Fully transparent paints nothing at all.
   static Widget _veil(Color ground, double t) => t <= 0
       ? const SizedBox.shrink()
@@ -2651,13 +2918,79 @@ class SpotlightBoardState extends State<SpotlightBoard> with MetadataPresentatio
     return Stack(
       fit: StackFit.expand,
       children: [
-        Positioned(
-          left: flip ? null : m.gutter,
-          right: flip ? m.gutter : null,
-          bottom: identityBottom,
-          width: m.w * (820 / 1920),
-          child: _identity(item, flip, m),
-        ),
+        if (widget.dpad)
+          Positioned(
+            left: flip ? null : m.gutter,
+            right: flip ? m.gutter : null,
+            bottom: identityBottom,
+            width: m.w * (820 / 1920),
+            child: _identity(item, flip, m),
+          )
+        else
+          // Touch: the title treatment and synopsis travel with the art and
+          // hand over to the incoming title's in step with the drag.
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _heroSwipe,
+              builder: (context, _) {
+                final dx = _heroSwipe.value;
+                final w = _heroSwipeWidth;
+                final other = w > 0 ? _heroNeighbour(dx) : null;
+                final p = w > 0 ? (dx.abs() / w).clamp(0.0, 1.0) : 0.0;
+                Widget place(
+                  StremioMeta it,
+                  bool side,
+                  double offset,
+                  double opacity,
+                  Key key, {
+                  bool interactive = true,
+                }) {
+                  Widget child = Opacity(
+                    opacity: opacity,
+                    child: _identity(it, side, m),
+                  );
+                  if (!interactive) {
+                    child = IgnorePointer(
+                      child: ExcludeFocus(child: ExcludeSemantics(child: child)),
+                    );
+                  }
+                  return Positioned(
+                    key: key,
+                    left: side ? null : m.gutter,
+                    right: side ? m.gutter : null,
+                    bottom: identityBottom,
+                    width: m.w * (820 / 1920),
+                    child: Transform.translate(
+                      offset: Offset(offset, 0),
+                      child: child,
+                    ),
+                  );
+                }
+
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (other != null)
+                      place(
+                        other,
+                        _flipForItem(other),
+                        dx < 0 ? dx + w : dx - w,
+                        p,
+                        ValueKey('spotlight-identity-incoming-${other.id}'),
+                        interactive: false,
+                      ),
+                    place(
+                      item,
+                      flip,
+                      dx,
+                      1 - p,
+                      const ValueKey('spotlight-identity-current'),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         if (widget.hero.length > 1)
           Positioned(
             left: 0,

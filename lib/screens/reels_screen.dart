@@ -19,6 +19,7 @@ import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
 import '../widgets/hero_trailer_backdrop.dart';
 import '../widgets/trailer_engine.dart';
+import '../widgets/watchlist_added_bubble.dart';
 
 enum _ClipState { idle, resolving, ready, failed }
 
@@ -33,6 +34,7 @@ class _Reel {
   int revision = 0;
   Duration position = Duration.zero;
   DateTime? leftAt;
+  bool firstFrameReady = false;
 
   StremioMeta get item => title.item;
 }
@@ -108,6 +110,7 @@ class ReelPlayback {
     this.prewarm = false,
     this.initialPosition,
     this.onPosition,
+    this.onFirstFrameReady,
     this.failed = false,
     this.onPlaybackFailed,
   });
@@ -118,7 +121,7 @@ class ReelPlayback {
   final bool failed;
   final VoidCallback? onPlaybackFailed;
 
-  /// Keep the current and next iOS native players prepared.
+  /// The next clip is opening toward its first frame beneath a swipe.
   final bool prewarm;
   final double volume;
 
@@ -126,6 +129,7 @@ class ReelPlayback {
   final bool paused;
   final Duration? initialPosition;
   final ValueChanged<Duration>? onPosition;
+  final VoidCallback? onFirstFrameReady;
 }
 
 class _ReelsScreenState extends State<ReelsScreen> {
@@ -155,8 +159,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
   late final List<_Reel> _reels;
   final Set<String> _postersPrepared = {};
   final Map<String, bool> _inWatchlist = {};
+  WatchlistAddedBubbleHandle? _watchlistBubble;
 
   int _index = 0;
+  // Keep the active decoder on the page that is leaving until that page is
+  // mostly gone. Tearing a texture/platform-view down at PageView's midpoint
+  // is visible as a hitch, especially on devices with one high-res output.
+  int _playbackIndex = 0;
+  bool _pageWorkPending = false;
+  int? _swipePreviewIndex;
+  bool _freezeOutgoingForHandoff = false;
+  bool _incomingStarted = false;
+  double _dragProgress = 0;
   bool _filling = false;
   bool _exhausted = false;
   bool _refreshing = false;
@@ -184,6 +198,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     _feed = saved?.feed ?? widget.feed ?? ReelsFeed();
     _reels = saved?.reels ?? [];
     _index = saved?.index ?? 0;
+    _playbackIndex = _index;
     _pages = PageController(initialPage: _index, keepPage: false);
     // Returning from the detail page restores the frame without resuming audio
     // or motion behind the user.
@@ -197,6 +212,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   @override
   void dispose() {
+    _watchlistBubble?.dismiss();
     if (widget.feed == null) {
       _session = _ReelsSession(
         scope: _scope,
@@ -380,9 +396,58 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _index = index;
       _paused = false;
     });
+    // PageView reports the new page at the midpoint. Keep the old player
+    // alive while the pages are still moving, then hand off the decoder once
+    // the spring comes to rest. This is the same pause/retain discipline used
+    // by the Home spotlight trailer.
+    _pageWorkPending = true;
+  }
+
+  void _settlePage() {
+    if (!_current) return;
+    final pageChanged = _pageWorkPending;
+    _pageWorkPending = false;
+    setState(() {
+      _playbackIndex = _index;
+      _swipePreviewIndex = null;
+      _freezeOutgoingForHandoff = false;
+      _incomingStarted = false;
+      _dragProgress = 0;
+    });
+    if (!pageChanged) return;
     HapticFeedback.selectionClick();
+    // Stream resolution and image decoding can be expensive on low-end
+    // devices. Start them after, never during, the page animation.
     unawaited(_fill());
     _prepare();
+  }
+
+  bool get _supportsParallelFramePreparation =>
+      PlatformUtil.isIosMobile || PlatformUtil.isAndroidTvCached;
+
+  void _startIncoming(int index) {
+    if (_incomingStarted || index < 0 || index >= _reels.length) return;
+    setState(() {
+      _incomingStarted = true;
+      _playbackIndex = index;
+      _freezeOutgoingForHandoff = false;
+    });
+  }
+
+  void _onFirstFrameReady(_Reel reel) {
+    if (!_current || reel.firstFrameReady) return;
+    final index = _reels.indexOf(reel);
+    if (index < 0) return;
+    setState(() => reel.firstFrameReady = true);
+    // On engines that can truly prepare in parallel, preserve the outgoing
+    // held frame until the incoming video has rendered. Single-output engines
+    // still switch at 90% so releasing their decoder starts the only possible
+    // preparation path.
+    if (_supportsParallelFramePreparation &&
+        _dragProgress >= .90 &&
+        index == _swipePreviewIndex) {
+      _startIncoming(index);
+    }
   }
 
   void _playbackFailed(_Reel reel, int revision) {
@@ -467,7 +532,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
             duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
           )
-          .whenComplete(() => _movingByKey = false),
+          .whenComplete(() {
+            _movingByKey = false;
+            _settlePage();
+          }),
     );
   }
 
@@ -481,6 +549,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     }
     if (n is ScrollEndNotification) {
       _dragPage = null;
+      _settlePage();
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _discardFailedAhead(),
       );
@@ -488,6 +557,44 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _refreshArmed = false;
       if (_pull != 0) setState(() => _pull = 0);
       return false;
+    }
+    // Start preparing on the first visible sliver, rather than waiting for the
+    // PageView to settle. At 75% freeze the old frame; at 90% hand playback to
+    // the already-prepared incoming clip.
+    final dragPage = _dragPage;
+    if (dragPage != null && n.metrics.viewportDimension > 0) {
+      final page = n.metrics.pixels / n.metrics.viewportDimension;
+      final progress = page - dragPage;
+      _dragProgress = progress.abs();
+      if (progress.abs() >= .02) {
+        final candidate = (dragPage + progress.sign.toInt()).clamp(
+          0,
+          _reels.length - 1,
+        );
+        if (candidate != _swipePreviewIndex) {
+          setState(() {
+            _swipePreviewIndex = candidate;
+          });
+        }
+        final distance = _dragProgress;
+        if (distance >= .75 && !_freezeOutgoingForHandoff) {
+          setState(() => _freezeOutgoingForHandoff = true);
+        } else if (distance < .70 && _freezeOutgoingForHandoff) {
+          setState(() => _freezeOutgoingForHandoff = false);
+        }
+        if (distance >= .90 &&
+            (!_supportsParallelFramePreparation ||
+                _reels[candidate].firstFrameReady)) {
+          _startIncoming(candidate);
+        } else if (distance < .85 && _incomingStarted) {
+          // A cancelled drag returns control to the page it began on.
+          setState(() {
+            _incomingStarted = false;
+            _playbackIndex = dragPage;
+            _freezeOutgoingForHandoff = false;
+          });
+        }
+      }
     }
     if (_dragPage != 0) return false;
     // Pulled past the top of the first reel (the bounce shows it as negative
@@ -527,24 +634,29 @@ class _ReelsScreenState extends State<ReelsScreen> {
     } catch (_) {}
   }
 
-  Future<void> _toggleWatchlist(StremioMeta item) async {
+  Future<void> _toggleWatchlist(StremioMeta item, {Offset? origin}) async {
     final key = _watchKey(item);
     final next = !(_inWatchlist[key] ?? false);
     setState(() => _inWatchlist[key] = next);
     HapticFeedback.mediumImpact();
+    // The confirmation must start from the user's press, not from an async
+    // storage completion. A failed write dismisses this optimistic feedback.
+    final bubble = next
+        ? showWatchlistAddedBubble(context, origin: origin)
+        : null;
+    if (next) _watchlistBubble = bubble;
     try {
       await StorageService.setMyWatchlistItem(await _watchlistItem(item), next);
       if (!mounted) return;
+      if (next) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              next ? 'Added to My Watchlist' : 'Removed from My Watchlist',
-            ),
-          ),
+          const SnackBar(content: Text('Removed from My Watchlist')),
         );
     } catch (_) {
+      bubble?.dismiss();
+      if (identical(_watchlistBubble, bubble)) _watchlistBubble = null;
       if (!mounted) return;
       setState(() => _inWatchlist[key] = !next);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -555,9 +667,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
 
   /// A double tap is intentionally one-way: it is a quick "save this" action,
   /// so it must never remove something the user had already saved.
-  void _addToWatchlist(StremioMeta item) {
+  void _addToWatchlist(StremioMeta item, Offset origin) {
     if (_inWatchlist[_watchKey(item)] ?? false) return;
-    unawaited(_toggleWatchlist(item));
+    unawaited(_toggleWatchlist(item, origin: origin));
   }
 
   /// Do not surface a title already completed by either connected tracker.
@@ -625,6 +737,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
             : const CircularProgressIndicator(color: Colors.white),
       );
     } else {
+      // Keep the normal next Reel opening while this one plays. During a drag,
+      // the first visible adjacent page takes priority (including a backward
+      // swipe) so it is the one held on its first frame.
+      final prewarmIndex =
+          _swipePreviewIndex ?? ((_dragPage ?? _index) + 1);
       body = NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: PageView.builder(
@@ -647,24 +764,29 @@ class _ReelsScreenState extends State<ReelsScreen> {
               key: ValueKey('$i:${_watchKey(reel.item)}'),
               reel: reel,
               active: i == _index,
-              // AVPlayer can keep the current clip and the next one prepared
-              // together, so an iOS swipe has a frame ready at the page edge.
-              // Desktop uses one media_kit output and keeps the next URL and
-              // poster warm instead; attempting a second decoder would stall
-              // both during the handoff.
-              prewarm: PlatformUtil.isIosMobile && i == _index + 1,
+              playbackActive: i == _playbackIndex,
+              // Preparation begins while the current Reel is playing and
+              // continues for the page visible beneath a swipe.
+              prewarm: i == prewarmIndex,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
-              paused: i == _index && _paused,
+              paused: (i == _index && _paused) ||
+                  (i == _playbackIndex && _freezeOutgoingForHandoff),
+              // The 75% handoff freeze is not a user pause. Showing the play
+              // affordance for it creates a one-frame false paused state just
+              // before the next clip takes over.
+              showPauseOverlay: i == _index && _paused,
               onTogglePause: _togglePause,
               muted: _muted,
               inWatchlist: _inWatchlist[_watchKey(reel.item)] ?? false,
               onMute: _toggleMute,
-              onWatchlist: () => _toggleWatchlist(reel.item),
-              onAddToWatchlist: () => _addToWatchlist(reel.item),
+              onWatchlist: (origin) =>
+                  _toggleWatchlist(reel.item, origin: origin),
+              onAddToWatchlist: (origin) => _addToWatchlist(reel.item, origin),
               onOpen: () => _open(reel.item),
               onPosition: (position) => reel.position = position,
+              onFirstFrameReady: () => _onFirstFrameReady(reel),
               playerBuilder: widget.playerBuilder,
             );
           },
@@ -732,6 +854,14 @@ class _ReelPagePhysics extends PageScrollPhysics {
 
   final int Function() anchorPage;
 
+  // A firm, near-critical snap makes the end of a Reel swipe feel decisive
+  // without the prolonged soft ease of the default page spring.
+  static const _snapSpring = SpringDescription(
+    mass: 0.55,
+    stiffness: 520,
+    damping: 30,
+  );
+
   @override
   _ReelPagePhysics applyTo(ScrollPhysics? ancestor) =>
       _ReelPagePhysics(anchorPage: anchorPage, parent: buildParent(ancestor));
@@ -771,7 +901,7 @@ class _ReelPagePhysics extends PageScrollPhysics {
             .clamp(position.minScrollExtent, position.maxScrollExtent);
     if (target == position.pixels) return null;
     return ScrollSpringSimulation(
-      spring,
+      _snapSpring,
       position.pixels,
       target,
       velocity.clamp(-2500.0, 2500.0),
@@ -785,30 +915,35 @@ class _ReelPagePhysics extends PageScrollPhysics {
 class _ReelPage extends StatefulWidget {
   final _Reel reel;
   final bool active;
+  final bool playbackActive;
   final bool prewarm;
   final bool floatingNav;
   final VoidCallback onPlaybackFailed;
   final VoidCallback onRetry;
   final bool paused;
+  final bool showPauseOverlay;
   final VoidCallback onTogglePause;
   final bool muted;
   final bool inWatchlist;
   final VoidCallback onMute;
-  final VoidCallback onWatchlist;
-  final VoidCallback onAddToWatchlist;
+  final ValueChanged<Offset?> onWatchlist;
+  final ValueChanged<Offset> onAddToWatchlist;
   final VoidCallback onOpen;
   final ValueChanged<Duration> onPosition;
+  final VoidCallback onFirstFrameReady;
   final Widget Function(ReelPlayback playback)? playerBuilder;
 
   const _ReelPage({
     super.key,
     required this.reel,
     required this.active,
+    required this.playbackActive,
     required this.prewarm,
     required this.floatingNav,
     required this.onPlaybackFailed,
     required this.onRetry,
     required this.paused,
+    required this.showPauseOverlay,
     required this.onTogglePause,
     required this.muted,
     required this.inWatchlist,
@@ -817,6 +952,7 @@ class _ReelPage extends StatefulWidget {
     required this.onAddToWatchlist,
     required this.onOpen,
     required this.onPosition,
+    required this.onFirstFrameReady,
     required this.playerBuilder,
   });
 
@@ -826,9 +962,13 @@ class _ReelPage extends StatefulWidget {
 
 class _ReelPageState extends State<_ReelPage>
     with AutomaticKeepAliveClientMixin {
-  DateTime? _lastTapAt;
-  Offset? _lastTapPosition;
-
+  static const _doubleTapWindow = Duration(milliseconds: 180);
+  Timer? _pauseTapTimer;
+  Offset? _firstTapPosition;
+  Offset? _tapDownPosition;
+  bool _tapDragged = false;
+  Offset? _watchlistOrigin;
+  final GlobalKey _watchlistActionKey = GlobalKey();
   @override
   bool get wantKeepAlive => widget.prewarm;
 
@@ -838,27 +978,63 @@ class _ReelPageState extends State<_ReelPage>
     if (widget.prewarm != oldWidget.prewarm) updateKeepAlive();
   }
 
-  void _recognizeDoubleTap(PointerDownEvent event) {
-    final now = DateTime.now();
-    final previousAt = _lastTapAt;
-    final previousPosition = _lastTapPosition;
-    final isDoubleTap =
-        previousAt != null &&
-        previousPosition != null &&
-        now.difference(previousAt) <= const Duration(milliseconds: 300) &&
-        (event.position - previousPosition).distanceSquared <= 1600;
-    _lastTapAt = isDoubleTap ? null : now;
-    _lastTapPosition = isDoubleTap ? null : event.position;
-    if (isDoubleTap) widget.onAddToWatchlist();
+  @override
+  void dispose() {
+    _pauseTapTimer?.cancel();
+    super.dispose();
   }
 
-  void _cancelTapIfDragged(PointerMoveEvent event) {
-    final position = _lastTapPosition;
-    if (position != null &&
-        (event.position - position).distanceSquared > 1600) {
-      _lastTapAt = null;
-      _lastTapPosition = null;
+  void _onVideoPointerDown(PointerDownEvent event) {
+    _tapDragged = false;
+    _tapDownPosition = event.position;
+  }
+
+  void _onVideoPointerMove(PointerMoveEvent event) {
+    final down = _tapDownPosition;
+    if (down != null && (event.position - down).distanceSquared > 1600) {
+      _tapDragged = true;
     }
+  }
+
+  void _onVideoPointerUp(PointerUpEvent event) {
+    if (_tapDragged) {
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      _tapDownPosition = null;
+      return;
+    }
+    _tapDownPosition = null;
+    final first = _firstTapPosition;
+    if (_pauseTapTimer != null &&
+        first != null &&
+        (event.position - first).distanceSquared <= 1600) {
+      _pauseTapTimer!.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      widget.onAddToWatchlist(event.position);
+      return;
+    }
+    _pauseTapTimer?.cancel();
+    _firstTapPosition = event.position;
+    _pauseTapTimer = Timer(_doubleTapWindow, () {
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      if (mounted) widget.onTogglePause();
+    });
+  }
+
+  Offset _watchlistButtonCenter() {
+    final box = _watchlistActionKey.currentContext?.findRenderObject()
+        as RenderBox?;
+    if (box == null) return Offset.zero;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
+
+  void _toggleWatchlistFromAction() {
+    final origin = _watchlistOrigin ?? _watchlistButtonCenter();
+    _watchlistOrigin = null;
+    widget.onWatchlist(origin);
   }
 
   @override
@@ -870,12 +1046,13 @@ class _ReelPageState extends State<_ReelPage>
     final playback = ReelPlayback(
       item: item,
       streams: reel.state == _ClipState.ready ? reel.streams : null,
-      active: widget.active,
+      active: widget.playbackActive,
       volume: widget.muted ? 0 : 100,
       paused: widget.paused,
       prewarm: widget.prewarm && reel.state != _ClipState.failed,
       initialPosition: reel.position > Duration.zero ? reel.position : null,
       onPosition: widget.onPosition,
+      onFirstFrameReady: widget.onFirstFrameReady,
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
     );
@@ -888,22 +1065,16 @@ class _ReelPageState extends State<_ReelPage>
         // The video itself: a tap pauses or resumes it. The title, text and
         // buttons above keep their own taps.
         Listener(
-          onPointerDown: _recognizeDoubleTap,
-          onPointerMove: _cancelTapIfDragged,
-          child: GestureDetector(
-            // Keep the pause gesture immediate. GestureDetector delays onTap
-            // while it waits to rule out a double tap, which made a normal
-            // reel tap feel unresponsive. The Listener above recognizes the
-            // second tap without joining this gesture arena.
-            onTap: widget.onTogglePause,
-            behavior: HitTestBehavior.opaque,
-            child:
-                widget.playerBuilder?.call(playback) ??
-                ReelVideoSurface(
-                  playback: playback,
-                  onPlaybackFailed: widget.onPlaybackFailed,
-                ),
-          ),
+          onPointerDown: _onVideoPointerDown,
+          onPointerMove: _onVideoPointerMove,
+          onPointerUp: _onVideoPointerUp,
+          behavior: HitTestBehavior.opaque,
+          child:
+              widget.playerBuilder?.call(playback) ??
+              ReelVideoSurface(
+                playback: playback,
+                onPlaybackFailed: widget.onPlaybackFailed,
+              ),
         ),
         if (playback.failed && widget.active)
           Center(
@@ -923,7 +1094,7 @@ class _ReelPageState extends State<_ReelPage>
               ],
             ),
           ),
-        if (widget.paused)
+        if (widget.paused && widget.showPauseOverlay)
           const IgnorePointer(
             child: Center(
               child: _GlassCircle(
@@ -1013,7 +1184,7 @@ class _ReelPageState extends State<_ReelPage>
               ],
               if (description != null && description.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                _ReelSynopsis(title: item.name, text: description),
+                _ReelSynopsis(text: description),
               ],
             ],
           ),
@@ -1026,6 +1197,7 @@ class _ReelPageState extends State<_ReelPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               _ReelAction(
+                key: _watchlistActionKey,
                 icon: widget.muted
                     ? Icons.volume_off_rounded
                     : Icons.volume_up_rounded,
@@ -1037,11 +1209,14 @@ class _ReelPageState extends State<_ReelPage>
                 icon: widget.inWatchlist
                     ? Icons.check_rounded
                     : Icons.add_rounded,
-                tooltip: widget.inWatchlist
-                    ? 'Remove from My Watchlist'
-                    : 'Add to My Watchlist',
-                selected: widget.inWatchlist,
-                onTap: widget.onWatchlist,
+              tooltip: widget.inWatchlist
+                  ? 'Remove from My Watchlist'
+                  : 'Add to My Watchlist',
+              selected: widget.inWatchlist,
+              onTap: _toggleWatchlistFromAction,
+              onTapDown: (origin) {
+                _watchlistOrigin = origin;
+              },
               ),
             ],
           ),
@@ -1101,9 +1276,13 @@ class ReelVideoSurface extends StatelessWidget {
                 !playback.failed,
             highResolutionVideo: true,
             suspended: !playback.active || playback.paused,
-            freezeFrame: playback.paused,
+            // iOS may have the next frame ready before the swipe settles.
+            // Keep that paused frame visible rather than falling back to its
+            // poster, then let it start directly once it becomes active.
+            freezeFrame: playback.paused || playback.prewarm,
             initialPosition: playback.initialPosition,
             onPlaybackPosition: playback.onPosition,
+            onFirstFrameReady: playback.onFirstFrameReady,
             decorative: false,
             fadeDuration: Duration.zero,
             engineFactory: engineFactory,
@@ -1133,72 +1312,70 @@ class ReelVideoSurface extends StatelessWidget {
   }
 }
 
-/// The feed has one vertical gesture owner. Full descriptions scroll in a
-/// separate sheet, never in a competing scrollable over the reel.
-class _ReelSynopsis extends StatelessWidget {
-  const _ReelSynopsis({required this.title, required this.text});
+/// Expands inline so the Reel remains one continuous surface; opening a sheet
+/// here would interrupt the feed's light, swipe-first interaction.
+class _ReelSynopsis extends StatefulWidget {
+  const _ReelSynopsis({required this.text});
 
-  final String title;
   final String text;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    behavior: HitTestBehavior.opaque,
-    onTap: () => showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      useSafeArea: true,
-      builder: (context) => SizedBox(
-        height: MediaQuery.sizeOf(context).height * 0.6,
-        child: Column(
-          children: [
-            ListTile(
-              title: Text(title),
-              trailing: IconButton(
-                tooltip: 'Close description',
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close_rounded),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Text(text),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-    child: Semantics(
-      button: true,
-      label: 'Show full description',
-      child: Column(
+  State<_ReelSynopsis> createState() => _ReelSynopsisState();
+}
+
+class _ReelSynopsisState extends State<_ReelSynopsis> {
+  bool _expanded = false;
+
+  static const _style = TextStyle(
+    color: Color(0xE6FFFFFF),
+    fontSize: 14,
+    height: 1.4,
+    shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+  );
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final hasMore = TextPainter(
+        text: TextSpan(text: widget.text, style: _style),
+        maxLines: 3,
+        textDirection: Directionality.of(context),
+      )
+        ..layout(maxWidth: constraints.maxWidth);
+      final canExpand = hasMore.didExceedMaxLines;
+      final expanded = _expanded && canExpand;
+
+      final content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            text,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xE6FFFFFF),
-              fontSize: 14,
-              height: 1.4,
-              shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
-            ),
+            widget.text,
+            maxLines: expanded ? null : 3,
+            overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: _style,
           ),
-          const Text(
-            'MORE',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+          if (canExpand)
+            Text(
+              expanded ? 'LESS' : 'MORE',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
-          ),
         ],
-      ),
-    ),
+      );
+      if (!canExpand) return content;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Semantics(
+          button: true,
+          label: expanded ? 'Collapse description' : 'Show full description',
+          child: content,
+        ),
+      );
+    },
   );
 }
 
@@ -1256,13 +1433,16 @@ class _ReelAction extends StatelessWidget {
   final IconData icon;
   final String tooltip;
   final VoidCallback onTap;
+  final ValueChanged<Offset>? onTapDown;
   final bool selected;
 
   const _ReelAction({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.onTap,
     this.selected = false,
+    this.onTapDown,
   });
 
   @override
@@ -1273,6 +1453,7 @@ class _ReelAction extends StatelessWidget {
         button: true,
         label: tooltip,
         child: GestureDetector(
+          onTapDown: (details) => onTapDown?.call(details.globalPosition),
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
           child: _GlassCircle(

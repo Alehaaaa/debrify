@@ -55,6 +55,7 @@ import '../widgets/horizontal_mouse_wheel.dart';
 import '../widgets/home/home_theme.dart';
 import '../widgets/parents_guide_section.dart';
 import '../widgets/movie_watched_badge.dart';
+import '../widgets/watchlist_added_bubble.dart';
 import '../services/trakt/trakt_episode_model.dart';
 import '../services/trakt/trakt_service.dart';
 import '../widgets/trakt/trakt_menu_helpers.dart';
@@ -1110,14 +1111,14 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       await StorageService.setMyWatchlistItem(_myWatchlistItem, next);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
+      if (next) {
+        showWatchlistAddedBubble(context);
+        return;
+      }
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          SnackBar(
-            content: Text(
-              next ? 'Added to My Watchlist' : 'Removed from My Watchlist',
-            ),
-          ),
+          SnackBar(content: const Text('Removed from My Watchlist')),
         );
     } catch (_) {
       if (!mounted) return;

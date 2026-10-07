@@ -24,6 +24,7 @@ import '../services/watched_action_coordinator.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
 import '../widgets/calendar_display_preferences.dart';
+import '../widgets/watchlist_added_bubble.dart';
 import 'settings/widgets/settings_widgets.dart'
     show SettingsSection, SettingsSectionLabel;
 import '../theme/app_motion.dart' show kMenuSheetAnimation;
@@ -475,7 +476,12 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
         final add = action == _CalendarEpisodeAction.watchlistAdd;
         try {
           await StorageService.setMyWatchlistItem(show, add);
-          _snack(add ? 'Added to My Watchlist' : 'Removed from My Watchlist');
+          if (!mounted) return;
+          if (add) {
+            showWatchlistAddedBubble(context);
+          } else {
+            _snack('Removed from My Watchlist');
+          }
         } catch (_) {
           _snack('Couldn\'t update My Watchlist');
         }

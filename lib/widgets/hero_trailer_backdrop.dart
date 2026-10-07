@@ -60,8 +60,8 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// while suspended.
   final bool suspended;
 
-  /// iOS reels may prepare one paused native player ahead of the swipe.
-  /// Ignored by engines that require the single video-output lease.
+  /// Reels may prepare one paused native player ahead of the swipe. Engines
+  /// that require the single video-output lease retain a serialized fallback.
   final bool prewarm;
 
   /// Fullscreen reels need a full HD video output instead of the small
@@ -156,6 +156,10 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// Reels use it to resume after a page or detail-screen handoff.
   final ValueChanged<Duration>? onPlaybackPosition;
 
+  /// The first decoded frame is on screen. Reels use this as the portable
+  /// readiness signal for a current + next handoff.
+  final VoidCallback? onFirstFrameReady;
+
   /// Non-null for a muted collection tile: no intro skip, small texture, and
   /// playback only while this token owns ambient video.
   final Object? focusPreviewOwner;
@@ -206,6 +210,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.freezeFrame = false,
     this.initialPosition,
     this.onPlaybackPosition,
+    this.onFirstFrameReady,
     this.focusPreviewOwner,
     this.httpHeaders,
     this.engineFactory,
@@ -532,7 +537,10 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       // backgrounded — trailer audio would play over other apps. The resume
       // handler reschedules.
       if (!mounted || !_canPlay || _covered || _appPaused) return;
-      if (widget.suspended && !(widget.prewarm && _usePlatformView)) return;
+      // A Reels page may ask us to decode the next clip while it is suspended
+      // beneath an in-progress swipe. Open it and pause on the first frame;
+      // this works for serialized engines too once the outgoing lease yields.
+      if (widget.suspended && !widget.prewarm) return;
       _initPlayer();
     });
   }
@@ -550,9 +558,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     final gen = ++_engineGen;
     TrailerEngine? created;
     try {
-      // AVPlayer supports the bounded current + next reel pair. All other
-      // ambient players retain single-decoder serialization.
-      if (widget.prewarm && usePlatformView) {
+      // AVPlayer and the Android-TV native Exo path can keep a bounded current
+      // + next pair alive. Other engines retain single-decoder serialization.
+      if (widget.prewarm && _supportsConcurrentPrewarm) {
         created = await _createEngine();
       } else {
         created = await SerializedTrailerEngine.create(
@@ -640,6 +648,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         engine.seek(_introSkip);
       }
       setState(() => _videoVisible = true);
+      widget.onFirstFrameReady?.call();
       _syncPlayingNotification();
     });
     // Fatal playback error (dead/expired stream), including mid-play after the
@@ -727,6 +736,10 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     }
   }
+
+  bool get _supportsConcurrentPrewarm =>
+      _usePlatformView ||
+      (!kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached);
 
   /// See [HeroTrailerBackdrop.onPlaybackFailed]. Post-frame so a failure
   /// landing inside a parent build can't re-enter setState mid-build.

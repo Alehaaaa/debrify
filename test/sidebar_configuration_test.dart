@@ -16,12 +16,12 @@ void main() {
 
   tearDown(ProfileRuntime.debugReset);
 
-  test('defaults preserve the previously shipped grouped sidebar order', () {
+  test('defaults use the grouped sidebar order', () {
     expect(SidebarConfiguration.defaults().order, <String>[
       'search',
       'home',
-      'discover',
       'reels',
+      'discover',
       'calendar',
       'downloads',
       'iptv',

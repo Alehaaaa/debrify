@@ -11,6 +11,7 @@ import 'dart:ui' show AppExitResponse, PointerDeviceKind;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
@@ -104,6 +105,7 @@ import 'widgets/mobile_floating_nav.dart';
 import 'widgets/mobile_classic_nav.dart';
 import 'widgets/tv_ambient_art_stage.dart';
 import 'widgets/app_tab_switcher.dart';
+import 'widgets/shell_tab_pager.dart';
 import 'widgets/tv_sidebar_nav.dart';
 import 'widgets/desktop_pill_nav.dart';
 import 'widgets/desktop_sidebar_nav.dart';
@@ -1380,10 +1382,31 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   final GlobalKey<NavigatorState> _sectionNavigatorKey =
       GlobalKey<NavigatorState>();
   late final _SectionNavigatorObserver _sectionNavigatorObserver =
-      _SectionNavigatorObserver((playerOpen) {
-        if (mounted) setState(() => _playerRouteOpen = playerOpen);
-      });
+      _SectionNavigatorObserver(
+        (playerOpen) {
+          if (mounted) setState(() => _playerRouteOpen = playerOpen);
+        },
+        onCoveredChanged: (covered) {
+          if (!mounted || _sectionRouteCovering == covered) return;
+          void apply() {
+            if (mounted) setState(() => _sectionRouteCovering = covered);
+          }
+
+          // Declarative page updates can report routes mid-build.
+          if (SchedulerBinding.instance.schedulerPhase ==
+              SchedulerPhase.persistentCallbacks) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => apply());
+          } else {
+            apply();
+          }
+        },
+      );
   bool _playerRouteOpen = false;
+
+  /// True while any route (detail page, sheet, dialog) sits above the section
+  /// root, including its exit animation. Pushed routes inherit the selected
+  /// tab's safe-area mode from the shell; the swipe pager applies it per page.
+  bool _sectionRouteCovering = false;
 
   // Home (the Stremio board; old index-0 Home retired) — unless a startup
   // channel is pending, in which case boot straight to IPTV (13) so the page
@@ -1393,11 +1416,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late int _selectedIndex =
       widget.initialTab ??
       (MainPageBridge.hasPendingIptvStartup ? MainTab.iptv : MainTab.home);
-
-  // Phone/tablet tabs are one continuous horizontal surface. Keep the exact
-  // visible-index order here because app tab ids intentionally have gaps.
-  final PageController _tabPager = PageController();
-  List<int> _tabPagerIndices = const [];
 
   // Phone nav chrome: 'classic' (bottom bar, default) vs 'floating' (the
   // glass button). Nothing renders until the pref is read — a one-frame
@@ -2035,7 +2053,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       HardwareKeyboard.instance.removeHandler(_tvDeadFocusRecovery);
     }
     _animationController.dispose();
-    _tabPager.dispose();
     _tvSidebarExpanded.dispose();
     DeepLinkService().dispose();
     RemoteControlState().stop();
@@ -2965,15 +2982,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (!visible.contains(index)) {
       return;
     }
-    final page = _tabPagerIndices.indexOf(index);
-    if (page >= 0 && _tabPager.hasClients && index != _selectedIndex) {
-      _tabPager.animateToPage(
-        page,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
-      return;
-    }
+    // On touch layouts the selection change slides [ShellTabPager] to the
+    // tab; it never reports the tabs it crosses.
     _selectTab(index);
   }
 
@@ -3243,14 +3253,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       final indices = <int>[
         MainTab.search,
         MainTab.home,
-        MainTab.discover,
         MainTab.reels,
+        MainTab.discover,
         MainTab.downloads,
         MainTab.iptv,
         MainTab.youtube,
         MainTab.debrifyTv,
         MainTab.stremioTv,
-      ]; // Search, Home, Discover, Downloads, IPTV, YouTube,
+      ]; // Search, Home, Reels, Discover, Downloads, IPTV, YouTube,
       // Debrify TV, Stremio TV. The dedicated Search tab (17) is no longer
       // TV-only — every non-TV layout WIDE enough for a sidebar carries it
       // too (see the phone gate where nonTvIndices is built). The Home board
@@ -3289,15 +3299,15 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       final indices = <int>[
         MainTab.search,
         MainTab.home,
-        MainTab.discover,
         MainTab.reels,
+        MainTab.discover,
         MainTab.downloads,
         MainTab.iptv,
         MainTab.youtube,
         MainTab.stremioTv,
         MainTab.addons,
         MainTab.settings,
-      ]; // Search, Home, Discover, IPTV, YouTube, Stremio TV, Addons, Settings
+      ]; // Search, Home, Reels, Discover, Downloads, IPTV, YouTube, Stremio TV, Addons, Settings
       _insertTraktCalendarTab(indices, calendar);
       return _applyProfilePolicy(indices);
     }
@@ -3305,8 +3315,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     final indices = <int>[
       MainTab.search,
       MainTab.home,
-      MainTab.discover,
       MainTab.reels,
+      MainTab.discover,
       MainTab.downloads,
       MainTab.iptv,
       MainTab.youtube,
@@ -3438,9 +3448,15 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           isTelevision: _isAndroidTv,
           floatingNav:
               !_isAndroidTv &&
-              _phoneNavLoaded &&
-              _phoneNavStyle == 'floating' &&
-              MediaQuery.sizeOf(context).width < 600,
+              ((_phoneNavLoaded &&
+                      _phoneNavStyle == 'floating' &&
+                      MediaQuery.sizeOf(context).width < 600) ||
+                  // The desktop pill lives over the lower-right corner just
+                  // like the mobile floating navigation. Reels owns a full
+                  // action rail there, so give both its buttons the same
+                  // clearance on every floating-nav surface.
+                  (_desktopSidebarStyle == 'pill' &&
+                      MediaQuery.sizeOf(context).width >= 600)),
         );
       default:
         return _pages[index];
@@ -3458,30 +3474,26 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
   }
 
-  void _configureTabPager(List<int> indices) {
-    if (listEquals(_tabPagerIndices, indices)) return;
-    _tabPagerIndices = List<int>.of(indices);
-    final initial =
-        indices.indexOf(_selectedIndex).clamp(0, indices.length - 1) as int;
-    // This method runs from build. Recreating/disposal of a controller while
-    // PageView is registering its elements breaks Flutter's build scope; move
-    // the persistent controller only after this frame instead.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_tabPager.hasClients) return;
-      _tabPager.jumpToPage(initial);
-    });
-  }
-
-  Widget _buildSwipeableTabs(List<int> indices) {
-    _configureTabPager(indices);
-    return PageView.builder(
-      controller: _tabPager,
-      itemCount: indices.length,
-      onPageChanged: (page) => _selectTab(indices[page]),
-      itemBuilder: (context, page) {
-        final index = indices[page];
-        return KeyedSubtree(
-          key: ValueKey('tab-page-$index'),
+  /// Touch layouts: one continuous horizontal surface across the visible
+  /// tabs (see [ShellTabPager]).
+  Widget _buildSwipeableTabs(List<int> visible, {required bool iosEdge}) {
+    return ShellTabPager(
+      tabs: visible,
+      selectedTab: _selectedIndex,
+      fallbackTab: MainTab.home,
+      onTabSelected: _selectTab,
+      // A player owns every gesture while it's up.
+      swipeEnabled: !_playerRouteOpen,
+      pageBuilder: (context, index) {
+        // Safe-area mode is per page: an edge-to-edge tab and an inset tab
+        // can share the screen mid-swipe without either one jumping when
+        // the selection flips at the midpoint.
+        final edge = iosEdge && _kEdgeToEdgeTabs.contains(index);
+        return SafeArea(
+          left: false,
+          right: false,
+          top: !edge,
+          bottom: !edge,
           child: _buildPage(index),
         );
       },
@@ -4088,6 +4100,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     PlatformUtil.isIosMobile && !_isAndroidTv && !isDesktopWide;
                 final edgePage =
                     iosEdge && _kEdgeToEdgeTabs.contains(_selectedIndex);
+                // Touch layouts page between tabs with one continuous swipe.
+                // Sidebar and TV layouts keep their focus-first transition.
+                final useTabPager = !isDesktopWide && !_isAndroidTv;
+                // With the pager, each root page applies its own top/bottom
+                // insets; the shell applies the selected tab's mode only for
+                // routes pushed over it (unchanged from before the pager).
+                final shellInsets =
+                    !edgePage && (!useTabPager || _sectionRouteCovering);
                 return Scaffold(
                   // Opaque page ink rather than transparent-to-the-wallpaper.
                   //
@@ -4182,8 +4202,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                             // insets in MediaQuery and handle them
                             // themselves, so their backgrounds (and Home's
                             // hero) reach under the status bar and tab bar.
-                            top: !edgePage,
-                            bottom: !edgePage,
+                            top: shellInsets,
+                            bottom: shellInsets,
                             child: Stack(
                               children: [
                                 // Page fills the whole area so its own
@@ -4200,8 +4220,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                                         // touch layouts PageView keeps the
                                         // outgoing tab beside the incoming
                                         // one throughout the swipe.
-                                        child: !isDesktopWide && !_isAndroidTv
-                                            ? _buildSwipeableTabs(nonTvIndices)
+                                        child: useTabPager
+                                            ? _buildSwipeableTabs(
+                                                nonTvIndices,
+                                                iosEdge: iosEdge,
+                                              )
                                             : _buildAnimatedPage(),
                                       ),
                                     ],
@@ -4364,9 +4387,49 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 /// Keeps shell controls above normal section routes while letting the player
 /// remain genuinely fullscreen.
 class _SectionNavigatorObserver extends NavigatorObserver {
-  _SectionNavigatorObserver(this._onPlayerVisibilityChanged);
+  _SectionNavigatorObserver(
+    this._onPlayerVisibilityChanged, {
+    this.onCoveredChanged,
+  });
 
   final ValueChanged<bool> _onPlayerVisibilityChanged;
+
+  /// Reports whether any route sits above the section root. A popped route
+  /// keeps counting until its exit animation finishes, so the shell's insets
+  /// don't change under a page that is still sliding out.
+  final ValueChanged<bool>? onCoveredChanged;
+  final Set<Route<dynamic>> _covering = <Route<dynamic>>{};
+
+  void _cover(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute == null) return; // the section root itself
+    if (_covering.add(route) && _covering.length == 1) {
+      onCoveredChanged?.call(true);
+    }
+  }
+
+  void _uncover(Route<dynamic> route, {required bool animated}) {
+    if (!_covering.contains(route)) return;
+    void drop() {
+      if (_covering.remove(route) && _covering.isEmpty) {
+        onCoveredChanged?.call(false);
+      }
+    }
+
+    final animation = route is ModalRoute ? route.animation : null;
+    if (!animated ||
+        animation == null ||
+        animation.status == AnimationStatus.dismissed) {
+      drop();
+      return;
+    }
+    late final AnimationStatusListener listener;
+    listener = (status) {
+      if (status != AnimationStatus.dismissed) return;
+      animation.removeStatusListener(listener);
+      drop();
+    };
+    animation.addStatusListener(listener);
+  }
 
   void _update(Route<dynamic>? route) {
     if (route is! FrozenLegacyPageRoute) return;
@@ -4374,11 +4437,14 @@ class _SectionNavigatorObserver extends NavigatorObserver {
   }
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
-      _update(route);
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _cover(route, previousRoute);
+    _update(route);
+  }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _uncover(route, animated: true);
     if (route is FrozenLegacyPageRoute) {
       _onPlayerVisibilityChanged(false);
     }
@@ -4386,8 +4452,19 @@ class _SectionNavigatorObserver extends NavigatorObserver {
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _uncover(route, animated: false);
     if (route is FrozenLegacyPageRoute) {
       _onPlayerVisibilityChanged(false);
+    }
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    final wasCovering = oldRoute != null && _covering.remove(oldRoute);
+    if (wasCovering && newRoute != null) {
+      _covering.add(newRoute);
+    } else if (wasCovering && _covering.isEmpty) {
+      onCoveredChanged?.call(false);
     }
   }
 }
