@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/41af3b949aa11dd6b1c7f0207f4300790d9a0674/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610070647",
+          "date": "2026-10-07T06:53:01Z",
+          "localizedDescription": "What's new:\n• Refine swipe shell, reels, and watchlist UI (92be21ec)\n• Add continuous swipe tab navigation (33a7d599)\n• Improve reels feed and offline states (11fea62c)\n\nBuild 202610070647 from nextup@92be21e\nhttps://github.com/Alehaaaa/debrify/compare/41af3b9...92be21e",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-55-92be21e.ipa",
+          "size": 39923074,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610061923",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Reels tab, and More Like This titles hold for their menu (8f58c961)\n\nBuild 202610061255 from nextup@8f58c96\nhttps://github.com/Alehaaaa/debrify/compare/5d9f14c...8f58c96",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-38-8f58c96.ipa",
           "size": 39872687,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610060915",
-          "date": "2026-10-06T09:21:18Z",
-          "localizedDescription": "What's new:\n• CI: a new push cancels the iOS build already running on its branch (5d9f14c0)\n• Frosted press only on holds, never on plain taps (ca1f8a87)\n• Frosted-glass press for every tile (da945143)\n\nBuild 202610060915 from nextup@5d9f14c\nhttps://github.com/Alehaaaa/debrify/compare/30bbdaa...5d9f14c",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-37-5d9f14c.ipa",
-          "size": 39846122,
           "minOSVersion": "14.0"
         }
       ],
