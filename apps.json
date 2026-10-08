@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Fresh iOS builds of every nextup commit.",
   "description": "Debrify built automatically from every commit to nextup in Alehaaaa/debrify, each with a changelog of what changed since the previous build.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,17 +16,26 @@
       "developerName": "Alehaaaa",
       "subtitle": "Torrent search and debrid management.",
       "localizedDescription": "A modern torrent search and debrid management app.\n\nThese are unsigned commit builds produced by GitHub Actions; SideStore re-signs them with your own certificate on install.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": [
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/search.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/player.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/episodes.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/downloads.png",
-        "https://raw.githubusercontent.com/Alehaaaa/debrify/92be21eca9d2f7bc1a16787dfbe1b42de9c6b78a/assets/screenshots/stremio-catalog.png"
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/screenshots/search.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/screenshots/player.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/screenshots/episodes.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/screenshots/downloads.png",
+        "https://raw.githubusercontent.com/Alehaaaa/debrify/b4c32940b6eaa7ddc52c4d36e5c20b9332db779b/assets/screenshots/stremio-catalog.png"
       ],
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610082035",
+          "date": "2026-10-08T20:38:46Z",
+          "localizedDescription": "What's new:\n• Improve reels sharing and sync flow (b4c32940)\n\nBuild 202610082035 from nextup@b4c3294\nhttps://github.com/Alehaaaa/debrify/compare/92be21e...b4c3294",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-56-b4c3294.ipa",
+          "size": 39946097,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610070647",
@@ -106,15 +115,6 @@
           "localizedDescription": "What's new:\n• Reels: tap to pause, clips start on arrival, deeper buffer (4accf10d)\n• Reels: official scene clips from TMDB, fast feed on few requests (66f17f99)\n\nBuild 202610061312 from nextup@4accf10\nhttps://github.com/Alehaaaa/debrify/compare/8f58c96...4accf10",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-40-4accf10.ipa",
           "size": 39885221,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610061255",
-          "date": "2026-10-06T13:02:11Z",
-          "localizedDescription": "What's new:\n• Reels tab, and More Like This titles hold for their menu (8f58c961)\n\nBuild 202610061255 from nextup@8f58c96\nhttps://github.com/Alehaaaa/debrify/compare/5d9f14c...8f58c96",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-38-8f58c96.ipa",
-          "size": 39872687,
           "minOSVersion": "14.0"
         }
       ],
