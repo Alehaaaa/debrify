@@ -7779,6 +7779,24 @@ class _SearchScreenState extends State<SearchScreen>
 
   /// The sheet latch. See the block comment above.
   bool _searchSheetOpen = false;
+
+  /// Wide layouts: the header row (field slot + close + mode picker) decides
+  /// how wide the field can be, so the floating field that sits over it is
+  /// sized from the slot's measured width instead of a guess.
+  final GlobalKey _spotlightFieldSlotKey = GlobalKey();
+  double? _spotlightFieldSlotWidth;
+
+  void _measureSpotlightFieldSlot() {
+    if (!mounted || !_searchSheetOpen) return;
+    final box =
+        _spotlightFieldSlotKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final width = box.size.width;
+    final previous = _spotlightFieldSlotWidth;
+    if (previous == null || (previous - width).abs() > 0.5) {
+      setState(() => _spotlightFieldSlotWidth = width);
+    }
+  }
   bool _focusSearchAfterMorph = false;
 
   void _focusExpandedSearch() {
@@ -17478,11 +17496,19 @@ class _SearchScreenState extends State<SearchScreen>
     final leftInset = narrow ? 16.0 : 24.0;
     final canClose =
         !widget.searchPage && !_sheetForced && _searchController.text.isEmpty;
+    // Both layouts keep the 52px circular close button 10px to the right of
+    // the field. Narrow: the field takes the rest of the row. Wide: the field
+    // is capped at 720 and the mode picker sits at the far right, so the
+    // measured header slot is the source of truth once it has laid out.
     final fieldWidth = narrow
-        // Mirrors the narrow header row: its 52px circular close button and
-        // 10px gap stay beside the persistent expanding field.
         ? shellWidth - (leftInset * 2) - (canClose ? 62 : 0)
-        : min(720.0, shellWidth - leftInset * 2);
+        : _spotlightFieldSlotWidth ??
+              min(720.0, shellWidth - leftInset * 2 - (canClose ? 62 : 0));
+    if (_searchSheetOpen && !narrow) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _measureSpotlightFieldSlot(),
+      );
+    }
     final topInset = MediaQuery.viewPaddingOf(context).top;
 
     final Widget? openSheet = _searchSheetOpen
@@ -17505,7 +17531,11 @@ class _SearchScreenState extends State<SearchScreen>
                   // header's geometry for its mode picker and close affordance,
                   // but reserve the field's exact footprint instead of rebuilding
                   // the old glass field underneath it.
-                  fieldOverride: const SizedBox(height: 52),
+                  fieldOverride: SizedBox(
+                    key: _spotlightFieldSlotKey,
+                    width: double.infinity,
+                    height: 52,
+                  ),
                 ),
                 _buildUnifiedCatalogSourcesBar(),
                 Expanded(child: _buildAnimatedBody()),
@@ -17702,9 +17732,19 @@ class _SearchScreenState extends State<SearchScreen>
             circular: _spotlightShellActive && _searchSheetOpen,
           );
 
+    // Spotlight sheet: the floating field sits 14px below the safe area
+    // (_SpotlightSearchButton.topInset), so the row that carries its close
+    // button uses the same top on every width.
+    final floatingField = fieldOverride != null && !tv;
+
     if (narrow) {
       return Padding(
-        padding: EdgeInsets.fromLTRB(16, tv ? 16 : 12, 16, 10),
+        padding: EdgeInsets.fromLTRB(
+          16,
+          tv ? 16 : (floatingField ? 14 : 12),
+          16,
+          10,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -17725,20 +17765,30 @@ class _SearchScreenState extends State<SearchScreen>
     return Padding(
       padding: tv && widget.searchMode
           ? const EdgeInsets.fromLTRB(24, 8, 24, 8)
-          : EdgeInsets.fromLTRB(24, tv ? 18 : 16, 24, 12),
+          : EdgeInsets.fromLTRB(
+              24,
+              tv ? 18 : (floatingField ? 14 : 16),
+              24,
+              12,
+            ),
       child: Row(
         children: [
+          // Close sits right beside the field, exactly as on phones; the mode
+          // picker keeps the far right.
           Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: field,
-              ),
+            child: Row(
+              children: [
+                Flexible(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 720),
+                    child: field,
+                  ),
+                ),
+                if (close != null) ...[const SizedBox(width: 10), close],
+              ],
             ),
           ),
           if (showToggle) ...[const SizedBox(width: 12), toggle],
-          if (close != null) ...[const SizedBox(width: 12), close],
         ],
       ),
     );

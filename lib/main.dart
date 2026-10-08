@@ -4107,8 +4107,15 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                 // With the pager, each root page applies its own top/bottom
                 // insets; the shell applies the selected tab's mode only for
                 // routes pushed over it (unchanged from before the pager).
+                // The player is pushed on the section navigator, so the shell
+                // must step aside entirely while it's up: no insets, no
+                // sidebar offset, black ground. Pager pages keep their own
+                // insets, so the tab underneath doesn't shift.
+                final playerFullscreen = _playerRouteOpen;
                 final shellInsets =
-                    !edgePage && (!useTabPager || _sectionRouteCovering);
+                    !playerFullscreen &&
+                    !edgePage &&
+                    (!useTabPager || _sectionRouteCovering);
                 return Scaffold(
                   // Opaque page ink rather than transparent-to-the-wallpaper.
                   //
@@ -4133,7 +4140,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   //
                   // TV keeps its transparent shell above — TvAmbientArtStage is
                   // the real background there.
-                  backgroundColor: app.shell.ink,
+                  backgroundColor: playerFullscreen
+                      ? Colors.black
+                      : app.shell.ink,
                   // On iOS the body runs under the (translucent) tab bar;
                   // Scaffold then reports the bar's height as bottom padding
                   // to the page, so content can still clear it.
@@ -4191,14 +4200,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                       // pages with their own SafeArea/padding.bottom reads
                       // would re-apply a 34px inset they no longer sit under.
                       Positioned.fill(
-                        left: isDesktopWide ? desktopSidebarWidth : 0,
+                        left: isDesktopWide && !playerFullscreen
+                            ? desktopSidebarWidth
+                            : 0,
                         child: ClipRect(
                           child: SafeArea(
                             // The rail absorbs the left inset when present;
                             // under 'pill' there is no rail, so the content
                             // must take the inset back (iPad landscape
                             // notch) or the first column sits under it.
-                            left: !isDesktopWide || desktopPill,
+                            left:
+                                !playerFullscreen &&
+                                (!isDesktopWide || desktopPill),
+                            right: !playerFullscreen,
                             // Edge-to-edge pages keep the top and bottom
                             // insets in MediaQuery and handle them
                             // themselves, so their backgrounds (and Home's

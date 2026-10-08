@@ -259,8 +259,12 @@ class MediaKitTrailerEngine implements TrailerEngine {
   static Future<MediaKitTrailerEngine> create({
     bool reportPlaybackErrors = false,
     bool highResolution = false,
+    bool sharedOutput = false,
   }) async {
-    final lease = await VideoOutputLease.acquire(debugLabel: 'trailer');
+    final lease = await VideoOutputLease.acquire(
+      debugLabel: 'trailer',
+      shared: sharedOutput,
+    );
     try {
       return MediaKitTrailerEngine._(
         lease,

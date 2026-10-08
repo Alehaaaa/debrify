@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/platform_util.dart';
+
 /// Serialises creation of media_kit video outputs, of which this process may
 /// hold exactly **one** at a time.
 ///
@@ -37,6 +39,13 @@ import 'package:flutter/foundation.dart';
 /// Engines that do not create a media_kit output — Android TV's ExoPlayer path
 /// — must not take the lease. They have their own decoder discipline and a
 /// different failure mode (a starved hardware codec pool, not an abort).
+///
+/// ## Paired outputs
+///
+/// Reels keep the visible clip and the next one decoding at once. A `shared`
+/// acquire may coexist with exactly one other output where that is safe
+/// ([allowsPair] — everywhere but tvOS and web). An exclusive acquire still
+/// waits until every output, shared ones included, has been released.
 class VideoOutputLease {
   VideoOutputLease._();
 
@@ -45,14 +54,37 @@ class VideoOutputLease {
   /// Completes when the current holder releases. Null when the slot is free.
   static Completer<void>? _holder;
 
+  /// Outputs taken with `shared: true` (at most two outputs in total).
+  static int _shared = 0;
+
+  /// Completed and replaced on every release, so parked callers re-check.
+  static Completer<void> _changed = Completer<void>();
+
+  static int get _inUse => (_holder == null ? 0 : 1) + _shared;
+
+  static void _notifyReleased() {
+    final changed = _changed;
+    _changed = Completer<void>();
+    changed.complete();
+  }
+
+  /// Whether a second, concurrent output is safe on this platform. tvOS aborts
+  /// on a second `VideoOutput`; web has no native outputs to pair.
+  static bool get allowsPair => !kIsWeb && !PlatformUtil.isTvOS;
+
   /// Waits for the slot, then takes it. Release the returned handle when the
   /// output has been disposed — not merely when disposal was requested.
-  static Future<VideoOutputLeaseHandle> acquire({String debugLabel = ''}) async {
-    final waitedFrom = _holder == null ? null : DateTime.now();
+  static Future<VideoOutputLeaseHandle> acquire({
+    String debugLabel = '',
+    bool shared = false,
+  }) async {
+    final pair = shared && allowsPair;
+    bool busy() => pair ? _inUse >= 2 : _inUse > 0;
+    final waitedFrom = busy() ? DateTime.now() : null;
     // A loop, not a single await: several callers can be parked on the same
     // future, and only one of them can win the slot when it completes.
-    while (_holder != null) {
-      await _holder!.future;
+    while (busy()) {
+      await _changed.future;
     }
     if (waitedFrom != null) {
       final waited = DateTime.now().difference(waitedFrom);
@@ -63,6 +95,10 @@ class VideoOutputLease {
         );
       }
     }
+    if (pair) {
+      _shared++;
+      return VideoOutputLeaseHandle._(Completer<void>(), shared: true);
+    }
     final c = Completer<void>();
     _holder = c;
     return VideoOutputLeaseHandle._(c);
@@ -70,22 +106,26 @@ class VideoOutputLease {
 
   /// Whether anything currently holds the slot. Diagnostics only.
   @visibleForTesting
-  static bool get isHeld => _holder != null;
+  static bool get isHeld => _inUse > 0;
 
   @visibleForTesting
   static void debugReset() {
     final held = _holder;
     _holder = null;
+    _shared = 0;
     if (held != null && !held.isCompleted) held.complete();
+    _notifyReleased();
   }
 }
 
 /// A taken lease. Releasing twice is a no-op, which is what makes it safe to
 /// release from every exit path without tracking which one ran.
 class VideoOutputLeaseHandle {
-  VideoOutputLeaseHandle._(this._completer);
+  VideoOutputLeaseHandle._(this._completer, {bool shared = false})
+    : _isShared = shared;
 
   final Completer<void> _completer;
+  final bool _isShared;
   bool _released = false;
 
   bool get released => _released;
@@ -93,9 +133,12 @@ class VideoOutputLeaseHandle {
   void release() {
     if (_released) return;
     _released = true;
-    if (VideoOutputLease._holder == _completer) {
+    if (_isShared) {
+      if (VideoOutputLease._shared > 0) VideoOutputLease._shared--;
+    } else if (VideoOutputLease._holder == _completer) {
       VideoOutputLease._holder = null;
     }
     if (!_completer.isCompleted) _completer.complete();
+    VideoOutputLease._notifyReleased();
   }
 }

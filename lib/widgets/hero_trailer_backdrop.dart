@@ -16,6 +16,7 @@ import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
 import 'trailer_engine.dart';
 import 'serialized_trailer_engine.dart';
+import 'video_output_lease.dart';
 import '../services/collection_focus_playback.dart';
 
 /// OTT-style "living backdrop": shows the static blurred [imageUrl] and, when
@@ -148,6 +149,12 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// full-screen clips, where falling back to a poster on pause is jarring.
   final bool freezeFrame;
 
+  /// Reels: this clip may share the decoder budget with exactly one other
+  /// paired clip (current + next), so the next reel can be opened and parked
+  /// while the visible one plays — on media_kit too, wherever a second video
+  /// output is safe ([VideoOutputLease.allowsPair]).
+  final bool pairedOutput;
+
   /// Resume this clip at a saved position after its decoder was handed to
   /// another reel. Null/zero starts normally.
   final Duration? initialPosition;
@@ -208,6 +215,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.heroTag,
     this.live = false,
     this.freezeFrame = false,
+    this.pairedOutput = false,
     this.initialPosition,
     this.onPlaybackPosition,
     this.onFirstFrameReady,
@@ -394,6 +402,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       reportPlaybackErrors:
           widget.focusPreviewOwner != null || !widget.decorative,
       highResolution: widget.highResolutionVideo,
+      sharedOutput: widget.pairedOutput,
     );
   }
 
@@ -760,7 +769,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   bool get _supportsConcurrentPrewarm =>
       _usePlatformView ||
-      (!kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached);
+      (!kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached) ||
+      (widget.pairedOutput && VideoOutputLease.allowsPair);
 
   bool get _mayStartPlayer =>
       !widget.suspended || (widget.prewarm && _supportsConcurrentPrewarm);

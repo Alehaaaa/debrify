@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -117,6 +118,7 @@ class ReelPlayback {
     required this.volume,
     this.paused = false,
     this.prewarm = false,
+    this.previewing = false,
     this.initialPosition,
     this.onPosition,
     this.onFirstFrameReady,
@@ -132,6 +134,10 @@ class ReelPlayback {
 
   /// The next clip is opening toward its first frame beneath a swipe.
   final bool prewarm;
+
+  /// The paired clip is on screen beside the active one during a swipe: it
+  /// plays, muted, so the handoff never waits on a cold or frozen player.
+  final bool previewing;
   final double volume;
 
   /// Tapped to pause: hold the frame, keep the player.
@@ -720,13 +726,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
             : const CircularProgressIndicator(color: Colors.white),
       );
     } else {
-      // Keep the normal next Reel opening while this one plays. During a drag,
-      // the first visible adjacent page takes priority (including a backward
-      // swipe) so it is the one held on its first frame.
+      // The next Reel is opened and parked on its first frame while this one
+      // plays. During a drag the other visible page — the incoming one, or,
+      // past the midpoint, the outgoing one — is the paired player instead,
+      // and it plays muted so both halves of the screen stay live. Only the
+      // page that owns the majority of the screen ([_index]) is audible.
       final preview = _swipePreviewIndex;
-      final prewarmIndex = preview != null && preview != _index
+      final dragPage = _dragPage;
+      final companion = preview != null && preview != _index
           ? preview
-          : _index + 1;
+          : (dragPage != null && dragPage != _index ? dragPage : null);
+      final prewarmIndex = companion ?? _index + 1;
+      final canPreview = !kIsWeb && !PlatformUtil.isTvOS;
       body = NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: PageView.builder(
@@ -753,6 +764,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
               // Preparation begins while the current Reel is playing and
               // continues for the page visible beneath a swipe.
               prewarm: widget.isActive && !_sharing && i == prewarmIndex,
+              previewing:
+                  canPreview &&
+                  widget.isActive &&
+                  !_sharing &&
+                  i == companion,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
@@ -898,6 +914,7 @@ class _ReelPage extends StatefulWidget {
   final bool active;
   final bool playbackActive;
   final bool prewarm;
+  final bool previewing;
   final bool floatingNav;
   final VoidCallback onPlaybackFailed;
   final VoidCallback onRetry;
@@ -920,6 +937,7 @@ class _ReelPage extends StatefulWidget {
     required this.active,
     required this.playbackActive,
     required this.prewarm,
+    this.previewing = false,
     required this.floatingNav,
     required this.onPlaybackFailed,
     required this.onRetry,
@@ -1037,6 +1055,10 @@ class _ReelPageState extends State<_ReelPage>
       volume: widget.muted || !widget.playbackActive ? 0 : 100,
       paused: widget.paused,
       prewarm: widget.prewarm && reel.state != _ClipState.failed,
+      previewing:
+          widget.previewing &&
+          widget.prewarm &&
+          reel.state != _ClipState.failed,
       initialPosition: reel.position > Duration.zero ? reel.position : null,
       onPosition: widget.onPosition,
       failed: reel.state == _ClipState.failed,
@@ -1306,15 +1328,20 @@ class ReelVideoSurface extends StatelessWidget {
                 streams != null &&
                 !playback.failed,
             highResolutionVideo: true,
-            suspended: !playback.active || playback.paused,
+            suspended:
+                !(playback.active || playback.previewing) || playback.paused,
             // iOS may have the next frame ready before the swipe settles.
             // Keep that paused frame visible rather than falling back to its
             // poster, then let it start directly once it becomes active.
-            freezeFrame: playback.paused || playback.prewarm,
-            // Match the Home trailer handoff: AVPlayer can prime the next
-            // frame in parallel; macOS keeps the serialized output lease and
-            // starts it as soon as the outgoing reel yields it.
+            freezeFrame:
+                playback.paused ||
+                (playback.prewarm && !playback.previewing),
+            // Current + next are a decoder pair: AVPlayer, Exo and media_kit
+            // (off tvOS, via a shared output lease) all prime the next clip
+            // in parallel while the visible one plays. tvOS keeps the single
+            // serialized output and starts once the outgoing reel yields it.
             prewarm: playback.prewarm,
+            pairedOutput: true,
             initialPosition: playback.initialPosition,
             onPlaybackPosition: playback.onPosition,
             onFirstFrameReady: playback.onFirstFrameReady,

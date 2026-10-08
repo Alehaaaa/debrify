@@ -85,4 +85,38 @@ void main() {
         reason: 'the loop in acquire() must re-check, not let every parked '
             'waiter through on one completion');
   });
+
+  test('reels pair: two shared outputs coexist, a third waits', () async {
+    if (!VideoOutputLease.allowsPair) return;
+    final current = await VideoOutputLease.acquire(shared: true);
+    final next = await VideoOutputLease.acquire(shared: true);
+
+    var thirdGranted = false;
+    final third = VideoOutputLease.acquire(shared: true).then((h) {
+      thirdGranted = true;
+      return h;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(thirdGranted, isFalse, reason: 'a pair is current + next, no more');
+
+    current.release();
+    (await third).release();
+    expect(thirdGranted, isTrue);
+    next.release();
+    expect(VideoOutputLease.isHeld, isFalse);
+  });
+
+  test('an exclusive acquire waits for every shared output', () async {
+    final shared = await VideoOutputLease.acquire(shared: true);
+    var granted = false;
+    final exclusive = VideoOutputLease.acquire().then((h) {
+      granted = true;
+      return h;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(granted, isFalse);
+    shared.release();
+    (await exclusive).release();
+    expect(granted, isTrue);
+  });
 }
