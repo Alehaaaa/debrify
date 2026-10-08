@@ -276,6 +276,59 @@ private final class NowPlayingBridge {
   }
 }
 
+/// Uses the official public clip URL rather than a temporary playback stream.
+private final class ReelShareBridge {
+  private var pendingResult: FlutterResult?
+
+  func install(
+    on messenger: FlutterBinaryMessenger,
+    controller: @escaping () -> UIViewController?
+  ) -> FlutterMethodChannel {
+    let channel = FlutterMethodChannel(name: "debrify/reel_share", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "share" else { result(FlutterMethodNotImplemented); return }
+      guard let self, self.pendingResult == nil,
+            let args = call.arguments as? [String: Any],
+            let value = args["url"] as? String,
+            let url = URL(string: value), url.scheme == "https", url.host == "youtu.be",
+            let sourceController = controller(),
+            let sourceView = sourceController.view, sourceView.window != nil else {
+        result(false)
+        return
+      }
+      var presenter = sourceController
+      while let presented = presenter.presentedViewController { presenter = presented }
+      let caption = args["text"] as? String ?? ""
+      let share = UIActivityViewController(activityItems: [caption, url], applicationActivities: nil)
+      if let title = args["title"] as? String { share.setValue(title, forKey: "subject") }
+      if let popover = share.popoverPresentationController {
+        popover.sourceView = sourceView
+        let center = CGRect(x: sourceView.bounds.midX, y: sourceView.bounds.midY, width: 1, height: 1)
+        var anchor = center
+        if let origin = args["origin"] as? [String: NSNumber],
+           let x = origin["x"], let y = origin["y"],
+           let width = origin["width"], let height = origin["height"] {
+          let candidate = CGRect(x: x.doubleValue, y: y.doubleValue,
+                                 width: width.doubleValue, height: height.doubleValue)
+            .intersection(sourceView.bounds)
+          if !candidate.isNull && !candidate.isEmpty { anchor = candidate }
+        }
+        popover.sourceRect = anchor
+        popover.permittedArrowDirections = args["origin"] == nil ? [] : .any
+      }
+      self.pendingResult = result
+      share.completionWithItemsHandler = { [weak self] _, _, _, _ in
+        let reply = self?.pendingResult
+        self?.pendingResult = nil
+        // Cancellation is handled too: do not open a fallback after dismissal.
+        reply?(true)
+      }
+      presenter.present(share, animated: true)
+    }
+    return channel
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private let deviceSecretCipher = DeviceSecretCipher()
@@ -284,6 +337,8 @@ private final class NowPlayingBridge {
   private var profilePrivacyChannel: FlutterMethodChannel?
   private let nowPlaying = NowPlayingBridge()
   private var nowPlayingChannel: FlutterMethodChannel?
+  private let reelShare = ReelShareBridge()
+  private var reelShareChannel: FlutterMethodChannel?
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -339,6 +394,7 @@ private final class NowPlayingBridge {
       deviceSecretChannel = deviceSecretCipher.install(on: registrar.messenger())
       profilePrivacyChannel = profilePrivacy.install(on: registrar.messenger())
       nowPlayingChannel = nowPlaying.install(on: registrar.messenger())
+      reelShareChannel = reelShare.install(on: registrar.messenger()) { registrar.viewController }
     }
   }
 

@@ -19,6 +19,7 @@ import '../widgets/hold_feedback.dart';
 import '../models/stremio_addon.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
+import '../services/watchlist_sync_service.dart';
 import '../services/startup_connection.dart';
 import '../services/watched_action_coordinator.dart';
 import '../utils/tv_keys.dart';
@@ -466,7 +467,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
         if (dayEntries == null) {
           _handleEpisodeSelected(entry);
         } else {
-          Navigator.of(context).popUntil((route) => route is! ModalBottomSheetRoute);
+          Navigator.of(
+            context,
+          ).popUntil((route) => route is! ModalBottomSheetRoute);
           _handleEpisodeSelected(entry);
         }
       case _CalendarEpisodeAction.showDay:
@@ -475,7 +478,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       case _CalendarEpisodeAction.watchlistRemove:
         final add = action == _CalendarEpisodeAction.watchlistAdd;
         try {
-          await StorageService.setMyWatchlistItem(show, add);
+          await WatchlistSyncService.setMyWatchlistItem(show, add);
           if (!mounted) return;
           if (add) {
             showWatchlistAddedBubble(context);
@@ -558,7 +561,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
 
   void _openDaySheet(DateTime day, List<TraktCalendarEntry> entries) {
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).calendar.sheetBg,
       shape: const RoundedRectangleBorder(
@@ -625,10 +628,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           ),
           // No app bar: the page header (month, chevrons, filters) is the
           // top of the page, so it keeps clear of the status bar itself.
-          child: SafeArea(
-            top: !_isTelevision,
-            child: _buildBody(isWide, app),
-          ),
+          child: SafeArea(top: !_isTelevision, child: _buildBody(isWide, app)),
         ),
       ),
     );
@@ -639,18 +639,34 @@ sheetAnimationStyle: kMenuSheetAnimation,
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.wifi_off_rounded,
-                size: 46, color: app.fade(app.core.tx, 0.5)),
-            const SizedBox(height: 16),
-            Text('You’re offline',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.wifi_off_rounded,
+                size: 46,
+                color: app.fade(app.core.tx, 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'You’re offline',
                 style: TextStyle(
-                    color: app.core.tx, fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text('Calendar updates need a connection. Try again when you’re back online.',
+                  color: app.core.tx,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Calendar updates need a connection. Try again when you’re back online.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: app.fade(app.core.tx, 0.68), height: 1.4)),
-          ]),
+                style: TextStyle(
+                  color: app.fade(app.core.tx, 0.68),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -1291,8 +1307,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
       ),
       padding: EdgeInsets.zero,
       itemCount: days.length,
-      separatorBuilder: (_, __) =>
-          SizedBox(height: _isTelevision ? 8 : 22),
+      separatorBuilder: (_, __) => SizedBox(height: _isTelevision ? 8 : 22),
       itemBuilder: (context, index) {
         final airingDay = days[index];
         return _AiringDayCard(
@@ -1585,8 +1600,18 @@ class _AiringDayCard extends StatelessWidget {
   Widget _buildGroupLayout(Color accent, bool isFocused) {
     const shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const shortMonths = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final relative = _relativeLabel(day);
     final dateLabel =
@@ -1632,36 +1657,39 @@ class _AiringDayCard extends StatelessWidget {
                       : () => onEpisodeOptions!(entry),
                 ),
               if (entries.length > 3)
-                HoldFeedback(borderRadius: BorderRadius.zero, child: InkWell(
-                  splashFactory: NoSplash.splashFactory,
-                  highlightColor: Colors.transparent,
-                  onTap: onOpen,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 11,
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '${entries.length - 3} more episode'
-                          '${entries.length - 3 == 1 ? '' : 's'}',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: app.settings.dim,
+                HoldFeedback(
+                  borderRadius: BorderRadius.zero,
+                  child: InkWell(
+                    splashFactory: NoSplash.splashFactory,
+                    highlightColor: Colors.transparent,
+                    onTap: onOpen,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 11,
+                      ),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${entries.length - 3} more episode'
+                            '${entries.length - 3 == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: app.settings.dim,
+                            ),
                           ),
-                        ),
-                        const Spacer(),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                          color: app.settings.dim2,
-                        ),
-                      ],
+                          const Spacer(),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: app.settings.dim2,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                )),
+                ),
             ],
           ),
         ),
@@ -1935,68 +1963,68 @@ class _EpisodeRow extends StatelessWidget {
         : '$code · ${entry.episodeTitle}';
 
     return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          borderRadius: app.shape.br(10),
-          color: rowGround,
-          border: Border.all(color: rowLine),
-        ),
-        child: Row(
-          children: [
-            _PosterThumb(
-              posterUrl: entry.posterUrl,
-              width: 28,
-              height: 40,
-              radius: 7,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.showTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: app.shape.br(10),
+        color: rowGround,
+        border: Border.all(color: rowLine),
+      ),
+      child: Row(
+        children: [
+          _PosterThumb(
+            posterUrl: entry.posterUrl,
+            width: 28,
+            height: 40,
+            radius: 7,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.showTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    detail,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: app.fade(app.core.tx, 0.68),
-                      fontSize: 10,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              decoration: BoxDecoration(
-                borderRadius: app.shape.brPill,
-                color: accent.withValues(alpha: 0.14),
-                border: Border.all(color: accent.withValues(alpha: 0.22)),
-              ),
-              child: Text(
-                time,
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
                 ),
+                const SizedBox(height: 2),
+                Text(
+                  detail,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: app.fade(app.core.tx, 0.68),
+                    fontSize: 10,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            decoration: BoxDecoration(
+              borderRadius: app.shape.brPill,
+              color: accent.withValues(alpha: 0.14),
+              border: Border.all(color: accent.withValues(alpha: 0.22)),
+            ),
+            child: Text(
+              time,
+              style: TextStyle(
+                color: accent,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
               ),
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2035,61 +2063,64 @@ class _GroupEpisodeRow extends StatelessWidget {
         'E${entry.episodeNumber.toString().padLeft(2, '0')}';
     final title = entry.episodeTitle?.trim();
     final subtitle = title == null || title.isEmpty ? code : '$code · $title';
-    return HoldFeedback(borderRadius: BorderRadius.zero, child: InkWell(
-      splashFactory: NoSplash.splashFactory,
-      highlightColor: Colors.transparent,
-      onTap: onTap,
-      onLongPress: withHoldHaptic(onLongPress),
-      onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
-        child: Row(
-          children: [
-            _PosterThumb(
-              posterUrl: entry.posterUrl,
-              width: 34,
-              height: 48,
-              radius: 7,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.showTitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onSurface,
+    return HoldFeedback(
+      borderRadius: BorderRadius.zero,
+      child: InkWell(
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        onTap: onTap,
+        onLongPress: withHoldHaptic(onLongPress),
+        onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
+          child: Row(
+            children: [
+              _PosterThumb(
+                posterUrl: entry.posterUrl,
+                width: 34,
+                height: 48,
+                radius: 7,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.showTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11.5, color: t.dim),
-                  ),
-                ],
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11.5, color: t.dim),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              time,
-              style: TextStyle(
-                color: accent,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w800,
-                fontFeatures: const [FontFeature.tabularFigures()],
+              const SizedBox(width: 10),
+              Text(
+                time,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ));
+    );
   }
 }
 

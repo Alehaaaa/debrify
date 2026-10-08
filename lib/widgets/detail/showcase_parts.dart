@@ -383,10 +383,7 @@ class _FilmGrainState extends State<_FilmGrain> {
     final image = _image;
     if (image == null) return const SizedBox.shrink();
     return CustomPaint(
-      painter: _GrainPainter(
-        image,
-        MediaQuery.devicePixelRatioOf(context),
-      ),
+      painter: _GrainPainter(image, MediaQuery.devicePixelRatioOf(context)),
       size: Size.infinite,
     );
   }
@@ -738,11 +735,7 @@ class ShowcaseIdentity extends StatelessWidget {
         _Circle.mark(
           node: next(),
           mark: m.hasTrakt
-              ? TraktMark(
-                  size: 16,
-                  dark: !m.traktTracked,
-                  color: Colors.white,
-                )
+              ? TraktMark(size: 16, dark: !m.traktTracked, color: Colors.white)
               : m.hasSimkl
               ? SimklMark(
                   size: 16,
@@ -807,8 +800,14 @@ class ShowcaseIdentity extends StatelessWidget {
       );
     }
     if (m.onMetadataExplore != null && i < actionNodes.length) {
-      actions.add(_Circle(node: next(), icon: Icons.explore_outlined,
-        label: 'Explore', onTap: m.onMetadataExplore!));
+      actions.add(
+        _Circle(
+          node: next(),
+          icon: Icons.explore_outlined,
+          label: 'Explore',
+          onTap: m.onMetadataExplore!,
+        ),
+      );
     }
     if (m.onAppMenu != null && i < actionNodes.length) {
       actions.add(
@@ -843,10 +842,7 @@ class ShowcaseIdentity extends StatelessWidget {
             alignment: Alignment.bottomCenter,
             child: _identityColumnCompact(context, m, actions, metrics),
           )
-        : SizedBox(
-            height: height,
-            child: _identityColumn(context, m, actions),
-          );
+        : SizedBox(height: height, child: _identityColumn(context, m, actions));
     // Touch/pointer: the open key-art above the identity is the trailer's
     // own frame, so tapping it brings the rolling trailer forward on its own
     // (the same promote the Trailer chip does). Sits BEHIND the identity, so
@@ -1056,9 +1052,8 @@ class _LogoAnchorScope extends InheritedWidget {
 
   const _LogoAnchorScope({required this.anchor, required super.child});
 
-  static _LogoAnchor? maybeOf(BuildContext context) => context
-      .getInheritedWidgetOfExactType<_LogoAnchorScope>()
-      ?.anchor;
+  static _LogoAnchor? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<_LogoAnchorScope>()?.anchor;
 
   @override
   bool updateShouldNotify(_LogoAnchorScope oldWidget) =>
@@ -1247,8 +1242,7 @@ class _ExpandableSynopsisState extends State<ExpandableSynopsis> {
 
   @override
   Widget build(BuildContext context) {
-    final bodyStyle =
-        widget.style ?? _t(12.5, a: 0.78).copyWith(height: 1.5);
+    final bodyStyle = widget.style ?? _t(12.5, a: 0.78).copyWith(height: 1.5);
     final actionStyle =
         widget.actionStyle ??
         _t(10.5, w: FontWeight.w700, a: 0.9).copyWith(letterSpacing: 0.8);
@@ -1327,7 +1321,7 @@ class _MetaLine extends StatelessWidget {
         Text(bits.join(' · '), style: _t(10.5 * scale, a: 0.86)),
         if (m.rating != null) ...[
           const SizedBox(width: 7),
-          _RatingBox(value: m.rating!),
+          DetailRatingBox(value: m.rating!),
         ],
         if (m.hasMdblist) ...[
           const SizedBox(width: 5),
@@ -1375,14 +1369,16 @@ class _TrackerMark extends StatelessWidget {
   }
 }
 
-class _RatingBox extends StatelessWidget {
+/// Shared outlined rating readout for detail-adjacent metadata.
+class DetailRatingBox extends StatelessWidget {
   final double value;
+  final double scale;
 
-  const _RatingBox({required this.value});
+  const DetailRatingBox({required this.value, this.scale = 1});
 
   @override
   Widget build(BuildContext context) {
-    final k = ShowcaseMetrics.of(context).k;
+    final k = ShowcaseMetrics.of(context).k * scale;
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 3 * k, vertical: 0.5 * k),
       decoration: BoxDecoration(
@@ -1398,7 +1394,7 @@ bool _hasHonors(DetailModel m) =>
     m.imdbExtra?.top250Rank != null || m.imdbExtra?.meterRank != null;
 
 /// The honors row — IMDb Top 250 position and the popularity meter, as
-/// hairline small-caps chips in the family of [_RatingBox]. Readout, never
+/// hairline small-caps chips in the family of [DetailRatingBox]. Readout, never
 /// focusable; monochrome so it sits under the artwork instead of on top of it.
 class _HonorsLine extends StatelessWidget {
   final DetailModel model;
@@ -1691,7 +1687,10 @@ class _PrimaryState extends State<_Primary> {
           // edge to edge. Cap it at a comfortable thumb-sized pill instead.
           return compact
               ? ConstrainedBox(
-                  constraints: const BoxConstraints(minWidth: 168, maxWidth: 220),
+                  constraints: const BoxConstraints(
+                    minWidth: 168,
+                    maxWidth: 220,
+                  ),
                   child: pill,
                 )
               : pill;
@@ -1866,7 +1865,9 @@ class ShowcaseSeasons extends StatelessWidget {
             label: 'Season ${s.number}',
             active: active,
             onTap: () => view.selectSeason(s.number),
-            onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(s.number),
+            onOptions: view.seasonOptions == null
+                ? null
+                : () => view.seasonOptions!(s.number),
           );
         },
       ),
@@ -1899,7 +1900,7 @@ class _SeasonDropdownState extends State<_SeasonDropdown> {
     if (box == null || overlay == null) return;
     final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
     final selected = await showMenu<int>(
-popUpAnimationStyle: kPopupMenuAnimation,
+      popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: RelativeRect.fromLTRB(
         origin.dx,
@@ -1934,39 +1935,45 @@ popUpAnimationStyle: kPopupMenuAnimation,
 
   @override
   Widget build(BuildContext context) {
-    return SeasonActionRegion(onTap: _open,
-      onOptions: widget.view.seasonOptions == null ? null : () => widget.view.seasonOptions!(widget.view.selectedSeasonNumber),
+    return SeasonActionRegion(
+      onTap: _open,
+      onOptions: widget.view.seasonOptions == null
+          ? null
+          : () => widget.view.seasonOptions!(widget.view.selectedSeasonNumber),
       child: Focus(
-      focusNode: widget.node,
-      onFocusChange: (v) => setState(() => _f = v),
-      onKeyEvent: (_, e) => widget.view.seasonOptions == null ? _activate(e, _open) : KeyEventResult.ignored,
-      child: GestureDetector(
-        onTap: _open,
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: _ink.withValues(alpha: _f ? 0.22 : 0.12),
-            borderRadius: BorderRadius.circular(17),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Season ${widget.view.selectedSeasonNumber}',
-                style: _t(14, w: FontWeight.w600),
-              ),
-              const SizedBox(width: 7),
-              const Icon(
-                Icons.keyboard_arrow_down_rounded,
-                size: 17,
-                color: Colors.white70,
-              ),
-            ],
+        focusNode: widget.node,
+        onFocusChange: (v) => setState(() => _f = v),
+        onKeyEvent: (_, e) => widget.view.seasonOptions == null
+            ? _activate(e, _open)
+            : KeyEventResult.ignored,
+        child: GestureDetector(
+          onTap: _open,
+          child: Container(
+            height: 34,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: _ink.withValues(alpha: _f ? 0.22 : 0.12),
+              borderRadius: BorderRadius.circular(17),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Season ${widget.view.selectedSeasonNumber}',
+                  style: _t(14, w: FontWeight.w600),
+                ),
+                const SizedBox(width: 7),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 17,
+                  color: Colors.white70,
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -1995,49 +2002,55 @@ class _SeasonPillState extends State<_SeasonPill> {
   @override
   Widget build(BuildContext context) {
     final k = ShowcaseMetrics.of(context).k;
-    return SeasonActionRegion(onTap: widget.onTap, onOptions: widget.onOptions, child: Focus(
-      focusNode: widget.node,
-      onFocusChange: (v) {
-        setState(() => _f = v);
-        if (v) _keepVisible(context);
-      },
-      // Selecting on FOCUS would reload the episode list on every step of a
-      // walk across the seasons. OK commits; the walk is free.
-      onKeyEvent: (_, e) => widget.onOptions == null ? _activate(e, widget.onTap) : KeyEventResult.ignored,
-      // The wide row is what every TOUCH tablet gets (compact swaps in the
-      // dropdown below 600), so the pill needs a finger path too — OK-only
-      // left the season control dead under a finger. Opaque: the pill draws
-      // no background until it is focused or active, and a bare DecoratedBox
-      // defers the hit test to the Text, so the padding would miss.
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: ParallaxFocus(
-          focused: _f,
-          shape: ParallaxShape.pill,
-          radius: BorderRadius.circular(12.5 * k),
-          child: Container(
-            height: 25 * k,
-            alignment: Alignment.center,
-            padding: EdgeInsets.symmetric(horizontal: 15 * k),
-            decoration: BoxDecoration(
-              color: (_f || widget.active)
-                  ? _ink.withValues(alpha: _f ? 0.28 : 0.18)
-                  : null,
-              borderRadius: BorderRadius.circular(12.5 * k),
-            ),
-            child: Text(
-              widget.label,
-              style: _t(
-                12.5 * k,
-                w: FontWeight.w600,
-                a: widget.active || _f ? 1 : 0.55,
+    return SeasonActionRegion(
+      onTap: widget.onTap,
+      onOptions: widget.onOptions,
+      child: Focus(
+        focusNode: widget.node,
+        onFocusChange: (v) {
+          setState(() => _f = v);
+          if (v) _keepVisible(context);
+        },
+        // Selecting on FOCUS would reload the episode list on every step of a
+        // walk across the seasons. OK commits; the walk is free.
+        onKeyEvent: (_, e) => widget.onOptions == null
+            ? _activate(e, widget.onTap)
+            : KeyEventResult.ignored,
+        // The wide row is what every TOUCH tablet gets (compact swaps in the
+        // dropdown below 600), so the pill needs a finger path too — OK-only
+        // left the season control dead under a finger. Opaque: the pill draws
+        // no background until it is focused or active, and a bare DecoratedBox
+        // defers the hit test to the Text, so the padding would miss.
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: ParallaxFocus(
+            focused: _f,
+            shape: ParallaxShape.pill,
+            radius: BorderRadius.circular(12.5 * k),
+            child: Container(
+              height: 25 * k,
+              alignment: Alignment.center,
+              padding: EdgeInsets.symmetric(horizontal: 15 * k),
+              decoration: BoxDecoration(
+                color: (_f || widget.active)
+                    ? _ink.withValues(alpha: _f ? 0.28 : 0.18)
+                    : null,
+                borderRadius: BorderRadius.circular(12.5 * k),
+              ),
+              child: Text(
+                widget.label,
+                style: _t(
+                  12.5 * k,
+                  w: FontWeight.w600,
+                  a: widget.active || _f ? 1 : 0.55,
+                ),
               ),
             ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -2474,7 +2487,12 @@ class ShowcaseCast extends StatelessWidget {
   final List<FocusNode> nodes;
   final ValueChanged<CastMember>? onPersonOpen;
 
-  const ShowcaseCast({super.key, required this.cast, required this.nodes, this.onPersonOpen});
+  const ShowcaseCast({
+    super.key,
+    required this.cast,
+    required this.nodes,
+    this.onPersonOpen,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2488,12 +2506,17 @@ class ShowcaseCast extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: cast.length,
         separatorBuilder: (_, __) => SizedBox(width: m.castGap),
-        itemBuilder: (context, i) =>
-            _CastTile(member: cast[i], node: nodes[i], size: m.circle,
-              onTap: onPersonOpen != null &&
-                      ((cast[i].tmdbPersonId ?? 0) > 0 ||
-                          cast[i].imdbPersonId != null)
-                  ? () => onPersonOpen!(cast[i]) : null),
+        itemBuilder: (context, i) => _CastTile(
+          member: cast[i],
+          node: nodes[i],
+          size: m.circle,
+          onTap:
+              onPersonOpen != null &&
+                  ((cast[i].tmdbPersonId ?? 0) > 0 ||
+                      cast[i].imdbPersonId != null)
+              ? () => onPersonOpen!(cast[i])
+              : null,
+        ),
       ),
     );
   }
@@ -2538,55 +2561,57 @@ class _CastTileState extends State<_CastTile> {
           onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
           child: _Hover(
-        cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-        builder: (context, hovered) => SizedBox(
-          width: widget.size,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ParallaxFocus(
-                focused: _f || hovered,
-                shape: ParallaxShape.castCircle,
-                radius: BorderRadius.circular(widget.size / 2),
-                child: ClipOval(
-                  child: SizedBox(
-                    width: widget.size,
-                    height: widget.size,
-                    child: (url != null && url.isNotEmpty)
-                        ? CachedNetworkImage(
-                            imageUrl: url,
-                            fit: BoxFit.cover,
-                            cacheManager: DebrifyImageCache.manager,
-                            memCacheWidth: 260,
-                            placeholder: (_, __) =>
-                                const ColoredBox(color: Color(0xFF4A4A55)),
-                            errorWidget: (_, __, ___) =>
-                                const ColoredBox(color: Color(0xFF4A4A55)),
-                          )
-                        : const ColoredBox(color: Color(0xFF4A4A55)),
+            cursor: widget.onTap != null
+                ? SystemMouseCursors.click
+                : MouseCursor.defer,
+            builder: (context, hovered) => SizedBox(
+              width: widget.size,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ParallaxFocus(
+                    focused: _f || hovered,
+                    shape: ParallaxShape.castCircle,
+                    radius: BorderRadius.circular(widget.size / 2),
+                    child: ClipOval(
+                      child: SizedBox(
+                        width: widget.size,
+                        height: widget.size,
+                        child: (url != null && url.isNotEmpty)
+                            ? CachedNetworkImage(
+                                imageUrl: url,
+                                fit: BoxFit.cover,
+                                cacheManager: DebrifyImageCache.manager,
+                                memCacheWidth: 260,
+                                placeholder: (_, __) =>
+                                    const ColoredBox(color: Color(0xFF4A4A55)),
+                                errorWidget: (_, __, ___) =>
+                                    const ColoredBox(color: Color(0xFF4A4A55)),
+                              )
+                            : const ColoredBox(color: Color(0xFF4A4A55)),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 9),
+                  Text(
+                    widget.member.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: _t(12.5 * k),
+                  ),
+                  if ((widget.member.character ?? '').isNotEmpty)
+                    Text(
+                      widget.member.character!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: _t(11.5 * k, a: 0.55),
+                    ),
+                ],
               ),
-              const SizedBox(height: 9),
-              Text(
-                widget.member.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: _t(12.5 * k),
-              ),
-              if ((widget.member.character ?? '').isNotEmpty)
-                Text(
-                  widget.member.character!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: _t(11.5 * k, a: 0.55),
-                ),
-            ],
+            ),
           ),
-        ),
-      ),
         ),
       ),
     );
@@ -2864,8 +2889,8 @@ class _PosterState extends State<_Poster> {
         if (v) _keepVisible(context);
         if (!v) _hold.reset();
       },
-      onKeyEvent: (_, e) => widget.onHold != null &&
-              isActivateOrSpaceKey(e.logicalKey)
+      onKeyEvent: (_, e) =>
+          widget.onHold != null && isActivateOrSpaceKey(e.logicalKey)
           ? _hold.handle(e)
           : _activate(e, () => widget.onTap?.call(widget.item)),
       child: _Hover(

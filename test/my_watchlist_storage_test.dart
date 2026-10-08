@@ -65,6 +65,16 @@ void main() {
     expect(saved.single.name, 'Fresh');
   });
 
+  test('keeps the earliest tracker addition time when records merge', () async {
+    final item = _title(id: 'tt1234567', imdbId: 'tt1234567');
+    await StorageService.setMyWatchlistItem(item, true, addedAtMs: 200);
+    await StorageService.setMyWatchlistItem(item, true, addedAtMs: 100);
+
+    final prefs = await SharedPreferences.getInstance();
+    final rows = jsonDecode(prefs.getString('my_watchlist_v1')!) as List;
+    expect((rows.single as Map)['addedAt'], 100);
+  });
+
   test('namespaces non-IMDb ids by source addon', () async {
     final addonA = StremioAddon(
       id: 'addon.a',
@@ -111,34 +121,40 @@ void main() {
       stored.id,
     );
     expect(
-      StorageService.withMyWatchlistSource(sourceLess, fallback).sourceAddon?.id,
+      StorageService.withMyWatchlistSource(
+        sourceLess,
+        fallback,
+      ).sourceAddon?.id,
       fallback.id,
     );
   });
 
-  test('source normalization keeps non-IMDb lookup and removal stable', () async {
-    final fallback = StremioAddon(
-      id: 'xtream-iptv',
-      name: 'Xtream',
-      manifestUrl: '',
-      baseUrl: '',
-    );
-    final sourceLess = _title(
-      id: 'xtream-series:playlist:77',
-      type: 'series',
-      name: 'Direct Series',
-    );
-    final identity = StorageService.withMyWatchlistSource(
-      sourceLess,
-      fallback,
-    );
+  test(
+    'source normalization keeps non-IMDb lookup and removal stable',
+    () async {
+      final fallback = StremioAddon(
+        id: 'xtream-iptv',
+        name: 'Xtream',
+        manifestUrl: '',
+        baseUrl: '',
+      );
+      final sourceLess = _title(
+        id: 'xtream-series:playlist:77',
+        type: 'series',
+        name: 'Direct Series',
+      );
+      final identity = StorageService.withMyWatchlistSource(
+        sourceLess,
+        fallback,
+      );
 
-    await StorageService.setMyWatchlistItem(identity, true);
-    expect(await StorageService.isInMyWatchlist(identity), isTrue);
-    await StorageService.setMyWatchlistItem(identity, false);
-    expect(await StorageService.isInMyWatchlist(identity), isFalse);
-    expect(await StorageService.getMyWatchlistItems(), isEmpty);
-  });
+      await StorageService.setMyWatchlistItem(identity, true);
+      expect(await StorageService.isInMyWatchlist(identity), isTrue);
+      await StorageService.setMyWatchlistItem(identity, false);
+      expect(await StorageService.isInMyWatchlist(identity), isFalse);
+      expect(await StorageService.getMyWatchlistItems(), isEmpty);
+    },
+  );
 
   test('canonicalizes an older un-namespaced fallback key', () async {
     final prefs = await SharedPreferences.getInstance();

@@ -46,7 +46,8 @@ class ReelTitle {
 /// requests for a batch run in parallel (the repository paces and caches
 /// them), so a fling through the feed is never waiting on one title at a time.
 ///
-/// Movies and shows alternate. A title is handed out once per app session,
+/// Movie and show candidates alternate; playable clips arrive as soon as their
+/// metadata does. A title is handed out once per app session,
 /// and the clip is picked at random among its official clips, so a title
 /// that comes back later shows another scene.
 class ReelsFeed {
@@ -98,6 +99,8 @@ class ReelsFeed {
   int _turn = 0;
   final Set<String> _visited = {};
   final List<(String, ReelTitle)> _ready = [];
+  int _pendingConfirmations = 0;
+  Completer<void>? _confirmationChanged;
   bool _requestFailed = false;
   final Set<String> _failedClips = {};
   bool _sourceLoaded = false;
@@ -126,9 +129,12 @@ class ReelsFeed {
 
   /// Distinguish unavailable metadata from a search that found no scene clips.
   bool get lastRequestFailed => _requestFailed;
-  bool get exhausted => _exhausted.length == _types.length && _ready.isEmpty;
+  bool get exhausted =>
+      _exhausted.length == _types.length &&
+      _ready.isEmpty &&
+      _pendingConfirmations == 0;
 
-  /// Up to [count] titles that have a clip, in alternating movie/show order.
+  /// Up to [count] titles that have a clip, as soon as they are playable.
   /// Fewer (possibly none) when the lists run dry or TMDB is unreachable.
   Future<List<ReelTitle>> take(int count, {bool allowRepeat = false}) async {
     if (!available || count <= 0) return const [];
@@ -152,11 +158,20 @@ class ReelsFeed {
       }
     }
 
-    drainReady();
+    Future<void> drainPending() async {
+      drainReady();
+      while (found.length < count && _pendingConfirmations > 0) {
+        await (_confirmationChanged ??= Completer<void>()).future;
+        drainReady();
+      }
+    }
+
+    await drainPending();
     // Scene clips are sparse among popular titles. Even take(1) must search
     // a useful window instead of declaring the entire feed empty after six
     // candidates. Keep extra confirmed clips for the following swipe.
     for (var round = 0; round < 8 && found.length < count; round++) {
+      if (_requestFailed) break;
       final batch = <(String, Map<String, dynamic>)>[];
       while (batch.length < 8) {
         final next = await _nextCandidate(language);
@@ -164,18 +179,23 @@ class ReelsFeed {
         batch.add(next);
       }
       if (batch.isEmpty) break;
-      final confirmed = await Future.wait([
-        for (final (type, row) in batch) _confirm(type, row, language),
-      ]);
-      for (var i = 0; i < confirmed.length; i++) {
-        final title = confirmed[i];
-        if (title != null) {
-          final key = '${batch[i].$1}:${batch[i].$2['id']}';
-          _known[key] = title;
-          _ready.add((key, title));
-        }
+      for (final (type, row) in batch) {
+        _pendingConfirmations++;
+        unawaited(_confirm(type, row, language).then((title) {
+          if (title != null) {
+            final key = '$type:${row['id']}';
+            _known[key] = title;
+            _ready.add((key, title));
+          }
+          _pendingConfirmations--;
+          final changed = _confirmationChanged;
+          _confirmationChanged = null;
+          changed?.complete();
+        }));
       }
-      drainReady();
+      // Return the first playable scenes immediately. The other confirmations
+      // keep filling the queue for upcoming swipes without blocking playback.
+      await drainPending();
       // A failed request is retryable; do not fan out more work on a broken
       // connection or consume the same failed candidates again in this call.
       if (_requestFailed) break;
@@ -406,6 +426,9 @@ class ReelsFeed {
               if (genre is Map && genre['name'] is String)
                 genre['name'] as String,
           ],
+          // The details payload already carries TMDB's vote average. Keep it
+          // on the reel item so the UI does not need another metadata request.
+          imdbRating: (data['vote_average'] as num?)?.toDouble(),
           year: date != null && date.length >= 4 ? date.substring(0, 4) : null,
         ),
         clipKey: clip.key,
@@ -414,6 +437,7 @@ class ReelsFeed {
     } catch (_) {
       _requestFailed = true;
       _visited.remove('$type:${row['id']}');
+      _exhausted.remove(type);
       _pool[type]!.insert(0, row);
       return null;
     }

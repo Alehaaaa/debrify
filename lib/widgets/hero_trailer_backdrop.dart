@@ -466,6 +466,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         _startTimer = null;
         _engine?.pause();
       } else if (_engine != null) {
+        _applyVolume(foreground: widget.foreground);
         if (!_pausedByUser && !_covered && !_appPaused) _engine!.play();
       } else if (_canPlay && !_covered && !_appPaused) {
         _scheduleStart();
@@ -539,14 +540,16 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       if (!mounted || !_canPlay || _covered || _appPaused) return;
       // A Reels page may ask us to decode the next clip while it is suspended
       // beneath an in-progress swipe. Open it and pause on the first frame;
-      // this works for serialized engines too once the outgoing lease yields.
-      if (widget.suspended && !widget.prewarm) return;
+      // Single-output engines start only when active. A queued offscreen
+      // prewarm could otherwise win the released lease ahead of the newly
+      // selected reel and hold that lease indefinitely while paused.
+      if (!_mayStartPlayer) return;
       _initPlayer();
     });
   }
 
   Future<void> _initPlayer() async {
-    if (_engine != null) return;
+    if (_engine != null || !_mayStartPlayer) return;
     final usePlatformView = _usePlatformView;
     final url = _playbackUrl;
     if (url == null || url.isEmpty) return;
@@ -570,7 +573,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
               gen == _engineGen &&
               !_covered &&
               !_appPaused &&
-              _canPlay,
+              _canPlay &&
+              _mayStartPlayer,
         );
       }
     } catch (_) {
@@ -585,6 +589,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         _covered ||
         _appPaused ||
         !_canPlay ||
+        !_mayStartPlayer ||
         _playbackUrl != url) {
       // Nothing else knows this engine exists, so nothing else will dispose it
       // — and its lease would be stranded.
@@ -623,10 +628,22 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // frame has actually RENDERED — `playing` flips true the moment open()
     // starts, long before frames exist, which would kill the loading spinner
     // early and crossfade onto a black/buffering surface.
-    engine.firstFrameRendered.then((_) {
+    engine.firstFrameRendered.then((_) async {
       if (!mounted || _engine != engine || _videoVisible) return;
       _firstFrameTimer?.cancel();
       _firstFrameTimer = null;
+      if (widget.prewarm && widget.suspended) {
+        // Exo open() completes at prepare(), before a frame exists. Let it
+        // preroll silently, then retain the decoded frame and buffer. A swipe
+        // that takes ownership during pause must win over this stale command.
+        await engine.pause();
+        if (!mounted || _engine != engine) return;
+        if (!widget.suspended && !_covered && !_appPaused && !_pausedByUser) {
+          _applyVolume(foreground: widget.foreground);
+          await engine.play();
+          if (!mounted || _engine != engine) return;
+        }
+      }
       // Resume a reel before applying the decorative trailer intro skip.
       final resumeAt = widget.initialPosition;
       if (resumeAt != null && resumeAt > Duration.zero) {
@@ -712,16 +729,20 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         // video-only — mux the separate audio track in for sound (the same
         // path the main player uses for high-res YouTube).
         audioUrl: usePlatformView ? null : widget.audioUrl,
-        volume: _userMuted ? 0 : widget.ambientVolume,
+        volume: _userMuted || (widget.prewarm && widget.suspended)
+            ? 0
+            : widget.ambientVolume,
         loop: widget.repeat && !widget.live,
         httpHeaders: widget.httpHeaders,
       );
       if (_engine != engine) return;
       _applyVolume(foreground: widget.foreground);
       // Suspended while the stream was opening: open() plays immediately.
-      if (widget.suspended || _covered || _appPaused) {
+      if (_covered ||
+          _appPaused ||
+          (widget.suspended && (!widget.prewarm || _videoVisible))) {
         await engine.pause();
-      } else if (widget.prewarm && usePlatformView) {
+      } else if (!widget.suspended && usePlatformView) {
         // The prepared controller opens paused, including when a swipe lands
         // during initialize(). Resume only if this reel still owns playback.
         await engine.play();
@@ -740,6 +761,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   bool get _supportsConcurrentPrewarm =>
       _usePlatformView ||
       (!kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached);
+
+  bool get _mayStartPlayer =>
+      !widget.suspended || (widget.prewarm && _supportsConcurrentPrewarm);
 
   /// See [HeroTrailerBackdrop.onPlaybackFailed]. Post-frame so a failure
   /// landing inside a parent build can't re-enter setState mid-build.
@@ -907,7 +931,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Muted → 0; foreground → full; ambient → deliberately low.
   void _applyVolume({required bool foreground}) {
     _engine?.setVolume(
-      _userMuted ? 0 : (foreground ? _foregroundVolume : widget.ambientVolume),
+      _userMuted || (widget.prewarm && widget.suspended && !foreground)
+          ? 0
+          : (foreground ? _foregroundVolume : widget.ambientVolume),
     );
   }
 

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,10 +7,14 @@ import 'package:flutter/services.dart';
 import '../models/stremio_addon.dart';
 import '../services/debrify_image_cache.dart';
 import '../services/main_page_bridge.dart';
+import '../services/local_series_completion_service.dart';
 import '../services/offline_title_store.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
+import '../services/reel_share_service.dart';
 import '../services/storage_service.dart';
+import '../services/watchlist_sync_service.dart';
+import '../widgets/detail/showcase_parts.dart' show DetailRatingBox;
 import '../services/simkl/simkl_service.dart';
 import '../services/trakt/trakt_service.dart';
 import '../services/youtube_service.dart';
@@ -34,7 +37,6 @@ class _Reel {
   int revision = 0;
   Duration position = Duration.zero;
   DateTime? leftAt;
-  bool firstFrameReady = false;
 
   StremioMeta get item => title.item;
 }
@@ -66,9 +68,15 @@ class _ReelsSession {
 /// reel shows already known (see [ReelsFeed] — one TMDB request per title),
 /// so a reel paints its backdrop the moment it's on screen. The clip's stream
 /// is resolved for the reel on screen and a bounded look-ahead window.
-/// Only the visible high-resolution reel owns the decoder.
+/// The visible reel and one adjacent clip stay prepared where the native
+/// player supports it; only the visible reel is audible.
 class ReelsScreen extends StatefulWidget {
   final bool isTelevision;
+
+  /// Whether this tab is the shell's currently visible destination.  Reels is
+  /// kept alive by the touch tab pager while its neighbour is shown, so this
+  /// must be explicit rather than relying on dispose to stop its audio/video.
+  final bool isActive;
 
   /// The shell overlays its navigation capsule in the lower-right corner.
   final bool floatingNav;
@@ -88,6 +96,7 @@ class ReelsScreen extends StatefulWidget {
   const ReelsScreen({
     super.key,
     this.isTelevision = false,
+    this.isActive = true,
     this.floatingNav = false,
     this.feed,
     this.resolver,
@@ -162,15 +171,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
   WatchlistAddedBubbleHandle? _watchlistBubble;
 
   int _index = 0;
-  // Keep the active decoder on the page that is leaving until that page is
-  // mostly gone. Tearing a texture/platform-view down at PageView's midpoint
-  // is visible as a hitch, especially on devices with one high-res output.
-  int _playbackIndex = 0;
   bool _pageWorkPending = false;
   int? _swipePreviewIndex;
-  bool _freezeOutgoingForHandoff = false;
-  bool _incomingStarted = false;
-  double _dragProgress = 0;
+  bool _sharing = false;
   bool _filling = false;
   bool _exhausted = false;
   bool _refreshing = false;
@@ -198,7 +201,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
     _feed = saved?.feed ?? widget.feed ?? ReelsFeed();
     _reels = saved?.reels ?? [];
     _index = saved?.index ?? 0;
-    _playbackIndex = _index;
     _pages = PageController(initialPage: _index, keepPage: false);
     // Returning from the detail page restores the frame without resuming audio
     // or motion behind the user.
@@ -240,12 +242,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
         // for the entire look-ahead batch to finish fetching metadata.
         final titles = await _feed.take(
           _reels.isEmpty ? 1 : need,
-          allowRepeat: true,
+          // A reopened Reels tab gets the session-wide unseen queue, never a
+          // replay just because the first discovery window ran dry.
+          allowRepeat: false,
         );
         if (!_current) return;
         final unseen = await Future.wait([
           for (final title in titles)
-            _isWatched(title.item).then((watched) => watched ? null : title),
+            _shouldExclude(
+              title.item,
+            ).then((excluded) => excluded ? null : title),
         ]);
         if (!_current) return;
         final playable = [for (final title in unseen) ?title];
@@ -319,7 +325,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
                     // more lines than a card preview.
                     maxHeightOverride: 1080,
-                    preferMuxed: false,
+                    preferMuxed: PlatformUtil.isIosMobile,
                     preferVp9: false,
                   ))
               .timeout(const Duration(seconds: 30));
@@ -364,7 +370,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _refreshing = true);
     HapticFeedback.mediumImpact();
     try {
-      final titles = await _feed.take(1, allowRepeat: true);
+      final titles = await _feed.take(1, allowRepeat: false);
       if (!_current || titles.isEmpty) return;
       setState(() {
         final reel = _Reel(titles.first);
@@ -396,11 +402,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _index = index;
       _paused = false;
     });
-    // PageView reports the new page at the midpoint. Keep the old player
-    // alive while the pages are still moving, then hand off the decoder once
-    // the spring comes to rest. This is the same pause/retain discipline used
-    // by the Home spotlight trailer.
+    // Ownership changes at the midpoint: the prepared incoming player starts
+    // while the swipe is still moving, rather than after the spring settles.
     _pageWorkPending = true;
+    unawaited(_resolve(index));
   }
 
   void _settlePage() {
@@ -408,11 +413,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     final pageChanged = _pageWorkPending;
     _pageWorkPending = false;
     setState(() {
-      _playbackIndex = _index;
       _swipePreviewIndex = null;
-      _freezeOutgoingForHandoff = false;
-      _incomingStarted = false;
-      _dragProgress = 0;
     });
     if (!pageChanged) return;
     HapticFeedback.selectionClick();
@@ -420,34 +421,6 @@ class _ReelsScreenState extends State<ReelsScreen> {
     // devices. Start them after, never during, the page animation.
     unawaited(_fill());
     _prepare();
-  }
-
-  bool get _supportsParallelFramePreparation =>
-      PlatformUtil.isIosMobile || PlatformUtil.isAndroidTvCached;
-
-  void _startIncoming(int index) {
-    if (_incomingStarted || index < 0 || index >= _reels.length) return;
-    setState(() {
-      _incomingStarted = true;
-      _playbackIndex = index;
-      _freezeOutgoingForHandoff = false;
-    });
-  }
-
-  void _onFirstFrameReady(_Reel reel) {
-    if (!_current || reel.firstFrameReady) return;
-    final index = _reels.indexOf(reel);
-    if (index < 0) return;
-    setState(() => reel.firstFrameReady = true);
-    // On engines that can truly prepare in parallel, preserve the outgoing
-    // held frame until the incoming video has rendered. Single-output engines
-    // still switch at 90% so releasing their decoder starts the only possible
-    // preparation path.
-    if (_supportsParallelFramePreparation &&
-        _dragProgress >= .90 &&
-        index == _swipePreviewIndex) {
-      _startIncoming(index);
-    }
   }
 
   void _playbackFailed(_Reel reel, int revision) {
@@ -484,7 +457,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _togglePause() {
-    if (_reels[_index].state != _ClipState.ready) return;
+    if (_reels.isEmpty || _reels[_index].state != _ClipState.ready) return;
     HapticFeedback.selectionClick();
     setState(() => _paused = !_paused);
   }
@@ -529,7 +502,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _pages
           .animateToPage(
             index,
-            duration: const Duration(milliseconds: 320),
+            duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
           )
           .whenComplete(() {
@@ -558,42 +531,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
       if (_pull != 0) setState(() => _pull = 0);
       return false;
     }
-    // Start preparing on the first visible sliver, rather than waiting for the
-    // PageView to settle. At 75% freeze the old frame; at 90% hand playback to
-    // the already-prepared incoming clip.
+    // A backward drag primes the previous clip as soon as it appears. Forward
+    // swipes already have the next page mounted and preparing at rest.
     final dragPage = _dragPage;
     if (dragPage != null && n.metrics.viewportDimension > 0) {
-      final page = n.metrics.pixels / n.metrics.viewportDimension;
-      final progress = page - dragPage;
-      _dragProgress = progress.abs();
-      if (progress.abs() >= .02) {
-        final candidate = (dragPage + progress.sign.toInt()).clamp(
-          0,
-          _reels.length - 1,
-        );
-        if (candidate != _swipePreviewIndex) {
-          setState(() {
-            _swipePreviewIndex = candidate;
-          });
-        }
-        final distance = _dragProgress;
-        if (distance >= .75 && !_freezeOutgoingForHandoff) {
-          setState(() => _freezeOutgoingForHandoff = true);
-        } else if (distance < .70 && _freezeOutgoingForHandoff) {
-          setState(() => _freezeOutgoingForHandoff = false);
-        }
-        if (distance >= .90 &&
-            (!_supportsParallelFramePreparation ||
-                _reels[candidate].firstFrameReady)) {
-          _startIncoming(candidate);
-        } else if (distance < .85 && _incomingStarted) {
-          // A cancelled drag returns control to the page it began on.
-          setState(() {
-            _incomingStarted = false;
-            _playbackIndex = dragPage;
-            _freezeOutgoingForHandoff = false;
-          });
-        }
+      final progress =
+          n.metrics.pixels / n.metrics.viewportDimension - dragPage;
+      final candidate = progress.abs() < .02
+          ? null
+          : (dragPage + progress.sign.toInt()).clamp(0, _reels.length - 1);
+      if (candidate != _swipePreviewIndex) {
+        setState(() => _swipePreviewIndex = candidate);
+        if (candidate != null) unawaited(_resolve(candidate));
       }
     }
     if (_dragPage != 0) return false;
@@ -646,7 +595,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
         : null;
     if (next) _watchlistBubble = bubble;
     try {
-      await StorageService.setMyWatchlistItem(await _watchlistItem(item), next);
+      await WatchlistSyncService.setMyWatchlistItem(
+        await _watchlistItem(item),
+        next,
+      );
       if (!mounted) return;
       if (next) return;
       ScaffoldMessenger.of(context)
@@ -672,22 +624,53 @@ class _ReelsScreenState extends State<ReelsScreen> {
     unawaited(_toggleWatchlist(item, origin: origin));
   }
 
-  /// Do not surface a title already completed by either connected tracker.
-  /// Both services return null for disconnected/temporarily unavailable
-  /// accounts, which deliberately leaves the candidate in the feed.
-  Future<bool> _isWatched(StremioMeta item) async {
+  /// Keep saved and completed titles out of discovery without hiding a title
+  /// that is merely in progress. Tracker calls return null when unavailable,
+  /// deliberately leaving the candidate eligible rather than treating a
+  /// temporary outage as an empty library.
+  Future<bool> _shouldExclude(StremioMeta item) async {
     final imdb = item.effectiveImdbId;
     if (imdb == null) return false;
     try {
-      final statuses = await Future.wait([
+      final series = item.type == 'series';
+      final statuses = await Future.wait<Object?>([
+        StorageService.isInMyWatchlist(item),
+        series
+            ? Future.wait([
+                StorageService.getExplicitlyWatchedSeriesIds(),
+                LocalSeriesCompletionService.instance.caughtUpIds(),
+              ])
+            : StorageService.isMovieFinished(imdb),
         TraktService.instance.fetchTitleStatus(imdb, item.type),
         SimklService.instance.fetchTitleStatus(imdb, contentType: item.type),
       ]);
-      final trakt = statuses[0] as TraktTitleStatus?;
-      final simkl = statuses[1] as SimklTitleStatus?;
-      return trakt?.titleWatched == true || simkl?.currentStatus == 'completed';
+      final localWatchlist = statuses[0] as bool;
+      final localFinished = series
+          ? (statuses[1] as List<Object?>).cast<Set<String>>().any(
+              (ids) => ids.contains(imdb.toLowerCase()),
+            )
+          : statuses[1] as bool;
+      final trakt = statuses[2] as TraktTitleStatus?;
+      final simkl = statuses[3] as SimklTitleStatus?;
+      return localWatchlist ||
+          localFinished ||
+          trakt?.inWatchlist == true ||
+          trakt?.titleWatched == true ||
+          simkl?.currentStatus == 'plantowatch' ||
+          simkl?.currentStatus == 'completed';
     } catch (_) {
       return false;
+    }
+  }
+
+  Future<void> _share(_Reel reel, Rect origin) async {
+    if (_sharing) return;
+    HapticFeedback.selectionClick();
+    setState(() => _sharing = true);
+    try {
+      await const ReelShareService().share(context, reel.title, origin: origin);
+    } finally {
+      if (mounted) setState(() => _sharing = false);
     }
   }
 
@@ -740,15 +723,17 @@ class _ReelsScreenState extends State<ReelsScreen> {
       // Keep the normal next Reel opening while this one plays. During a drag,
       // the first visible adjacent page takes priority (including a backward
       // swipe) so it is the one held on its first frame.
-      final prewarmIndex =
-          _swipePreviewIndex ?? ((_dragPage ?? _index) + 1);
+      final preview = _swipePreviewIndex;
+      final prewarmIndex = preview != null && preview != _index
+          ? preview
+          : _index + 1;
       body = NotificationListener<ScrollNotification>(
         onNotification: _onScroll,
         child: PageView.builder(
           controller: _pages,
-          // Upcoming URLs resolve ahead; keep the high-resolution decoder
-          // exclusive to the visible page on platforms with one output slot.
-          allowImplicitScrolling: false,
+          // Lay out the adjacent page before a gesture. KeepAlive alone cannot
+          // prepare an item that the sliver has never built.
+          allowImplicitScrolling: true,
           scrollDirection: Axis.vertical,
           // The bounce is what lets the first reel be pulled down.
           // Use our single-gesture snapper, rather than adding PageView's own
@@ -764,18 +749,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
               key: ValueKey('$i:${_watchKey(reel.item)}'),
               reel: reel,
               active: i == _index,
-              playbackActive: i == _playbackIndex,
+              playbackActive: widget.isActive && i == _index,
               // Preparation begins while the current Reel is playing and
               // continues for the page visible beneath a swipe.
-              prewarm: i == prewarmIndex,
+              prewarm: widget.isActive && !_sharing && i == prewarmIndex,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
-              paused: (i == _index && _paused) ||
-                  (i == _playbackIndex && _freezeOutgoingForHandoff),
-              // The 75% handoff freeze is not a user pause. Showing the play
-              // affordance for it creates a one-frame false paused state just
-              // before the next clip takes over.
+              paused: !widget.isActive || _sharing || (i == _index && _paused),
               showPauseOverlay: i == _index && _paused,
               onTogglePause: _togglePause,
               muted: _muted,
@@ -785,8 +766,8 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   _toggleWatchlist(reel.item, origin: origin),
               onAddToWatchlist: (origin) => _addToWatchlist(reel.item, origin),
               onOpen: () => _open(reel.item),
+              onShare: (origin) => _share(reel, origin),
               onPosition: (position) => reel.position = position,
-              onFirstFrameReady: () => _onFirstFrameReady(reel),
               playerBuilder: widget.playerBuilder,
             );
           },
@@ -929,8 +910,8 @@ class _ReelPage extends StatefulWidget {
   final ValueChanged<Offset?> onWatchlist;
   final ValueChanged<Offset> onAddToWatchlist;
   final VoidCallback onOpen;
+  final ValueChanged<Rect> onShare;
   final ValueChanged<Duration> onPosition;
-  final VoidCallback onFirstFrameReady;
   final Widget Function(ReelPlayback playback)? playerBuilder;
 
   const _ReelPage({
@@ -951,8 +932,8 @@ class _ReelPage extends StatefulWidget {
     required this.onWatchlist,
     required this.onAddToWatchlist,
     required this.onOpen,
+    required this.onShare,
     required this.onPosition,
-    required this.onFirstFrameReady,
     required this.playerBuilder,
   });
 
@@ -969,6 +950,7 @@ class _ReelPageState extends State<_ReelPage>
   bool _tapDragged = false;
   Offset? _watchlistOrigin;
   final GlobalKey _watchlistActionKey = GlobalKey();
+  final GlobalKey _shareActionKey = GlobalKey();
   @override
   bool get wantKeepAlive => widget.prewarm;
 
@@ -976,6 +958,11 @@ class _ReelPageState extends State<_ReelPage>
   void didUpdateWidget(covariant _ReelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.prewarm != oldWidget.prewarm) updateKeepAlive();
+    if (!widget.active) {
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+    }
   }
 
   @override
@@ -1020,13 +1007,13 @@ class _ReelPageState extends State<_ReelPage>
     _pauseTapTimer = Timer(_doubleTapWindow, () {
       _pauseTapTimer = null;
       _firstTapPosition = null;
-      if (mounted) widget.onTogglePause();
+      if (mounted && widget.active) widget.onTogglePause();
     });
   }
 
   Offset _watchlistButtonCenter() {
-    final box = _watchlistActionKey.currentContext?.findRenderObject()
-        as RenderBox?;
+    final box =
+        _watchlistActionKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return Offset.zero;
     return box.localToGlobal(box.size.center(Offset.zero));
   }
@@ -1047,16 +1034,16 @@ class _ReelPageState extends State<_ReelPage>
       item: item,
       streams: reel.state == _ClipState.ready ? reel.streams : null,
       active: widget.playbackActive,
-      volume: widget.muted ? 0 : 100,
+      volume: widget.muted || !widget.playbackActive ? 0 : 100,
       paused: widget.paused,
       prewarm: widget.prewarm && reel.state != _ClipState.failed,
       initialPosition: reel.position > Duration.zero ? reel.position : null,
       onPosition: widget.onPosition,
-      onFirstFrameReady: widget.onFirstFrameReady,
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
     );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
+    final rating = item.imdbRating;
     final description = item.description?.trim();
     final clipName = reel.title.clipName;
     return Stack(
@@ -1068,6 +1055,12 @@ class _ReelPageState extends State<_ReelPage>
           onPointerDown: _onVideoPointerDown,
           onPointerMove: _onVideoPointerMove,
           onPointerUp: _onVideoPointerUp,
+          onPointerCancel: (_) {
+            _tapDragged = true;
+            _pauseTapTimer?.cancel();
+            _pauseTapTimer = null;
+            _firstTapPosition = null;
+          },
           behavior: HitTestBehavior.opaque,
           child:
               widget.playerBuilder?.call(playback) ??
@@ -1168,18 +1161,35 @@ class _ReelPageState extends State<_ReelPage>
                   ],
                 ),
               ],
-              if (genres.isNotEmpty) ...[
+              if (genres.isNotEmpty || rating != null) ...[
                 const SizedBox(height: 8),
-                Text(
-                  genres,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
-                  ),
+                Row(
+                  children: [
+                    if (genres.isNotEmpty)
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Text(
+                          genres,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(color: Colors.black54, blurRadius: 6),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (genres.isNotEmpty && rating != null)
+                      const SizedBox(width: 8),
+                    // The detail badge's native type is 7.5px. Scale every
+                    // part of it together to a quieter 11px readout beside
+                    // this 13px genre line without changing the detail UI.
+                    if (rating != null)
+                      DetailRatingBox(value: rating, scale: 11 / 7.5),
+                  ],
                 ),
               ],
               if (description != null && description.isNotEmpty) ...[
@@ -1197,26 +1207,43 @@ class _ReelPageState extends State<_ReelPage>
             mainAxisSize: MainAxisSize.min,
             children: [
               _ReelAction(
-                key: _watchlistActionKey,
                 icon: widget.muted
                     ? Icons.volume_off_rounded
                     : Icons.volume_up_rounded,
                 tooltip: widget.muted ? 'Unmute' : 'Mute',
+                label: widget.muted ? 'Unmute' : 'Sound',
                 onTap: widget.onMute,
               ),
               const SizedBox(height: 16),
               _ReelAction(
+                key: _watchlistActionKey,
                 icon: widget.inWatchlist
                     ? Icons.check_rounded
                     : Icons.add_rounded,
-              tooltip: widget.inWatchlist
-                  ? 'Remove from My Watchlist'
-                  : 'Add to My Watchlist',
-              selected: widget.inWatchlist,
-              onTap: _toggleWatchlistFromAction,
-              onTapDown: (origin) {
-                _watchlistOrigin = origin;
-              },
+                tooltip: widget.inWatchlist
+                    ? 'Remove from My Watchlist'
+                    : 'Add to My Watchlist',
+                selected: widget.inWatchlist,
+                label: widget.inWatchlist ? 'Saved' : 'Save',
+                onTap: _toggleWatchlistFromAction,
+                onTapDown: (origin) {
+                  _watchlistOrigin = origin;
+                },
+              ),
+              const SizedBox(height: 16),
+              _ReelAction(
+                key: _shareActionKey,
+                icon: Icons.ios_share_rounded,
+                tooltip: 'Share clip',
+                label: 'Share',
+                onTap: () {
+                  final box =
+                      _shareActionKey.currentContext?.findRenderObject()
+                          as RenderBox?;
+                  if (box != null) {
+                    widget.onShare(box.localToGlobal(Offset.zero) & box.size);
+                  }
+                },
               ),
             ],
           ),
@@ -1270,6 +1297,10 @@ class ReelVideoSurface extends StatelessWidget {
             imageUrl: null,
             videoUrl: streams?.playUrl,
             audioUrl: streams?.audioUrl,
+            // iOS's AVPlayer platform view consumes one muxed URL.  Falling
+            // back to media_kit here made the entire Flutter scene recompose
+            // for each frame, which is especially noticeable while paging.
+            muxedVideoUrl: streams?.muxedPlaybackFallback,
             enabled:
                 (playback.active || playback.prewarm) &&
                 streams != null &&
@@ -1280,6 +1311,10 @@ class ReelVideoSurface extends StatelessWidget {
             // Keep that paused frame visible rather than falling back to its
             // poster, then let it start directly once it becomes active.
             freezeFrame: playback.paused || playback.prewarm,
+            // Match the Home trailer handoff: AVPlayer can prime the next
+            // frame in parallel; macOS keeps the serialized output lease and
+            // starts it as soon as the outgoing reel yields it.
+            prewarm: playback.prewarm,
             initialPosition: playback.initialPosition,
             onPlaybackPosition: playback.onPosition,
             onFirstFrameReady: playback.onFirstFrameReady,
@@ -1287,7 +1322,9 @@ class ReelVideoSurface extends StatelessWidget {
             fadeDuration: Duration.zero,
             engineFactory: engineFactory,
             onPlaybackFailed: onPlaybackFailed,
-            ambientVolume: playback.volume,
+            ambientVolume: playback.active && !playback.paused
+                ? playback.volume
+                : 0,
             imageBlurSigma: 0,
             videoBlurSigma: 0,
             startDelay: Duration.zero,
@@ -1340,9 +1377,9 @@ class _ReelSynopsisState extends State<_ReelSynopsis> {
         text: TextSpan(text: widget.text, style: _style),
         maxLines: 3,
         textDirection: Directionality.of(context),
-      )
-        ..layout(maxWidth: constraints.maxWidth);
+      )..layout(maxWidth: constraints.maxWidth);
       final canExpand = hasMore.didExceedMaxLines;
+      hasMore.dispose();
       final expanded = _expanded && canExpand;
 
       final content = Column(
@@ -1432,6 +1469,7 @@ class _ReelTitle extends StatelessWidget {
 class _ReelAction extends StatelessWidget {
   final IconData icon;
   final String tooltip;
+  final String label;
   final VoidCallback onTap;
   final ValueChanged<Offset>? onTapDown;
   final bool selected;
@@ -1440,6 +1478,7 @@ class _ReelAction extends StatelessWidget {
     super.key,
     required this.icon,
     required this.tooltip,
+    required this.label,
     required this.onTap,
     this.selected = false,
     this.onTapDown,
@@ -1452,23 +1491,39 @@ class _ReelAction extends StatelessWidget {
       child: Semantics(
         button: true,
         label: tooltip,
-        child: GestureDetector(
-          onTapDown: (details) => onTapDown?.call(details.globalPosition),
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: _GlassCircle(
-            size: 52,
-            tint: selected ? 0.32 : 0.16,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              transitionBuilder: (child, animation) =>
-                  ScaleTransition(scale: animation, child: child),
-              child: Icon(
-                icon,
-                key: ValueKey(icon),
-                color: Colors.white,
-                size: 26,
-              ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTapDown: (details) => onTapDown?.call(details.globalPosition),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(26),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GlassCircle(
+                  size: 52,
+                  tint: selected ? 0.32 : 0.16,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    child: Icon(
+                      icon,
+                      key: ValueKey(icon),
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 6)],
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1490,24 +1545,18 @@ class _GlassCircle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-        child: Container(
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: tint),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.28),
-              width: 1,
-            ),
-          ),
-          child: child,
-        ),
+    // A stable translucent surface avoids three live backdrop-blur passes
+    // over every video frame while the feed is scrolling.
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color.lerp(const Color(0xB3000000), Colors.white, tint),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
       ),
+      child: child,
     );
   }
 }

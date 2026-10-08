@@ -225,10 +225,16 @@ void main() {
       expect(current.opened, isTrue);
       expect(next.opened, isTrue);
       expect(next.playCalls, 0);
-      expect(next.pauseCalls, greaterThan(0));
+      expect(next.openedVolume, 0);
+      expect(next.pauseCalls, 0);
+      next._firstFrame.complete();
+      await tester.pump();
+      expect(next.pauseCalls, 1);
+      expect(next.volumes, everyElement(0));
       await tester.pumpWidget(host(false));
       await tester.pump();
       expect(next.playCalls, 1);
+      expect(next.volumes.last, 70);
       expect(next.openCalls, 1);
       expect(next.disposed, isFalse);
       await tester.pumpWidget(const SizedBox());
@@ -236,6 +242,43 @@ void main() {
       expect(next.disposed, isTrue);
     },
   );
+
+  testWidgets('offscreen serialized prewarm cannot take the active lease', (
+    tester,
+  ) async {
+    final engines = <int, _PendingFirstFrameEngine>{};
+    Widget host(int active) => MaterialApp(
+      home: Stack(
+        children: [
+          for (var i = 0; i < 3; i++)
+            HeroTrailerBackdrop(
+              key: ValueKey(i),
+              imageUrl: null,
+              videoUrl: 'https://example.invalid/reel-$i.mp4',
+              platformViewOverride: false,
+              enabled: i >= active,
+              suspended: i != active,
+              prewarm: i != active,
+              decorative: false,
+              startDelay: Duration.zero,
+              engineFactory: () async =>
+                  engines[i] = _PendingFirstFrameEngine(),
+            ),
+        ],
+      ),
+    );
+    await tester.pumpWidget(host(0));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(engines.keys, [0]);
+    // Skip the previously queued neighbor. Only the new active reel opens.
+    await tester.pumpWidget(host(2));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(engines.keys, [0, 2]);
+    expect(engines[0]!.disposed, isTrue);
+    expect(engines[2]!.opened, isTrue);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets('finite trailer plays once until a new focus session', (
     tester,
@@ -383,6 +426,8 @@ class _PendingFirstFrameEngine implements TrailerEngine {
   int playCalls = 0;
   String? openedUrl;
   String? openedAudio;
+  double? openedVolume;
+  final List<double> volumes = [];
   bool disposed = false;
   int buildVideoCalls = 0;
 
@@ -418,11 +463,12 @@ class _PendingFirstFrameEngine implements TrailerEngine {
     openCalls++;
     openedUrl = videoUrl;
     openedAudio = audioUrl;
+    openedVolume = volume;
     looped = loop;
   }
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async => volumes.add(volume);
 
   @override
   Future<void> seek(Duration position) async {}

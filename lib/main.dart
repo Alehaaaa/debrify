@@ -3446,6 +3446,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case MainTab.reels:
         return ReelsScreen(
           isTelevision: _isAndroidTv,
+          isActive: _selectedIndex == MainTab.reels && !_playerRouteOpen,
           floatingNav:
               !_isAndroidTv &&
               ((_phoneNavLoaded &&
@@ -4142,7 +4143,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   // MediaQuery stripped of the bottom padding the bar
                   // absorbs, and fixed SnackBars ("press back again to
                   // exit") anchor ABOVE the bar instead of covering it.
-                  bottomNavigationBar: classicBottomNav
+                  bottomNavigationBar: classicBottomNav && !_playerRouteOpen
                       ? MobileClassicNav(
                           translucent: iosEdge,
                           currentIndex: _selectedIndex,
@@ -4248,7 +4249,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-                      if (isDesktopWide && !desktopPill)
+                      if (isDesktopWide && !desktopPill && !_playerRouteOpen)
                         Positioned(
                           left: 0,
                           top: 0,
@@ -4282,7 +4283,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                         ),
                       // Full-screen layer, but hit-testable only at the
                       // capsule while closed — see DesktopPillNav.
-                      if (desktopPill)
+                      if (desktopPill && !_playerRouteOpen)
                         Positioned.fill(
                           child: DesktopPillNav(
                             expanded: expandDesktopSidebar,

@@ -128,7 +128,9 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     if (!enabled || !mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Matching Continue Watching across trackers…')),
+      const SnackBar(
+        content: Text('Matching Continue Watching across trackers…'),
+      ),
     );
     final result = await ContinueWatchingSyncService.matchAll();
     MainPageBridge.notifyIntegrationChanged();
@@ -167,10 +169,10 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     children: [
       SettingsToggleTile(
         icon: Icons.sync_rounded,
-        title: 'Sync Continue Watching everywhere',
+        title: 'Sync everywhere',
         subtitle: _syncAllContinueWatching
-            ? 'Keeps Continue Watching and watchlists matched in Debrify and every connected tracker'
-            : 'Keep each provider\'s lists separate',
+            ? 'Keeps watched items, Continue Watching, and watchlists matched in Debrify and every connected tracker'
+            : 'Keep watch history, progress, and watchlists separate',
         value: _syncAllContinueWatching,
         onChanged: _setSyncAllContinueWatching,
       ),

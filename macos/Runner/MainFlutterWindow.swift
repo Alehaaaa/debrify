@@ -246,12 +246,81 @@ private final class NowPlayingBridge {
   }
 }
 
+private final class ReelShareBridge: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
+  private var picker: NSSharingServicePicker?
+  private var pendingResult: FlutterResult?
+  private var title = ""
+
+  func install(on messenger: FlutterBinaryMessenger, view: NSView) -> FlutterMethodChannel {
+    let channel = FlutterMethodChannel(name: "debrify/reel_share", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self, weak view] call, result in
+      guard call.method == "share" else { result(FlutterMethodNotImplemented); return }
+      guard let self, self.pendingResult == nil, let view, view.window != nil,
+            let args = call.arguments as? [String: Any],
+            let value = args["url"] as? String,
+            let url = URL(string: value), url.scheme == "https", url.host == "youtu.be" else {
+        result(false)
+        return
+      }
+      let center = NSRect(x: view.bounds.midX, y: view.bounds.midY, width: 1, height: 1)
+      var anchor = center
+      if let origin = args["origin"] as? [String: NSNumber],
+         let x = origin["x"], let y = origin["y"],
+         let width = origin["width"], let height = origin["height"] {
+        // Flutter coordinates start at the top; an AppKit view may not.
+        let top = CGFloat(y.doubleValue)
+        let h = CGFloat(height.doubleValue)
+        let nativeY = view.isFlipped ? top : view.bounds.maxY - top - h
+        let candidate = NSRect(x: CGFloat(x.doubleValue), y: nativeY,
+                               width: CGFloat(width.doubleValue), height: h)
+          .intersection(view.bounds)
+        if !candidate.isNull && !candidate.isEmpty { anchor = candidate }
+      }
+      self.title = args["title"] as? String ?? ""
+      let caption = args["text"] as? String ?? ""
+      let picker = NSSharingServicePicker(items: [caption, url])
+      picker.delegate = self
+      self.picker = picker
+      self.pendingResult = result
+      picker.show(relativeTo: anchor, of: view, preferredEdge: .minY)
+    }
+    return channel
+  }
+
+  func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
+                            didChoose service: NSSharingService?) {
+    if service == nil { finish() }
+  }
+
+  func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker,
+                            delegateFor sharingService: NSSharingService) -> NSSharingServiceDelegate? {
+    sharingService.subject = title
+    return self
+  }
+
+  func sharingService(_ sharingService: NSSharingService, didShareItems items: [Any]) { finish() }
+
+  func sharingService(_ sharingService: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+    finish()
+  }
+
+  private func finish() {
+    let reply = pendingResult
+    pendingResult = nil
+    picker = nil
+    // A dismissed native share sheet should never open another sheet.
+    reply?(true)
+  }
+}
+
 class MainFlutterWindow: NSWindow {
   private var deviceSecretChannel: FlutterMethodChannel?
   private var profilePrivacyChannel: FlutterMethodChannel?
   private let deviceSecretCipher = MacOsDeviceSecretCipher()
   private let nowPlaying = NowPlayingBridge()
   private var nowPlayingChannel: FlutterMethodChannel?
+  private let reelShare = ReelShareBridge()
+  private var reelShareChannel: FlutterMethodChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
@@ -271,6 +340,8 @@ class MainFlutterWindow: NSWindow {
     RegisterGeneratedPlugins(registry: flutterViewController)
     deviceSecretChannel = deviceSecretCipher.install(on: flutterViewController.engine.binaryMessenger)
     nowPlayingChannel = nowPlaying.install(on: flutterViewController.engine.binaryMessenger)
+    reelShareChannel = reelShare.install(on: flutterViewController.engine.binaryMessenger,
+                                        view: flutterViewController.view)
     profilePrivacyChannel = FlutterMethodChannel(
       name: "com.debrify.app/profile_privacy",
       binaryMessenger: flutterViewController.engine.binaryMessenger

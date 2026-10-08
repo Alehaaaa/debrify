@@ -677,7 +677,10 @@ Future<void> openDownloadedItem(
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (routeContext) => MergedDetailScreen(
-        localOnly: true,
+        // Keep the Downloads entry on the exact same details surface as Home.
+        // The episode filter below is the offline constraint; a separate
+        // local-only page made downloaded shows look unlike downloaded movies
+        // and hid Home's metadata, trailer and related-title treatment.
         item:
             saved ??
             StremioMeta(
@@ -724,6 +727,8 @@ Future<void> openDownloadedItem(
                 type: media.type,
               )
             : null,
+        metaEnricher: (id, type) =>
+            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
         onRecommendationTap: (item) {
           unawaited(_openDownloadedCatalogPreview(routeContext, item));
         },

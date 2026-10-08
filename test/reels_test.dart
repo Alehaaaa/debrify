@@ -3,7 +3,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:debrify/screens/reels_screen.dart';
+import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/reels_feed.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/youtube_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
@@ -15,10 +17,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// A fake TMDB: two pages of two titles per type. Titles whose id is in
 /// [noClip] only have a trailer. Every request is recorded.
 class FakeTmdb {
-  FakeTmdb({this.noClip = const {}, this.description});
+  FakeTmdb({this.noClip = const {}, this.description, this.rating = 7.8});
 
   final Set<int> noClip;
   final String? description;
+  final double? rating;
   final requests = <String>[];
 
   int get detailRequests =>
@@ -51,6 +54,7 @@ class FakeTmdb {
       movie ? 'title' : 'name': 'Title $id',
       movie ? 'release_date' : 'first_air_date': '2001-02-03',
       'overview': description ?? 'About $id.',
+      if (rating != null) 'vote_average': rating,
       'genres': [
         {'id': 1, 'name': 'Comedy'},
         {'id': 2, 'name': 'Romance'},
@@ -145,6 +149,7 @@ void main() {
       expect(first.clipName, startsWith("'Scene"));
       expect(first.item.genres, ['Comedy', 'Romance']);
       expect(first.item.year, '2001');
+      expect(first.item.imdbRating, 7.8);
       expect(first.item.imdbId, startsWith('tt'));
     });
 
@@ -279,6 +284,7 @@ void main() {
       ReelsFeed feed, {
       Future<YoutubeResolvedStreams?> Function(String key)? resolver,
       bool floatingNav = false,
+      bool isActive = true,
       void Function(ReelPlayback)? onPlayer,
     }) => MaterialApp(
       home: AppThemeScope(
@@ -287,6 +293,7 @@ void main() {
           body: ReelsScreen(
             feed: feed,
             floatingNav: floatingNav,
+            isActive: isActive,
             resolver:
                 resolver ??
                 (key) async {
@@ -322,7 +329,42 @@ void main() {
       return null;
     }
 
-    testWidgets('a reel shows the clip name, genres and a clamped '
+    testWidgets(
+      'skips watchlisted and finished titles but keeps unfinished ones',
+      (tester) async {
+        await StorageService.setMyWatchlistItem(
+          const StremioMeta(
+            id: 'tt1010',
+            imdbId: 'tt1010',
+            type: 'movie',
+            name: 'Saved movie',
+          ),
+          true,
+        );
+      await StorageService.setSeriesExplicitlyWatched('tt2010', watched: true);
+        final seen = <String>{};
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            onPlayer: (playback) => seen.add(playback.item.id),
+          ),
+        );
+        await tester.pumpAndSettle();
+        for (var i = 0; i < 5; i++) {
+          await tester.fling(
+            find.byType(PageView),
+            const Offset(0, -500),
+            2000,
+          );
+          await tester.pumpAndSettle();
+        }
+        expect(seen, isNot(contains('tt1010')));
+        expect(seen, isNot(contains('tt2010')));
+        expect(seen, contains('tt1011'));
+      },
+    );
+
+    testWidgets('a reel shows the clip name, genres, rating and a clamped '
         'description', (tester) async {
       final long = List.filled(40, 'A long description.').join(' ');
       await tester.pumpWidget(host(feedFor(FakeTmdb(description: long))));
@@ -333,6 +375,7 @@ void main() {
       expect(find.text('Title $number'), findsOneWidget);
       expect(find.text("'Scene $number'"), findsOneWidget);
       expect(find.text('Comedy • Romance'), findsOneWidget);
+      expect(find.text('★ 7.8'), findsOneWidget);
       expect(find.textContaining('MORE', findRichText: true), findsOneWidget);
       await tester.tap(find.textContaining('MORE', findRichText: true));
       await tester.pumpAndSettle();
@@ -374,6 +417,19 @@ void main() {
       expect(playing(activeId(tester)!), findsOneWidget);
       expect(resolved.length, 5);
       expect(resolved.toSet().length, resolved.length);
+    });
+
+    testWidgets('leaving the Reels tab suspends every embedded player', (
+      tester,
+    ) async {
+      final feed = feedFor(FakeTmdb());
+      await tester.pumpWidget(host(feed));
+      await tester.pumpAndSettle();
+      expect(playing(activeId(tester)!), findsOneWidget);
+
+      await tester.pumpWidget(host(feed, isActive: false));
+      await tester.pumpAndSettle();
+      expect(activeId(tester), isNull);
     });
 
     testWidgets(

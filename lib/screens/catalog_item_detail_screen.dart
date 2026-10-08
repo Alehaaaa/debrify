@@ -33,6 +33,7 @@ import '../widgets/detail/detail_primary_sources.dart';
 import '../widgets/parents_guide_section.dart';
 import '../widgets/movie_watched_badge.dart';
 import '../widgets/watchlist_added_bubble.dart';
+import '../services/watchlist_sync_service.dart';
 import '../widgets/shimmer.dart';
 import '../widgets/trakt/trakt_menu_helpers.dart';
 import '../services/simkl/simkl_menu_helpers.dart';
@@ -310,7 +311,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
       final savedItem = sourceAddon == null
           ? _item
           : _item.withSourceAddon(sourceAddon);
-      await StorageService.setMyWatchlistItem(savedItem, next);
+      await WatchlistSyncService.setMyWatchlistItem(savedItem, next);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       if (next) {

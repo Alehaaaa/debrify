@@ -98,6 +98,7 @@ class PlatformViewTrailerEngine implements TrailerEngine {
   final _duration = StreamController<Duration>.broadcast();
   final _errors = StreamController<void>.broadcast();
   final _firstFrame = Completer<void>();
+  final _firstProgress = Completer<void>();
   bool _disposed = false;
   bool _detached = false;
   bool _lastPlaying = false;
@@ -121,9 +122,14 @@ class PlatformViewTrailerEngine implements TrailerEngine {
       return;
     }
     if (!value.isInitialized) return;
-    if (!_firstFrame.isCompleted &&
-        (!startPaused ||
-            (value.position > Duration.zero && !value.isBuffering))) {
+    if (!_firstProgress.isCompleted &&
+        value.position > Duration.zero &&
+        !value.isBuffering) {
+      _firstProgress.complete();
+    }
+    // Initialization means metadata is available, not that a frame is up.
+    // Prepared reels report readiness only after their muted preroll parks.
+    if (_ready && _firstProgress.isCompleted && !_firstFrame.isCompleted) {
       _firstFrame.complete();
     }
     if (_lastPlaying != value.isPlaying) {
@@ -164,16 +170,18 @@ class PlatformViewTrailerEngine implements TrailerEngine {
       await controller.setVolume(0);
       if (_disposed || _detached) return;
       await controller.play();
-      await _firstFrame.future.timeout(const Duration(seconds: 8));
+      await _firstProgress.future.timeout(const Duration(seconds: 8));
       if (_disposed || _detached) return;
       await controller.pause();
-      await controller.seekTo(Duration.zero);
       if (_disposed || _detached) return;
     }
     _ready = true;
     await setVolume(_wantedVolume);
     if (_disposed || _detached) return;
     if (_wantsPlay) await controller.play();
+    // Do not rewind the buffered opening frame: it adds another seek and can
+    // overwrite a swipe's resume command while open() is still finishing.
+    _onValue();
   }
 
   @override

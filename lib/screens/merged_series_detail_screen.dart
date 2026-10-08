@@ -30,6 +30,7 @@ import '../services/imdb_enrichment_service.dart';
 import '../services/imdb_parents_guide_service.dart';
 import '../services/main_page_bridge.dart';
 import '../services/storage_service.dart';
+import '../services/watchlist_sync_service.dart';
 import '../services/movie_completion_service.dart';
 import '../services/mdblist/mdblist_service.dart';
 import '../widgets/rewatch_progress_dialog.dart';
@@ -298,7 +299,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       _imdbPending = imdb ?? _imdbPending;
     });
   }
+
   ParentsGuideResult? _parentsGuide;
+
   /// [MergedDetailScreen.onRecommendationOptions] for one title, or null when
   /// the rail is tap-only.
   void Function(StremioMeta)? get _recommendationOptions {
@@ -526,6 +529,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       addedAtMs: item.addedAtMs,
     );
   }
+
   // Presentation is for rendering; source searches retain widget.item so a
   // translated display title cannot change file matching or binding queries.
   StremioMeta get _item => presentedMetadata!;
@@ -727,8 +731,11 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       'loaderInFlight=$_resumeLoaderInFlight '
       'promised=${promised == null ? 'none' : 'S${promised.season}E${promised.episode}'}',
     );
-    unawaited(_guardPlay(() async {
-      if (await DownloadedMediaService.playMatching(context, _item.imdbId ?? _item.id,
+    unawaited(
+      _guardPlay(() async {
+        if (await DownloadedMediaService.playMatching(
+          context,
+          _item.imdbId ?? _item.id,
           season: promised?.season ?? _resumeSeason ?? widget.initialSeason,
           episode: promised?.episode ?? _resumeEpisode ?? widget.initialEpisode,
         ))
@@ -1108,7 +1115,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     final next = !_inMyWatchlist;
     setState(() => _inMyWatchlist = next);
     try {
-      await StorageService.setMyWatchlistItem(_myWatchlistItem, next);
+      await WatchlistSyncService.setMyWatchlistItem(_myWatchlistItem, next);
       if (!mounted) return;
       HapticFeedback.mediumImpact();
       if (next) {
@@ -2226,12 +2233,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                     opacity: _trailerForeground ? 0 : 1,
                     duration: const Duration(milliseconds: 300),
                     child: TrailerStatusChip(
-                  loading: _trailerResolving,
-                  playing: _trailerAmbientPlaying,
-                  soundOn: _trailerAmbientSoundOn,
-                  onSoundToggle: widget.isTelevision
-                      ? null
-                      : _toggleTrailerAmbientSound,
+                      loading: _trailerResolving,
+                      playing: _trailerAmbientPlaying,
+                      soundOn: _trailerAmbientSoundOn,
+                      onSoundToggle: widget.isTelevision
+                          ? null
+                          : _toggleTrailerAmbientSound,
                     ),
                   ),
                 ),
@@ -2303,7 +2310,8 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       trailerBusy: _trailerResolving || _trailerLoading,
       trailerPlaying: _trailerAmbientPlaying,
       trailerForeground: _trailerForeground,
-      trailerPromotable: _trailerAmbientPlaying ||
+      trailerPromotable:
+          _trailerAmbientPlaying ||
           (_backdropKey.currentState?.canPromote ?? false),
       hasTrakt: _traktOnlyMenuOptions.isNotEmpty,
       traktTracked: _traktTracked,
@@ -3382,7 +3390,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     final options = _appMenuOptions;
     if (options.isEmpty || widget.onTraktAction == null) return;
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       // Same standard sheet chrome as the per-episode ⋮ menu.
       backgroundColor: AppThemeScope.of(context).sheetSurface,
@@ -3415,7 +3423,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
   void _showQuickActionsMenu() {
     if (_traktOnlyMenuOptions.isEmpty || widget.onTraktAction == null) return;
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3456,7 +3464,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
   void _showSimklQuickActionsMenu() {
     if (_menuOptionsSimkl.isEmpty || widget.onSimklAction == null) return;
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3489,7 +3497,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
   void _showMdblistQuickActionsMenu() {
     if (_menuOptionsMdblist.isEmpty || widget.onMdblistAction == null) return;
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: AppThemeScope.of(context).sheetSurface,
       showDragHandle: true,
@@ -3631,7 +3639,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   void _openDetailsSheet() {
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: _bg,
       isScrollControlled: true,

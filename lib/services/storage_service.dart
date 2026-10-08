@@ -1429,15 +1429,17 @@ class StorageService {
   static Future<String> getAppStructure() async {
     final prefs = await ProfilePreferences.instance();
     final value = prefs.getString(_appStructureKey) ?? '';
-    appStructureCached =
-        (value == 'legacy' || kDetailThemes.contains(value)) ? value : '';
+    appStructureCached = (value == 'legacy' || kDetailThemes.contains(value))
+        ? value
+        : '';
     return appStructureCached;
   }
 
   static Future<void> setAppStructure(String value) async {
     final prefs = await ProfilePreferences.instance();
-    final normalized =
-        (value == 'legacy' || kDetailThemes.contains(value)) ? value : '';
+    final normalized = (value == 'legacy' || kDetailThemes.contains(value))
+        ? value
+        : '';
     if (normalized.isEmpty) {
       await prefs.remove(_appStructureKey);
     } else {
@@ -1620,9 +1622,7 @@ class StorageService {
   }
 
   static Future<void> setPlayerDockPalette(String palette) async {
-    final normalized = _playerDockPalettes.contains(palette)
-        ? palette
-        : 'app';
+    final normalized = _playerDockPalettes.contains(palette) ? palette : 'app';
     final prefs = await ProfilePreferences.instance();
     await prefs.setString(_playerDockPaletteKey, normalized);
   }
@@ -2787,9 +2787,14 @@ class StorageService {
     }
 
     // Remove existing entry with same IMDB ID
-    items.removeWhere((e) => MediaIdentity.progressId(
-      e['imdbId'] as String? ?? '', e['contentType'] as String? ?? '',
-    ) == imdbId);
+    items.removeWhere(
+      (e) =>
+          MediaIdentity.progressId(
+            e['imdbId'] as String? ?? '',
+            e['contentType'] as String? ?? '',
+          ) ==
+          imdbId,
+    );
 
     // Add at front
     items.insert(0, {
@@ -2899,10 +2904,12 @@ class StorageService {
           .toList();
       final before = items.length;
       items.removeWhere(
-        (e) => MediaIdentity.progressId(
-          (e['imdbId'] as String? ?? '').trim().toLowerCase(),
-          e['contentType'] as String? ?? '',
-        ) == normalized,
+        (e) =>
+            MediaIdentity.progressId(
+              (e['imdbId'] as String? ?? '').trim().toLowerCase(),
+              e['contentType'] as String? ?? '',
+            ) ==
+            normalized,
       );
       if (items.length == before) return;
       await _saveContinueWatchingItems(items);
@@ -2953,7 +2960,8 @@ class StorageService {
     final stored = prefs.getStringList(_finishedMoviesKey) ?? const <String>[];
     return {
       for (final raw in stored)
-        if (raw.trim().isNotEmpty) MediaIdentity.progressId(raw.trim().toLowerCase(), 'movie'),
+        if (raw.trim().isNotEmpty)
+          MediaIdentity.progressId(raw.trim().toLowerCase(), 'movie'),
     };
   }
 
@@ -3100,7 +3108,8 @@ class StorageService {
       if (raw is! Map) return false;
       final storedId = raw['imdbId']?.toString().trim().toLowerCase();
       return storedId == id ||
-          (!_requiresExactProgressIdentity(id) && (storedId == null || storedId.isEmpty) &&
+          (!_requiresExactProgressIdentity(id) &&
+              (storedId == null || storedId.isEmpty) &&
               raw['type'] == 'series' &&
               raw['title']?.toString().trim().toLowerCase() ==
                   title.trim().toLowerCase());
@@ -3183,9 +3192,10 @@ class StorageService {
       if (seriesTitle != null) _seriesProgressKey(seriesTitle, stableId),
     };
     final videoAliases = <String>{
-      if (resumeId != null) _requiresExactProgressIdentity(stableId)
-          ? 'video_${stableId}_${resumeId.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}'
-          : alias('video', resumeId),
+      if (resumeId != null)
+        _requiresExactProgressIdentity(stableId)
+            ? 'video_${stableId}_${resumeId.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}'
+            : alias('video', resumeId),
     };
     if (stableId != null && stableId.isNotEmpty) {
       if (seriesTitle == null) {
@@ -3307,9 +3317,9 @@ class StorageService {
 
   static String _seriesProgressKey(String title, String? id) =>
       (_requiresExactProgressIdentity(id) ||
-              (id?.startsWith('medialibrary:') ?? false))
-          ? 'series_$id'
-          : 'series_${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+          (id?.startsWith('medialibrary:') ?? false))
+      ? 'series_$id'
+      : 'series_${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
 
   static Future<void> saveSeriesPlaybackState({
     required String seriesTitle,
@@ -3703,7 +3713,9 @@ class StorageService {
       }
     }
     if (result.isNotEmpty) return result;
-    if (!_requiresExactProgressIdentity(imdbId) && seriesTitle != null && seriesTitle.isNotEmpty) {
+    if (!_requiresExactProgressIdentity(imdbId) &&
+        seriesTitle != null &&
+        seriesTitle.isNotEmpty) {
       // Only ID-less legacy records may provide title fallback. A matching
       // display title does not make another IMDb series the same show.
       final index = await getFinishedSeriesEpisodeIndex();
@@ -4136,7 +4148,8 @@ class StorageService {
     int? recoveryUpdatedAtMs,
   }) async {
     final map = await _getPlaybackStateMap();
-    final key = (_requiresExactProgressIdentity(imdbId) ||
+    final key =
+        (_requiresExactProgressIdentity(imdbId) ||
             (imdbId?.startsWith('medialibrary:') ?? false))
         ? 'video_${imdbId}_${videoTitle.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}'
         : 'video_${videoTitle.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
@@ -4165,7 +4178,8 @@ class StorageService {
     String? contentIdentity,
   }) async {
     final map = await _getPlaybackStateMap();
-    final key = (_requiresExactProgressIdentity(contentIdentity) ||
+    final key =
+        (_requiresExactProgressIdentity(contentIdentity) ||
             (contentIdentity?.startsWith('medialibrary:') ?? false))
         ? 'video_${contentIdentity}_${videoTitle.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}'
         : 'video_${videoTitle.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
@@ -5704,7 +5718,15 @@ class StorageService {
   /// Adds, refreshes, or removes a title. Adding stores the full presentation
   /// metadata needed by Home, not just an id, so My Watchlist paints instantly
   /// offline and can route back through the source addon when it is installed.
-  static Future<void> setMyWatchlistItem(StremioMeta item, bool saved) async {
+  static Future<void> setMyWatchlistItem(
+    StremioMeta item,
+    bool saved, {
+
+    /// A tracker list's original timestamp.  When records are reconciled we
+    /// retain the earliest known add, rather than moving an old title to the
+    /// top merely because it was imported on this device today.
+    int? addedAtMs,
+  }) async {
     if (!supportsMyWatchlistItem(item)) {
       throw ArgumentError.value(
         item.type,
@@ -5720,9 +5742,10 @@ class StorageService {
     if (saved) {
       rows.insert(0, {
         'key': key,
-        'addedAt': existing == null
-            ? DateTime.now().millisecondsSinceEpoch
-            : _myWatchlistAddedAt(existing),
+        'addedAt': _earliestMyWatchlistAddedAt(
+          existing == null ? null : _myWatchlistAddedAt(existing),
+          addedAtMs,
+        ),
         'item': item.toJson(),
       });
     }
@@ -5749,6 +5772,15 @@ class StorageService {
       }
       await prefs.setString(_myWatchlistKey, encoded);
     }
+  }
+
+  static int _earliestMyWatchlistAddedAt(int? existing, int? incoming) {
+    final candidates = <int>[
+      if (existing != null && existing > 0) existing,
+      if (incoming != null && incoming > 0) incoming,
+    ];
+    if (candidates.isEmpty) return DateTime.now().millisecondsSinceEpoch;
+    return candidates.reduce((a, b) => a < b ? a : b);
   }
 
   /// Removes a saved movie/series once actual playback is about to launch.
@@ -6940,7 +6972,7 @@ class StorageService {
   }
 
   /// Whether writes may be sent to [source]: either it is ticked as a scrobble
-  /// target, or "Sync Continue Watching everywhere" mirrors to every tracker.
+  /// target, or "Sync everywhere" mirrors to every tracker.
   static Future<bool> scrobblesTo(TrackingSource source) async =>
       (await getTrackingScrobbleTargets()).contains(source) ||
       await getSyncAllContinueWatching();

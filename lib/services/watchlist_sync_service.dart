@@ -8,7 +8,7 @@ import 'trakt/trakt_list_source.dart';
 import 'trakt/trakt_service.dart';
 
 /// Keeps Debrify's My Watchlist, the Trakt watchlist and Simkl's Plan to
-/// Watch in step while "Sync Continue Watching everywhere" is on.
+/// Watch in step while "Sync everywhere" is on.
 ///
 /// A title on any list is added to the lists missing it. Removals travel via
 /// a snapshot of what every list agreed on last time: a title that was agreed
@@ -20,6 +20,58 @@ import 'trakt/trakt_service.dart';
 /// Watch, and Simkl removals only touch titles still in Plan to Watch.
 class WatchlistSyncService {
   const WatchlistSyncService._();
+
+  /// The one user-initiated My Watchlist write path.  Local state stays
+  /// available immediately and, when unified tracking is enabled, the same
+  /// intent is sent to both connected trackers instead of waiting for the
+  /// next background reconciliation.
+  static Future<void> setMyWatchlistItem(StremioMeta item, bool saved) async {
+    await StorageService.setMyWatchlistItem(item, saved);
+    if (!await StorageService.getSyncAllContinueWatching()) return;
+    final key = _key(item);
+    if (key == null) return; // Trackers cannot address addon-local titles.
+    final imdbId = item.effectiveImdbId!;
+    final type = item.type;
+    await Future.wait([
+      _writeTrakt(imdbId, type, saved),
+      _writeSimkl(imdbId, type, saved),
+    ]);
+  }
+
+  static Future<void> _writeTrakt(
+    String imdbId,
+    String type,
+    bool saved,
+  ) async {
+    if (!await TraktService.instance.isAuthenticated()) return;
+    await _safe(
+      () => saved
+          ? TraktService.instance.addToWatchlist(imdbId, type)
+          : TraktService.instance.removeFromWatchlist(imdbId, type),
+    );
+  }
+
+  static Future<void> _writeSimkl(
+    String imdbId,
+    String type,
+    bool saved,
+  ) async {
+    if (!await SimklService.instance.isAuthenticated()) return;
+    final status = await SimklService.instance.fetchTitleStatus(
+      imdbId,
+      contentType: type,
+    );
+    if (status == null) return; // Never guess after a failed status read.
+    if (saved && status.currentStatus == null) {
+      await _safe(
+        () => SimklService.instance.addToList(imdbId, type, 'plantowatch'),
+      );
+    } else if (!saved && status.currentStatus == 'plantowatch') {
+      // Simkl removal is whole-title: never erase Watching/Completed history
+      // just because its local watchlist counterpart was removed.
+      await _safe(() => SimklService.instance.removeFromList(imdbId, type));
+    }
+  }
 
   static Future<WatchlistSyncResult> sync() async {
     final traktAuthed = await TraktService.instance.isAuthenticated();
@@ -42,8 +94,7 @@ class WatchlistSyncService {
       if (key != null) local[key] = item;
     }
 
-    final traktResult =
-        results[1] as ({List<StremioMeta> items, bool failed})?;
+    final traktResult = results[1] as ({List<StremioMeta> items, bool failed})?;
     final traktReadable = traktResult != null && !traktResult.failed;
     final trakt = <String, StremioMeta>{};
     if (traktReadable) {
@@ -86,7 +137,14 @@ class WatchlistSyncService {
     final agreed = <String>{};
     var added = 0, removed = 0;
 
-    for (final MapEntry(key: key, value: meta) in union.entries) {
+    for (final MapEntry(key: key, value: fallbackMeta) in union.entries) {
+      // All three list APIs expose their list-added time.  Preserve the first
+      // known addition as the canonical sort key, even if another service was
+      // connected later and only just received the title.
+      final meta = _oldestAdded(
+        [local[key], trakt[key], simkl[key]].whereType<StremioMeta>(),
+        fallbackMeta,
+      );
       final imdbId = meta.effectiveImdbId!;
       final type = meta.type;
       final inLocal = local.containsKey(key);
@@ -107,12 +165,16 @@ class WatchlistSyncService {
           removed++;
         }
         if (traktReadable && inTrakt) {
-          if (await _safe(() => TraktService.instance.removeFromWatchlist(imdbId, type))) {
+          if (await _safe(
+            () => TraktService.instance.removeFromWatchlist(imdbId, type),
+          )) {
             removed++;
           }
         }
         if (simklHas && !watching.contains(imdbId.toLowerCase())) {
-          if (await _safe(() => SimklService.instance.removeFromList(imdbId, type))) {
+          if (await _safe(
+            () => SimklService.instance.removeFromList(imdbId, type),
+          )) {
             removed++;
           }
         }
@@ -120,16 +182,24 @@ class WatchlistSyncService {
       }
 
       if (!inLocal) {
-        await StorageService.setMyWatchlistItem(meta, true);
+        await StorageService.setMyWatchlistItem(
+          meta,
+          true,
+          addedAtMs: meta.addedAtMs,
+        );
         added++;
       }
       if (traktReadable && !inTrakt) {
-        if (await _safe(() => TraktService.instance.addToWatchlist(imdbId, type))) {
+        if (await _safe(
+          () => TraktService.instance.addToWatchlist(imdbId, type),
+        )) {
           added++;
         }
       }
       if (simklCanAdd) {
-        if (await _safe(() => SimklService.instance.addToList(imdbId, type, 'plantowatch'))) {
+        if (await _safe(
+          () => SimklService.instance.addToList(imdbId, type, 'plantowatch'),
+        )) {
           added++;
         }
       }
@@ -165,6 +235,19 @@ class WatchlistSyncService {
       debugPrint('WatchlistSync: $e');
       return false;
     }
+  }
+
+  static StremioMeta _oldestAdded(
+    Iterable<StremioMeta> items,
+    StremioMeta fallback,
+  ) {
+    StremioMeta? oldest;
+    for (final item in items) {
+      final stamp = item.addedAtMs;
+      if (stamp == null || stamp <= 0) continue;
+      if (oldest == null || stamp < oldest.addedAtMs!) oldest = item;
+    }
+    return oldest ?? fallback;
   }
 }
 

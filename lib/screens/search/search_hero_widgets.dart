@@ -396,18 +396,27 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final item = presentedMetadata!;
-    final background = usesMetadataProvider(MetadataCategory.backgrounds) ? item.background : widget.background;
-    final description = usesMetadataProvider(MetadataCategory.information) ? item.description : widget.description;
+    final background = usesMetadataProvider(MetadataCategory.backgrounds)
+        ? item.background
+        : widget.background;
+    final description = usesMetadataProvider(MetadataCategory.information)
+        ? item.description
+        : widget.description;
     final isTelevision = widget.isTelevision;
     final height = widget.height;
     final rating = widget.rating;
     final compact = widget.compact;
     final scheme = Theme.of(context).colorScheme;
     final hasBackgroundArtwork = background != null && background.isNotEmpty;
-    final allowPosterFallback = !usesMetadataProvider(MetadataCategory.backgrounds) ||
+    final allowPosterFallback =
+        !usesMetadataProvider(MetadataCategory.backgrounds) ||
         metadataPreferences.fallback;
-    final bg = hasBackgroundArtwork ? background : (allowPosterFallback ? item.poster ?? '' : '');
-    final runtime = usesMetadataProvider(MetadataCategory.information) ? item.runtime : widget.runtime;
+    final bg = hasBackgroundArtwork
+        ? background
+        : (allowPosterFallback ? item.poster ?? '' : '');
+    final runtime = usesMetadataProvider(MetadataCategory.information)
+        ? item.runtime
+        : widget.runtime;
     // Chip-grammar meta line (type · year · runtime · genres, then the IMDb
     // mark) — replaces the old bordered type pill + star line for the flatter
     // OTT look. Facts-first order on purpose: the line ellipsizes from the
@@ -893,7 +902,9 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
   Widget _buildTitleArt() {
     return _HeroTitleArt(
       title: presentedMetadata!.name,
-      logoUrl: usesMetadataProvider(MetadataCategory.backgrounds) ? presentedMetadata!.logo : widget.logo,
+      logoUrl: usesMetadataProvider(MetadataCategory.backgrounds)
+          ? presentedMetadata!.logo
+          : widget.logo,
       compact: widget.compact,
       isTelevision: widget.isTelevision,
     );
@@ -1017,13 +1028,24 @@ Widget _heroEdgeFeather(Alignment begin, Alignment end, Color c, double frac) {
 /// glass without using a splash over the hero artwork.
 class _SpotlightSearchButton extends StatefulWidget {
   final VoidCallback onTap;
-  const _SpotlightSearchButton({required this.onTap});
+  final bool expanded;
+  final double expandedWidth;
+  final Widget expandedChild;
+
+  const _SpotlightSearchButton({
+    required this.onTap,
+    required this.expanded,
+    required this.expandedWidth,
+    required this.expandedChild,
+  });
 
   /// The button's geometry, named so the trailer layer's status chips can
   /// clear it by DERIVATION — a bare 66 over there would silently regress
   /// the clipped-"AMBIE…" overlap the moment this button moved or grew.
   static const double rightInset = 14;
+  static const double topInset = 14;
   static const double diameter = 40;
+  static const morphDuration = Duration(milliseconds: 300);
 
   @override
   State<_SpotlightSearchButton> createState() => _SpotlightSearchButtonState();
@@ -1039,31 +1061,63 @@ class _SpotlightSearchButtonState extends State<_SpotlightSearchButton> {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : _SpotlightSearchButton.morphDuration;
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: widget.expanded ? MouseCursor.defer : SystemMouseCursors.click,
       onEnter: (_) => _setHovered(true),
       onExit: (_) => _setHovered(false),
       child: GestureDetector(
-        onTap: widget.onTap,
-        child: ClipOval(
-          child: BackdropFilter(
-            filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              curve: Curves.easeOutCubic,
-              width: _SpotlightSearchButton.diameter,
-              height: _SpotlightSearchButton.diameter,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: app.fade(app.home.bg, _hovered ? 0.9 : 0.8),
-                border: Border.all(
-                  color: app.fade(app.core.tx, _hovered ? 0.28 : 0.16),
+        // Once expanded the editable field receives every tap directly. The
+        // control stays mounted across this state change, so it is genuinely
+        // the same surface that grew from the icon.
+        onTap: widget.expanded ? null : widget.onTap,
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          width: double.infinity,
+          height: widget.expanded ? 52 : _SpotlightSearchButton.diameter,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: app.fade(app.home.bg, _hovered ? 0.9 : 0.8),
+            border: Border.all(
+              color: app.fade(app.core.tx, _hovered ? 0.28 : 0.16),
+            ),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: BackdropFilter(
+              filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: AnimatedSwitcher(
+                duration: duration,
+                switchInCurve: const Interval(
+                  0.2,
+                  1,
+                  curve: Curves.easeOutCubic,
                 ),
-              ),
-              child: Icon(
-                Icons.search_rounded,
-                size: 20,
-                color: app.fade(app.core.tx, _hovered ? 1 : 0.88),
+                switchOutCurve: const Interval(0, 0.4, curve: Curves.easeOut),
+                child: widget.expanded
+                    ? KeyedSubtree(
+                        key: const ValueKey('search-morph-field'),
+                        // Reveal a fully laid-out field through the pill's
+                        // clip. Reflowing EditableText through icon-sized
+                        // constraints makes the text jump during the morph.
+                        child: OverflowBox(
+                          alignment: Alignment.centerLeft,
+                          minWidth: max(0.0, widget.expandedWidth - 2),
+                          maxWidth: max(0.0, widget.expandedWidth - 2),
+                          minHeight: 50,
+                          maxHeight: 50,
+                          child: widget.expandedChild,
+                        ),
+                      )
+                    : Icon(
+                        Icons.search_rounded,
+                        key: const ValueKey('search-morph-icon'),
+                        size: 20,
+                        color: app.fade(app.core.tx, _hovered ? 1 : 0.88),
+                      ),
               ),
             ),
           ),
@@ -1376,8 +1430,9 @@ class _HeroTrailerLayerState extends State<_HeroTrailerLayer> {
   /// board) is `SafeArea(top: false)` — the shipped corner put the chip both
   /// UNDER the status bar and UNDER that button (the clipped "AMBIE…").
   /// Cleared to the button's left, vertically centred on it.
-  double _chipTop(BuildContext context) =>
-      widget.isTelevision ? 16.0 : MediaQuery.viewPaddingOf(context).top + 10.0;
+  double _chipTop(BuildContext context) => widget.isTelevision
+      ? 16.0
+      : MediaQuery.viewPaddingOf(context).top + _SpotlightSearchButton.topInset;
 
   double get _chipRight => widget.isTelevision
       ? 22.0
@@ -1880,7 +1935,8 @@ class _HeroTitleArtState extends State<_HeroTitleArt> {
     // Poppins (rounded geometric) for the display title, airier and lighter
     // than Inter-w800/-1 tracking — closer to Stremio's hero. Body/metadata
     // stay on the Inter theme.
-    style: TextStyle(fontFamily: 'Poppins', 
+    style: TextStyle(
+      fontFamily: 'Poppins',
       fontSize: widget.compact
           ? (widget.isTelevision ? 24 : 20)
           : (widget.isTelevision ? 38 : 26),
