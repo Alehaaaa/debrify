@@ -174,16 +174,6 @@ Each build lists what changed since the previous one, and the source keeps the l
 
 ---
 
-## ❤️ Support Debrify
-
-Debrify is free, open source, and built by one person. If it has been useful to you, you can help fund development:
-
-- [Sponsor on GitHub](https://github.com/sponsors/varunsalian)
-
-Every bit helps keep the app improving.
-
----
-
 ## Before You Read the Code
 
 A warning: this is not a clean codebase.

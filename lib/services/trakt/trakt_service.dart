@@ -907,7 +907,8 @@ class TraktService {
     };
     final response = await _authenticatedPost(path, body);
     if (response == null) return false;
-    final ok = response.statusCode >= 200 && response.statusCode < 300;
+    final ok = response.statusCode >= 200 && response.statusCode < 300 &&
+        (!path.startsWith('/sync/history') || _historyMatched(response.body));
     if (!ok) {
       debugPrint('Trakt: Sync action failed (${response.statusCode})');
     } else {
@@ -936,8 +937,19 @@ class TraktService {
   Future<bool> removeFromCollection(String imdbId, String type) =>
       _syncAction('/sync/collection/remove', imdbId, type);
 
-  Future<bool> addToHistory(String imdbId, String type) =>
-      _syncAction('/sync/history', imdbId, type);
+  static bool _historyMatched(String body) {
+    try {
+      final data = jsonDecode(body);
+      if (data is! Map) return false;
+      final missing = data['not_found'];
+      return missing is! Map || missing.values.every((value) => value is List && value.isEmpty);
+    } catch (_) { return false; }
+  }
+
+  Future<bool> addToHistory(String imdbId, String type, {DateTime? watchedAt}) =>
+      _syncAction('/sync/history', imdbId, type, extraItemFields: {
+        if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
+      });
 
   Future<bool> removeFromHistory(String imdbId, String type) =>
       _syncAction('/sync/history/remove', imdbId, type);
@@ -991,7 +1003,8 @@ class TraktService {
     };
     final response = await _authenticatedPost(path, body);
     if (response == null) return false;
-    final ok = response.statusCode >= 200 && response.statusCode < 300;
+    final ok = response.statusCode >= 200 && response.statusCode < 300 &&
+        (!path.startsWith('/sync/history') || _historyMatched(response.body));
     if (!ok) {
       debugPrint('Trakt: Episode sync failed (${response.statusCode})');
     } else if (path == '/sync/history' || path == '/sync/history/remove') {
@@ -1002,8 +1015,11 @@ class TraktService {
     return ok;
   }
 
-  Future<bool> markEpisodeWatched(String showImdbId, int season, int episode) =>
-      _syncEpisodeAction('/sync/history', showImdbId, season, episode);
+  Future<bool> markEpisodeWatched(String showImdbId, int season, int episode,
+      {DateTime? watchedAt}) =>
+      _syncEpisodeAction('/sync/history', showImdbId, season, episode,
+        extraEpisodeFields: {if (watchedAt != null)
+          'watched_at': watchedAt.toUtc().toIso8601String()});
 
   Future<bool> markEpisodeUnwatched(
     String showImdbId,
@@ -1646,6 +1662,10 @@ class TraktService {
   /// Returns a map of IMDB ID → 100.0 (fully watched).
   Future<Map<String, double>> fetchWatchedMovies() async =>
       await fetchWatchedMoviesOrNull() ?? {};
+
+  /// Full completion evidence, including episodes of partially watched shows.
+  Future<List<dynamic>?> fetchWatchedHistoryRows(String type) =>
+      _fetchAllWatchedPages(type, limit: 250);
 
   /// Failure-aware watched movie bulk read for background badge refreshes.
   Future<Map<String, double>?> fetchWatchedMoviesOrNull() async {

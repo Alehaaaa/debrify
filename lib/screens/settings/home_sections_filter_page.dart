@@ -13,7 +13,6 @@ import '../../services/mdblist/mdblist_service.dart';
 import '../../services/mdblist/mdblist_list_source.dart';
 import '../../services/storage_service.dart';
 import '../../services/trakt/trakt_list_source.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/home/home_theme.dart';
 import '../../models/tracking_source.dart';
@@ -159,7 +158,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('home_sections_filter');
     _groups = _buildModel();
     final seededOrder = HomeRowOrder.insertMissingAfter(
       widget.rowOrder,

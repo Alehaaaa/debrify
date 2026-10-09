@@ -444,33 +444,6 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
     // Reset when the menu closes; load-event refreshes rebuild via their own path.
     private boolean umSubtitleTracksBuilt = false;
 
-    // Analytics keep-alive: this native player has no periodic progress channel
-    // of its own, so we ping Flutter every few minutes while actually playing so
-    // the analytics session is not cut off during a long watch. No content data
-    // is sent — the Flutter side just emits a playback heartbeat.
-    private static final long ANALYTICS_HEARTBEAT_MS = 240_000L; // 4 minutes
-    private final Handler analyticsHeartbeatHandler = new Handler(Looper.getMainLooper());
-    private final Runnable analyticsHeartbeatRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (player != null && player.isPlaying()) {
-                MethodChannel channel = MainActivity.getAndroidTvPlayerChannel();
-                if (channel != null) {
-                    channel.invokeMethod("analyticsHeartbeat", null);
-                }
-            }
-            analyticsHeartbeatHandler.postDelayed(this, ANALYTICS_HEARTBEAT_MS);
-        }
-    };
-
-    private void startAnalyticsHeartbeat() {
-        analyticsHeartbeatHandler.removeCallbacks(analyticsHeartbeatRunnable);
-        analyticsHeartbeatHandler.postDelayed(analyticsHeartbeatRunnable, ANALYTICS_HEARTBEAT_MS);
-    }
-
-    private void stopAnalyticsHeartbeat() {
-        analyticsHeartbeatHandler.removeCallbacks(analyticsHeartbeatRunnable);
-    }
     private final Runnable subtitleSeekRunnable = () -> {
         if (player != null) {
             long pos = player.getCurrentPosition();
@@ -6134,7 +6107,6 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         ActivityTracker.INSTANCE.setCurrentActivity(this);
-        startAnalyticsHeartbeat();
         // Resume the side-rendered subtitle ticker paused in onPause. Set the
         // gate first — startExternalSubtitleTicker() honours it.
         activityResumed = true;
@@ -6152,7 +6124,6 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
         if (player != null && player.isPlaying()) {
             player.pause();
         }
-        stopAnalyticsHeartbeat();
 
         // Stop waking the main thread 4x/second while the activity isn't visible;
         // state is preserved and onResume restarts the ticker. The gate also
@@ -6241,9 +6212,6 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
         if (pikPakRetryHandler != null) {
             pikPakRetryHandler.removeCallbacksAndMessages(null);
         }
-
-        // Stop analytics keep-alive heartbeat
-        stopAnalyticsHeartbeat();
 
         // Clean up buffering indicator
         if (bufferingIndicator != null) {

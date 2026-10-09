@@ -1,7 +1,6 @@
 import 'widgets/settings_load_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../services/analytics_service.dart';
 import '../../services/pikpak_api_service.dart';
 import '../../services/profiles/profile_credential_facade.dart';
 import '../../services/storage_service.dart';
@@ -54,7 +53,6 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('provider_settings');
     _loadSettings();
   }
 

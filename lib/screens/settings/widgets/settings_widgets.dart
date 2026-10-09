@@ -416,11 +416,6 @@ abstract final class SettingsRows {
     title: 'Check for Updates',
     subtitle: '',
   );
-  static const supportDebrify = SettingsRowContent(
-    icon: Icons.favorite_rounded,
-    title: 'Support Debrify',
-    subtitle: '',
-  );
   static const reddit = SettingsRowContent(
     icon: Icons.forum_rounded,
     title: 'Reddit Community',

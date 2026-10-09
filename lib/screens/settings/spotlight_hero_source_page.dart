@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
@@ -83,7 +82,6 @@ class _SpotlightHeroSourcePageState extends State<SpotlightHeroSourcePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('spotlight_hero_source_settings');
     _load();
   }
 

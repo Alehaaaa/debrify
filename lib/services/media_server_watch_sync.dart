@@ -14,7 +14,8 @@ import 'profiles/profile_async_authorization.dart';
 import 'profiles/profile_preferences.dart';
 import 'storage_service.dart';
 
-/// Playback-driven sync, not a library crawler or a persistent retry queue.
+/// Playback sync. Historical library reconciliation is handled by
+/// WatchHistorySyncService when unified tracking is enabled.
 class MediaServerWatchSync {
   static const preferenceKey = 'media_server_watch_sync_enabled_v1';
   @visibleForTesting
@@ -22,7 +23,8 @@ class MediaServerWatchSync {
       MediaServerClient(timeout: const Duration(seconds: 5));
 
   static Future<bool> enabled() async =>
-      (await ProfilePreferences.instance()).getBool(preferenceKey) ?? false;
+      await StorageService.getSyncAllContinueWatching() ||
+      ((await ProfilePreferences.instance()).getBool(preferenceKey) ?? false);
 
   static Future<void> setEnabled(bool value) async {
     final capability = await ProfileAsyncAuthorization.capture(

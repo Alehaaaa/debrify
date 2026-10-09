@@ -1,7 +1,5 @@
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
@@ -82,7 +80,6 @@ class _TvSidebarStylePageState extends State<TvSidebarStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_sidebar_style_settings');
     _load();
   }
 

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/sidebar_configuration.dart';
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme_scope.dart';
@@ -43,7 +42,6 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('sidebar_customization_settings');
     _load();
   }
 

@@ -165,10 +165,8 @@ void main() {
       //
       // `sans` stays null: Signal is the shipped look and must not move.
       expect(DetailFontRole.sans.family, isNull);
-      // Fraunces, not Source Serif: `SourceSerifPro-Regular.ttf`,
-      // `Merriweather-Regular.ttf` and both Roboto files in assets/fonts are
-      // HTML error pages saved with a .ttf extension, so anything naming them
-      // silently falls back. See the note on `DetailFontRoleX.family`.
+      // Fraunces is the shipped serif. See the note on
+      // `DetailFontRoleX.family`.
       expect(DetailFontRole.serif.family, 'Fraunces72');
       expect(DetailFontRole.mono.family, 'JetBrainsMono');
       expect(DetailFontRole.sans.fallback, isNull);

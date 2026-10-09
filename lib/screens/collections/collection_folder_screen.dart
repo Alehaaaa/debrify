@@ -17,7 +17,6 @@ import '../../models/home_collection.dart';
 import '../../widgets/collections/collection_list_gallery.dart';
 import '../../widgets/collections/collection_browser_hero.dart';
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/collection_folder_loader.dart';
 import '../../services/collection_catalog_pager.dart';
 import '../../services/watched_filter.dart';
@@ -297,7 +296,6 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
   void initState() {
     super.initState();
     _native.identityChanges.addListener(_identitiesChanged);
-    AnalyticsService.screenView('collection_folder');
     _collection = widget.collection;
     MainPageBridge.addHomeSettingsListener(_onConfigurationChanged);
     _stremio.addAddonsChangedListener(_onConfigurationChanged);

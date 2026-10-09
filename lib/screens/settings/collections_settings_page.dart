@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 
 import '../../models/home_collection.dart';
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/collection_gif_settings.dart';
 import '../../services/home_collections_store.dart';
 import '../../services/main_page_bridge.dart';
@@ -54,7 +53,6 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('collections_settings');
     MainPageBridge.addHomeSettingsListener(_onHomeSettingsChanged);
     unawaited(_load());
   }

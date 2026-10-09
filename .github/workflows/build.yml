@@ -36,6 +36,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -43,7 +44,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Java
       uses: actions/setup-java@v4
@@ -125,24 +127,42 @@ jobs:
     - name: Verify packaged Android subtitle decoders
       run: dev/scripts/verify_android_subtitle_decoders.sh build/app/outputs/flutter-apk/app-release.apk
 
-    - name: Rename APK (release)
-      if: github.event_name == 'release'
-      run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}.apk
+    # One universal APK serves phones AND Android TV (leanback and touchscreen
+    # are optional in the manifest). It is published under both names so
+    # people pick the obvious download; the two files are byte-identical, so
+    # the in-app updater (which takes any .apk asset) is unaffected.
+    - name: Name APKs for Android and Android TV
+      shell: bash
+      run: |
+        set -euo pipefail
+        SUFFIX="${{ github.event.release.tag_name || 'dev' }}"
+        cd build/app/outputs/flutter-apk
+        cp app-release.apk "debrify-${SUFFIX}-android.apk"
+        cp app-release.apk "debrify-${SUFFIX}-androidtv.apk"
 
-    - name: Attach APK to GitHub Release
+    - name: Attach APKs to GitHub Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}.apk
+        files: |
+          build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}-android.apk
+          build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}-androidtv.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload APK as artifact (manual)
+    - name: Upload Android APK as artifact (manual)
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
         name: debrify-android
-        path: build/app/outputs/flutter-apk/app-release.apk
+        path: build/app/outputs/flutter-apk/debrify-dev-android.apk
+
+    - name: Upload Android TV APK as artifact (manual)
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: debrify-androidtv
+        path: build/app/outputs/flutter-apk/debrify-dev-androidtv.apk
 
   macos:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
@@ -157,6 +177,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -164,7 +185,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -260,6 +282,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -267,7 +290,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -319,6 +343,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -326,7 +351,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -423,6 +449,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -430,7 +457,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     # tvOS can't use subosito/flutter-action. The build needs the
     # fluttertv/flutter-tvos CLI, which clones its own pinned stock Flutter
@@ -595,6 +623,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -602,7 +631,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Install Linux dependencies
       run: |
@@ -792,6 +822,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -799,7 +830,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Install Linux dependencies
       run: |

@@ -4,8 +4,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/simkl/simkl_service.dart';
 import '../../services/storage_service.dart';
@@ -45,7 +43,6 @@ class _SimklSettingsPageState extends State<SimklSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('simkl_settings');
     _loadSettings();
   }
 
@@ -170,10 +167,6 @@ class _SimklSettingsPageState extends State<SimklSettingsPage> {
         _isConnecting = false;
         _username = username;
         _resetPinState();
-      });
-      AnalyticsService.integrationConnected('simkl', {
-        'surface': 'settings',
-        'method': 'pin',
       });
       MainPageBridge.notifyIntegrationChanged();
       // PIN card (and its Cancel) just left the tree — refocus.

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../theme/app_looks.dart';
 import '../../theme/app_theme_controller.dart';
 import '../../theme/app_theme_scope.dart';
@@ -34,7 +32,6 @@ class _LooksPageState extends State<LooksPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('looks_settings');
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

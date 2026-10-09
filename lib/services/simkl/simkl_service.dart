@@ -713,7 +713,7 @@ class SimklService {
 
   /// Mark a whole title (movie, or every aired episode of a show) watched via
   /// `POST /sync/history`.
-  Future<bool> markWatched(String imdbId, String type) async {
+  Future<bool> markWatched(String imdbId, String type, {DateTime? watchedAt}) async {
     final token = await StorageService.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final typeKey = _typeKey(type);
@@ -723,6 +723,7 @@ class SimklService {
         typeKey: [
           {
             'ids': MediaIdentity.apiIds(imdbId),
+            if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
           },
         ],
       },
@@ -786,14 +787,14 @@ class SimklService {
   Future<bool> markEpisodeWatched(
     String showImdbId,
     int season,
-    int episode,
+    int episode, {DateTime? watchedAt}
   ) async {
     final token = await StorageService.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final result = await _postOrNull(
       '/sync/history',
       {
-        'shows': [_episodeRef(showImdbId, season, episode)],
+        'shows': [_episodeRef(showImdbId, season, episode, watchedAt: watchedAt)],
       },
       token: token,
       label: 'markEpisodeWatched',
@@ -883,14 +884,14 @@ class SimklService {
 
   /// Builds the `{ids, seasons: [{number, episodes: [{number}]}]}` show
   /// reference shared by every episode-scoped write above.
-  Map<String, dynamic> _episodeRef(String showImdbId, int season, int episode) {
+  Map<String, dynamic> _episodeRef(String showImdbId, int season, int episode, {DateTime? watchedAt}) {
     return {
       'ids': MediaIdentity.apiIds(showImdbId),
       'seasons': [
         {
           'number': season,
           'episodes': [
-            {'number': episode},
+            {'number': episode, if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String()},
           ],
         },
       ],
@@ -1523,6 +1524,9 @@ class SimklService {
   Future<Set<String>> fetchWatchedShowEpisodes(String showImdbId) async {
     return await fetchWatchedShowEpisodesOrNull(showImdbId) ?? {};
   }
+
+  Future<Map<String, dynamic>?> fetchWatchedEpisodeHistory(String showId) =>
+      _fetchWatchedShowEpisodeItem(showId);
 
   Future<Set<String>?> fetchWatchedShowEpisodesOrNull(String showImdbId) async {
     final item = await _fetchWatchedShowEpisodeItem(showImdbId);

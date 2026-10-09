@@ -5,7 +5,6 @@ import 'widgets/settings_widgets.dart';
 import '../../services/engine/settings_manager.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../services/engine/config_loader.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import '../../theme/app_theme_scope.dart';
 
@@ -28,7 +27,6 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('debrify_tv_settings');
     // TV: land DPAD focus on the first body row. The builder's rows load
     // async, so retry a few frames until one becomes focusable.
     if (PlatformUtil.isTelevision) {

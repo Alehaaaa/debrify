@@ -16,7 +16,6 @@ import '../models/iptv_playlist.dart';
 import '../utils/stream_badge_appearance.dart';
 import '../utils/movie_parser.dart';
 import '../utils/series_parser.dart';
-import 'analytics_service.dart';
 import 'episode_info_service.dart';
 import 'iptv_epg_service.dart';
 import 'storage_service.dart';
@@ -213,11 +212,6 @@ class AndroidTvPlayerBridge {
   // Prevents stale metadata from previous sessions being sent to new sessions
   static String? _currentSessionId;
 
-  // Throttle for analytics playback heartbeats fed from the native TV player's
-  // high-frequency progress pings (fires every ~5s). We only forward one
-  // heartbeat per [AnalyticsService.heartbeatInterval] so the analytics session
-  // stays alive without flooding events.
-  static DateTime? _lastPlaybackHeartbeat;
   static Future<void> _subtitleAppearanceSaveQueue = Future<void>.value();
 
   static Future<void> _saveSubtitleAppearance(
@@ -271,17 +265,6 @@ class AndroidTvPlayerBridge {
     });
     _subtitleAppearanceSaveQueue = operation.catchError((_) {});
     await operation;
-  }
-
-  static void _maybeSendPlaybackHeartbeat(String player) {
-    final now = DateTime.now();
-    final last = _lastPlaybackHeartbeat;
-    if (last != null &&
-        now.difference(last) < AnalyticsService.heartbeatInterval) {
-      return;
-    }
-    _lastPlaybackHeartbeat = now;
-    AnalyticsService.playbackHeartbeat(player);
   }
 
   // Deprecated: use _streamNextProvider
@@ -407,11 +390,6 @@ class AndroidTvPlayerBridge {
               message: e.toString(),
             );
           }
-        case 'analyticsHeartbeat':
-          // Dedicated keep-alive ping from the Java (Torbox/Real-Debrid/stream)
-          // TV player, which has no periodic progress channel of its own.
-          AnalyticsService.playbackHeartbeat('torbox_tv');
-          return null;
         case 'saveIptvSeriesAudio':
           // The native TV player captured the user's audio-language pick for an
           // Xtream series — persist it under the same per-series key the phone/
@@ -442,8 +420,6 @@ class AndroidTvPlayerBridge {
         case 'torboxPlaybackFinished':
         case 'realDebridPlaybackFinished':
         case 'streamPlaybackFinished':
-          _lastPlaybackHeartbeat =
-              null; // reset so the next watch isn't throttled
           final finished = _playbackFinishedCallback;
           _streamNextProvider = null;
           _channelSwitchProvider = null;
@@ -490,15 +466,6 @@ class AndroidTvPlayerBridge {
           }
           return true;
         case 'torrentPlaybackProgress':
-          // Keep the analytics session alive during native TV playback (the
-          // Flutter UI is backgrounded, so this progress ping is our activity
-          // signal). The native player pings even while paused, so gate on the
-          // isPlaying flag to match the Dart/Java players; throttled so we emit
-          // at most one heartbeat per interval.
-          if (call.arguments is Map &&
-              (call.arguments as Map)['isPlaying'] == true) {
-            _maybeSendPlaybackHeartbeat('android_tv');
-          }
           final args = call.arguments;
           final session = _progressSession;
           if (session == null || args is! Map) return false;
@@ -885,8 +852,6 @@ class AndroidTvPlayerBridge {
             );
             return null;
           }
-          _lastPlaybackHeartbeat =
-              null; // reset so the next watch isn't throttled
           final finishedProgress = _progressSession;
           _progressDrain = finishedProgress?.closeAndDrain() ?? _progressDrain;
           final finishedDrain = _progressDrain;

@@ -1341,10 +1341,24 @@ class AppDelegate: FlutterAppDelegate {
     }
 
     private func validatedTopShelfMediaURL(_ raw: String) -> URL? {
-        guard raw.count <= 16_384,
-              let url = URL(string: raw),
-              url.scheme?.lowercased() == "https",
-              url.host != nil else {
+        guard raw.count <= 16_384, let url = URL(string: raw) else {
+            return nil
+        }
+        if url.isFileURL {
+            // A relay (Cobalt) trailer the Dart side saved locally: its tunnel
+            // has no byte-range support, so AVFoundation can't open it over
+            // HTTP. Only MP4s inside this app's temporary directory qualify.
+            let temp = FileManager.default.temporaryDirectory
+                .standardizedFileURL.resolvingSymlinksInPath().path
+            let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+            guard path.hasPrefix(temp.hasSuffix("/") ? temp : temp + "/"),
+                  url.pathExtension.lowercased() == "mp4",
+                  FileManager.default.fileExists(atPath: path) else {
+                return nil
+            }
+            return URL(fileURLWithPath: path)
+        }
+        guard url.scheme?.lowercased() == "https", url.host != nil else {
             return nil
         }
         return url

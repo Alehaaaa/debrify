@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import '../models/stremio_addon.dart';
 import '../models/advanced_search_selection.dart';
 import '../widgets/episodes_panel.dart';
-import '../services/analytics_service.dart';
-
 /// Route name for [EpisodesScreen]'s pushed route (a `MaterialPageRoute`,
 /// or a zero-duration `PageRouteBuilder` on TV).
 const String kEpisodesRouteName = 'episodes';
@@ -111,7 +109,6 @@ class _EpisodesScreenState extends State<EpisodesScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('episodes');
   }
 
   @override

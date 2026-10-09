@@ -63,9 +63,9 @@ class ReelShareService {
       builder: (_) => _ReelShareSheet(content: content),
     );
     if (copied == true && context.mounted) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(content: Text('Clip link copied')),
-      );
+      ScaffoldMessenger.maybeOf(
+        context,
+      )?.showSnackBar(const SnackBar(content: Text('Clip link copied')));
     }
   }
 

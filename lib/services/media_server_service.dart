@@ -721,6 +721,17 @@ class MediaServerLibrarySession implements MediaServerLibraryAccess {
     }
   }
 
+  Future<void> setHistoryWatched(String itemId, bool watched, {DateTime? at}) =>
+      _withClient(
+        (client) => client.setHistoryWatched(
+          _account,
+          itemId,
+          watched,
+          at: at,
+          authorize: authorize,
+        ),
+      );
+
   @override
   Future<MediaServerLibraryPage> browse({
     String? parentId,

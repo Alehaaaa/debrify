@@ -104,6 +104,50 @@ class ReelsFeed {
   bool _requestFailed = false;
   final Set<String> _failedClips = {};
   bool _sourceLoaded = false;
+  bool _sourceLoading = false;
+  Future<void> _takeTail = Future<void>.value();
+  String? _lastType;
+  final List<Set<String>> _recentGenres = [];
+
+  /// Rank only clips that are ready: diversity must never delay playback to
+  /// wait for a preferred title. Older candidates win otherwise equal scores.
+  int _nextReadyIndex() {
+    var bestIndex = 0;
+    var bestScore = double.negativeInfinity;
+    for (var i = 0; i < _ready.length; i++) {
+      final item = _ready[i].$2.item;
+      final genres = (item.genres ?? const <String>[])
+          .map((genre) => genre.toLowerCase())
+          .toSet();
+      var score = item.type == _lastType ? 0.0 : 2.0;
+      for (var age = 0; age < _recentGenres.length; age++) {
+        final recent = _recentGenres[_recentGenres.length - 1 - age];
+        if (genres.isNotEmpty && recent.isNotEmpty) {
+          final overlap =
+              genres.intersection(recent).length / genres.union(recent).length;
+          score -= overlap / (age + 1);
+        }
+      }
+      // Quality is a gentle tie-breaker, not a popularity-only feed.
+      score += (item.imdbRating ?? 5).clamp(0, 10) * .05;
+      score -= i * .02;
+      if (score > bestScore) {
+        bestScore = score;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
+  void _rememberSelection(ReelTitle title) {
+    _lastType = title.item.type;
+    _recentGenres.add(
+      (title.item.genres ?? const <String>[])
+          .map((genre) => genre.toLowerCase())
+          .toSet(),
+    );
+    if (_recentGenres.length > 4) _recentGenres.removeAt(0);
+  }
 
   void excludeClip(String key) => _failedClips.add(key);
   void allowClip(String key) => _failedClips.remove(key);
@@ -132,11 +176,25 @@ class ReelsFeed {
   bool get exhausted =>
       _exhausted.length == _types.length &&
       _ready.isEmpty &&
-      _pendingConfirmations == 0;
+      _pendingConfirmations == 0 &&
+      !_sourceLoading;
 
   /// Up to [count] titles that have a clip, as soon as they are playable.
   /// Fewer (possibly none) when the lists run dry or TMDB is unreachable.
-  Future<List<ReelTitle>> take(int count, {bool allowRepeat = false}) async {
+  Future<List<ReelTitle>> take(int count, {bool allowRepeat = false}) {
+    // Pull-to-refresh can overlap queue filling. Serialize cursor ownership
+    // without serializing the metadata requests within each scan window.
+    final result = _takeTail.then(
+      (_) => _take(count, allowRepeat: allowRepeat),
+    );
+    _takeTail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<List<ReelTitle>> _take(int count, {required bool allowRepeat}) async {
     if (!available || count <= 0) return const [];
     final language = _language ??= await _loadLanguage();
     // Provider rows arrive in the background: waiting for 48 IMDb lookups
@@ -148,12 +206,13 @@ class ReelsFeed {
     final found = <ReelTitle>[];
     void drainReady() {
       while (_ready.isNotEmpty && found.length < count) {
-        final (key, candidate) = _ready.removeAt(0);
+        final (key, candidate) = _ready.removeAt(_nextReadyIndex());
         final title = _playableVariant(key, candidate);
         if (title == null) continue;
         if (_shown.add(key)) {
           found.add(title);
           _known[key] = title;
+          _rememberSelection(title);
         }
       }
     }
@@ -181,17 +240,19 @@ class ReelsFeed {
       if (batch.isEmpty) break;
       for (final (type, row) in batch) {
         _pendingConfirmations++;
-        unawaited(_confirm(type, row, language).then((title) {
-          if (title != null) {
-            final key = '$type:${row['id']}';
-            _known[key] = title;
-            _ready.add((key, title));
-          }
-          _pendingConfirmations--;
-          final changed = _confirmationChanged;
-          _confirmationChanged = null;
-          changed?.complete();
-        }));
+        unawaited(
+          _confirm(type, row, language).then((title) {
+            if (title != null) {
+              final key = '$type:${row['id']}';
+              _known[key] = title;
+              _ready.add((key, title));
+            }
+            _pendingConfirmations--;
+            final changed = _confirmationChanged;
+            _confirmationChanged = null;
+            changed?.complete();
+          }),
+        );
       }
       // Return the first playable scenes immediately. The other confirmations
       // keep filling the queue for upcoming swipes without blocking playback.
@@ -228,6 +289,7 @@ class ReelsFeed {
     _sourceLoaded = true;
     final load = _sourceLoad;
     if (load == null) return;
+    _sourceLoading = true;
     try {
       final items = await load();
       final unique = <String, StremioMeta>{
@@ -238,20 +300,32 @@ class ReelsFeed {
       };
       // Keep this bounded: it is a seed that mixes with TMDB pages, not a
       // bulk import that delays the first playable reel.
-      final seeds = unique.values.toList()..shuffle(_random);
-      final resolved = await Future.wait([
-        for (final item in seeds.take(48)) _resolveSourceItem(item, language),
+      final shuffled = unique.values.toList()..shuffle(_random);
+      final seeds = shuffled.take(48).toList();
+      var cursor = 0;
+      Future<void> worker() async {
+        while (cursor < seeds.length) {
+          final item = seeds[cursor++];
+          final candidate = await _resolveSourceItem(item, language);
+          if (candidate == null) continue;
+          final key = '${candidate.$1}:${candidate.$2['id']}';
+          if (_visited.contains(key) || _shown.contains(key)) continue;
+          final pool = _pool[candidate.$1]!;
+          if (pool.any((row) => row['id'] == candidate.$2['id'])) continue;
+          pool.insert(_random.nextInt(pool.length + 1), candidate.$2);
+          // A provider may finish after TMDB's lists ran dry.
+          _exhausted.remove(candidate.$1);
+        }
+      }
+
+      await Future.wait([
+        for (var i = 0; i < math.min(4, seeds.length); i++) worker(),
       ]);
-      for (final candidate in resolved) {
-        if (candidate == null) continue;
-        _pool[candidate.$1]!.add(candidate.$2);
-      }
-      for (final pool in _pool.values) {
-        pool.shuffle(_random);
-      }
     } catch (_) {
       // Discovery providers are optional. TMDB remains a fully working feed
       // when either account is disconnected or a provider request fails.
+    } finally {
+      _sourceLoading = false;
     }
   }
 

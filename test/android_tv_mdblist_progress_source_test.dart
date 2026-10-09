@@ -98,7 +98,7 @@ void main() {
       final launchSeeds = _between(
         source,
         '// Real packs retain the existing Trakt/Simkl launch-time snapshots',
-        "AnalyticsService.trackInBackground('playback_started'",
+        'MainPageBridge.notifyPlayerLaunching(isTrailer: isTrailer);',
       );
       expect(launchSeeds, contains('unawaited(_seedMdblistEpisodeProgress'));
       expect(launchSeeds, isNot(contains('await _seedMdblistEpisodeProgress')));

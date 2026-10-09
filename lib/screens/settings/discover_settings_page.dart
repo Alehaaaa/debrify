@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../models/metadata_preferences.dart';
-import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
@@ -42,7 +41,6 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('discover_settings');
     _load();
   }
 

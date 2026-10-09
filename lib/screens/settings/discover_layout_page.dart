@@ -1,8 +1,6 @@
 import 'widgets/settings_load_error.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
@@ -71,7 +69,6 @@ class _DiscoverLayoutPageState extends State<DiscoverLayoutPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('discover_layout_settings');
     _load();
   }
 

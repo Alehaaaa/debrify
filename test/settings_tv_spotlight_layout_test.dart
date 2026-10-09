@@ -111,10 +111,6 @@ SettingsTvLayout _layout(
   onOpenProfileAppearance: _noop,
   onOpenRecordings: _noop,
   onOpenIptvSettings: _noop,
-  showSupportDonation: false,
-  supportDonationLabel: 'Support Debrify',
-  supportDonationSubtitle: 'Help fund development',
-  onOpenSupportDonation: _noop,
 );
 
 Future<void> _pumpTv(

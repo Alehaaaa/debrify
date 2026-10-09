@@ -20,6 +20,7 @@ import '../utils/tv_keys.dart';
 import 'home/card_focus_rise.dart';
 import 'home/home_theme.dart';
 import 'movie_watched_badge.dart';
+import 'rotten_tomatoes_score.dart';
 
 /// Poster-first grid tile for catalog and search results.
 ///
@@ -120,7 +121,9 @@ class CatalogItemTile extends StatefulWidget {
 }
 
 class _CatalogItemTileState extends State<CatalogItemTile>
-    with MetadataPresentationMixin<CatalogItemTile> {
+    with
+        MetadataPresentationMixin<CatalogItemTile>,
+        RottenTomatoesScoreMixin<CatalogItemTile> {
   @override
   StremioMeta get originalMetadata => widget.item;
   @override
@@ -168,6 +171,10 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     final item = presentedMetadata!;
     final poster = metadataArtworkPending(MetadataCategory.posters) ? null : item.poster;
     final rating = item.imdbRating;
+    // Follows the ★ chip's setting: one "ratings" switch covers both.
+    final tomatoes = widget.showRatingBadge && !widget.localOnly
+        ? rottenTomatoesFor(item.effectiveImdbId ?? item.id)
+        : null;
     final typeLabel = item.type == 'series' ? 'SERIES' : 'MOVIE';
     final isMovie = item.type.toLowerCase() == 'movie';
     final supportsWatched = isMovie || item.type.toLowerCase() == 'series';
@@ -283,6 +290,11 @@ class _CatalogItemTileState extends State<CatalogItemTile>
                   padding: const EdgeInsets.only(top: 4),
                   child: _RatingChip(value: rating),
                 ),
+              if (tomatoes != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: RottenTomatoesChip(score: tomatoes),
+                ),
               if (supportsWatched)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -300,8 +312,23 @@ class _CatalogItemTileState extends State<CatalogItemTile>
             left: widget.showTypeBadge ? 68 : 9,
             child: _watchedBadge(),
           ),
-        if (rating != null && widget.showRatingBadge)
-          Positioned(top: 10, right: 10, child: _RatingChip(value: rating)),
+        // Stacked down the right edge: the top row already carries the
+        // type and watched badges, and narrow tiles can't fit two more.
+        if ((rating != null && widget.showRatingBadge) || tomatoes != null)
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (rating != null && widget.showRatingBadge)
+                  _RatingChip(value: rating),
+                if (rating != null && widget.showRatingBadge && tomatoes != null)
+                  const SizedBox(height: 4),
+                if (tomatoes != null) RottenTomatoesChip(score: tomatoes),
+              ],
+            ),
+          ),
       ],
 
       if (widget.hasBoundSource)
@@ -320,7 +347,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       // chrome below the tile stays calm. Suppressed when the caller shows a
       // persistent title below the poster.
       if (home && widget.showInlineTitle)
-        Positioned.fill(child: _HomeCaption(item: item))
+        Positioned.fill(child: _HomeCaption(item: item, tomatoes: tomatoes))
       else if (_active && widget.showInlineTitle)
         Positioned(
           left: 12,
@@ -715,7 +742,8 @@ class _DownloadSweepPainter extends CustomPainter {
 /// year · rating line — the same type and colours as the Spotlight cards.
 class _HomeCaption extends StatelessWidget {
   final StremioMeta item;
-  const _HomeCaption({required this.item});
+  final int? tomatoes;
+  const _HomeCaption({required this.item, this.tomatoes});
 
   @override
   Widget build(BuildContext context) {
@@ -753,9 +781,14 @@ class _HomeCaption extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.96),
                     ),
                   ),
-                  if (meta.isNotEmpty)
-                    Text(
-                      meta,
+                  if (meta.isNotEmpty || tomatoes != null)
+                    Text.rich(
+                      ratingsMetaSpan(
+                        meta,
+                        tomatoes,
+                        fontSize: 13 * 0.85,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
                       maxLines: 1,
                       textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,

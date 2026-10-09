@@ -37,7 +37,6 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^2.0.0
   http: ^1.1.0
-  pug_flutter: ^0.0.3
   intl: ^0.20.3
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.5
@@ -66,8 +65,8 @@ dependencies:
   # credential vault, encrypted backups, and remote-control session crypto.
   # No native code, so it works on tvOS without a federated sibling.
   cryptography: ^2.7.0
-  # Promoted from transitive (pug_flutter) to direct: SecretVault derives its
-  # master key from per-platform hardware identifiers. No tvOS implementation —
+  # SecretVault derives its master key from per-platform hardware identifiers.
+  # No tvOS implementation —
   # guard with PlatformUtil.isTvOS before touching it (see secret_vault.dart).
   device_info_plus: ^13.2.0
   flutter_sharing_intent: ^2.0.4
@@ -131,8 +130,8 @@ dependencies:
   connectivity_plus_tvos: ^0.0.2
   # device_info_plus_tvos is ABSENT for the same reason as package_info: it
   # wants device_info_plus_platform_interface ^8.1.0 while the plugin ships
-  # ^7.x. We never call device_info directly (it arrives via pug_flutter), so
-  # nothing of ours depends on it working.
+  # ^7.x. SecretVault guards every device_info call with PlatformUtil.isTvOS,
+  # so nothing of ours depends on it working there.
   #
   # package_info_plus_tvos is deliberately ABSENT: it requires
   # package_info_plus_platform_interface ^4.1.0, which NO published
@@ -253,7 +252,6 @@ flutter:
     - assets/images/webdav_sync_guide_qr.png
     - assets/images/profile_avatars/
     - assets/splash_logo.png
-    - assets/config/app_remote_config.json
     - assets/config/engines/
 
   # Bundled subtitle fonts

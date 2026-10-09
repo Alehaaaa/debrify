@@ -27,15 +27,12 @@ extension DetailFontRoleX on DetailFontRole {
   ///    "whatever the platform decides" stops being acceptable.
   ///
   /// **Why Fraunces and not Source Serif**, which the picker also names:
-  /// `assets/fonts/SourceSerifPro-Regular.ttf` and `Merriweather-Regular.ttf`
-  /// are not fonts. Both files — and both Roboto faces — are HTML error pages
-  /// saved with a `.ttf` extension (they begin `<!DOCTYPE html>`), so anything
-  /// asking for them silently falls back to the platform default. That is a
-  /// pre-existing bug with its own blast radius (the subtitle font picker
-  /// offers all three), and replacing them means adding megabytes of variable
-  /// font to the bundle — a size decision, not a theming one. Fraunces is
-  /// real, licensed (`assets/fonts/licenses/OFL-Fraunces.txt`) and already
-  /// shipping, so the theme layer uses what actually exists.
+  /// Fraunces was chosen when `SourceSerifPro-Regular.ttf`,
+  /// `Merriweather-Regular.ttf` and both Roboto faces were HTML error pages
+  /// saved with a `.ttf` extension. Those files are now real static faces
+  /// (Source Serif 4, Merriweather, Roboto; licenses in
+  /// `assets/fonts/licenses/`), so switching the serif role is purely a design
+  /// call — but Fraunces remains the shipped look.
   ///
   /// `sans` stays null, so **Signal — the shipped look — does not move**, and
   /// neither does any site that resolves to it.

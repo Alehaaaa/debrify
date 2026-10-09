@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../models/tracking_source.dart';
-import '../../services/analytics_service.dart';
 import '../../services/continue_watching_sync_service.dart';
 import '../../services/hide_watched_prefs.dart';
 import '../../services/main_page_bridge.dart';
@@ -32,7 +31,6 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tracking_settings');
     _load();
   }
 
@@ -129,14 +127,24 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('Matching Continue Watching across trackers…'),
+        content: Text('Syncing all watch history, Continue Watching and watchlists…'),
       ),
     );
-    final result = await ContinueWatchingSyncService.matchAll();
-    MainPageBridge.notifyIntegrationChanged();
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(result.summary)));
+    try {
+      final result = await ContinueWatchingSyncService.matchAll();
+      MainPageBridge.notifyIntegrationChanged();
+      if (!mounted || !_syncAllContinueWatching) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(result.summary)));
+    } catch (_) {
+      if (!mounted || !_syncAllContinueWatching) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text(
+          'Sync interrupted. Pending watch history will retry on the next refresh.',
+        )));
+    }
   }
 
   Future<void> _setProgress(WatchProgressSource? source) async {

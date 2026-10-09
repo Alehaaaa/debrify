@@ -6,7 +6,6 @@ import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/stream_badge_rules.dart';
-import '../../services/analytics_service.dart';
 import '../../services/stream_badges_service.dart';
 import '../../services/stream_badge_matcher.dart';
 import '../../theme/app_theme_scope.dart';
@@ -43,7 +42,6 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('stream_badges_settings');
     unawaited(_load());
   }
 

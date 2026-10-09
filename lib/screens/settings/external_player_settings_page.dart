@@ -7,7 +7,6 @@ import '../../services/external_player_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/android_native_downloader.dart';
 import '../../services/subtitle_font_service.dart';
-import '../../services/analytics_service.dart';
 import '../../services/skip_segment_service.dart';
 import '../../models/android_video_renderer_mode.dart';
 import '../../models/content_display_match_mode.dart';
@@ -216,7 +215,6 @@ class _ExternalPlayerSettingsPageState
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('playback_${widget.section.name}_settings');
     _loadSettings();
     _commandFocusNode.addListener(() {
       if (!mounted) return;

@@ -26,6 +26,7 @@ import '../../utils/dialog_tap_guard.dart';
 import '../card_action_menu.dart';
 import '../hold_feedback.dart';
 import '../../utils/tv_keys.dart';
+import 'raised_row.dart';
 import 'row_tag_pill.dart';
 import 'home_row_focus.dart';
 import 'spotlight_card_trailer.dart';
@@ -39,6 +40,7 @@ import '../../utils/platform_util.dart';
 import '../../utils/wide_touch_scale.dart';
 import '../../utils/spotlight_interaction_policy.dart';
 import '../optical_logo.dart';
+import '../rotten_tomatoes_score.dart';
 
 /// What a card is, once a shelf stops being a list of TITLES.
 ///
@@ -598,7 +600,22 @@ class _M {
   double liftDownFor(double cardHeight) =>
       compact ? 0 : cardHeight * (dpad ? 0.05 : 0.02);
   double get title => compact ? 19.0 : w * (26 / 1920);
-  double get caption => compact ? 12.0 : w * (21 / 1920);
+
+  /// Card caption size. Phones keep their measured 12 and TV its shipped
+  /// proportion; wider touch/desktop boards follow the window but never drop
+  /// below [_tabletCaption] — the bare proportion gave an 800-wide tablet
+  /// ~8.8, SMALLER than the phone it is supposed to out-scale.
+  double get caption => dpad
+      ? w * (21 / 1920)
+      : compact
+      ? 12.0
+      : max(w * (21 / 1920), _tabletCaption);
+  static const double _tabletCaption = 14.5;
+
+  /// The expanded card's description, tied to the caption (and so to the
+  /// window) instead of a fixed 10.5–12 band.
+  double get description =>
+      dpad ? (caption * 0.75).clamp(10.5, 12.0) : max(caption * 0.72, 11.5);
 
   /// The caption strip below the art — compact only; wide overlays it on the
   /// card. It reserves two lines because the second carries useful playback
@@ -3382,7 +3399,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
             // viewport grows by exactly that strip — the art box itself stays
             // at [cardHeight], so the ratio guard still holds.
             height: cardHeight + (captions ? m.captionBlock : 0),
-            child: ListView.separated(
+            // Not a ListView: a lifted card must paint over BOTH neighbours,
+            // and a ListView paints the next card on top of it.
+            child: RaisedRow(
               // Now that the board unbuilds far-off shelves, a rebuilt row
               // would otherwise come back rewound to column 0 — PageStorage
               // carries the offset across the unbuild (DPAD re-lands via
@@ -3391,7 +3410,6 @@ class SpotlightBoardState extends State<SpotlightBoard>
               // The lift paints into the padding above and below rather than
               // being sliced off at the viewport edge.
               clipBehavior: Clip.none,
-              scrollDirection: Axis.horizontal,
               // Let the last card reach the reading cursor even on short rows.
               padding: EdgeInsets.only(
                 left: m.gutter,
@@ -3427,6 +3445,7 @@ class SpotlightBoardState extends State<SpotlightBoard>
                   height: cardHeight,
                   expandedHeight: m.wideCardW / SpotlightCardShape.wide.aspect,
                   caption: m.caption,
+                  description: m.description,
                   radius: m.radius,
                   captionBelow: m.compact && captions,
                   captionBlock: captions ? m.captionBlock : 0,
@@ -3759,6 +3778,7 @@ class _Card extends StatefulWidget {
   final double height;
   final double expandedHeight;
   final double caption;
+  final double description;
   final double radius;
 
   /// Compact: the caption sits BELOW the art (small art can't afford an
@@ -3786,9 +3806,6 @@ class _Card extends StatefulWidget {
   /// independent of DPAD focus would put two cursors on a board that had
   /// exactly one at HEAD.
   final bool hoverable;
-  final bool overlayReplica;
-  final bool forceExpanded;
-  final double? forcedGrowth;
 
   /// Selects the input that owns an optional card preview: hover on a pointer
   /// board, focus on a DPAD board. This deliberately does not use `_f || _h`:
@@ -3812,6 +3829,7 @@ class _Card extends StatefulWidget {
     required this.height,
     required this.expandedHeight,
     required this.caption,
+    this.description = 12,
     this.radius = 7,
     this.captionBelow = false,
     this.captionBlock = 0,
@@ -3823,9 +3841,6 @@ class _Card extends StatefulWidget {
     this.trailerVolume = 0,
     this.onTrailerStart,
     this.hoverable = false,
-    this.overlayReplica = false,
-    this.forceExpanded = false,
-    this.forcedGrowth,
     this.dpad = true,
     this.onDesktopPreviewActivityChanged,
   });
@@ -3834,11 +3849,10 @@ class _Card extends StatefulWidget {
   State<_Card> createState() => _CardState();
 }
 
-class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
+class _CardState extends State<_Card>
+    with MetadataPresentationMixin<_Card>, RottenTomatoesScoreMixin<_Card> {
   double _paintedGrowth = 1;
   double? _scrollGrowth;
-  final _hoverPortal = OverlayPortalController();
-  final _hoverLink = LayerLink();
 
   void _freezeScrollWidth(bool scrolling) {
     if (scrolling == (_scrollGrowth != null)) return;
@@ -3847,8 +3861,8 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
 
   bool _wideSelected = false;
   bool _moving = false;
-  bool get _activeCard =>
-      widget.forceExpanded || (widget.largeInteractions ? _wideSelected : _f);
+
+  bool get _activeCard => widget.largeInteractions ? _wideSelected : _f;
   bool? _lastReducedMotion;
 
   @override
@@ -3868,6 +3882,11 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
   void initState() {
     super.initState();
     widget.register?.call(this);
+    if (_prefetchDescription) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadFocusedDescription();
+      });
+    }
   }
 
   void _setWideSelection(bool selected, {required bool moving}) {
@@ -3928,47 +3947,93 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
   Object? _descriptionScope;
   int _descriptionRequest = 0;
 
+  /// True from the moment an expanded card starts looking up its description
+  /// until that lookup settles, so the caption can hold the description's
+  /// room instead of jumping when the text lands.
+  bool _descriptionLoading = false;
+
+  /// The item (and profile scope) a prefetched lookup already ran or is
+  /// running for, so hover changes neither restart nor cancel it.
+  Object? _descriptionFor;
+  Object? _descriptionForScope;
+
+  /// Pointer boards look the description up as soon as the card is built,
+  /// so a hovered card opens WITH its text instead of popping it in a beat
+  /// later. DPAD boards keep the focus-and-dwell lookup (a remote sweeps
+  /// through far more cards, on far weaker hardware). The lookup is cached
+  /// per title, so a later hover costs nothing.
+  bool get _prefetchDescription => widget.largeInteractions && _canExpand;
+
   void _loadFocusedDescription() {
+    final item = originalMetadata;
+    final scope = ProfileRuntime.scope.value;
+    final prefetch = _prefetchDescription;
+    if (prefetch &&
+        item != null &&
+        identical(_descriptionFor, item) &&
+        _descriptionForScope == scope) {
+      return;
+    }
     _descriptionTimer?.cancel();
     final request = ++_descriptionRequest;
-    final item = originalMetadata;
-    if (!_canExpand || !_activeCard || _moving || item == null) return;
-    final scope = ProfileRuntime.scope.value;
+    _descriptionLoading = false;
+    _descriptionFor = null;
+    if (!_canExpand ||
+        item == null ||
+        (!prefetch && (!_activeCard || _moving))) {
+      return;
+    }
+    _descriptionLoading = true;
+    if (prefetch) {
+      _descriptionFor = item;
+      _descriptionForScope = scope;
+    }
     bool current() =>
         mounted &&
-        _activeCard &&
+        (prefetch || _activeCard) &&
         _canExpand &&
         request == _descriptionRequest &&
         identical(originalMetadata, item) &&
         ProfileRuntime.scope.value == scope;
-    _descriptionTimer = Timer(const Duration(milliseconds: 300), () async {
-      try {
-        final prefs = await MetadataPreferencesService.loadForBackground(
-          isCurrent: current,
-        );
-        if (prefs == null || !current()) return;
-        if (prefs.provider(MetadataCategory.information) !=
-                MetadataPreferences.current &&
-            !prefs.fallback)
-          return;
-        if ((heroPresentation?.description ?? '').trim().isNotEmpty) return;
-        final imdb = item.effectiveImdbId;
-        if (imdb == null) return;
-        final details = await StremioService.instance.fetchMetaDetails(
-          imdbId: imdb,
-          type: item.type,
-        );
-        if (!current()) return;
-        final description = details?.description?.trim();
-        if (description == null || description.isEmpty) return;
-        setState(() {
-          _resolvedDescription = description;
-          _descriptionScope = scope;
-        });
-      } catch (_) {
-        // Optional metadata must never interrupt remote navigation.
-      }
-    });
+    _descriptionTimer = Timer(
+      prefetch ? Duration.zero : const Duration(milliseconds: 300),
+      () async {
+        try {
+          final prefs = await MetadataPreferencesService.loadForBackground(
+            isCurrent: current,
+          );
+          if (prefs == null || !current()) return;
+          if (prefs.provider(MetadataCategory.information) !=
+                  MetadataPreferences.current &&
+              !prefs.fallback)
+            return;
+          if ((heroPresentation?.description ?? '').trim().isNotEmpty) return;
+          final imdb = item.effectiveImdbId;
+          if (imdb == null) return;
+          final details = await StremioService.instance.fetchMetaDetails(
+            imdbId: imdb,
+            type: item.type,
+          );
+          if (!current()) return;
+          final description = details?.description?.trim();
+          if (description == null || description.isEmpty) return;
+          setState(() {
+            _resolvedDescription = description;
+            _descriptionScope = scope;
+          });
+        } catch (_) {
+          // Optional metadata must never interrupt remote navigation. Let the
+          // next hover retry a prefetch that failed.
+          if (request == _descriptionRequest) _descriptionFor = null;
+        } finally {
+          if (mounted &&
+              request == _descriptionRequest &&
+              _descriptionLoading) {
+            setState(() => _descriptionLoading = false);
+          }
+        }
+      },
+    );
   }
 
   /// DPAD centre is a key gesture, not a pointer long-press. Keep the short
@@ -3996,13 +4061,6 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
   void _setHover(bool hovered) {
     if (_h == hovered) return;
     setState(() => _h = hovered);
-    if (widget.largeInteractions && !widget.overlayReplica) {
-      if (hovered) {
-        _hoverPortal.show();
-      } else {
-        _hoverPortal.hide();
-      }
-    }
     if (widget.largeInteractions) widget.onInteraction?.call(this, hovered);
     _reportDesktopPreviewActivity(_previewActive);
   }
@@ -4080,7 +4138,6 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     // regardless of the resting poster preference.
     tween: Tween(
       end:
-          widget.forcedGrowth ??
           _scrollGrowth ??
           (_canExpand && _activeCard && !_moving
               ? (widget.expandedHeight *
@@ -4089,10 +4146,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
                     (_trailerPlaying ? 1.38 : 1.18)
               : 1.0),
     ),
-    duration:
-        widget.overlayReplica ||
-            _scrollGrowth != null ||
-            MediaQuery.disableAnimationsOf(context)
+    duration: _scrollGrowth != null || MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : _trailerPlaying
         ? const Duration(milliseconds: 700)
@@ -4105,8 +4159,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     _paintedGrowth = growth;
     final app = AppThemeScope.of(context);
     final c = widget.card;
-    final expanded =
-        widget.forceExpanded || (_canExpand && _activeCard && !_moving);
+    final expanded = _canExpand && _activeCard && !_moving;
     final w = widget.height * c.shape.aspect * growth;
     // Keep the row's baseline and height; only widen the selected poster.
     // The width uses landscape-rail sizing rather than the taller poster.
@@ -4144,6 +4197,10 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
         ? (_resolvedDescription ?? '')
         : '';
     final showDescription = description.isNotEmpty;
+    // Hold the description's room for the whole expansion — while it loads
+    // too — so the title never jumps up when the text arrives.
+    final reserveDescription =
+        expanded && (showDescription || _descriptionLoading);
     final changed = meta != null && !identical(meta, originalMetadata);
     final artwork = expanded && c.shape != SpotlightCardShape.wide
         ? SpotlightCard(
@@ -4183,13 +4240,17 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     final contained = c.shape.fit == BoxFit.contain;
     // The caption's second line — kind and/or rating, dot-joined. One line
     // whatever it carries, so the caption bed math stays two-state.
+    // Title cards only (channels/playlists carry no metadata).
+    final tomatoes = widget.showTitleAndRating && c.metadata != null
+        ? rottenTomatoesFor(c.metadata!.effectiveImdbId ?? c.watchedImdbId)
+        : null;
     final metaLine = [
       if ((c.subtitle ?? '').isNotEmpty) c.subtitle!,
       if (widget.showTitleAndRating && (c.rating ?? 0) > 0)
         '★ ${c.rating!.toStringAsFixed(1)}',
     ].join(' · ');
     final hasTitle = widget.showTitleAndRating && displayedTitle.isNotEmpty;
-    final hasSubtitle = metaLine.isNotEmpty;
+    final hasSubtitle = metaLine.isNotEmpty || tomatoes != null;
     final hasCaptionContent = hasTitle || hasSubtitle || showDescription;
     final preview = c.previewBuilder;
     // Exactly one card owns the decoder: desktop follows the pointer, TV
@@ -4204,7 +4265,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     // vertical padding around those lines.
     final captionLineHeight = widget.caption * 1.2;
     final captionBedHeight =
-        (showDescription ? height : 33.0) +
+        (reserveDescription ? height : 33.0) +
         (hasTitle ? captionLineHeight : 0) +
         (hasSubtitle ? captionLineHeight * 0.85 : 0);
 
@@ -4214,16 +4275,26 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
     // it stays attached to the physical card without scaling its small glyphs
     // or letting the travelling glare wash through them.
     final tvCaptionFamily = PlatformUtil.isTvOS ? 'CupertinoSystemText' : null;
+    // The expanded caption is laid out ONCE, at the card's final expanded
+    // width, and revealed by the clip as the card grows. Laid out at the
+    // animating width it re-wrapped every frame and the text crawled.
+    final expandedTextWidth =
+        widget.expandedHeight * SpotlightCardShape.wide.aspect * 1.18;
+    final descriptionLines = height >= 180 ? 3 : 2;
+    final descriptionLineHeight =
+        MediaQuery.textScalerOf(context).scale(widget.description) * 1.35;
     final overlayCaption =
         widget.captionBelow ||
-            (!widget.showCaption && !showDescription) ||
-            !hasCaptionContent
+            (!widget.showCaption && !reserveDescription) ||
+            !(hasCaptionContent || reserveDescription)
         ? null
         : IgnorePointer(
             child: Align(
-              alignment: Alignment.bottomCenter,
+              alignment: expanded
+                  ? Alignment.bottomLeft
+                  : Alignment.bottomCenter,
               child: SizedBox(
-                width: double.infinity,
+                width: expanded ? expandedTextWidth : double.infinity,
                 child: Padding(
                   padding: expanded
                       ? const EdgeInsets.fromLTRB(12, 10, 12, 10)
@@ -4248,8 +4319,13 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
                           ),
                         ),
                       if (hasSubtitle)
-                        Text(
-                          metaLine,
+                        Text.rich(
+                          ratingsMetaSpan(
+                            metaLine,
+                            tomatoes,
+                            fontSize: widget.caption * 0.85,
+                            color: Colors.white.withValues(alpha: 0.72),
+                          ),
                           maxLines: 1,
                           textAlign: TextAlign.center,
                           overflow: TextOverflow.ellipsis,
@@ -4260,22 +4336,30 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
                             color: Colors.white.withValues(alpha: 0.72),
                           ),
                         ),
-                      if (showDescription) ...[
+                      if (reserveDescription) ...[
                         const SizedBox(height: 6),
-                        Text(
-                          description,
-                          maxLines: height >= 180 ? 3 : 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontFamily: tvCaptionFamily,
-                            fontSize: (widget.caption * 0.75).clamp(10.5, 12.0),
-                            fontWeight: FontWeight.w400,
-                            height: 1.35,
-                            // Paint alpha avoids an offscreen opacity layer.
-                            color: Colors.white.withValues(
-                              alpha: ((growth - 1) / 0.18).clamp(0.0, 1.0),
-                            ),
-                          ),
+                        SizedBox(
+                          height: descriptionLines * descriptionLineHeight,
+                          child: !showDescription
+                              ? null
+                              : Text(
+                                  description,
+                                  maxLines: descriptionLines,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontFamily: tvCaptionFamily,
+                                    fontSize: widget.description,
+                                    fontWeight: FontWeight.w400,
+                                    height: 1.35,
+                                    // Paint alpha avoids an offscreen opacity layer.
+                                    color: Colors.white.withValues(
+                                      alpha: ((growth - 1) / 0.18).clamp(
+                                        0.0,
+                                        1.0,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                         ),
                       ],
                     ],
@@ -4285,8 +4369,30 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
             ),
           );
 
+    // The expanded caption rides the card's lift (see attachedForeground):
+    // drawn beside the transform it stayed put while the art zoomed and rose
+    // out from under it.
+    final expandedCaption = !expanded || overlayCaption == null
+        ? null
+        : AnimatedOpacity(
+            key: ValueKey('spotlight-trailer-text-${c.metadata?.id}'),
+            opacity: _hideTrailerText ? 0 : 1,
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 300),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(widget.radius),
+              child: OverflowBox(
+                alignment: Alignment.bottomLeft,
+                maxWidth: max(expandedTextWidth, w),
+                child: overlayCaption,
+              ),
+            ),
+          );
+
     final art = ParallaxFocus(
       forceEnabled: widget.forceParallax,
+      attachedForeground: expandedCaption,
       focused: widget.largeInteractions ? _wideSelected : _f || _h,
       radius: BorderRadius.circular(widget.radius),
       // Expanded paragraphs stay in screen space, above every focus/glare
@@ -4496,23 +4602,7 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
 
     // Keep this wrapper mounted on both focus states: swapping Stack for its
     // child destroys ParallaxFocus's spring exactly when it should animate.
-    final cursored = Stack(
-      fit: StackFit.passthrough,
-      children: [
-        focusArt,
-        if (expanded && overlayCaption != null)
-          Positioned.fill(
-            child: AnimatedOpacity(
-              key: ValueKey('spotlight-trailer-text-${c.metadata?.id}'),
-              opacity: _hideTrailerText ? 0 : 1,
-              duration: MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 300),
-              child: overlayCaption,
-            ),
-          ),
-      ],
-    );
+    final cursored = Stack(fit: StackFit.passthrough, children: [focusArt]);
 
     // Compact: art + its caption below, one Column — the caption is part of
     // the card so the tap target covers both. Keep the same metadata line as
@@ -4543,8 +4633,13 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
                             ),
                           ),
                         if (hasSubtitle)
-                          Text(
-                            metaLine,
+                          Text.rich(
+                            ratingsMetaSpan(
+                              metaLine,
+                              tomatoes,
+                              fontSize: widget.caption * 0.85,
+                              color: app.core.tx.withValues(alpha: 0.52),
+                            ),
                             maxLines: 1,
                             textAlign: TextAlign.center,
                             overflow: TextOverflow.ellipsis,
@@ -4638,44 +4733,11 @@ class _CardState extends State<_Card> with MetadataPresentationMixin<_Card> {
             },
             child: interactive,
           );
-    if (!widget.hoverable ||
-        !widget.largeInteractions ||
-        widget.overlayReplica) {
-      return focusable;
-    }
-    // A ListView paints later siblings over earlier ones. When this card grows
-    // on hover, paint a pointer-transparent copy in the root overlay so the
-    // selected card genuinely sits above its idle neighbours.
-    return OverlayPortal(
-      controller: _hoverPortal,
-      overlayChildBuilder: (context) => CompositedTransformFollower(
-        link: _hoverLink,
-        targetAnchor: Alignment.topLeft,
-        followerAnchor: Alignment.topLeft,
-        child: IgnorePointer(
-          child: _Card(
-            overlayReplica: true,
-            forceExpanded: true,
-            forcedGrowth: _paintedGrowth,
-            card: widget.card,
-            node: null,
-            height: widget.height,
-            expandedHeight: widget.expandedHeight,
-            caption: widget.caption,
-            radius: widget.radius,
-            captionBelow: widget.captionBelow,
-            captionBlock: widget.captionBlock,
-            showCaption: widget.showCaption,
-            showTitleAndRating: widget.showTitleAndRating,
-            expandOnFocus: widget.expandOnFocus,
-            forceParallax: widget.forceParallax,
-            trailerEnabled: false,
-            trailerVolume: 0,
-            dpad: widget.dpad,
-          ),
-        ),
-      ),
-      child: CompositedTransformTarget(link: _hoverLink, child: focusable),
+    // Exactly the lifted card paints above its neighbours, switching the
+    // moment the hover/selection moves to another card.
+    return PaintRaised(
+      raised: widget.largeInteractions ? _wideSelected : _f || _h,
+      child: focusable,
     );
   }
 }

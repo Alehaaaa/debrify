@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'indexer_managers_settings_page.dart';
 import 'widgets/dynamic_settings_builder.dart';
@@ -20,7 +19,6 @@ class _TorrentSettingsPageState extends State<TorrentSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('torrent_settings');
     // On TV, land DPAD focus on the first row so users aren't stranded.
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

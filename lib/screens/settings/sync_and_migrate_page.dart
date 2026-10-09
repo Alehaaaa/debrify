@@ -15,7 +15,6 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/webdav_item.dart';
-import '../../services/analytics_service.dart';
 import '../../services/webdav_sync/webdav_sync_clock.dart';
 import '../../services/webdav_sync/webdav_sync_engine.dart';
 import '../../services/webdav_sync/webdav_sync_feature.dart';
@@ -112,7 +111,6 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       authorization: _syncAuthorization,
       activation: _syncActivation,
     );
-    AnalyticsService.screenView('sync_and_migrate');
     if (_syncFeatureEnabled) {
       _loadSyncState();
       unawaited(_loadLogUploadSetting());

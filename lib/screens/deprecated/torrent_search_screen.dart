@@ -92,7 +92,6 @@
 // import '../services/local_bound_source_service.dart';
 // import '../services/next_episode_service.dart';
 // import '../services/stremio_service.dart';
-// import '../services/analytics_service.dart';
 // import '../models/stremio_addon.dart';
 // import 'dart:async';
 // 
@@ -3224,21 +3223,6 @@
 //         return;
 //       }
 // 
-//       AnalyticsService.trackInBackground('search_used', {
-//         'mode': selection != null && selection.imdbId.trim().isNotEmpty
-//             ? 'imdb'
-//             : 'keyword',
-//         'source_type': searchSourceSnapshot.type.name,
-//         'source_label': searchSourceSnapshot.label,
-//         'source_addon_id': searchSourceSnapshot.addon?.id,
-//         'content_type': selection?.contentType ?? 'unknown',
-//         'has_results': filteredTorrents.isNotEmpty,
-//         'result_count_bucket': _analyticsResultCountBucket(
-//           filteredTorrents.length,
-//         ),
-//         'quick_play': quickPlayPendingSnapshot,
-//       });
-// 
 //       final metadata = _buildTorrentMetadataMap(filteredTorrents);
 // 
 //       // Always recalculate engine counts from filtered results
@@ -3319,14 +3303,6 @@
 //           return part[0].toUpperCase() + part.substring(1).toLowerCase();
 //         })
 //         .join(' ');
-//   }
-// 
-//   String _analyticsResultCountBucket(int count) {
-//     if (count <= 0) return '0';
-//     if (count <= 5) return '1_5';
-//     if (count <= 20) return '6_20';
-//     if (count <= 50) return '21_50';
-//     return '51_plus';
 //   }
 // 
 //   /// Returns a short label for the source tag.

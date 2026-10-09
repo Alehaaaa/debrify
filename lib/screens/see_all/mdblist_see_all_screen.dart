@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_discover_models.dart';
@@ -174,7 +173,6 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('mdblist_see_all');
     if (widget.embedded) {
       final saved = DiscoverPrefs.enumSortFor(
         DiscoverPrefs.mdblist,
@@ -941,9 +939,6 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
   void _playRandom() {
     final play = widget.onQuickPlay;
     if (play == null || _visible.isEmpty) return;
-    AnalyticsService.trackInBackground('discover_random_play', {
-      'source': 'mdblist',
-    });
     play(_visible[_random.nextInt(_visible.length)]);
   }
 

@@ -454,8 +454,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         widget.videoUrl != oldWidget.videoUrl ||
         widget.audioUrl != oldWidget.audioUrl ||
         widget.muxedVideoUrl != oldWidget.muxedVideoUrl;
-    if (urlChanged || (!oldWidget.enabled && widget.enabled))
+    if (urlChanged || (!oldWidget.enabled && widget.enabled)) {
       _completed = false;
+    }
     if (urlChanged || widget.enabled != oldWidget.enabled) {
       if (!_canPlay) {
         _teardownPlayer();

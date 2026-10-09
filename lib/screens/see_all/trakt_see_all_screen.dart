@@ -4,7 +4,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
@@ -214,7 +213,6 @@ class _TraktSeeAllScreenState extends State<TraktSeeAllScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('trakt_see_all');
     _items = widget.cwItems;
     _category = widget.initialCategory;
     // Discover only: reopen on the order the user last picked for this source.
@@ -460,9 +458,6 @@ class _TraktSeeAllScreenState extends State<TraktSeeAllScreen> {
   void _playRandom() {
     final play = widget.onQuickPlay;
     if (play == null || _visible.isEmpty) return;
-    AnalyticsService.trackInBackground('discover_random_play', {
-      'source': 'trakt_cw',
-    });
     play(_visible[_random.nextInt(_visible.length)]);
   }
 

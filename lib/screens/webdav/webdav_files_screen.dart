@@ -7,7 +7,6 @@ import '../../models/playlist_view_mode.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../../models/webdav_item.dart';
 import '../../screens/video_player/models/playlist_entry.dart';
-import '../../services/analytics_service.dart';
 import '../../services/download_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../widgets/tv_text_field.dart';
@@ -120,9 +119,6 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView(
-      _isPicker ? 'webdav_migrate_picker' : 'webdav_files',
-    );
     _loadSettingsAndRoot();
     if (_usesPushedNavigation) {
       // Pushed from the Cloud hub — system/remote Back should fold the folder

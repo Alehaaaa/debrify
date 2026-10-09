@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme_scope.dart';
 import '../see_all/stremio_dropdown.dart';
 
-/// Selectable max playback resolutions for YouTube (pixel height). 1440p/2160p
-/// are served by YouTube only in VP9 (no H.264 above 1080p); picking them opts
-/// into VP9 playback. Any preference at/under 1080p stays H.264.
-const List<int> kYoutubeQualities = [2160, 1440, 1080, 720, 480, 360];
+/// Selectable YouTube playback resolutions, capped at 1080p.
+const List<int> kYoutubeQualities = [1080, 720, 480, 360];
 
 String youtubeQualityLabel(int height) => '${height}p';
 

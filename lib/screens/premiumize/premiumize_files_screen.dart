@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../screens/video_player_screen.dart'; // re-exports PlaylistEntry
-import '../../services/analytics_service.dart';
 import '../../services/premiumize_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/download_service.dart';
@@ -141,7 +140,6 @@ class _PremiumizeFilesScreenState extends State<PremiumizeFilesScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('premiumize_files');
     _loadSettings();
 
     if (widget.isPushedRoute) {

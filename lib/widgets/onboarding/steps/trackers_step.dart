@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../theme/widgets/parallax_focus.dart';
-import '../../../services/analytics_service.dart';
 import '../../../services/main_page_bridge.dart';
 import '../../../services/mdblist/mdblist_service.dart';
 import '../../../services/storage_service.dart';
@@ -208,10 +207,6 @@ class TrackersStep extends StatelessWidget {
                         return;
                       }
                       await StorageService.setMdblistSyncCatalogItems(true);
-                      AnalyticsService.integrationConnected('mdblist', {
-                        'surface': 'onboarding',
-                        'method': 'api_key',
-                      });
                       MainPageBridge.notifyIntegrationChanged();
                       onMdblistConnected();
                       if (dialogContext.mounted) Navigator.pop(dialogContext);

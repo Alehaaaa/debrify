@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -135,7 +136,8 @@ void main() {
     (widget) => widget is ParallaxFocus && widget.focused,
   );
   Finder horizontal() => find.byWidgetPredicate(
-    (widget) => widget is ListView && widget.scrollDirection == Axis.horizontal,
+    (widget) =>
+        widget is ScrollView && widget.scrollDirection == Axis.horizontal,
   );
   void surface(WidgetTester tester, Size size) {
     tester.view.physicalSize = size;
@@ -157,9 +159,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(active(), findsOneWidget);
       expect(tester.element(active()), isNot(same(first)));
-      final visibleCard = tester.getRect(active()).intersect(
-        Offset.zero & const Size(1024, 768),
-      );
+      final visibleCard = tester
+          .getRect(active())
+          .intersect(Offset.zero & const Size(1024, 768));
       await tester.tapAt(visibleCard.center);
       expect(opened, 1);
       expect(tester.takeException(), isNull);
@@ -536,7 +538,9 @@ void main() {
     tester,
   ) async {
     surface(tester, const Size(1200, 800));
-    await tester.pumpWidget(host(platform: TargetPlatform.macOS, expand: false));
+    await tester.pumpWidget(
+      host(platform: TargetPlatform.macOS, expand: false),
+    );
     await tester.pumpAndSettle();
     expect(active(), findsNothing);
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -544,10 +548,9 @@ void main() {
     final position = target.localToGlobal(target.size.center(Offset.zero));
     await mouse.addPointer(location: position);
     await tester.pumpAndSettle();
-    await tester.sendEventToBinding(PointerScrollEvent(
-      position: position,
-      scrollDelta: const Offset(250, 0),
-    ));
+    await tester.sendEventToBinding(
+      PointerScrollEvent(position: position, scrollDelta: const Offset(250, 0)),
+    );
     await tester.pumpAndSettle();
     expect(active(), findsOneWidget);
     expect(tester.getRect(active()).contains(position), isTrue);
@@ -559,17 +562,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('expanded posters retain row height with landscape-sized width', (tester) async {
+  testWidgets('expanded posters retain row height with landscape-sized width', (
+    tester,
+  ) async {
     surface(tester, const Size(1200, 800));
     await tester.pumpWidget(host(platform: TargetPlatform.macOS));
     await tester.pumpAndSettle();
-    final restingSize = (nodes[1].context!.findRenderObject() as RenderBox).size;
+    final restingSize =
+        (nodes[1].context!.findRenderObject() as RenderBox).size;
     nodes[1].requestFocus();
     await tester.pumpAndSettle();
     final posterSize = (nodes[1].context!.findRenderObject() as RenderBox).size;
-    await tester.pumpWidget(host(platform: TargetPlatform.macOS, shape: SpotlightCardShape.wide));
+    await tester.pumpWidget(
+      host(platform: TargetPlatform.macOS, shape: SpotlightCardShape.wide),
+    );
     await tester.pumpAndSettle();
-    final landscapeSize = (nodes[1].context!.findRenderObject() as RenderBox).size;
+    final landscapeSize =
+        (nodes[1].context!.findRenderObject() as RenderBox).size;
     expect(posterSize.width, closeTo(landscapeSize.width, 0.01));
     expect(posterSize.height, closeTo(restingSize.height, 0.01));
     expect(posterSize.width, greaterThan(restingSize.width));
@@ -602,6 +611,58 @@ void main() {
       greaterThan(1.0),
     );
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('a hovered card\'s caption rides its art while it expands', (
+    tester,
+  ) async {
+    surface(tester, const Size(1440, 900));
+    await tester.pumpWidget(host(platform: TargetPlatform.macOS));
+    await tester.pumpAndSettle();
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1430, 890));
+    final target = nodes[2].context!.findRenderObject() as RenderBox;
+    await mouse.moveTo(target.localToGlobal(target.size.center(Offset.zero)));
+    final description = find.text('Description 2');
+    final title = find.text('Title 2').last;
+    // The lifted art: the first clip inside the card's lift transform.
+    Rect art() => tester.getRect(
+      find.descendant(of: active(), matching: find.byType(ClipRRect)).first,
+    );
+    // Caption position measured FROM the lifted art's bottom-left corner.
+    Offset onArt(Finder f) => tester.getTopLeft(f) - art().bottomLeft;
+    double wrapWidth() =>
+        tester.renderObject<RenderBox>(description).constraints.maxWidth;
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(description, findsOneWidget);
+    final midTitle = onArt(title);
+    final midDescription = onArt(description);
+    final midWrap = wrapWidth();
+    await tester.pumpAndSettle();
+    expect(onArt(title).dx, closeTo(midTitle.dx, 0.5));
+    expect(onArt(title).dy, closeTo(midTitle.dy, 0.5));
+    expect(onArt(description).dy, closeTo(midDescription.dy, 0.5));
+    expect(wrapWidth(), midWrap);
+    expect(tester.takeException(), isNull);
+    await mouse.removePointer();
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('tablet card captions are larger than the phone\'s', (
+    tester,
+  ) async {
+    surface(tester, const Size(820, 1180));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    final sizes = [
+      for (final text in tester.widgetList<Text>(find.text('Title 1')))
+        if (text.style?.fontSize != null) text.style!.fontSize!,
+    ];
+    expect(sizes, isNotEmpty);
+    expect(sizes.first, greaterThan(12));
     await tester.pumpWidget(const SizedBox());
   });
 

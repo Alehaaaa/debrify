@@ -4,8 +4,6 @@ import '../../services/launch_animation/launch_animation_library.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/launch/launch_ident.dart';
@@ -41,7 +39,6 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('launch_animation_settings');
     if (PlatformUtil.isAndroidTvCached) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

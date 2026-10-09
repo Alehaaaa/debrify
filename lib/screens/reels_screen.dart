@@ -15,7 +15,10 @@ import '../services/reels_feed.dart';
 import '../services/reel_share_service.dart';
 import '../services/storage_service.dart';
 import '../services/watchlist_sync_service.dart';
-import '../widgets/detail/showcase_parts.dart' show DetailRatingBox;
+import '../widgets/detail/showcase_parts.dart'
+    show DetailGlyphBox, DetailRatingBox;
+import '../services/omdb/omdb_ratings_service.dart';
+import '../widgets/rotten_tomatoes_score.dart';
 import '../services/simkl/simkl_service.dart';
 import '../services/trakt/trakt_service.dart';
 import '../services/youtube_service.dart';
@@ -38,6 +41,10 @@ class _Reel {
   int revision = 0;
   Duration position = Duration.zero;
   DateTime? leftAt;
+
+  /// A player has rendered [streams]' first frame. An open relay connection
+  /// keeps streaming past the tunnel's expiry, so a prepared clip is kept.
+  bool framed = false;
 
   StremioMeta get item => title.item;
 }
@@ -244,10 +251,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
       while (_current && !_exhausted) {
         final need = _index + 1 + _ahead - _reels.length;
         if (need <= 0) break;
-        // Publish the first title immediately; don't make its playback wait
-        // for the entire look-ahead batch to finish fetching metadata.
+        // Publish each confirmed title immediately. Waiting for the whole
+        // look-ahead batch lets one slow lookup hold back already-ready reels.
         final titles = await _feed.take(
-          _reels.isEmpty ? 1 : need,
+          1,
           // A reopened Reels tab gets the session-wide unseen queue, never a
           // replay just because the first discovery window ran dry.
           allowRepeat: false,
@@ -344,6 +351,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() {
       if (streams != null && streams.hasPlayable) {
         reel.streams = streams;
+        reel.framed = false;
         reel.state = _ClipState.ready;
       } else {
         reel.state = _ClipState.failed;
@@ -364,6 +372,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() {
       reel.revision++;
       reel.streams = null;
+      reel.framed = false;
       reel.state = _ClipState.idle;
       if (index == _index) _paused = false;
     });
@@ -404,6 +413,25 @@ class _ReelsScreenState extends State<ReelsScreen> {
       next.position = Duration.zero;
     }
     next.leftAt = null;
+    // An unopened relay tunnel past its expiry can no longer be opened. The
+    // paired (prewarmed/previewing) player already holds its connection, so
+    // keep that one rather than restarting the clip mid-swipe.
+    final preview = _swipePreviewIndex;
+    final drag = _dragPage;
+    final prepared =
+        index ==
+        (preview != null && preview != _index
+            ? preview
+            : (drag != null && drag != _index ? drag : _index + 1));
+    if (next.state == _ClipState.ready &&
+        next.streams?.needsRefresh == true &&
+        !(prepared && next.framed)) {
+      YoutubeService.invalidateStreams(next.title.clipKey);
+      next.revision++;
+      next.streams = null;
+      next.framed = false;
+      next.state = _ClipState.idle;
+    }
     setState(() {
       _index = index;
       _paused = false;
@@ -434,6 +462,20 @@ class _ReelsScreenState extends State<ReelsScreen> {
         reel.revision != revision ||
         reel.state != _ClipState.ready ||
         !_reels.contains(reel)) {
+      return;
+    }
+    // A relay tunnel can die without the clip being unavailable: it expired
+    // before a loop restart or reconnect, or the instance dropped it. Retry
+    // once through direct extraction, resuming at the last position.
+    if (reel.streams?.isRelay == true) {
+      YoutubeService.markRelayFailed(reel.title.clipKey);
+      setState(() {
+        reel.revision++;
+        reel.streams = null;
+        reel.framed = false;
+        reel.state = _ClipState.idle;
+      });
+      unawaited(_resolve(_reels.indexOf(reel)));
       return;
     }
     setState(() {
@@ -765,10 +807,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
               // continues for the page visible beneath a swipe.
               prewarm: widget.isActive && !_sharing && i == prewarmIndex,
               previewing:
-                  canPreview &&
-                  widget.isActive &&
-                  !_sharing &&
-                  i == companion,
+                  canPreview && widget.isActive && !_sharing && i == companion,
               onPlaybackFailed: () => _playbackFailed(reel, revision),
               onRetry: () => _retry(reel),
               floatingNav: widget.floatingNav,
@@ -1061,11 +1100,16 @@ class _ReelPageState extends State<_ReelPage>
           reel.state != _ClipState.failed,
       initialPosition: reel.position > Duration.zero ? reel.position : null,
       onPosition: widget.onPosition,
+      onFirstFrameReady: () => reel.framed = true,
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
     );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
     final rating = item.imdbRating;
+    final omdbId = item.effectiveImdbId;
+    final hasOmdb =
+        OmdbRatingsService.instance.enabled &&
+        OmdbRatingsService.isImdbId(omdbId);
     final description = item.description?.trim();
     final clipName = reel.title.clipName;
     return Stack(
@@ -1183,7 +1227,7 @@ class _ReelPageState extends State<_ReelPage>
                   ],
                 ),
               ],
-              if (genres.isNotEmpty || rating != null) ...[
+              if (genres.isNotEmpty || rating != null || hasOmdb) ...[
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1211,6 +1255,43 @@ class _ReelPageState extends State<_ReelPage>
                     // this 13px genre line without changing the detail UI.
                     if (rating != null)
                       DetailRatingBox(value: rating, scale: 11 / 7.5),
+                    // Rotten Tomatoes + Metacritic (OMDb) as twin boxes, and
+                    // OMDb's IMDb when the reel has none of its own.
+                    if (hasOmdb)
+                      OmdbRatingsBuilder(
+                        imdbId: omdbId,
+                        builder: (context, r) {
+                          if (r == null) return const SizedBox.shrink();
+                          final boxes = <Widget>[
+                            if (rating == null && r.imdb != null)
+                              DetailRatingBox(value: r.imdb!, scale: 11 / 7.5),
+                            if (r.score != null)
+                              DetailGlyphBox(
+                                glyph: (size, color) =>
+                                    TomatoGlyph(size: size, color: color),
+                                label: '${r.score}%',
+                                scale: 11 / 7.5,
+                              ),
+                            if (r.metacritic != null)
+                              DetailGlyphBox(
+                                glyph: (size, color) =>
+                                    MetacriticGlyph(size: size, color: color),
+                                label: '${r.metacritic}',
+                                scale: 11 / 7.5,
+                              ),
+                          ];
+                          final leading = genres.isNotEmpty || rating != null;
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (var i = 0; i < boxes.length; i++) ...[
+                                if (i > 0 || leading) const SizedBox(width: 6),
+                                boxes[i],
+                              ],
+                            ],
+                          );
+                        },
+                      ),
                   ],
                 ),
               ],
@@ -1334,8 +1415,7 @@ class ReelVideoSurface extends StatelessWidget {
             // Keep that paused frame visible rather than falling back to its
             // poster, then let it start directly once it becomes active.
             freezeFrame:
-                playback.paused ||
-                (playback.prewarm && !playback.previewing),
+                playback.paused || (playback.prewarm && !playback.previewing),
             // Current + next are a decoder pair: AVPlayer, Exo and media_kit
             // (off tvOS, via a shared output lease) all prime the next clip
             // in parallel while the visible one plays. tvOS keeps the single

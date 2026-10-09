@@ -6,6 +6,8 @@ import 'storage_service.dart';
 import 'trakt/trakt_continue_watching_service.dart';
 import 'trakt/trakt_service.dart';
 import 'watchlist_sync_service.dart';
+import 'watch_history_sync_service.dart';
+import 'profiles/profile_runtime.dart';
 
 /// Removes a title from every Continue Watching owner when unified tracking is
 /// enabled. Each remote operation is best-effort so one disconnected account
@@ -23,7 +25,10 @@ class ContinueWatchingSyncService {
     final type = contentType == 'series' ? 'series' : 'movie';
     await Future.wait([
       StorageService.removeContinueWatchingItem(imdbId),
-      StorageService.clearPlaybackStateByImdbId(imdbId),
+      StorageService.clearPlaybackStateByImdbId(
+        imdbId,
+        preserveFinishedEpisodes: true,
+      ),
       _removeTrakt(imdbId, type),
       _removeSimkl(imdbId, type),
     ]);
@@ -31,6 +36,11 @@ class ContinueWatchingSyncService {
 
   static Future<ContinueWatchingMatchResult>? _autoMatchInFlight;
   static DateTime? _lastAutoMatch;
+  static Object? _lastScope;
+  static Future<ContinueWatchingMatchResult>? _matchInFlight;
+  static Object? _matchScope;
+  static int? _matchRevision;
+  static int? _lastRevision;
 
   /// Background match while sync is on (app start, Home reloads). Throttled so
   /// row reloads it triggers don't loop. Returns null when it didn't run.
@@ -39,7 +49,18 @@ class ContinueWatchingSyncService {
   }) async {
     if (!await enabled()) return null;
     final inFlight = _autoMatchInFlight;
-    if (inFlight != null) return inFlight;
+    if (inFlight != null &&
+        _lastScope == ProfileRuntime.scope.value &&
+        _lastRevision == StorageService.trackingSourceRevision.value) {
+      return inFlight;
+    }
+    final scope = ProfileRuntime.scope.value;
+    if (_lastScope != scope ||
+        _lastRevision != StorageService.trackingSourceRevision.value) {
+      _lastRevision = StorageService.trackingSourceRevision.value;
+      _lastAutoMatch = null;
+      _lastScope = scope;
+    }
     final last = _lastAutoMatch;
     if (last != null && DateTime.now().difference(last) < minInterval) {
       return null;
@@ -48,9 +69,15 @@ class ContinueWatchingSyncService {
     final run = matchAll();
     _autoMatchInFlight = run;
     try {
-      return await run;
+      final result = await run;
+      if (result.historyFailed > 0) _lastAutoMatch = null;
+      return result;
+    } catch (error) {
+      _lastAutoMatch = null;
+      debugPrint('Tracker sync interrupted: ${error.runtimeType}');
+      return null;
     } finally {
-      _autoMatchInFlight = null;
+      if (identical(_autoMatchInFlight, run)) _autoMatchInFlight = null;
     }
   }
 
@@ -61,6 +88,37 @@ class ContinueWatchingSyncService {
   /// plus a resume position when the runtime is known. A tracker whose list
   /// can't be read is skipped rather than treated as empty.
   static Future<ContinueWatchingMatchResult> matchAll() async {
+    final scope = ProfileRuntime.scope.value;
+    if (_matchInFlight != null &&
+        _matchScope == scope &&
+        _matchRevision == StorageService.trackingSourceRevision.value) {
+      return _matchInFlight!;
+    }
+    _matchScope = scope;
+    _matchRevision = StorageService.trackingSourceRevision.value;
+    final run = _matchAll();
+    _matchInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (identical(_matchInFlight, run)) _matchInFlight = null;
+    }
+  }
+
+  static Future<ContinueWatchingMatchResult> _matchAll() async {
+    final scope = ProfileRuntime.scope.value;
+    final revision = StorageService.trackingSourceRevision.value;
+    Future<void> checkCurrent() async {
+      if (scope != ProfileRuntime.scope.value ||
+          revision != StorageService.trackingSourceRevision.value ||
+          !await enabled()) {
+        throw StateError(
+          'Sync stopped because the profile or sync setting changed',
+        );
+      }
+    }
+
+    await checkCurrent();
     final traktAuthed = await TraktService.instance.isAuthenticated();
     final simklAuthed = await SimklService.instance.isAuthenticated();
     final traktService = TraktContinueWatchingService.instance;
@@ -185,9 +243,11 @@ class ContinueWatchingSyncService {
             if (watchedAt(key) case final int at) 'updatedAt': at,
           },
     ];
+    await checkCurrent();
     var toLocal = await StorageService.importContinueWatchingItems(imports);
     var toTrakt = 0, toSimkl = 0;
     for (final MapEntry(key: key, value: target) in best.entries) {
+      await checkCurrent();
       final localEntry = atLocal[key];
       if ((localEntry == null || target.isAheadOf(localEntry)) &&
           await _writeLocalPosition(
@@ -240,6 +300,7 @@ class ContinueWatchingSyncService {
       for (final key in atLocal.keys)
         if (watchedAt(key) case final int at) key: at,
     });
+    await checkCurrent();
     WatchlistSyncResult watchlist;
     try {
       watchlist = await WatchlistSyncService.sync();
@@ -247,7 +308,11 @@ class ContinueWatchingSyncService {
       debugPrint('ContinueWatchingSync: watchlist sync failed: $e');
       watchlist = const WatchlistSyncResult();
     }
+    await checkCurrent();
+    final history = await WatchHistorySyncService.sync();
     return ContinueWatchingMatchResult(
+      historyChanged: history.changed,
+      historyFailed: history.failed,
       watchlistAdded: watchlist.added,
       watchlistRemoved: watchlist.removed,
       addedToDebrify: toLocal,
@@ -273,7 +338,8 @@ class ContinueWatchingSyncService {
       return false;
     }
     if (!isSeries && !target.resumable) return false;
-    final minutes = target.runtimeMinutes ?? (isSeries ? local?.runtimeMinutes : null);
+    final minutes =
+        target.runtimeMinutes ?? (isSeries ? local?.runtimeMinutes : null);
     final started = target.resumable;
     final durationMs = minutes != null && minutes > 0 && started
         ? minutes * 60000
@@ -403,8 +469,12 @@ class ContinueWatchingMatchResult {
   final bool simklSkipped;
   final int watchlistAdded;
   final int watchlistRemoved;
+  final int historyChanged;
+  final int historyFailed;
 
   const ContinueWatchingMatchResult({
+    this.historyChanged = 0,
+    this.historyFailed = 0,
     this.watchlistAdded = 0,
     this.watchlistRemoved = 0,
     required this.addedToDebrify,
@@ -419,22 +489,22 @@ class ContinueWatchingMatchResult {
       addedToTrakt +
       addedToSimkl +
       watchlistAdded +
-      watchlistRemoved;
+      watchlistRemoved +
+      historyChanged;
 
   String get summary {
     final parts = [
+      if (historyChanged > 0) '$historyChanged watch history updates',
+      if (historyFailed > 0) '$historyFailed history transfers need retry',
       if (addedToDebrify > 0) '$addedToDebrify in Debrify',
       if (addedToTrakt > 0) '$addedToTrakt on Trakt',
       if (addedToSimkl > 0) '$addedToSimkl on Simkl',
     ];
     if (watchlistAdded > 0) parts.add('$watchlistAdded watchlist adds');
     if (watchlistRemoved > 0) parts.add('$watchlistRemoved watchlist removals');
-    final skipped = [
-      if (traktSkipped) 'Trakt',
-      if (simklSkipped) 'Simkl',
-    ];
+    final skipped = [if (traktSkipped) 'Trakt', if (simklSkipped) 'Simkl'];
     final base = parts.isEmpty
-        ? 'Continue Watching and watchlists already in sync'
+        ? 'Watch history, Continue Watching and watchlists already in sync'
         : 'Synced: ${parts.join(', ')}';
     return skipped.isEmpty
         ? base

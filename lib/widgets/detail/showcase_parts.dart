@@ -16,6 +16,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/widgets/parallax_focus.dart';
 import '../../theme/widgets/themed_skeleton.dart';
+import '../rotten_tomatoes_score.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../card_action_menu.dart' show CardMenuGesture;
@@ -1323,6 +1324,39 @@ class _MetaLine extends StatelessWidget {
           const SizedBox(width: 7),
           DetailRatingBox(value: m.rating!),
         ],
+        // RT + Metacritic from OMDb as twin outlined boxes (and IMDb when the
+        // model has none). Async, so each box carries its own leading gap.
+        OmdbRatingsBuilder(
+          imdbId: m.item.effectiveImdbId,
+          builder: (context, r) {
+            if (r == null) return const SizedBox.shrink();
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (m.rating == null && r.imdb != null) ...[
+                  const SizedBox(width: 7),
+                  DetailRatingBox(value: r.imdb!),
+                ],
+                if (r.score != null) ...[
+                  SizedBox(width: m.rating == null && r.imdb == null ? 7 : 5),
+                  DetailGlyphBox(
+                    glyph: (size, color) =>
+                        TomatoGlyph(size: size, color: color),
+                    label: '${r.score}%',
+                  ),
+                ],
+                if (r.metacritic != null) ...[
+                  const SizedBox(width: 5),
+                  DetailGlyphBox(
+                    glyph: (size, color) =>
+                        MetacriticGlyph(size: size, color: color),
+                    label: '${r.metacritic}',
+                  ),
+                ],
+              ],
+            );
+          },
+        ),
         if (m.hasMdblist) ...[
           const SizedBox(width: 5),
           _TrackerMark(letter: 'M', on: m.mdblistTracked, tint: kMdblistPurple),
@@ -1386,6 +1420,41 @@ class DetailRatingBox extends StatelessWidget {
         borderRadius: BorderRadius.circular(2.5 * k),
       ),
       child: Text('★ ${value.toStringAsFixed(1)}', style: _t(7.5 * k, a: 0.9)),
+    );
+  }
+}
+
+/// [DetailRatingBox]'s twin for a drawn mark (tomato, Metascore) + label.
+class DetailGlyphBox extends StatelessWidget {
+  final Widget Function(double size, Color color) glyph;
+  final String label;
+  final double scale;
+
+  const DetailGlyphBox({
+    super.key,
+    required this.glyph,
+    required this.label,
+    this.scale = 1,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final k = ShowcaseMetrics.of(context).k * scale;
+    final style = _t(7.5 * k, a: 0.9);
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 3 * k, vertical: 0.5 * k),
+      decoration: BoxDecoration(
+        border: Border.all(color: _ink.withValues(alpha: 0.45), width: 0.75),
+        borderRadius: BorderRadius.circular(2.5 * k),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          glyph(7.5 * k, style.color!),
+          SizedBox(width: 2.5 * k),
+          Text(label, style: style),
+        ],
+      ),
     );
   }
 }

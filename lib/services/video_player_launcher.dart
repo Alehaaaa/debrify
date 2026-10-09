@@ -33,7 +33,6 @@ import '../services/android_tv_player_bridge.dart';
 import '../services/debrid_service.dart';
 import '../services/main_page_bridge.dart';
 import '../services/next_episode_service.dart';
-import '../services/analytics_service.dart';
 import '../services/episode_tracker_snapshot_service.dart';
 import '../services/local_playback_resume_resolver.dart';
 import '../services/series_source_fetcher.dart';
@@ -1201,16 +1200,6 @@ class VideoPlayerLauncher {
       unawaited(_seedMdblistEpisodeProgress(args.contentImdbId!));
     }
 
-    AnalyticsService.trackInBackground('playback_started', <String, Object?>{
-      'content_type': args.contentType ?? 'unknown',
-      'provider': _analyticsProviderLabel(args),
-      'has_playlist': args.playlist?.isNotEmpty ?? false,
-      'trakt_scrobble': args.traktScrobble,
-      'simkl_scrobble': args.simklScrobble,
-      'mdblist_scrobble': args.mdblistScrobble,
-      'platform': AnalyticsService.currentPlatformLabel(),
-    });
-
     MainPageBridge.notifyPlayerLaunching(isTrailer: isTrailer);
 
     // Log playlist entries to trace relativePath
@@ -2169,88 +2158,6 @@ class VideoPlayerLauncher {
         MainPageBridge.notifyContentPlaybackStopped();
       }
     });
-  }
-
-  static String _analyticsProviderLabel(VideoPlayerLaunchArgs args) {
-    if (args.rdTorrentId != null && args.rdTorrentId!.isNotEmpty) {
-      return 'real_debrid';
-    }
-    if (args.torboxTorrentId != null && args.torboxTorrentId!.isNotEmpty) {
-      return 'torbox';
-    }
-    if (args.pikpakCollectionId != null &&
-        args.pikpakCollectionId!.isNotEmpty) {
-      return 'pikpak';
-    }
-    if (args.stremioTvChannels != null) {
-      return 'stremio_tv';
-    }
-    if (args.iptvChannels != null) {
-      return 'iptv';
-    }
-    if (args.stremioSources != null && args.stremioSources!.isNotEmpty) {
-      return 'stremio';
-    }
-    final playlistProvider = _analyticsPlaylistProviderLabel(args.playlist);
-    if (playlistProvider != null) {
-      return playlistProvider;
-    }
-    final urlProvider = _analyticsUrlProviderLabel(args.videoUrl);
-    if (urlProvider != null) {
-      return urlProvider;
-    }
-    return 'direct';
-  }
-
-  static String? _analyticsPlaylistProviderLabel(
-    List<PlaylistEntry>? playlist,
-  ) {
-    if (playlist == null || playlist.isEmpty) return null;
-
-    for (final entry in playlist) {
-      final explicitProvider = entry.provider?.trim().toLowerCase();
-      if (explicitProvider == 'torbox') return 'torbox';
-      if (explicitProvider == 'pikpak') return 'pikpak';
-      if (explicitProvider == 'realdebrid' ||
-          explicitProvider == 'real_debrid' ||
-          explicitProvider == 'real debrid') {
-        return 'real_debrid';
-      }
-
-      if (entry.torboxTorrentId != null ||
-          entry.torboxWebDownloadId != null ||
-          entry.torboxFileId != null) {
-        return 'torbox';
-      }
-      if (entry.pikpakFileId != null) {
-        return 'pikpak';
-      }
-      if (entry.rdTorrentId != null && entry.rdTorrentId!.isNotEmpty) {
-        return 'real_debrid';
-      }
-    }
-
-    return null;
-  }
-
-  static String? _analyticsUrlProviderLabel(String videoUrl) {
-    final uri = Uri.tryParse(videoUrl);
-    if (uri == null) return null;
-
-    final host = uri.host.toLowerCase();
-    if (host.isEmpty) return null;
-
-    if (host.contains('real-debrid')) {
-      return 'real_debrid';
-    }
-    if (host.contains('mypikpak') || host.contains('pikpak')) {
-      return 'pikpak';
-    }
-    if (host.contains('torbox') || host.contains('tb-cdn.')) {
-      return 'torbox';
-    }
-
-    return null;
   }
 
   static Future<bool> _launchOnAndroidTv(

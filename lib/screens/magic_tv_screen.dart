@@ -23,7 +23,6 @@ import '../models/debrify_tv/channel_stats.dart';
 import '../models/debrify_tv/prepared_torrents.dart';
 import '../models/debrify_tv/cache_results.dart';
 import '../models/debrify_tv/import_results.dart';
-import '../services/analytics_service.dart';
 import '../services/android_native_downloader.dart';
 import '../services/android_tv_player_bridge.dart';
 import '../services/debrid_service.dart';
@@ -493,7 +492,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('magic_tv');
     _channelSearchFocusNode = FocusNode(debugLabel: 'DebrifyTVChannelSearch');
     _loadSettings();
     _loadChannels(); // also warms the Spotlight rail health, once per reload

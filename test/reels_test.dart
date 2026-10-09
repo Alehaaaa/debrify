@@ -341,7 +341,10 @@ void main() {
           ),
           true,
         );
-      await StorageService.setSeriesExplicitlyWatched('tt2010', watched: true);
+        await StorageService.setSeriesExplicitlyWatched(
+          'tt2010',
+          watched: true,
+        );
         final seen = <String>{};
         await tester.pumpWidget(
           host(
@@ -432,30 +435,97 @@ void main() {
       expect(activeId(tester), isNull);
     });
 
-    testWidgets(
-      'the next clip prepares its first frame as soon as it enters the swipe',
-      (tester) async {
-        var sawPreparedFrame = false;
-        await tester.pumpWidget(
-          host(
-            feedFor(FakeTmdb()),
-            onPlayer: (playback) {
-              sawPreparedFrame |= playback.prewarm && playback.streams != null;
-            },
-          ),
-        );
-        await tester.pumpAndSettle();
+    testWidgets('the next clip prepares silently before the swipe begins', (
+      tester,
+    ) async {
+      var sawPreparedFrame = false;
+      await tester.pumpWidget(
+        host(
+          feedFor(FakeTmdb()),
+          onPlayer: (playback) {
+            sawPreparedFrame |= playback.prewarm && playback.streams != null;
+            if (!playback.active) expect(playback.volume, 0);
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(sawPreparedFrame, isTrue);
 
+      final gesture = await tester.startGesture(const Offset(200, 450));
+      // Clear Flutter's touch slop, then cross the 2% preparation threshold.
+      await gesture.moveBy(const Offset(0, -60));
+      await tester.pump();
+
+      expect(sawPreparedFrame, isTrue);
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'playback follows the swipe midpoint and reverses before release',
+      (tester) async {
+        await tester.pumpWidget(host(feedFor(FakeTmdb())));
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        final controller = tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!;
         final gesture = await tester.startGesture(const Offset(200, 450));
-        // Clear Flutter's touch slop, then cross the 2% preparation threshold.
         await gesture.moveBy(const Offset(0, -60));
         await tester.pump();
-
-        expect(sawPreparedFrame, isTrue);
+        await gesture.moveBy(const Offset(0, -320));
+        await tester.pump();
+        expect(controller.page, inExclusiveRange(.5, 1));
+        expect(activeId(tester), isNot(first));
+        expect(playing(activeId(tester)!), findsOneWidget);
+        await gesture.moveBy(const Offset(0, 320));
+        await tester.pump();
+        expect(controller.page, lessThan(.5));
+        expect(playing(first), findsOneWidget);
         await gesture.up();
         await tester.pumpAndSettle();
+        expect(controller.page, 0);
+        expect(playing(first), findsOneWidget);
       },
     );
+
+    testWidgets('sharing pauses the reel and dismissal preserves user pause', (
+      tester,
+    ) async {
+      const shareChannel = MethodChannel('debrify/reel_share');
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        shareChannel,
+        (_) async => false,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          shareChannel,
+          null,
+        ),
+      );
+      await tester.pumpWidget(host(feedFor(FakeTmdb())));
+      await tester.pumpAndSettle();
+      final first = activeId(tester)!;
+      for (final paused in [false, true]) {
+        if (paused) {
+          await tester.sendKeyEvent(LogicalKeyboardKey.space);
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byTooltip('Share clip'));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('player:$first:true:100.0:true:true')),
+          findsOneWidget,
+        );
+        Navigator.of(tester.element(find.text('Copy link'))).pop();
+        await tester.pumpAndSettle();
+        expect(
+          find.byKey(ValueKey('player:$first:true:100.0:true:$paused')),
+          findsOneWidget,
+        );
+      }
+    });
 
     testWidgets('a pending look-ahead request does not block a later swipe', (
       tester,
@@ -626,6 +696,54 @@ void main() {
           tester.widget<PageView>(find.byType(PageView)).controller!.page,
           0,
         );
+      },
+    );
+
+    testWidgets(
+      'a relay clip that fails in the player is re-resolved, not discarded',
+      (tester) async {
+        final attempts = <String, int>{};
+        VoidCallback? relayFailure;
+        VoidCallback? directFailure;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) async {
+              final n = attempts[key] = (attempts[key] ?? 0) + 1;
+              return n == 1
+                  ? const YoutubeResolvedStreams(
+                      playUrl: 'https://relay.example/tunnel',
+                      isRelay: true,
+                    )
+                  : _clip;
+            },
+            onPlayer: (playback) {
+              if (!playback.active) return;
+              final streams = playback.streams;
+              if (streams?.isRelay == true) {
+                relayFailure ??= playback.onPlaybackFailed;
+              } else if (streams != null) {
+                directFailure ??= playback.onPlaybackFailed;
+              }
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        relayFailure!();
+        await tester.pumpAndSettle();
+        // Retried once through direct extraction, on the same page.
+        expect(find.text('Retry clip'), findsNothing);
+        expect(playing(first), findsOneWidget);
+        expect(attempts.values.where((n) => n == 2), hasLength(1));
+        expect(
+          tester.widget<PageView>(find.byType(PageView)).controller!.page,
+          0,
+        );
+        // A direct stream that fails is a genuinely unavailable clip.
+        directFailure!();
+        await tester.pumpAndSettle();
+        expect(find.text('Retry clip'), findsOneWidget);
       },
     );
 

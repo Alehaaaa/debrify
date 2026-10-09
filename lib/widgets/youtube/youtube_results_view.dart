@@ -53,7 +53,9 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
   String? _errorMessage;
 
   final List<FocusNode> _cardFocusNodes = [];
-  final FocusNode _qualityFocusNode = FocusNode(debugLabel: 'youtube-quality-filter');
+  final FocusNode _qualityFocusNode = FocusNode(
+    debugLabel: 'youtube-quality-filter',
+  );
 
   int _maxHeight = 1080;
 
@@ -172,7 +174,9 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
 
       final startIndex = _cardFocusNodes.length;
       for (int i = 0; i < result.videos.length; i++) {
-        _cardFocusNodes.add(FocusNode(debugLabel: 'youtube-card-${startIndex + i}'));
+        _cardFocusNodes.add(
+          FocusNode(debugLabel: 'youtube-card-${startIndex + i}'),
+        );
       }
 
       setState(() {
@@ -212,6 +216,7 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
       streams = await YoutubeService.resolveStreams(
         video.id,
         withCaptions: true,
+        includeMetadata: false,
       );
     } catch (_) {
       streams = null;
@@ -228,7 +233,9 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
     final playUrl = streams?.playUrl;
     if (playUrl == null || playUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not load this video')),
+        const SnackBar(
+          content: Text('YouTube did not provide a playable stream.'),
+        ),
       );
       return;
     }
@@ -336,27 +343,20 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
     }
   }
 
-  /// Snackbar text explaining the chosen download quality and why it isn't
-  /// selectable. YouTube only serves a single audio+video file at low
-  /// resolutions (≤720p); 1080p and up come as separate video/audio tracks that
-  /// must be merged (muxed) — which we don't do on download — so we grab the
-  /// best combined stream automatically.
+  /// Report only the format information the resolver actually supplied.
   String _downloadQualityMessage(YoutubeResolvedStreams? streams) {
     final h = streams?.downloadHeight;
-    final quality = h != null ? '${h}p' : 'best available';
-    if (streams?.downloadHasAudio == false) {
-      return 'Added to downloads at $quality (no audio — YouTube offered no '
-          'combined video+audio file for this one).';
-    }
-    return 'Added to downloads at $quality — the best quality YouTube serves '
-        'as a single file with audio. Higher resolutions come as separate '
-        'video/audio that must be merged, so quality can’t be picked here.';
+    final quality = h != null ? ' at ${h}p' : '';
+    final audio = streams?.downloadHasAudio == false
+        ? ' (video only, no audio)'
+        : '';
+    return 'Added to downloads$quality$audio.';
   }
 
   /// DPAD entry point from the search input: focus the quality selector.
@@ -385,9 +385,7 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
   Widget _buildContent() {
     final app = AppThemeScope.of(context);
     if (_isLoading) {
-      return Center(
-        child: CircularProgressIndicator(color: app.seeAll.accent),
-      );
+      return Center(child: CircularProgressIndicator(color: app.seeAll.accent));
     }
 
     if (_errorMessage != null && _videos.isEmpty) {
@@ -406,19 +404,14 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
                 _errorMessage!,
-                style: TextStyle(
-                  color: app.youtube.textBody,
-                  fontSize: 16,
-                ),
+                style: TextStyle(color: app.youtube.textBody, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _performSearch,
-              style: FilledButton.styleFrom(
-                backgroundColor: app.seeAll.accent,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: app.seeAll.accent),
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
             ),
@@ -443,18 +436,12 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
             const SizedBox(height: 16),
             const Text(
               'No videos found',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
               'Try a different search term',
-              style: TextStyle(
-                color: app.youtube.textDim,
-                fontSize: 14,
-              ),
+              style: TextStyle(color: app.youtube.textDim, fontSize: 14),
             ),
           ],
         ),
@@ -475,7 +462,7 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
           // no overflow, no clipped titles, whatever the device.
           final colWidth =
               (constraints.maxWidth - hPad * 2 - spacing * (columns - 1)) /
-                  columns;
+              columns;
           const metaHeight = 96.0;
           final cardHeight = colWidth * 9 / 16 + metaHeight;
           final aspectRatio = colWidth / cardHeight;
@@ -506,8 +493,7 @@ class YoutubeResultsViewState extends State<YoutubeResultsView>
                   ),
                 ),
               ),
-              if (_hasMore)
-                SliverToBoxAdapter(child: _buildLoadingIndicator()),
+              if (_hasMore) SliverToBoxAdapter(child: _buildLoadingIndicator()),
             ],
           );
         },

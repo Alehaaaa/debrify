@@ -1,7 +1,5 @@
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_controller.dart';
@@ -57,7 +55,6 @@ class _AppThemePageState extends State<AppThemePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('app_theme_settings');
     // isTelevision, not isAndroidTvCached: Apple TV reaches this page through
     // the same two-pane Settings shell and needs the same initial card focus.
     if (PlatformUtil.isTelevision) {

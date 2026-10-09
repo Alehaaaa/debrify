@@ -24,12 +24,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    // Only faces that are REAL. `SourceSerifPro-Regular.ttf`,
-    // `Merriweather-Regular.ttf` and both Roboto files in this repo are HTML
-    // error pages saved with a .ttf extension — see the note on
-    // `DetailFontRoleX.family`. Loading one here would measure the fallback
-    // and make every assertion below vacuous, which is exactly the failure
-    // the last test in this file guards against.
+    // Load the faces the themes actually use. A face that fails to load would
+    // measure the fallback and make every assertion below vacuous, which is
+    // exactly the failure the last test in this file guards against.
     await _loadFont('Fraunces72', ['assets/fonts/Fraunces72pt-Regular.ttf']);
     await _loadFont('JetBrainsMono', [
       'assets/fonts/JetBrainsMono-Regular.ttf',

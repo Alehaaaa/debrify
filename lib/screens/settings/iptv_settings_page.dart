@@ -14,7 +14,6 @@ import '../../services/iptv_catalog_refresh_service.dart';
 import '../../services/iptv_service.dart';
 import '../../services/xtream_codes_service.dart';
 import '../../services/storage_service.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/m3u_parser.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
@@ -295,7 +294,6 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    AnalyticsService.screenView('iptv_settings');
     _tabController = TabController(length: 3, vsync: this);
     // Rebuild on tab change so the inactive tabs' ExcludeFocus updates —
     // otherwise DPAD traversal can wander into off-screen tab content.

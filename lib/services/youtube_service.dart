@@ -6,6 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt_explode;
 import 'storage_service.dart';
+import 'cobalt_service.dart';
+import 'youtube_resolution_queue.dart';
+import 'youtube_stream_probe.dart';
 
 /// A YouTube video surfaced from a search.
 class YoutubeVideo {
@@ -51,9 +54,7 @@ class YoutubeSearchResult {
 /// video share the same separate [YoutubeResolvedStreams.audioUrl], so switching
 /// quality only swaps the video URL — the player re-muxes the same audio.
 ///
-/// Entries are H.264 up to 1080p and VP9 above it (YouTube serves 1440p/2160p in
-/// VP9/AV1 but never H.264); AV1 is never listed, as its decode is unreliable on
-/// our player matrix. See [YoutubeService._resolveStreamsBlocking].
+/// Entries are capped at 1080p. AV1 is excluded for decoder compatibility.
 /// One closed-caption / subtitle track offered by YouTube for a video.
 ///
 /// [url] is a direct WebVTT URL (YouTube's timedtext endpoint requested with
@@ -86,8 +87,7 @@ class YoutubeResolvedStreams {
   /// Video stream to play. When [audioUrl] is set this is a *video-only*
   /// adaptive stream (always H.264, capped at the user's preferred height) and
   /// the player must mux in [audioUrl]; otherwise it is a muxed (audio+video)
-  /// progressive stream. Higher-resolution VP9 rungs are offered via
-  /// [qualities] for opt-in switching, but are never the default here.
+  /// progressive stream. Playback and [qualities] are capped at 1080p.
   final String? playUrl;
 
   /// Separate audio track to play alongside a video-only [playUrl]. Null when
@@ -111,7 +111,7 @@ class YoutubeResolvedStreams {
   final int? durationSeconds;
 
   /// All video-only qualities available (highest first), for in-player quality
-  /// switching. H.264 up to 1080p plus VP9 above it (1440p/2160p); AV1 excluded.
+  /// switching. H.264 or VP9 up to 1080p; AV1 excluded.
   /// Populated only in the separate-audio path (each entry pairs with the shared
   /// [audioUrl]); empty when only a muxed stream exists.
   final List<YoutubeQuality> qualities;
@@ -120,6 +120,14 @@ class YoutubeResolvedStreams {
   /// when the video has no captions. Best-effort: a caption-fetch failure never
   /// blocks playback.
   final List<YoutubeCaptionTrack> captions;
+
+  /// Public relay URLs can expire much sooner than direct signed streams.
+  final DateTime? validUntil;
+
+  /// [playUrl] is a Cobalt tunnel: a live, muxed remux with no byte-range
+  /// support that can only be (re)opened until [validUntil]. Seeks and loop
+  /// restarts on it are best-effort; a failed relay is retried directly.
+  final bool isRelay;
 
   const YoutubeResolvedStreams({
     this.playUrl,
@@ -132,9 +140,27 @@ class YoutubeResolvedStreams {
     this.durationSeconds,
     this.qualities = const [],
     this.captions = const [],
+    this.validUntil,
+    this.isRelay = false,
   });
 
   bool get hasPlayable => playUrl != null && playUrl!.isNotEmpty;
+
+  /// Short-lived relays preloaded for a later reel need refreshing before use.
+  bool get needsRefresh {
+    final now = DateTime.now();
+    if (validUntil?.isAfter(now) == false) return true;
+    for (final url in [playUrl, audioUrl]) {
+      final query = Uri.tryParse(url ?? '')?.queryParameters;
+      final millis = int.tryParse(query?['exp'] ?? '');
+      final seconds = int.tryParse(query?['expire'] ?? '');
+      final expiry = millis ?? (seconds == null ? null : seconds * 1000);
+      if (expiry != null && expiry <= now.millisecondsSinceEpoch + 30000) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// Pixel height of the URL selected for playback, when the manifest reports
   /// it. A null result means the source did not identify its selected format;
@@ -151,14 +177,23 @@ class YoutubeResolvedStreams {
   /// A single-file playback fallback only when it is known to contain audio.
   /// [downloadUrl] itself may still be video-only in the rare no-muxed-stream
   /// case so downloads can retain their existing best-effort behavior.
-  String? get muxedPlaybackFallback => downloadHasAudio ? downloadUrl : null;
+  ///
+  /// Null for a relay: this is the URL handed to AVFoundation (the iOS
+  /// platform-view trailer player), which only opens byte-range-capable
+  /// files. Without it the backdrop plays the muxed tunnel through
+  /// media_kit, which streams it fine.
+  String? get muxedPlaybackFallback =>
+      downloadHasAudio && !isRelay ? downloadUrl : null;
 }
 
 /// A resolved-streams cache entry with the time it was resolved (for TTL).
 class _ResolvedCacheEntry {
   final YoutubeResolvedStreams streams;
   final DateTime at;
-  const _ResolvedCacheEntry(this.streams, this.at);
+
+  /// Earlier cut-off than the usual TTL (a provisional fallback).
+  final DateTime? until;
+  const _ResolvedCacheEntry(this.streams, this.at, {this.until});
 }
 
 /// One client rung's chosen streams, pre-probe (see the client ladder in
@@ -383,6 +418,7 @@ class YoutubeService {
   static final Map<String, _ResolvedCacheEntry> _resolveCache = {};
   static final Map<String, int> _resolveGeneration = {};
   static String? _preferredClient;
+  static YoutubeResolutionQueue _resolutionQueue = YoutubeResolutionQueue();
 
   @visibleForTesting
   static Future<({YoutubeResolvedStreams streams, String client})?> Function(
@@ -397,12 +433,47 @@ class YoutubeService {
   streamResolverOverride;
 
   @visibleForTesting
+  static Future<CobaltMedia?> Function(String videoId, int maxHeight)?
+  cobaltResolverOverride;
+
+  /// Relay URL → video id, so a player failure on an already-pruned (expired)
+  /// relay entry can still be traced back to its video.
+  static final Map<String, String> _relayUrlIds = {};
+
+  /// Videos whose relay stream failed in a player: resolve them directly
+  /// (seekable, loopable signed URLs) for a while instead of re-relaying.
+  static final Map<String, DateTime> _relayBypassUntil = {};
+  static const Duration _relayBypassTtl = Duration(minutes: 30);
+
+  static bool _relayBypassed(String videoId) {
+    final until = _relayBypassUntil[videoId];
+    if (until == null) return false;
+    if (until.isAfter(DateTime.now())) return true;
+    _relayBypassUntil.remove(videoId);
+    return false;
+  }
+
+  /// A relay stream for [videoId] failed to play: drop it and resolve the
+  /// video through direct extraction from now on.
+  static void markRelayFailed(String videoId) {
+    _relayBypassUntil[videoId] = DateTime.now().add(_relayBypassTtl);
+    while (_relayBypassUntil.length > 256) {
+      _relayBypassUntil.remove(_relayBypassUntil.keys.first);
+    }
+    invalidateStreams(videoId);
+  }
+
+  @visibleForTesting
   static void resetResolutionForTesting() {
     _resolveCache.clear();
     _resolveInFlight.clear();
     _resolveGeneration.clear();
     _preferredClient = null;
+    _resolutionQueue = YoutubeResolutionQueue();
+    _relayUrlIds.clear();
+    _relayBypassUntil.clear();
     streamResolverOverride = null;
+    cobaltResolverOverride = null;
   }
 
   /// Discard failed signed URLs, including pending results from before retry.
@@ -416,6 +487,8 @@ class YoutubeService {
   /// A failed player should not receive the same cached signed URL on reopen.
   static void invalidateStreamUrl(String? url) {
     if (url == null) return;
+    final relayId = _relayUrlIds.remove(url);
+    if (relayId != null) markRelayFailed(relayId);
     final ids = <String>{};
     for (final entry in _resolveCache.entries) {
       final streams = entry.value.streams;
@@ -423,8 +496,13 @@ class YoutubeService {
         streams.playUrl,
         streams.audioUrl,
         streams.downloadUrl,
+        ...streams.qualities.map((quality) => quality.videoUrl),
       ].contains(url)) {
-        ids.add(entry.key.split('#').first);
+        final id = entry.key.split('#').first;
+        if (streams.isRelay) {
+          _relayBypassUntil[id] = DateTime.now().add(_relayBypassTtl);
+        }
+        ids.add(id);
       }
     }
     for (final id in ids) {
@@ -434,23 +512,32 @@ class YoutubeService {
 
   /// Reels and trailers already have title metadata. Return playable streams
   /// without fetching it again; native iOS uses a single muxed connection.
+  ///
+  /// Previews try the Cobalt relay first on every platform; see
+  /// [resolveStreams]' `allowRelay`. A relay is a muxed live remux without
+  /// byte ranges, so it is never offered as [muxedPlaybackFallback]
+  /// (AVFoundation) and plays through media_kit/mpv or ExoPlayer instead.
   static Future<YoutubeResolvedStreams?> resolvePreviewStreams(
     String videoId, {
     int? maxHeightOverride,
     bool preferVp9 = false,
     bool? preferMuxed,
+    bool? allowRelay,
   }) => resolveStreams(
     videoId,
     maxHeightOverride: maxHeightOverride ?? ambientTrailerMaxHeight,
     preferVp9: preferVp9,
     includeMetadata: false,
     preferMuxed: preferMuxed ?? PlatformUtil.isIosMobile,
+    allowRelay: allowRelay,
   );
 
   static const Duration _resolveCacheTtl = Duration(minutes: 10);
 
   static bool _cacheUsable(_ResolvedCacheEntry entry) {
     final now = DateTime.now();
+    if (entry.streams.validUntil?.isAfter(now) == false) return false;
+    if (entry.until?.isAfter(now) == false) return false;
     if (now.difference(entry.at) >= _resolveCacheTtl) return false;
     for (final url in [
       entry.streams.playUrl,
@@ -458,9 +545,13 @@ class YoutubeService {
       entry.streams.downloadUrl,
     ]) {
       if (url == null) continue;
-      final expires = int.tryParse(
-        Uri.tryParse(url)?.queryParameters['expire'] ?? '',
-      );
+      final query = Uri.tryParse(url)?.queryParameters;
+      final relayExpires = int.tryParse(query?['exp'] ?? '');
+      if (relayExpires != null &&
+          relayExpires <= now.millisecondsSinceEpoch + 30000) {
+        return false;
+      }
+      final expires = int.tryParse(query?['expire'] ?? '');
       if (expires != null &&
           expires * 1000 <= now.millisecondsSinceEpoch + 30000) {
         return false;
@@ -474,36 +565,9 @@ class YoutubeService {
   static final Map<String, Future<YoutubeResolvedStreams?>> _resolveInFlight =
       {};
 
-  /// Resolution cap for ambient backdrop trailers (Home hero, Discover rail).
-  ///
-  /// 720p on Android TV: crisp in the hero region (480p read soft once the edge
-  /// feathers came off) while still lighter than a 1080p decode+composite on
-  /// weak TV silicon — the boxes this was tuned against.
-  ///
-  /// Per-platform, matched to what each box can actually decode:
-  ///
-  ///  * iPhone and iPad: **720.** The ambient surface is a background, not a
-  ///    player. libmpv hands every decoded frame to Flutter through three
-  ///    OpenGL pixel buffers; 1440p made that upload contend with scrolling.
-  ///  * Other phones and desktop: **1440.** Trailers are uploaded in 4K, and
-  ///    the 1440p rung is VP9 — a much higher bitrate than 1080p AVC.
-  ///    Downscaled into a 1080-class panel that is supersampling: visibly
-  ///    crisper, and every phone this app meets hardware-decodes VP9.
-  ///  * Apple TV: **1080.** VideoToolbox has no VP9 decode on the A15, so
-  ///    anything above 1080 would software-decode in mpv — the one place the
-  ///    hard-won trailer pipeline must not be gambled with. It still gets the
-  ///    VP9 1080 encode via [preferVp9], which YouTube serves at every rung.
-  ///  * Android TV: **1080** (up from 720 — these boxes certify VP9 hardware
-  ///    decode, and the Exo underlay plays full-screen now, where 720 read
-  ///    soft). Not 1440: the UI rasters at ~720p on this class of hardware
-  ///    and the extra decode would feed pixels nothing displays.
-  static int get ambientTrailerMaxHeight => PlatformUtil.isTvOS
-      ? 1080
-      : PlatformUtil.isAndroidTvCached
-      ? 1080
-      : PlatformUtil.isIosMobile
-      ? 720
-      : 1440;
+  /// Background playback uses 720p on iOS mobile; other devices use 1080p.
+  static int get ambientTrailerMaxHeight =>
+      PlatformUtil.isIosMobile ? 720 : 1080;
 
   /// Resolve a YouTube [videoId] into playable/downloadable stream URLs.
   ///
@@ -532,7 +596,32 @@ class YoutubeService {
     bool preferVp9 = false,
     bool includeMetadata = true,
     bool preferMuxed = false,
+    bool? allowRelay,
   }) {
+    // Key the effective preference, so changing playback quality does not
+    // reuse a lower-resolution result cached under a preference-free key.
+    if (maxHeightOverride == null) {
+      return StorageService.getYoutubeMaxHeight().then(
+        (height) => resolveStreams(
+          videoId,
+          maxHeightOverride: height,
+          withCaptions: withCaptions,
+          preferVp9: preferVp9,
+          includeMetadata: includeMetadata,
+          preferMuxed: preferMuxed,
+          allowRelay: allowRelay,
+        ),
+      );
+    }
+    maxHeightOverride = maxHeightOverride.clamp(144, 1080);
+    // Cobalt relay policy. Trailers and reels (no metadata, no captions) try
+    // it first: it is what still works when YouTube bot-checks this device.
+    // Full playback wants metadata, captions, quality switching and seeking,
+    // which a tunnel lacks, so it only falls back to the relay when direct
+    // extraction fails. `allowRelay: false` never relays (consumers that
+    // need byte ranges); `true` forces relay-first.
+    final relayFirst = allowRelay ?? (!includeMetadata && !withCaptions);
+    final relayFallback = allowRelay != false;
     final key = _resolveKey(
       videoId,
       maxHeightOverride,
@@ -540,6 +629,8 @@ class YoutubeService {
       preferVp9,
       includeMetadata,
       preferMuxed,
+      relayFirst,
+      relayFallback,
     );
     final cached = _resolveCache[key];
     if (cached != null && _cacheUsable(cached)) {
@@ -547,15 +638,24 @@ class YoutubeService {
     }
     final inFlight = _resolveInFlight[key];
     if (inFlight != null) return inFlight;
-    final future = _resolveUncached(
-      videoId,
-      maxHeightOverride: maxHeightOverride,
-      withCaptions: withCaptions,
-      preferVp9: preferVp9,
-      includeMetadata: includeMetadata,
-      preferMuxed: preferMuxed,
-      generation: _resolveGeneration[videoId] ?? 0,
-    );
+    final generation = _resolveGeneration[videoId] ?? 0;
+    final future = _resolutionQueue.run<YoutubeResolvedStreams?>(() {
+      if (generation != (_resolveGeneration[videoId] ?? 0)) {
+        return Future.value(null);
+      }
+      return _resolveUncached(
+        videoId,
+        maxHeightOverride: maxHeightOverride,
+        withCaptions: withCaptions,
+        preferVp9: preferVp9,
+        includeMetadata: includeMetadata,
+        preferMuxed: preferMuxed,
+        relayFirst: relayFirst,
+        relayFallback: relayFallback,
+        cacheKey: key,
+        generation: generation,
+      );
+    }, foreground: includeMetadata || withCaptions);
     _resolveInFlight[key] = future;
     // Block body: an arrow would return the removed (already-completed)
     // future for whenComplete to await — harmless here because the map holds
@@ -575,6 +675,8 @@ class YoutubeService {
     bool preferVp9,
     bool includeMetadata,
     bool preferMuxed,
+    bool relayFirst,
+    bool relayFallback,
   ) {
     var base = maxHeightOverride == null
         ? videoId
@@ -582,6 +684,9 @@ class YoutubeService {
     if (preferVp9) base = '$base#vp9';
     if (!includeMetadata) base = '$base#preview';
     if (preferMuxed) base = '$base#muxed';
+    // A range-requiring consumer must never be handed a cached relay tunnel.
+    if (relayFirst) base = '$base#relay';
+    if (!relayFallback) base = '$base#norelay';
     return withCaptions ? '$base#cc' : base;
   }
 
@@ -592,6 +697,9 @@ class YoutubeService {
     bool preferVp9 = false,
     bool includeMetadata = true,
     bool preferMuxed = false,
+    bool relayFirst = false,
+    bool relayFallback = false,
+    required String cacheKey,
     required int generation,
   }) async {
     // Read the user's resolution cap on the MAIN isolate — SharedPreferences is
@@ -607,42 +715,131 @@ class YoutubeService {
       // only awaits (the network calls are already async).
       final preferredClient = _preferredClient;
       final override = streamResolverOverride;
-      final result = override != null
-          ? await override(
-              videoId,
-              maxHeight,
-              withCaptions,
-              preferVp9,
-              includeMetadata,
-              preferMuxed,
-              preferredClient,
-            )
-          : await Isolate.run(
-              () => _resolveStreamsBlocking(
-                videoId,
-                maxHeight,
-                withCaptions,
-                preferVp9,
-                includeMetadata,
-                preferMuxed,
-                preferredClient,
-              ),
-            );
+      // Relay order is decided by [resolveStreams]: previews try Cobalt
+      // first, full playback only after direct extraction fails.
+      // Test overrides never contact public endpoints.
+      // Whether a relay miss is Cobalt's real answer about this video (every
+      // instance refused it, or its relay already failed in a player) rather
+      // than an instance being rate-limited or unreachable at that moment.
+      var relayMissFinal = true;
+      Future<CobaltMedia?> tryRelay() async {
+        if (_relayBypassed(videoId)) return null;
+        final relayOverride = cobaltResolverOverride;
+        try {
+          if (relayOverride != null) {
+            return await relayOverride(videoId, maxHeight);
+          }
+          if (override != null) return null;
+          final media = await CobaltService.instance.resolve(
+            videoId,
+            maxHeight: maxHeight,
+          );
+          if (media == null) {
+            relayMissFinal = CobaltService.instance.knowsUnservable(videoId);
+          }
+          return media;
+        } catch (e) {
+          debugPrint('YoutubeService: relay failed for $videoId — $e');
+          relayMissFinal = false;
+          return null;
+        }
+      }
+
+      ({YoutubeResolvedStreams streams, String client}) relayed(
+        CobaltMedia relay,
+      ) => (
+        streams: YoutubeResolvedStreams(
+          playUrl: relay.url,
+          downloadUrl: relay.url,
+          // Cobalt doesn't report actual dimensions: don't label the
+          // requested resolution as a verified delivered resolution.
+          // A tunnel can be (re)opened only until the instance's own
+          // expiry; fall back to a conservative window without one.
+          validUntil:
+              relay.expiresAt ??
+              DateTime.now().add(const Duration(seconds: 45)),
+          isRelay: true,
+        ),
+        client: 'cobalt',
+      );
+
+      // When the relay can't serve a trailer or reel, fall back to the
+      // original low-res path: one muxed (audio+video) MP4, usually 360p.
+      // It is the stream YouTube still hands out most reliably, opens in
+      // every player (AVFoundation included) and needs no audio pairing.
+      final directMuxed = preferMuxed || relayFirst;
+      Future<({YoutubeResolvedStreams streams, String client})?>
+      direct() async {
+        if (relayFirst) {
+          debugPrint(
+            'YoutubeService: $videoId low-res fallback '
+            '${relayMissFinal ? '(every Cobalt instance refused it)' : '(Cobalt busy — retried on next request)'}',
+          );
+        }
+        try {
+          return override != null
+              ? await override(
+                  videoId,
+                  maxHeight,
+                  withCaptions,
+                  preferVp9,
+                  includeMetadata,
+                  directMuxed,
+                  preferredClient,
+                )
+              : await Isolate.run(
+                  () => _resolveStreamsBlocking(
+                    videoId,
+                    maxHeight,
+                    withCaptions,
+                    preferVp9,
+                    includeMetadata,
+                    directMuxed,
+                    preferredClient,
+                  ),
+                );
+        } catch (e) {
+          // Covers isolate-spawn failures and any error rethrown from the
+          // extraction, so a YouTube cipher break is still diagnosable.
+          debugPrint('YoutubeService: direct resolve failed for $videoId — $e');
+          return null;
+        }
+      }
+
+      ({YoutubeResolvedStreams streams, String client})? result;
+      if (relayFirst) {
+        final media = await tryRelay();
+        if (media != null) result = relayed(media);
+      }
+      result ??= await direct();
+      if (!relayFirst &&
+          relayFallback &&
+          !(result?.streams.hasPlayable ?? false)) {
+        // YouTube bot-checked this device: the relay fetches from elsewhere.
+        final media = await tryRelay();
+        if (media != null) result = relayed(media);
+      }
       final streams = result?.streams;
       if (streams != null && generation == (_resolveGeneration[videoId] ?? 0)) {
-        _preferredClient = result!.client;
+        if (streams.isRelay) {
+          _relayUrlIds[streams.playUrl!] = videoId;
+          while (_relayUrlIds.length > 128) {
+            _relayUrlIds.remove(_relayUrlIds.keys.first);
+          }
+        } else if (result!.client != 'cobalt') {
+          _preferredClient = result.client;
+        }
         // Prune expired entries so the cache stays bounded to the active window.
         _resolveCache.removeWhere((_, e) => !_cacheUsable(e));
-        _resolveCache[_resolveKey(
-          videoId,
-          maxHeightOverride,
-          withCaptions,
-          preferVp9,
-          includeMetadata,
-          preferMuxed,
-        )] = _ResolvedCacheEntry(
+        // A low-res fallback taken only because Cobalt was momentarily out
+        // of rotation is provisional: let the next request try Cobalt again.
+        final provisional = relayFirst && !streams.isRelay && !relayMissFinal;
+        _resolveCache[cacheKey] = _ResolvedCacheEntry(
           streams,
           DateTime.now(),
+          until: provisional
+              ? DateTime.now().add(const Duration(seconds: 60))
+              : null,
         );
         while (_resolveCache.length > 64) {
           _resolveCache.remove(_resolveCache.keys.first);
@@ -675,7 +872,7 @@ class YoutubeService {
     bool preferMuxed,
     String? preferredClient,
   ) async {
-    var yt = yt_explode.YoutubeExplode();
+    var yt = yt_explode.YoutubeExplode(httpClient: YoutubePlaybackHttpClient());
     try {
       // Client ladder — impersonations of official YouTube apps, tried in
       // order until one yields URLs that actually answer. Every rung earns
@@ -737,7 +934,9 @@ class YoutubeService {
         } catch (e) {
           debugPrint('YoutubeService: $videoId [$label] manifest failed — $e');
           yt.close();
-          yt = yt_explode.YoutubeExplode();
+          yt = yt_explode.YoutubeExplode(
+            httpClient: YoutubePlaybackHttpClient(),
+          );
           continue;
         }
         final candidate = _selectStreams(
@@ -785,6 +984,17 @@ class YoutubeService {
             'YoutubeService: $videoId [$label] chosen URLs returned 403',
           );
           continue;
+        }
+        // A download fallback is optional: don't fetch two more manifests
+        // when the requested adaptive video and audio already work.
+        if (!preferMuxed &&
+            usability.primary &&
+            (candidate.playbackHeight ?? 0) >= maxHeight) {
+          selection = usability.muxedFallback
+              ? candidate
+              : candidate.withoutMuxedFallback();
+          selectedClient = label;
+          break;
         }
         if (!usability.muxedFallback) {
           // Keep the working adaptive pair as a last resort, but try the next
@@ -952,10 +1162,12 @@ class YoutubeService {
     // Best muxed single-file stream (download + playback fallback). Keep the
     // stream object (not just its URL) so we can report its resolution as the
     // actual download quality to the user.
-    final muxed = manifest.muxed.toList()
-      ..sort(
-        (a, b) => b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
-      );
+    final muxed =
+        manifest.muxed.where((s) => s.videoResolution.height <= 1080).toList()
+          ..sort(
+            (a, b) =>
+                b.bitrate.bitsPerSecond.compareTo(a.bitrate.bitsPerSecond),
+          );
     final muxedMp4 = muxed.where(
       (s) => s.container.name.toLowerCase() == 'mp4',
     );
@@ -970,22 +1182,8 @@ class YoutubeService {
     final bestMuxed = bestMuxedStream?.url.toString();
     final bestMuxedHeight = bestMuxedStream?.videoResolution.height;
 
-    // High-res playback: video-only track + best AAC audio (mp4). We allow
-    // H.264 (avc) AND VP9, but deliberately EXCLUDE AV1 (av01) — AV1 decode is
-    // unreliable across our player matrix (mpv on macOS stalls on it). VP9 is
-    // what unlocks resolutions above 1080p: YouTube serves 1440p/2160p only in
-    // VP9/AV1, never H.264.
-    //
-    // RISK CONTAINMENT — this must not regress existing playback:
-    //  * The shipped default preference is 1080p, and every height <=1080p
-    //    resolves to H.264 (the tie-break below keeps it), so out-of-the-box
-    //    auto-play is byte-equivalent to before VP9 was allowed.
-    //  * VP9 becomes the default pick ONLY when the user explicitly raises the
-    //    Quality preference to 1440p/2160p — heights YouTube serves only in
-    //    VP9. That is a deliberate opt-in they can lower again if their device
-    //    can't decode it smoothly.
-    //  * Every height is also offered in the in-player quality switcher for a
-    //    per-video override, independent of the preference.
+    // Use adaptive H.264/VP9 plus AAC, capped at 1080p. AV1 remains
+    // excluded because decoder support varies across the player matrix.
     bool isAvc(String c) => c.toLowerCase().contains('avc');
     bool isVp9(String c) {
       final l = c.toLowerCase();
@@ -996,7 +1194,11 @@ class YoutubeService {
     String? audioUrl;
     final qualities = <YoutubeQuality>[];
     final videoOnly = manifest.videoOnly
-        .where((s) => isAvc(s.videoCodec) || isVp9(s.videoCodec))
+        .where(
+          (s) =>
+              s.videoResolution.height <= 1080 &&
+              (isAvc(s.videoCodec) || isVp9(s.videoCodec)),
+        )
         .toList();
     final audioStreams = manifest.audioOnly
         .where((s) => s.container.name.toLowerCase() == 'mp4')
@@ -1037,15 +1239,7 @@ class YoutubeService {
         qualities.add(YoutubeQuality(height: h, videoUrl: s.url.toString()));
       }
 
-      // Default pick = highest quality at or below the user's preferred height
-      // (the Quality dropdown); if the video has nothing that low, the lowest
-      // available so it still plays. [qualities] is descending and H.264 sorts
-      // first at equal heights, so any preference <=1080p resolves to the SAME
-      // H.264 stream as before — VP9 is chosen only when the preference is
-      // 1440p/2160p AND the video actually offers it. A video that lacks the
-      // preferred height steps down to the next best automatically. Chosen FROM
-      // [qualities] so [playUrl] always matches an entry (the in-player "now
-      // playing" highlight matches by URL).
+      // Select within the preference; all switchable qualities stay <=1080p.
       final atOrBelow = qualities.where((q) => q.height <= maxHeight).toList();
       playUrl =
           (atOrBelow.isNotEmpty ? atOrBelow.first : qualities.last).videoUrl;
@@ -1086,17 +1280,19 @@ class YoutubeService {
     String? muxedFallbackUrl,
   ) async {
     Future<bool> usable(String url) async {
-      final client = http.Client();
+      final uri = Uri.tryParse(url);
+      if (uri == null ||
+          uri.host.isEmpty ||
+          (uri.scheme != 'https' && uri.scheme != 'http')) {
+        return false;
+      }
       try {
-        final resp = await client
-            .head(Uri.parse(url))
-            .timeout(const Duration(seconds: 2));
-        // Transport failures are inconclusive; explicit HTTP rejection is not.
+        final resp = await probeYoutubeStream(uri);
         return resp.statusCode >= 200 && resp.statusCode < 400;
       } catch (_) {
+        // A transport timeout is inconclusive. The player can still try it;
+        // an explicit HTTP denial above is never treated as success.
         return true;
-      } finally {
-        client.close();
       }
     }
 

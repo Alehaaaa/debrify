@@ -1,7 +1,5 @@
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -77,7 +75,6 @@ class _IptvStylePageState extends State<IptvStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('iptv_style_settings');
     _load();
   }
 

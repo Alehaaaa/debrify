@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -89,7 +87,6 @@ class _TvPlayerControlsStylePageState extends State<TvPlayerControlsStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_player_controls_style_settings');
     _load();
   }
 

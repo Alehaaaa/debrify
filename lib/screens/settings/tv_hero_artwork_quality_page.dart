@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../models/tv_hero_artwork_quality.dart';
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/tv_hero_artwork_quality_controller.dart';
 import '../../theme/app_theme_scope.dart';
@@ -62,7 +61,6 @@ class _TvHeroArtworkQualityPageState extends State<TvHeroArtworkQualityPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_hero_artwork_quality_settings');
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

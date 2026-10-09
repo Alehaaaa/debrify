@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 
 import '../../models/webdav_item.dart';
 import '../../models/profiles/profile_policy.dart';
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/profiles/profile_async_authorization.dart';
 import '../../services/storage_service.dart';
@@ -65,7 +64,6 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('webdav_settings');
     _load();
   }
 

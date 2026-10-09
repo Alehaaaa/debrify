@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/quick_play_rules.dart';
-import '../../services/analytics_service.dart';
 import '../../services/source_priority.dart';
 import '../../services/storage_service.dart';
 import '../../services/main_page_bridge.dart';
@@ -72,7 +71,6 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('quick_play_settings');
     _load();
   }
 

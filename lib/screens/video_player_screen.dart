@@ -34,7 +34,6 @@ import '../models/profiles/profile_policy.dart';
 import '../services/profiles/profile_policy_guard.dart';
 import '../services/skip_segment_service.dart';
 import '../services/offline_title_store.dart';
-import '../services/analytics_service.dart';
 import '../services/pip_service.dart';
 import '../services/audio_effect_session_service.dart';
 import '../services/tvos_decode_remedy.dart';
@@ -1658,8 +1657,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   String? _simklLastScrobbleAction;
   Timer? _simklHeartbeatTimer;
   MdblistScrobbleSession? _mdblistSession;
-  // Keeps the analytics session alive during long, interaction-free playback.
-  Timer? _analyticsHeartbeatTimer;
 
   Duration? _randomStartOffset(Duration duration) {
     final num clampedPercent = widget.randomStartMaxPercent.clamp(0, 99);
@@ -1696,8 +1693,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     PlayerVisibility.opened(this);
     // OS media controls: headset/Bluetooth buttons, media keys, lock screen.
     MediaSessionService.instance.attach(this, _PlayerMediaSession(this));
-    AnalyticsService.screenView('video_player');
-    _startAnalyticsHeartbeat();
     _activePlaylist = widget.playlist
         ?.map((entry) => entry.withDefaultHttpHeaders(widget.httpHeaders))
         .toList();
@@ -2359,21 +2354,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   void _stopTraktHeartbeat() {
     _traktHeartbeatTimer?.cancel();
     _traktHeartbeatTimer = null;
-  }
-
-  /// Periodic analytics ping so a long, interaction-free watch keeps the
-  /// analytics session alive. Independent of Trakt (fires regardless of Trakt
-  /// auth); only emits while actually playing. No content details are sent.
-  void _startAnalyticsHeartbeat() {
-    _analyticsHeartbeatTimer?.cancel();
-    _analyticsHeartbeatTimer = Timer.periodic(
-      AnalyticsService.heartbeatInterval,
-      (_) {
-        if (_isPlaying) {
-          AnalyticsService.playbackHeartbeat('dart');
-        }
-      },
-    );
   }
 
   /// Send updated progress to Trakt after a user seek (bypasses dedup guard).
@@ -12162,7 +12142,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     PipService.detach(this);
     // Scrobble stop to Trakt when user exits player
     _stopTraktHeartbeat();
-    _analyticsHeartbeatTimer?.cancel();
     _traktScrobble('stop');
     _stopSimklHeartbeat();
     _simklScrobble('stop');

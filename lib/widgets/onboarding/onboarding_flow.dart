@@ -11,7 +11,6 @@ import '../../screens/settings/profile_backup_flows.dart';
 import '../../screens/webdav_sync/webdav_sync_login_screen.dart';
 import '../../services/account_service.dart';
 import '../../services/alldebrid_account_service.dart';
-import '../../services/analytics_service.dart';
 import '../../services/engine/config_loader.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../services/engine/local_engine_storage.dart';
@@ -536,7 +535,6 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     final title = integrationMeta[type]!.title;
     if (!_connectedServices.contains(title)) _connectedServices.add(title);
     _hasConfigured = true;
-    AnalyticsService.integrationConnected(type.name, {'surface': 'onboarding'});
     MainPageBridge.notifyIntegrationChanged();
 
     if (type == IntegrationType.pikpak) await _offerPikPakRestriction();

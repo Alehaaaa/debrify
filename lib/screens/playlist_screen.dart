@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../services/analytics_service.dart';
 import '../services/storage_service.dart';
 import '../services/main_page_bridge.dart';
 import '../theme/app_theme_scope.dart';
@@ -55,7 +53,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('playlist');
     _initFuture = _init();
 
     // Search controller listener with debounce

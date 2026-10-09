@@ -17,6 +17,7 @@ import '../services/debrify_image_cache.dart';
 import '../services/stremio_service.dart';
 import '../services/trakt/trakt_episode_model.dart';
 import '../services/trakt/trakt_service.dart';
+import '../services/omdb/omdb_ratings_service.dart';
 import '../services/tvmaze_service.dart';
 import '../services/storage_service.dart';
 import '../services/local_series_completion_service.dart';
@@ -1351,6 +1352,9 @@ class EpisodesPanelState extends State<EpisodesPanel> {
           prefetched: prefetchedThumbs,
         );
 
+        // IMDb episode ratings (OMDb) for the season on screen; other seasons
+        // load as they're opened. Then Trakt fills anything IMDb lacks.
+        unawaited(_enrichImdbSeasonRatings(show, _selectedSeasonNumber, generation));
         // Backfill per-episode ratings from Trakt when the addon didn't supply
         // real ones (Cinemeta sends rating:0). Non-blocking — ratings pop in.
         _enrichEpisodeRatings(show, seasons, generation);
@@ -1404,6 +1408,37 @@ class EpisodesPanelState extends State<EpisodesPanel> {
         ? flat[lastStarted + 1]
         : flat[lastStarted];
     return (season: target.season, episode: target.number);
+  }
+
+  /// IMDb ratings for one season from OMDb (one request per season, cached on
+  /// device; long-finished seasons are effectively fetched once). IMDb is the
+  /// rating the ★ means everywhere else, so it replaces a Trakt backfill, but
+  /// an episode OMDb has no rating for keeps whatever it had.
+  Future<void> _enrichImdbSeasonRatings(
+    StremioMeta show,
+    int seasonNumber,
+    int generation,
+  ) async {
+    final imdbId = show.progressId ?? show.id;
+    if (!MediaIdentity.isImdb(imdbId)) return;
+    final ratings = await OmdbRatingsService.instance.seasonRatings(
+      imdbId.split(':').first,
+      seasonNumber,
+    );
+    if (ratings == null || ratings.isEmpty) return;
+    if (!mounted || generation != _episodeModeGeneration) return;
+    var changed = false;
+    for (final season in _episodeSeasons) {
+      if (season.number != seasonNumber) continue;
+      for (final episode in season.episodes) {
+        final r = ratings[episode.number];
+        if (r != null && episode.rating != r) {
+          episode.rating = r;
+          changed = true;
+        }
+      }
+    }
+    if (changed) setState(() {});
   }
 
   /// Backfill per-episode ratings from Trakt's public seasons API, keyed off
@@ -1683,6 +1718,13 @@ class EpisodesPanelState extends State<EpisodesPanel> {
       _viewGeneration++;
     });
     unawaited(_loadSelectedEpisodeMetadata());
+    if (!_isDirectSource) {
+      unawaited(_enrichImdbSeasonRatings(
+        _selectedShow ?? widget.show,
+        seasonNumber,
+        _episodeModeGeneration,
+      ));
+    }
   }
 
   void _onEpisodeTap(TraktEpisode episode) {

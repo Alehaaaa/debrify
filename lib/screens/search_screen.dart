@@ -64,7 +64,6 @@ import '../models/stremio_tv/stremio_tv_channel.dart';
 import '../models/stremio_tv/stremio_tv_now_playing.dart';
 import '../models/torrent.dart';
 import '../models/torrent_filter_state.dart';
-import '../services/analytics_service.dart';
 import '../services/debrify_tv_repository.dart';
 import '../services/discover_prefs.dart';
 import '../services/engine/dynamic_engine.dart';
@@ -1976,13 +1975,6 @@ class _SearchScreenState extends State<SearchScreen>
       initialScrollOffset: widget.searchPage ? 0 : _homeLastScroll,
     );
     // This one widget backs three tabs (Home board / dedicated Search / Discover).
-    AnalyticsService.screenView(
-      _isSearchSurface
-          ? 'search'
-          : widget.discoverMode
-          ? 'discover'
-          : 'home',
-    );
     // Tab-owned: a pushed person/studio page must not take these from the
     // Discover tab underneath it (their unregisters are identity-checked).
     if (!_fixedDiscover) {
@@ -13388,9 +13380,6 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     _lastListOpenAt = now;
-    AnalyticsService.trackInBackground('mdblist_list_search_open', {
-      'liked': choice.liked,
-    });
     // TV: switching to the Discover tab rebuilds this Search screen fresh on
     // return (main.dart keys tab content by index), losing the results, scroll,
     // and focused card. Instead PUSH the list's items over the Search board —

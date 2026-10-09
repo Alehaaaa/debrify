@@ -2,6 +2,7 @@ import '../widgets/downloaded_media_button.dart';
 import '../services/downloaded_media_service.dart';
 import '../services/offline_title_store.dart';
 import '../widgets/metadata_franchise_rail.dart';
+import '../widgets/rotten_tomatoes_score.dart';
 import '../widgets/metadata_title_navigation.dart';
 import '../services/metadata_provider_service.dart';
 import '../services/metadata_preferences_service.dart';
@@ -22,7 +23,6 @@ import '../widgets/trailer_status_chip.dart';
 import '../models/stremio_addon.dart';
 import '../models/advanced_search_selection.dart';
 import '../models/playlist_view_mode.dart';
-import '../services/analytics_service.dart';
 import '../services/series_source_service.dart';
 import '../services/app_route_observer.dart';
 import '../services/debrify_image_cache.dart';
@@ -646,7 +646,6 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     MdblistService.instance.watchedRevision.addListener(
       _loadLocalMovieFinished,
     );
-    AnalyticsService.screenView('series_detail');
     MainPageBridge.addPlaybackReturnListener(_onPlaybackReturned);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -2982,35 +2981,55 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         ),
       );
     }
-    if (rating != null) {
-      add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              rating.toStringAsFixed(1),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                color: _imdb,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text(
-                'IMDb',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
+    Widget imdbRow(double value) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value.toStringAsFixed(1),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
-      );
-    }
+        const SizedBox(width: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          decoration: BoxDecoration(
+            color: _imdb,
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: const Text(
+            'IMDb',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+    if (rating != null) add(imdbRow(rating));
+    // Rotten Tomatoes + Metacritic (and IMDb, if the page has none) from
+    // OMDb, in the same "value + mark" grammar. Arrives async, so it brings
+    // its own leading gaps instead of going through [add].
+    parts.add(
+      OmdbRatingsBuilder(
+        imdbId: _item.effectiveImdbId,
+        builder: (context, r) {
+          final readouts = omdbDetailReadouts(
+            r,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            glyphColor: Colors.white,
+            glyphSize: 16,
+            gap: 16,
+            hasImdb: rating != null,
+            imdbBadge: imdbRow,
+          );
+          if (readouts.isEmpty) return const SizedBox.shrink();
+          // The first gap only belongs there when something precedes it.
+          if (parts.length == 1) readouts.removeAt(0);
+          return Row(mainAxisSize: MainAxisSize.min, children: readouts);
+        },
+      ),
+    );
     return Wrap(crossAxisAlignment: WrapCrossAlignment.center, children: parts);
   }
 

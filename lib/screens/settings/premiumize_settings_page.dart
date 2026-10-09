@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/storage_service.dart';
 import '../../services/premiumize_account_service.dart';
-import '../../services/analytics_service.dart';
 import '../../widgets/premiumize_account_status_widget.dart';
 import '../../services/main_page_bridge.dart';
 import '../../utils/platform_util.dart';
@@ -35,7 +34,6 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('premiumize_settings');
     _load();
   }
 
@@ -147,9 +145,6 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
       _apiKeyController.clear();
     });
     _refocusOnTv(_logoutButtonFocusNode);
-    AnalyticsService.integrationConnected('premiumize', {
-      'surface': 'settings',
-    });
     _snack('Premiumize connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }

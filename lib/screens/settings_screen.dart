@@ -41,8 +41,6 @@ import '../services/profiles/profile_reset_service.dart';
 import '../services/webdav_sync/webdav_sync_library_models.dart';
 import '../utils/platform_util.dart';
 import '../utils/deovr_utils.dart' as deovr;
-
-import '../services/analytics_service.dart';
 import '../services/diagnostic_log.dart';
 import '../services/account_service.dart';
 import '../services/backup_restore_service.dart';
@@ -51,7 +49,6 @@ import '../services/download_service.dart';
 import '../services/mdblist/mdblist_service.dart';
 import '../services/simkl/simkl_service.dart';
 import '../services/storage_service.dart';
-import '../services/support_remote_config_service.dart';
 import '../services/torbox_account_service.dart';
 import '../services/premiumize_account_service.dart';
 import '../services/alldebrid_account_service.dart';
@@ -63,7 +60,6 @@ import '../services/live_recording_service.dart';
 import '../services/desktop_schedule_service.dart';
 import '../services/update_service.dart';
 import '../services/local_source_update_service.dart';
-import '../widgets/support_donation_chooser_dialog.dart';
 import '../widgets/tv_text_field.dart';
 import 'settings/debrify_tv_settings_page.dart';
 import 'settings/settings_tv_layout.dart';
@@ -298,16 +294,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _textBrightness = 'bright';
   String _launchAnimation = 'trace';
   String _downloadLocationSubtitle = 'Downloads/Debrify (default)';
-  SupportDonationConfig _supportDonation = SupportDonationConfig.empty;
-  String _supportSettingsLabel = 'Support Debrify';
-  String _supportSettingsSubtitle = 'Help fund development with a donation';
 
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('settings');
     _loadSummaries();
-    _loadSupportConfig();
     _loadDownloadLocation();
     // IPTV recording exists where its engine can run (Android 10+, or pre-Q
     // with the grantable legacy storage path) — the search index must not
@@ -1000,39 +991,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .toSet();
   }
 
-  Future<void> _loadSupportConfig() async {
-    final service = SupportRemoteConfigService.instance;
-    final cached = await service.loadCachedOrFallback();
-    if (mounted) {
-      setState(() {
-        _applySupportConfig(cached);
-      });
-    }
-
-    final fresh = await service.loadConfig();
-    if (!mounted) return;
-    setState(() {
-      _applySupportConfig(fresh);
-    });
-  }
-
-  void _applySupportConfig(SupportRemoteConfig config) {
-    _supportDonation = config.donation;
-    _supportSettingsLabel = config.donation.settingsLabel;
-    _supportSettingsSubtitle = config.donation.settingsSubtitle;
-  }
-
-  Future<void> _openSupportDonation() async {
-    await showSupportDonationChooserDialog(
-      context,
-      donation: _supportDonation,
-      title: _supportSettingsLabel,
-      // Match the settings palette (the dialog is shown from the State's
-      // context, which sits above the scoped theme in build()).
-      theme: settingsPageTheme(context),
-    );
-  }
-
   void _applyRdUserInfo(dynamic user) {
     final expiry = _tryParseDate(user.expiration);
     final bool isPremium = user.isPremium;
@@ -1411,10 +1369,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onOpenParentsGuideStyle: _openParentsGuideStylePage,
       onOpenRecordings: _openRecordings,
       onOpenIptvSettings: _openIptvSettings,
-      showSupportDonation: _supportDonation.hasProviders,
-      supportDonationLabel: _supportSettingsLabel,
-      supportDonationSubtitle: _supportSettingsSubtitle,
-      onOpenSupportDonation: _openSupportDonation,
     );
   }
 
@@ -1483,10 +1437,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onToggleIncludeAlphaUpdates: _toggleIncludeAlphaUpdates,
       tvKeyboardEnabled: _tvKeyboardEnabled,
       onToggleTvKeyboard: _toggleTvKeyboard,
-      showSupportDonation: _supportDonation.hasProviders,
-      supportDonationLabel: _supportSettingsLabel,
-      supportDonationSubtitle: _supportSettingsSubtitle,
-      onOpenSupportDonation: _openSupportDonation,
       onOpenRecordings: _openRecordings,
       onOpenIptvSettings: _openIptvSettings,
       showIptvAppearance: _iptvAppearanceSearchable,
@@ -2879,16 +2829,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         keywords: const ['version', 'upgrade', 'github', 'new build'],
       ),
 
-      // Support
-      if (_supportDonation.hasProviders)
-        SettingsSearchEntry(
-          icon: SettingsRows.supportDebrify.icon,
-          title: _supportSettingsLabel,
-          subtitle: _supportSettingsSubtitle,
-          category: 'About',
-          keywords: const ['donate', 'tip', 'contribute', 'fund'],
-          onTap: _openSupportDonation,
-        ),
       nav(
         SettingsRows.reddit,
         'About',
@@ -6928,6 +6868,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
                   ],
+                  if (summary.updateAvailable &&
+                      UpdateService.manualInstallHint != null) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      UpdateService.manualInstallHint!,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: bodyColor,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'Release notes',
@@ -7671,10 +7622,6 @@ class _SettingsLayout extends StatelessWidget {
   final ValueChanged<bool> onToggleIncludeAlphaUpdates;
   final bool tvKeyboardEnabled;
   final ValueChanged<bool> onToggleTvKeyboard;
-  final bool showSupportDonation;
-  final String supportDonationLabel;
-  final String supportDonationSubtitle;
-  final Future<void> Function() onOpenSupportDonation;
   // Live TV & DVR.
   final Future<void> Function() onOpenRecordings;
   final Future<void> Function() onOpenIptvSettings;
@@ -7769,10 +7716,6 @@ class _SettingsLayout extends StatelessWidget {
     required this.onToggleIncludeAlphaUpdates,
     required this.tvKeyboardEnabled,
     required this.onToggleTvKeyboard,
-    required this.showSupportDonation,
-    required this.supportDonationLabel,
-    required this.supportDonationSubtitle,
-    required this.onOpenSupportDonation,
     required this.onOpenRecordings,
     required this.onOpenIptvSettings,
     required this.showIptvAppearance,
@@ -8304,15 +8247,8 @@ class _SettingsLayout extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             SettingsSection(
-              title: 'Community & Support',
+              title: 'Community',
               children: [
-                if (showSupportDonation)
-                  SettingsTile(
-                    icon: SettingsRows.supportDebrify.icon,
-                    title: supportDonationLabel,
-                    subtitle: supportDonationSubtitle,
-                    onTap: onOpenSupportDonation,
-                  ),
                 SettingsTile.spec(
                   SettingsRows.reddit,
                   onTap: () => launchSettingsUrl(SettingsRows.reddit.url!),
@@ -8721,13 +8657,6 @@ class _SettingsLayout extends StatelessWidget {
                             )
                           : null,
                     ),
-                    if (showSupportDonation)
-                      SettingsTile(
-                        icon: SettingsRows.supportDebrify.icon,
-                        title: supportDonationLabel,
-                        subtitle: supportDonationSubtitle,
-                        onTap: onOpenSupportDonation,
-                      ),
                     SettingsTile.spec(
                       SettingsRows.reddit,
                       onTap: () => launchSettingsUrl(SettingsRows.reddit.url!),

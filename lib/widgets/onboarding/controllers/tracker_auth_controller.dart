@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-
-import '../../../services/analytics_service.dart';
 import '../../../services/main_page_bridge.dart';
 import '../../../services/simkl/simkl_service.dart';
 import '../../../services/storage_service.dart';
@@ -262,10 +260,6 @@ class TrackerAuthController extends ChangeNotifier {
     } else {
       await StorageService.setSimklSyncCatalogItems(true);
     }
-    AnalyticsService.integrationConnected(kind.name, {
-      'surface': 'onboarding',
-      'method': kind == TrackerKind.trakt ? 'device_code' : 'pin',
-    });
     MainPageBridge.notifyIntegrationChanged();
   }
 

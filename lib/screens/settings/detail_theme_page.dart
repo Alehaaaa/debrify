@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/premium_looks.dart';
 import '../../utils/platform_util.dart';
@@ -58,7 +56,6 @@ class _DetailThemePageState extends State<DetailThemePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('detail_theme_settings');
     _load();
   }
 

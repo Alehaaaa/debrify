@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../../services/analytics_service.dart';
 import '../../theme/app_ambience.dart';
 import '../../theme/app_art.dart';
 import '../../theme/app_focus.dart';
@@ -199,7 +197,6 @@ class _ThemeTokensPageState extends State<ThemeTokensPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('theme_tokens_settings');
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

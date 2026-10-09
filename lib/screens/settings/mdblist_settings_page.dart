@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/storage_service.dart';
@@ -41,7 +39,6 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('mdblist_settings');
     _load();
   }
 
@@ -130,7 +127,6 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
     });
     if (!mounted) return;
     _refocusOnTv(_logoutButtonFocusNode);
-    AnalyticsService.integrationConnected('mdblist', {'surface': 'settings'});
     _snack('MDBList connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }

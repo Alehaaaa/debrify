@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/trakt/trakt_calendar_entry.dart';
-import '../services/analytics_service.dart';
 import '../services/android_native_downloader.dart';
 import '../services/main_page_bridge.dart';
 import '../services/mdblist/mdblist_calendar_service.dart';
@@ -107,7 +106,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('trakt_calendar');
     final now = DateTime.now();
     _selectedYear = _lastViewedYear ?? now.year;
     _selectedMonth = _lastViewedMonth ?? now.month;

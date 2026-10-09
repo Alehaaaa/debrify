@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,7 @@ import 'main_page_bridge.dart';
 import 'storage_service.dart';
 import 'stremio_service.dart';
 import 'youtube_service.dart';
+import 'relay_clip_file.dart';
 import 'profiles/profile_bootstrap.dart';
 import 'profiles/profile_lock_controller.dart';
 import 'profiles/profile_runtime.dart';
@@ -256,6 +258,7 @@ class TvosTopShelfService {
       if (imdbId == null || meta == null) continue;
       attempted++;
 
+      File? relayClip;
       try {
         var youtubeId = _validYoutubeId(meta.trailerYtId);
         if (youtubeId == null) {
@@ -268,13 +271,41 @@ class TvosTopShelfService {
         }
         if (youtubeId == null) continue;
 
-        final streams = await YoutubeService.resolvePreviewStreams(
+        var streams = await YoutubeService.resolvePreviewStreams(
           youtubeId,
           maxHeightOverride: _previewHeight,
         );
         if (generation != _publishGeneration) return;
-        final videoUrl = streams?.playUrl;
+        var videoUrl = streams?.playUrl;
         if (videoUrl == null || videoUrl.isEmpty) continue;
+        if (streams!.isRelay) {
+          // AVFoundation exports the preview and can't open a relay tunnel
+          // over HTTP (no byte ranges), so hand it a local copy of the part
+          // the preview uses.
+          final clip = File(
+            '${Directory.systemTemp.path}/topshelf-relay-$youtubeId-'
+            '${DateTime.now().microsecondsSinceEpoch}.mp4',
+          );
+          relayClip = clip;
+          final saved = await RelayClipFile.download(
+            Uri.parse(videoUrl),
+            clip,
+            maxDuration: const Duration(seconds: _previewDurationSeconds + 2),
+          );
+          if (generation != _publishGeneration) return;
+          if (saved) {
+            videoUrl = clip.uri.toString();
+          } else {
+            YoutubeService.markRelayFailed(youtubeId);
+            streams = await YoutubeService.resolvePreviewStreams(
+              youtubeId,
+              maxHeightOverride: _previewHeight,
+            );
+            if (generation != _publishGeneration) return;
+            videoUrl = streams?.playUrl;
+            if (videoUrl == null || videoUrl.isEmpty) continue;
+          }
+        }
 
         final arguments = <String, dynamic>{
           'cacheKey':
@@ -300,6 +331,13 @@ class TvosTopShelfService {
         // One unavailable/restricted trailer must not prevent later titles in
         // the reel from receiving previews.
         debugPrint('Top Shelf: preview unavailable');
+      } finally {
+        // The exported preview lives in the app group; the source copy is
+        // no longer needed once the native exporter returns.
+        final clip = relayClip;
+        if (clip != null) {
+          unawaited(clip.delete().then<void>((_) {}, onError: (Object _) {}));
+        }
       }
     }
   }

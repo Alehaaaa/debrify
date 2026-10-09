@@ -12,7 +12,6 @@ import '../../models/stremio_tv/stremio_tv_channel.dart';
 import '../../models/stremio_tv/stremio_tv_now_playing.dart';
 import '../../models/torrent.dart';
 import '../../services/play_loader_style.dart';
-import '../../services/analytics_service.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/debrid_service.dart';
 import '../../services/stream_url_validator.dart';
@@ -140,7 +139,6 @@ class _StremioTvScreenState extends State<StremioTvScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('stremio_tv');
     _loadSettings().then((_) => _discoverAndLoad());
     MdblistService.instance.isAuthenticated().then((v) {
       if (mounted && v != _mdblistConnected) {

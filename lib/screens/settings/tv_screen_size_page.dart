@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -39,7 +37,6 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_screen_size_settings');
     _load();
   }
 

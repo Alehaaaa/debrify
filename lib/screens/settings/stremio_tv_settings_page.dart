@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -26,7 +25,6 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('stremio_tv_settings');
     _loadSettings();
   }
 

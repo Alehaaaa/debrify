@@ -99,11 +99,12 @@ class MediaServerClient {
     Future<void> Function()? authorize,
     bool allowEmptyResponse = false,
     Duration? requestTimeout,
+    String? method,
   }) async {
     await authorize?.call();
     final request =
         http.Request(
-            body == null ? 'GET' : 'POST',
+            method ?? (body == null ? 'GET' : 'POST'),
             endpoint(baseUrl, path, query),
           )
           // Never forward a session token or login body through an HTTP redirect.
@@ -520,7 +521,7 @@ class MediaServerClient {
   }) async {
     if (offset < 0 ||
         !const {'SortName', 'DateCreated', 'ProductionYear'}.contains(sort) ||
-        !const {'browse', 'recent', 'resume'}.contains(mode)) {
+        !const {'browse', 'recent', 'resume', 'history'}.contains(mode)) {
       throw ArgumentError('Invalid library query');
     }
     final data = await _request(
@@ -560,7 +561,7 @@ class MediaServerClient {
           'SortOrder': mode != 'browse' || (!episodeOrder && sort != 'SortName')
               ? 'Descending'
               : 'Ascending',
-          'Fields': 'Overview,PrimaryImageAspectRatio,DateCreated',
+          'Fields': 'Overview,PrimaryImageAspectRatio,DateCreated,ProviderIds',
           'EnableImages': 'true',
           'ImageTypeLimit': '1',
           'EnableUserData': 'true',
@@ -759,6 +760,28 @@ class MediaServerClient {
       kind: account.kind,
       token: account.token,
       body: const {},
+      authorize: authorize,
+      allowEmptyResponse: true,
+    );
+  }
+
+  Future<void> setHistoryWatched(
+    MediaServerAccount account,
+    String itemId,
+    bool watched, {
+    DateTime? at,
+    Future<void> Function()? authorize,
+  }) async {
+    await _request(
+      account.baseUrl,
+      'Users/${_segment(account.userId)}/PlayedItems/${_segment(itemId)}',
+      deviceId: account.deviceId,
+      kind: account.kind,
+      token: account.token,
+      method: watched ? 'POST' : 'DELETE',
+      query: {
+        if (watched && at != null) 'DatePlayed': at.toUtc().toIso8601String(),
+      },
       authorize: authorize,
       allowEmptyResponse: true,
     );

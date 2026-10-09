@@ -16,6 +16,7 @@ import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
 import '../hold_feedback.dart';
+import '../rotten_tomatoes_score.dart';
 
 /// The five showcase layouts developed after the original detail-page set.
 ///
@@ -825,6 +826,32 @@ class _DetailPremiumState extends State<DetailPremium> {
     child: child,
   );
 
+  /// Rotten Tomatoes + Metacritic beside the ★ rating, each mark drawn in
+  /// the star's colour with its figure in the rating's type.
+  Widget _omdbFacts() => OmdbRatingsBuilder(
+    imdbId: _m.item.effectiveImdbId,
+    builder: (context, r) {
+      if (r == null) return const SizedBox.shrink();
+      final style = _t.titleStyle(size: 18, weight: FontWeight.w800, tracking: -.2);
+      Widget fact(Widget glyph, String value) => Padding(
+        padding: const EdgeInsets.only(left: 14),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [glyph, const SizedBox(width: 6), Text(value, style: style)],
+        ),
+      );
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (r.score != null)
+            fact(TomatoGlyph(size: 20, color: _t.rating), '${r.score}%'),
+          if (r.metacritic != null)
+            fact(MetacriticGlyph(size: 20, color: _t.rating), '${r.metacritic}'),
+        ],
+      );
+    },
+  );
+
   Widget _mosaicFactsTile() => _mosaicTile(
     child: DecoratedBox(
       decoration: BoxDecoration(color: _t.pane, gradient: _t.paneWash),
@@ -840,7 +867,7 @@ class _DetailPremiumState extends State<DetailPremium> {
               children: [
                 Icon(Icons.star_rounded, color: _t.rating, size: 22),
                 const SizedBox(width: 8),
-                if (compact)
+                if (compact) ...[
                   Text(
                     _m.rating == null ? '—' : _m.rating!.toStringAsFixed(1),
                     style: _t.titleStyle(
@@ -848,8 +875,9 @@ class _DetailPremiumState extends State<DetailPremium> {
                       weight: FontWeight.w800,
                       tracking: -.2,
                     ),
-                  )
-                else ...[
+                  ),
+                  _omdbFacts(),
+                ] else ...[
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -865,6 +893,7 @@ class _DetailPremiumState extends State<DetailPremium> {
                       Text('AT A GLANCE', style: _t.dataStyle(size: 8.5)),
                     ],
                   ),
+                  _omdbFacts(),
                   const SizedBox(width: 15),
                   Container(width: 1, height: 32, color: _t.hair),
                   const SizedBox(width: 15),

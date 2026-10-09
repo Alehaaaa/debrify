@@ -181,6 +181,7 @@ class WatchlistSyncService {
         continue;
       }
 
+      var allAdded = true;
       if (!inLocal) {
         await StorageService.setMyWatchlistItem(
           meta,
@@ -194,6 +195,8 @@ class WatchlistSyncService {
           () => TraktService.instance.addToWatchlist(imdbId, type),
         )) {
           added++;
+        } else {
+          allAdded = false;
         }
       }
       if (simklCanAdd) {
@@ -201,9 +204,11 @@ class WatchlistSyncService {
           () => SimklService.instance.addToList(imdbId, type, 'plantowatch'),
         )) {
           added++;
+        } else {
+          allAdded = false;
         }
       }
-      agreed.add(key);
+      if (allAdded) agreed.add(key);
     }
 
     // A title agreed last time that no readable list has now may still sit on

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -83,7 +81,6 @@ class _PlayerGuideStylePageState extends State<PlayerGuideStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('player_guide_style_settings');
     _load();
   }
 

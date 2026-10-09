@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/theme_palette.dart';
@@ -127,7 +125,6 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('player_dock_settings');
     _load();
   }
 

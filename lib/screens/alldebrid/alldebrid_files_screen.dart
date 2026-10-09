@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../screens/video_player_screen.dart'; // re-exports PlaylistEntry
 import '../../services/alldebrid_service.dart';
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/download_service.dart';
 import '../../services/video_player_launcher.dart';
@@ -107,7 +106,6 @@ class _AllDebridFilesScreenState extends State<AllDebridFilesScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('alldebrid_files');
     final initialQuery = widget.initialSearchQuery?.trim() ?? '';
     if (initialQuery.isNotEmpty) {
       _searchActive = true;

@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../theme/app_looks.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_controller.dart';
@@ -49,7 +47,6 @@ class _FormPageState extends State<FormPage> with _FirstRowFocus {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('form_settings');
     focusFirstRowOnTv();
   }
 
@@ -145,7 +142,6 @@ class _PalettePageState extends State<PalettePage> with _FirstRowFocus {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('palette_settings');
     focusFirstRowOnTv();
   }
 

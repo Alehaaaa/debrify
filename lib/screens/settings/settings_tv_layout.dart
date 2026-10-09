@@ -153,10 +153,6 @@ class SettingsTvLayout extends StatefulWidget {
   // Live TV & DVR.
   final Future<void> Function() onOpenRecordings;
   final Future<void> Function() onOpenIptvSettings;
-  final bool showSupportDonation;
-  final String supportDonationLabel;
-  final String supportDonationSubtitle;
-  final Future<void> Function() onOpenSupportDonation;
 
   const SettingsTvLayout({
     super.key,
@@ -247,10 +243,6 @@ class SettingsTvLayout extends StatefulWidget {
     required this.onOpenProfileAppearance,
     required this.onOpenRecordings,
     required this.onOpenIptvSettings,
-    required this.showSupportDonation,
-    required this.supportDonationLabel,
-    required this.supportDonationSubtitle,
-    required this.onOpenSupportDonation,
   });
 
   @override
@@ -365,8 +357,7 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
   /// exactly 17 — Looks from the theme work, Profile Picker, Hero Artwork
   /// Quality from the player-dock merge, and Player Controls from the native
   /// OTT-skin work, less Details Theme (App Theme covers it) and Theme Lab
-  /// (a tool, not a setting); About has up to 6 with the conditional donation
-  /// row;
+  /// (a tool, not a setting); About has 5;
   /// Data & Backup up to 6). Connections and Trackers are sized from their
   /// own lists; see the pool computation in [initState].
   ///
@@ -1350,8 +1341,8 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
         }
       case 9: // About (Updates + Support merged — matches the phone layout)
         {
-          // The donation row is conditional, so index the pane nodes off a
-          // running counter to keep Up/Down wiring contiguous.
+          // Index the pane nodes off a running counter to keep Up/Down
+          // wiring contiguous.
           int p = 0;
           return [
             const SettingsSectionLabel('Updates'),
@@ -1392,18 +1383,10 @@ class _SettingsTvLayoutState extends State<SettingsTvLayout> {
               ],
             ),
             const SizedBox(height: 18),
-            const SettingsSectionLabel('Community & Support'),
+            const SettingsSectionLabel('Community'),
             SettingsSection(
               title: '',
               children: [
-                if (widget.showSupportDonation)
-                  SettingsTile(
-                    icon: SettingsRows.supportDebrify.icon,
-                    title: widget.supportDonationLabel,
-                    subtitle: widget.supportDonationSubtitle,
-                    onTap: widget.onOpenSupportDonation,
-                    focusNode: _paneNodes[p++],
-                  ),
                 SettingsTile.spec(
                   SettingsRows.reddit,
                   onTap: () => launchSettingsUrl(SettingsRows.reddit.url!),

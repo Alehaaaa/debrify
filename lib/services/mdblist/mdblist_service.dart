@@ -1084,9 +1084,10 @@ class MdblistService {
     int? episode,
     int? rating,
     String? timestampField,
+    DateTime? watchedAt,
   }) {
     if (ids.toJson().isEmpty) return null;
-    final timestamp = DateTime.now().toUtc().toIso8601String();
+    final timestamp = (watchedAt ?? DateTime.now()).toUtc().toIso8601String();
     final attributes = <String, dynamic>{
       if (rating != null) 'rating': rating,
       if (timestampField != null) timestampField: timestamp,
@@ -1125,6 +1126,7 @@ class MdblistService {
     int? episode,
     int? rating,
     String? timestampField,
+    DateTime? watchedAt,
   }) async {
     final scope = ProfileRuntime.scope.value;
     final capability = await _captureCapability();
@@ -1145,6 +1147,7 @@ class MdblistService {
       episode: episode,
       rating: rating,
       timestampField: timestampField,
+      watchedAt: watchedAt,
     );
     if (payload == null) return false;
     final response = await _trackerRequest(
@@ -1189,6 +1192,7 @@ class MdblistService {
     String type, {
     int? season,
     int? episode,
+    DateTime? watchedAt,
   }) => _mutateTitle(
     '/sync/watched',
     ids,
@@ -1196,6 +1200,7 @@ class MdblistService {
     season: season,
     episode: episode,
     timestampField: 'watched_at',
+    watchedAt: watchedAt,
   );
   Future<bool> markUnwatched(
     MdblistMediaIds ids,

@@ -11,7 +11,6 @@ import '../../services/storage_service.dart';
 import '../../services/stremio_service.dart';
 import '../../services/trakt/trakt_list_source.dart';
 import '../../services/trakt/trakt_service.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'home_sections_filter_page.dart';
 import 'spotlight_hero_source_page.dart';
@@ -176,7 +175,6 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('home_page_settings');
     _loadSettings();
   }
 

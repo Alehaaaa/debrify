@@ -71,8 +71,9 @@ void main() {
   test('several waiters do not all wake into the slot at once', () async {
     final first = await VideoOutputLease.acquire();
     final granted = <int>[];
+    final waiters = <Future<VideoOutputLeaseHandle>>[];
     for (var i = 0; i < 3; i++) {
-      unawaited(VideoOutputLease.acquire().then((h) {
+      waiters.add(VideoOutputLease.acquire().then((h) {
         granted.add(i);
         // Each holds until explicitly released.
         return h;
@@ -84,6 +85,11 @@ void main() {
     expect(granted.length, 1,
         reason: 'the loop in acquire() must re-check, not let every parked '
             'waiter through on one completion');
+    // Drain every parked acquisition. Resetting the lease with live waiters
+    // lets this test's callbacks take the next test's output slots.
+    for (final waiter in waiters) {
+      (await waiter).release();
+    }
   });
 
   test('reels pair: two shared outputs coexist, a third waits', () async {

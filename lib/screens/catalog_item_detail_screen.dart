@@ -17,7 +17,6 @@ import '../theme/app_theme_scope.dart';
 import '../theme/artwork_accent.dart';
 import '../models/play_loader_art.dart';
 import '../models/stremio_addon.dart';
-import '../services/analytics_service.dart';
 import '../services/app_route_observer.dart';
 import '../services/imdb_enrichment_service.dart';
 import '../services/imdb_parents_guide_service.dart';
@@ -262,7 +261,6 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
     MdblistService.instance.watchedRevision.addListener(
       _loadLocalMovieFinished,
     );
-    AnalyticsService.screenView('catalog_detail');
     MainPageBridge.addPlaybackReturnListener(_onPlaybackReturned);
     _revealCtrl = AnimationController(
       vsync: this,

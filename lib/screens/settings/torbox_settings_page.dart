@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/storage_service.dart';
 import '../../services/torbox_account_service.dart';
-import '../../services/analytics_service.dart';
 import '../../widgets/torbox_account_status_widget.dart';
 import '../../services/main_page_bridge.dart';
 import '../../utils/platform_util.dart';
@@ -35,7 +34,6 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('torbox_settings');
     _load();
   }
 
@@ -157,7 +155,6 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
       }
     }
     debugPrint('TorboxSettingsPage: API key saved successfully.');
-    AnalyticsService.integrationConnected('torbox', {'surface': 'settings'});
     _snack('Torbox connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../services/analytics_service.dart';
 import '../services/main_page_bridge.dart';
 import '../widgets/browse/browse_results_focus.dart';
 import '../widgets/browse/browse_search_header.dart';
@@ -83,7 +82,6 @@ class _BrowseScreenState extends State<BrowseScreen> {
   void initState() {
     super.initState();
     // Same widget backs both the IPTV (13) and YouTube (14) tabs.
-    AnalyticsService.screenView(widget.tabIndex == 14 ? 'youtube' : 'iptv');
     // Down-from-field is wired via BrowseSearchHeader.onDownArrow →
     // TvTextField (a node-level handler here would be clobbered by the
     // shell's Focus widget on attach).

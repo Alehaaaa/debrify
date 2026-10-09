@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import '../../screens/video_player_screen.dart';
-import '../../services/analytics_service.dart';
 import '../../services/pikpak_api_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/download_service.dart';
@@ -139,7 +138,6 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('pikpak_files');
     _scrollController.addListener(_onScroll);
     _loadSettings();
 

@@ -51,6 +51,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -60,6 +61,9 @@ jobs:
             config["TMDB_READ_ACCESS_TOKEN"] = token
         else:
             print("::warning::TMDB_READ_ACCESS_TOKEN is not set; building without TMDB metadata")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        if omdb:
+            config["OMDB_API_KEY"] = omdb
         path = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
         path.write_text(json.dumps(config), encoding="utf-8")
 

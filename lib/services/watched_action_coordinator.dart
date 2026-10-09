@@ -34,8 +34,7 @@ class WatchedActionCoordinator {
     TrackingSourcePolicy policy,
     Set<TrackingSource> forceTargets,
     TrackingSource source,
-  ) =>
-      policy.scrobbleTargets.contains(source) || forceTargets.contains(source);
+  ) => policy.scrobbles(source) || forceTargets.contains(source);
 
   static Future<WatchedActionResult> setTitleWatched({
     required String imdbId,
@@ -77,7 +76,10 @@ class WatchedActionCoordinator {
         // is an active rewatch), so clearing the paused session is what takes
         // the title OFF Simkl's Continue Watching — fold the result in, and
         // keep this write behind the same Scrobble gate as the mark itself.
-        ok = await SimklService.instance.deletePlaybackForImdb(id, contentType: contentType);
+        ok = await SimklService.instance.deletePlaybackForImdb(
+          id,
+          contentType: contentType,
+        );
       }
       if (!ok) failures.add('Simkl');
     }
@@ -120,7 +122,8 @@ class WatchedActionCoordinator {
     }
     EpisodeTrackerSnapshotRevision.invalidateTitle('local', imdbId);
 
-    if (CustomSeriesIdentity.isCustom(imdbId)) return const WatchedActionResult([]);
+    if (CustomSeriesIdentity.isCustom(imdbId))
+      return const WatchedActionResult([]);
 
     final policy = (await TrackingSourcePolicy.load()).forContent(imdbId);
     final failures = <String>[];

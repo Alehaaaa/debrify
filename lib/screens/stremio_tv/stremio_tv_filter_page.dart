@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
@@ -114,7 +113,6 @@ class _StremioTvFilterPageState extends State<StremioTvFilterPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('stremio_tv_filter');
     _addons = _buildModel();
     _railNodes = List.generate(
       _addons.length,

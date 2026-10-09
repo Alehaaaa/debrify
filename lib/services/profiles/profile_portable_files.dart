@@ -66,7 +66,6 @@ class ProfilePortableFiles {
     'remote_intro_shown',
     'update_auto_check_enabled',
     'update_include_alpha_enabled',
-    'dismissed_donation_campaign_ids_v1',
     'profile_gate_style_v1',
     'profile_gate_always_ask_v1',
   };

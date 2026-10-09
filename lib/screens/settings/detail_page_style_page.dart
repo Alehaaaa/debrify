@@ -1,7 +1,5 @@
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/storage_service.dart';
 import '../../models/detail_page_section_visibility.dart';
 import '../../utils/platform_util.dart';
@@ -160,7 +158,6 @@ class _DetailPageStylePageState extends State<DetailPageStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('detail_page_style_settings');
     _load();
   }
 

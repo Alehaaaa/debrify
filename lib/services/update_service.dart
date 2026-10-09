@@ -1,6 +1,9 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
+
+import '../utils/platform_util.dart';
 
 const String _kGithubOwner = 'Alehaaaa';
 const String _kGithubRepo = 'debrify';
@@ -10,6 +13,23 @@ const String _kReleasesPage =
 /// Provides helpers to inspect GitHub releases and determine whether a newer
 /// build is available for the current client.
 class UpdateService {
+  /// Apple builds are sideloaded and cannot install their own update, so the
+  /// update prompt only TELLS the user how to update there. Null elsewhere.
+  static String? get manualInstallHint {
+    if (kIsWeb) return null;
+    if (PlatformUtil.isTvOS) {
+      return 'Apple TV can\'t update the app by itself. Download the new '
+          'tvOS .ipa from the release page and reinstall it with your '
+          'sideloading tool (Sideloadly or atvloadly).';
+    }
+    if (PlatformUtil.isIosMobile) {
+      return 'iPhone and iPad can\'t update the app by itself. Download the '
+          'new .ipa from the release page and reinstall it with your '
+          'sideloading app (AltStore, SideStore or Sideloadly).';
+    }
+    return null;
+  }
+
   static const Duration _cacheDuration = Duration(minutes: 5);
 
   static final Map<bool, AppRelease> _cachedReleases = {};

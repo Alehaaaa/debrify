@@ -330,10 +330,6 @@ class StorageService {
       'home_hide_catalog_addon_names';
   static const String _homeHideCollectionNamesKey =
       'home_hide_collection_names';
-  static const String _supportRemoteConfigCacheKey =
-      'support_remote_config_cache_v1';
-  static const String _dismissedDonationCampaignIdsKey =
-      'dismissed_donation_campaign_ids_v1';
 
   // Startup settings
   static const String _startupAutoLaunchEnabledKey =
@@ -2978,7 +2974,7 @@ class StorageService {
   /// Mark a locally tracked movie finished, remove it from Continue Watching,
   /// and clear its resumable state. The finished record itself remains so the
   /// detail action can accurately read "Rewatch".
-  static Future<void> markMovieAsFinished(String imdbId) async {
+  static Future<void> markMovieAsFinished(String imdbId, {bool preserveResume = false}) async {
     imdbId = MediaIdentity.progressId(imdbId, 'movie');
     final normalized = imdbId.trim().toLowerCase();
     if (normalized.isEmpty) return;
@@ -2989,10 +2985,12 @@ class StorageService {
       await prefs.setStringList(_finishedMoviesKey, finished.toList()..sort());
       localCompletionRevision.value++;
     }
-    await Future.wait([
-      removeContinueWatchingItem(normalized),
-      clearPlaybackStateByImdbId(normalized),
-    ]);
+    if (!preserveResume) {
+      await Future.wait([
+        removeContinueWatchingItem(normalized),
+        clearPlaybackStateByImdbId(normalized),
+      ]);
+    }
     debugPrint('StorageService: markMovieAsFinished imdbId="$normalized"');
   }
 
@@ -3071,19 +3069,29 @@ class StorageService {
   }
 
   /// Remove all playback state entries (series progress, video progress) for an IMDB ID.
-  static Future<void> clearPlaybackStateByImdbId(String imdbId) async {
+  static Future<void> clearPlaybackStateByImdbId(String imdbId, {bool preserveFinishedEpisodes = false}) async {
     final normalized = imdbId.trim().toLowerCase();
     if (normalized.isEmpty) return;
     final map = await _getPlaybackStateMap();
     final keysToRemove = <String>[];
+    var preserved = false;
     for (final entry in map.entries) {
       if (entry.value is Map<String, dynamic> &&
           (entry.value['imdbId'] as String?)?.trim().toLowerCase() ==
               normalized) {
-        keysToRemove.add(entry.key);
+        final record = entry.value as Map<String, dynamic>;
+        final completed = record['finishedEpisodes'];
+        if (preserveFinishedEpisodes && record['type'] == 'series' &&
+            completed is Map && completed.isNotEmpty) {
+          // A Continue Watching dismissal clears bookmarks, not watched history.
+          record['seasons'] = <String, dynamic>{};
+          preserved = true;
+        } else {
+          keysToRemove.add(entry.key);
+        }
       }
     }
-    if (keysToRemove.isEmpty) return;
+    if (keysToRemove.isEmpty && !preserved) return;
     for (final key in keysToRemove) {
       map.remove(key);
     }
@@ -3722,6 +3730,30 @@ class StorageService {
       return index['title:${seriesTitle.trim().toLowerCase()}'] ?? {};
     }
     return {};
+  }
+
+  /// Historical completion records, including titles no longer in Continue Watching.
+  static Future<List<Map<String, dynamic>>> getCompletedEpisodeHistory() async {
+    final map = await _getPlaybackStateMap();
+    final result = <Map<String, dynamic>>[];
+    for (final raw in map.values) {
+      if (raw is! Map || raw['type'] != 'series') continue;
+      final id = raw['imdbId']?.toString().trim().toLowerCase();
+      if (id == null || id.isEmpty) continue;
+      final finished = raw['finishedEpisodes'];
+      if (finished is! Map) continue;
+      for (final season in finished.entries) {
+        final sn = int.tryParse(season.key.toString());
+        if (sn == null || season.value is! Map) continue;
+        for (final episode in (season.value as Map).entries) {
+          final ep = int.tryParse(episode.key.toString());
+          if (ep == null) continue;
+          result.add({'id': id, 'season': sn, 'episode': ep,
+            'at': episode.value is Map ? episode.value['finishedAt'] : null});
+        }
+      }
+    }
+    return result;
   }
 
   /// One-pass index for derived series completion. IMDb keys are preferred;
@@ -7418,12 +7450,12 @@ class StorageService {
   static Future<int> getYoutubeMaxHeight() async {
     final prefs = await ProfilePreferences.instance();
     final v = prefs.getInt(_youtubeMaxHeightKey);
-    return (v != null && v > 0) ? v : 1080;
+    return (v != null && v > 0) ? v.clamp(144, 1080) : 1080;
   }
 
   static Future<void> setYoutubeMaxHeight(int height) async {
     final prefs = await ProfilePreferences.instance();
-    await prefs.setInt(_youtubeMaxHeightKey, height);
+    await prefs.setInt(_youtubeMaxHeightKey, height.clamp(144, 1080));
   }
 
   /// Android TV IPTV video decoder: 'auto' | 'hardware' | 'software'.
@@ -8959,30 +8991,6 @@ class StorageService {
         .toList();
     await SecretVault.setStringList(prefs, _indexerManagerConfigsKey, rawList);
     return List<IndexerManagerConfig>.unmodifiable(configs);
-  }
-
-  static Future<String?> getSupportRemoteConfigCache() async {
-    final prefs = await DevicePreferences.instance();
-    return prefs.getString(_supportRemoteConfigCacheKey);
-  }
-
-  static Future<void> setSupportRemoteConfigCache(String json) async {
-    final prefs = await DevicePreferences.instance();
-    await prefs.setString(_supportRemoteConfigCacheKey, json);
-  }
-
-  static Future<List<String>> getDismissedDonationCampaignIds() async {
-    final prefs = await DevicePreferences.instance();
-    return prefs.getStringList(_dismissedDonationCampaignIdsKey) ?? <String>[];
-  }
-
-  static Future<void> dismissDonationCampaign(String campaignId) async {
-    final prefs = await DevicePreferences.instance();
-    final ids =
-        prefs.getStringList(_dismissedDonationCampaignIdsKey) ?? <String>[];
-    if (ids.contains(campaignId)) return;
-    ids.add(campaignId);
-    await prefs.setStringList(_dismissedDonationCampaignIdsKey, ids);
   }
 
   // Quick Play VR Settings methods
