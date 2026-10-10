@@ -530,7 +530,7 @@ void main() {
           ),
           client: 'androidVr',
         ));
-        await stale;
+        expect(await stale, isNull);
         // Completing the old request must not delete the new in-flight request.
         final joined = YoutubeService.resolvePreviewStreams(
           'aaaaaaaaaaa',

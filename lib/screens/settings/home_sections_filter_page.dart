@@ -12,6 +12,8 @@ import '../../services/simkl/simkl_list_source.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/mdblist/mdblist_list_source.dart';
 import '../../services/storage_service.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../services/trakt/trakt_list_source.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/home/home_theme.dart';
@@ -817,7 +819,10 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   @override
   Widget build(BuildContext context) {
     final (on, total) = _totals;
-    _narrow = MediaQuery.sizeOf(context).width < 640;
+    final app = AppThemeScope.of(context);
+    // The wide header needs room for the title, count and four action pills.
+    // On tablet widths it otherwise overflows before the two panes do.
+    _narrow = MediaQuery.sizeOf(context).width < 1080;
     if (!_narrow) _narrowList = false;
     return PopScope(
       canPop: false,
@@ -834,7 +839,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Container(
-          decoration: HomeTheme.pageBackground,
+          decoration: GlassChrome.enabled(app)
+              ? BoxDecoration(color: app.core.ground)
+              : HomeTheme.pageBackground,
           child: SafeArea(
             child: Column(
               children: [
@@ -850,6 +857,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildHeader(int on, int total) {
+    final app = AppThemeScope.of(context);
     final backButton = IconButton(
       onPressed: _arranging ? () => _setArrangeMode(false) : _saveAndClose,
       icon: Icon(
@@ -868,10 +876,12 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
     );
     final countPill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(99),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(99))
+          : BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(99),
+            ),
       child: Text.rich(
         TextSpan(
           children: [
@@ -949,6 +959,8 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _actionButton(int i, String label) {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     final node = _headerNodes[i];
     return Focus(
       focusNode: node,
@@ -979,11 +991,16 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
+                color: frosted ? GlassChrome.fill(app, raised: focused) : null,
                 borderRadius: BorderRadius.circular(99),
                 border: Border.all(
                   color: focused
-                      ? HomeTheme.focusGold
-                      : Colors.white.withValues(alpha: 0.16),
+                      ? (frosted
+                            ? GlassChrome.edge(app, active: true)
+                            : HomeTheme.focusGold)
+                      : (frosted
+                            ? GlassChrome.edge(app)
+                            : Colors.white.withValues(alpha: 0.16)),
                   width: focused ? 2 : 1,
                 ),
                 // Bloom only off-TV — an animated/static blur shadow re-rasters
@@ -1037,6 +1054,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildArrangeList() {
+    final app = AppThemeScope.of(context);
     final entries = _arrangeEntries;
     if (entries.isEmpty) {
       return Center(
@@ -1103,18 +1121,27 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                           horizontal: 12,
                           vertical: 10,
                         ),
-                        decoration: BoxDecoration(
-                          color: picked
-                              ? HomeTheme.chromeAccent.withValues(alpha: 0.16)
-                              : Colors.white.withValues(alpha: 0.025),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(
-                            color: focused || picked
-                                ? HomeTheme.focusGold
-                                : Colors.white.withValues(alpha: 0.05),
-                            width: focused || picked ? 2 : 1.5,
-                          ),
-                        ),
+                        decoration: GlassChrome.enabled(app)
+                            ? GlassChrome.decoration(
+                                app,
+                                raised: focused || picked,
+                                active: focused || picked,
+                                radius: BorderRadius.circular(13),
+                              )
+                            : BoxDecoration(
+                                color: picked
+                                    ? HomeTheme.chromeAccent.withValues(
+                                        alpha: 0.16,
+                                      )
+                                    : Colors.white.withValues(alpha: 0.025),
+                                borderRadius: BorderRadius.circular(13),
+                                border: Border.all(
+                                  color: focused || picked
+                                      ? HomeTheme.focusGold
+                                      : Colors.white.withValues(alpha: 0.05),
+                                  width: focused || picked ? 2 : 1.5,
+                                ),
+                              ),
                         child: Row(
                           children: [
                             ReorderableDragStartListener(
@@ -1253,6 +1280,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildRail() {
+    final app = AppThemeScope.of(context);
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 10, 12),
       itemCount: _groups.length,
@@ -1288,26 +1316,35 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                     horizontal: 13,
                     vertical: 12,
                   ),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? HomeTheme.chromeAccent.withValues(alpha: 0.10)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: focused ? HomeTheme.focusGold : Colors.transparent,
-                      width: focused ? 2 : 1.5,
-                    ),
-                    boxShadow: focused && !widget.isTelevision
-                        ? [
-                            BoxShadow(
-                              color: HomeTheme.focusGoldDeep.withValues(
-                                alpha: 0.4,
-                              ),
-                              blurRadius: 12,
-                            ),
-                          ]
-                        : null,
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(
+                          app,
+                          raised: focused || selected,
+                          active: focused || selected,
+                          radius: BorderRadius.circular(12),
+                        )
+                      : BoxDecoration(
+                          color: selected
+                              ? HomeTheme.chromeAccent.withValues(alpha: 0.10)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: focused
+                                ? HomeTheme.focusGold
+                                : Colors.transparent,
+                            width: focused ? 2 : 1.5,
+                          ),
+                          boxShadow: focused && !widget.isTelevision
+                              ? [
+                                  BoxShadow(
+                                    color: HomeTheme.focusGoldDeep.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                    blurRadius: 12,
+                                  ),
+                                ]
+                              : null,
+                        ),
                   child: Row(
                     children: [
                       _stateDot(g.onCount, g.total),
@@ -1355,6 +1392,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildItemList() {
+    final app = AppThemeScope.of(context);
     final items = _groups[_selectedGroup].items;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(14, 4, 18, 12),
@@ -1387,26 +1425,33 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                     horizontal: 14,
                     vertical: 12,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.025),
-                    borderRadius: BorderRadius.circular(13),
-                    border: Border.all(
-                      color: focused
-                          ? HomeTheme.focusGold
-                          : Colors.white.withValues(alpha: 0.05),
-                      width: focused ? 2 : 1.5,
-                    ),
-                    boxShadow: focused && !widget.isTelevision
-                        ? [
-                            BoxShadow(
-                              color: HomeTheme.focusGoldDeep.withValues(
-                                alpha: 0.4,
-                              ),
-                              blurRadius: 12,
-                            ),
-                          ]
-                        : null,
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(
+                          app,
+                          raised: focused || it.on,
+                          active: focused,
+                          radius: BorderRadius.circular(13),
+                        )
+                      : BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.025),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: focused
+                                ? HomeTheme.focusGold
+                                : Colors.white.withValues(alpha: 0.05),
+                            width: focused ? 2 : 1.5,
+                          ),
+                          boxShadow: focused && !widget.isTelevision
+                              ? [
+                                  BoxShadow(
+                                    color: HomeTheme.focusGoldDeep.withValues(
+                                      alpha: 0.4,
+                                    ),
+                                    blurRadius: 12,
+                                  ),
+                                ]
+                              : null,
+                        ),
                   child: Row(
                     children: [
                       Expanded(

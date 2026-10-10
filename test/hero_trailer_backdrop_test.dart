@@ -623,6 +623,41 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('foreground URL handoff does not close the replacement route', (
+    tester,
+  ) async {
+    final engines = <_PendingFirstFrameEngine>[];
+    var closes = 0;
+    var failures = 0;
+    Widget host(String url) => MaterialApp(
+      home: HeroTrailerBackdrop(
+        imageUrl: null,
+        videoUrl: url,
+        foreground: true,
+        enabled: true,
+        startDelay: Duration.zero,
+        onRequestClose: () => closes++,
+        onPlaybackFailed: () => failures++,
+        engineFactory: () async {
+          final engine = _PendingFirstFrameEngine();
+          engines.add(engine);
+          return engine;
+        },
+      ),
+    );
+
+    await tester.pumpWidget(host('https://example.invalid/old.mp4'));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpWidget(host('https://example.invalid/new.mp4'));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    expect(engines, hasLength(2));
+    expect(engines.first.disposed, isTrue);
+    expect(closes, 0);
+    expect(failures, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a hung initial seek remains covered by the startup timeout', (
     tester,
   ) async {

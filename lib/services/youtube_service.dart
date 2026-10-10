@@ -901,6 +901,10 @@ class YoutubeService {
           _resolveCache.remove(_resolveCache.keys.first);
         }
       }
+      // Invalidation also revokes the old caller's result. Otherwise a slow
+      // extraction can finish after a clip retry and still hand its expired or
+      // broken URL to an old awaiting player, even though it was not cached.
+      if (generation != (_resolveGeneration[videoId] ?? 0)) return null;
       return streams;
     } catch (e) {
       // Covers both isolate-spawn failures and any error rethrown from the

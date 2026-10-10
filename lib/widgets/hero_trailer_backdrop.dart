@@ -877,12 +877,16 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     YoutubeService.invalidateStreamUrl(widget.videoUrl);
     YoutubeService.invalidateStreamUrl(widget.muxedVideoUrl);
     final cb = widget.onPlaybackFailed;
-    if (cb == null) return;
+    if (cb == null && (!widget.foreground || widget.onRequestClose == null)) {
+      return;
+    }
     final generation = _engineGen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // The old URL can fail immediately before a new Reel takes this state.
       // Its queued callback must not fail the replacement player.
-      if (mounted && generation == _engineGen) cb();
+      if (!mounted || generation != _engineGen) return;
+      if (widget.foreground) widget.onRequestClose?.call();
+      cb?.call();
     });
   }
 
@@ -932,14 +936,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     _syncPlayingNotification();
     // Nothing to dispose / rescue if no player existed.
     if (engine == null) return;
-    // If the stream died while foregrounded, the page content is faded out and
-    // input-blocked with no controls left to paint — ask the parent to back out
-    // so the user isn't stranded on a frozen surface.
-    if (widget.foreground) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.onRequestClose?.call(),
-      );
-    }
+    // This is also used for intentional URL replacement, visibility changes
+    // and decoder handoff. Only a real playback failure should close a
+    // foreground route; _notifyPlaybackFailed owns that guarded callback.
     // Dispose only after this frame's rebuild has dropped the Video/Texture,
     // so it never renders against a disposed controller — except when no
     // frames are coming (see _disposeEngineSoon).
