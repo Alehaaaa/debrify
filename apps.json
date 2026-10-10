@@ -26,7 +26,7 @@
           "buildVersion": "202610101858",
           "date": "2026-10-10T19:05:13Z",
           "localizedDescription": "What's new:\n• Unify frosted glass chrome across shared app widgets (5d060f04)\n• Polish frosted glass surfaces across Nextup chrome (da04dbc9)\n• chore: clear Dart and Flutter analysis diagnostics (7d60e409)\n• Fix Dart analyzer diagnostics and preserve Flutter compatibility (b61985a1)\n\nBuild 202610101858 from nextup@5d060f0\nhttps://github.com/Alehaaaa/debrify/compare/9bb4987...5d060f0",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/nextup-ios-61-5d060f0.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-61-5d060f0/nextup-ios-61-5d060f0.ipa",
           "size": 40296359,
           "minOSVersion": "14.0"
         },
@@ -35,7 +35,7 @@
           "buildVersion": "202610101616",
           "date": "2026-10-10T16:22:20Z",
           "localizedDescription": "What's new:\n• Resolve unnecessary underscore lint diagnostics (9bb49874)\n• Rebrand app presentation and release assets as Nextup (56f7a28c)\n\nBuild 202610101616 from nextup@9bb4987\nhttps://github.com/Alehaaaa/debrify/compare/cc1e3c6...9bb4987",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/nextup-ios-60-9bb4987.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-60-9bb4987/nextup-ios-60-9bb4987.ipa",
           "size": 40304919,
           "minOSVersion": "14.0"
         },
@@ -44,7 +44,7 @@
           "buildVersion": "202610101319",
           "date": "2026-10-10T13:24:23Z",
           "localizedDescription": "What's new:\n• Add glass player and offline resume flow (cc1e3c63)\n\nBuild 202610101319 from nextup@cc1e3c6\nhttps://github.com/Alehaaaa/debrify/compare/ab0d60c...cc1e3c6",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-59-cc1e3c6.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-59-cc1e3c6/debrify-ios-59-cc1e3c6.ipa",
           "size": 40305567,
           "minOSVersion": "14.0"
         },
@@ -53,7 +53,7 @@
           "buildVersion": "202610091941",
           "date": "2026-10-09T19:45:19Z",
           "localizedDescription": "What's new:\n• Add OMDb/Cobalt relay and watch history sync (ab0d60c5)\n\nBuild 202610091941 from nextup@ab0d60c\nhttps://github.com/Alehaaaa/debrify/compare/8dcc369...ab0d60c",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-58-ab0d60c.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-58-ab0d60c/debrify-ios-58-ab0d60c.ipa",
           "size": 40156941,
           "minOSVersion": "14.0"
         },
@@ -62,7 +62,7 @@
           "buildVersion": "202610082201",
           "date": "2026-10-08T22:08:13Z",
           "localizedDescription": "What's new:\n• Allow paired reel outputs and shell blackout (8dcc3692)\n\nBuild 202610082201 from nextup@8dcc369\nhttps://github.com/Alehaaaa/debrify/compare/b4c3294...8dcc369",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-57-8dcc369.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-57-8dcc369/debrify-ios-57-8dcc369.ipa",
           "size": 39947460,
           "minOSVersion": "14.0"
         },
@@ -71,7 +71,7 @@
           "buildVersion": "202610082035",
           "date": "2026-10-08T20:38:46Z",
           "localizedDescription": "What's new:\n• Improve reels sharing and sync flow (b4c32940)\n\nBuild 202610082035 from nextup@b4c3294\nhttps://github.com/Alehaaaa/debrify/compare/92be21e...b4c3294",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-56-b4c3294.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-56-b4c3294/debrify-ios-56-b4c3294.ipa",
           "size": 39946097,
           "minOSVersion": "14.0"
         },
@@ -80,7 +80,7 @@
           "buildVersion": "202610070647",
           "date": "2026-10-07T06:53:01Z",
           "localizedDescription": "What's new:\n• Refine swipe shell, reels, and watchlist UI (92be21ec)\n• Add continuous swipe tab navigation (33a7d599)\n• Improve reels feed and offline states (11fea62c)\n\nBuild 202610070647 from nextup@92be21e\nhttps://github.com/Alehaaaa/debrify/compare/41af3b9...92be21e",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-55-92be21e.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-55-92be21e/debrify-ios-55-92be21e.ipa",
           "size": 39923074,
           "minOSVersion": "14.0"
         },
@@ -89,7 +89,7 @@
           "buildVersion": "202610061923",
           "date": "2026-10-06T19:29:51Z",
           "localizedDescription": "What's new:\n• Improve reel playback and media matching (41af3b94)\n• Improve profile storage and section navigation (982ea7d0)\n\nBuild 202610061923 from nextup@41af3b9\nhttps://github.com/Alehaaaa/debrify/compare/7f89ac8...41af3b9",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-54-41af3b9.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-54-41af3b9/debrify-ios-54-41af3b9.ipa",
           "size": 39917027,
           "minOSVersion": "14.0"
         },
@@ -98,7 +98,7 @@
           "buildVersion": "202610061847",
           "date": "2026-10-06T18:52:01Z",
           "localizedDescription": "What's new:\n• Complete offline cache dependencies and clean download startup checks (7f89ac8c)\n• Keep Downloads available without providers and remove transfer waits from its manager (c66b36e7)\n• Serve durable offline artwork directly and verify local playback preparation (be0302e8)\n• Open the local download library offline and remove network waits from startup (23cb21da)\n\nBuild 202610061847 from nextup@7f89ac8\nhttps://github.com/Alehaaaa/debrify/compare/bea6230...7f89ac8",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-53-7f89ac8.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-53-7f89ac8/debrify-ios-53-7f89ac8.ipa",
           "size": 39888958,
           "minOSVersion": "14.0"
         },
@@ -107,7 +107,7 @@
           "buildVersion": "202610061551",
           "date": "2026-10-06T15:56:25Z",
           "localizedDescription": "What's new:\n• Prepare upcoming reel posters and bound their decode to full HD (bea6230c)\n• Exercise the texture renderer in reel poster continuity regression (79a5eeba)\n• Keep reel posters mounted, prefer HD sources, and discard failed upcoming clips (2c8a1f98)\n\nBuild 202610061551 from nextup@bea6230\nhttps://github.com/Alehaaaa/debrify/compare/61b99cf...bea6230",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-48-bea6230.ipa",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-48-bea6230/debrify-ios-48-bea6230.ipa",
           "size": 39898597,
           "minOSVersion": "14.0"
         }
