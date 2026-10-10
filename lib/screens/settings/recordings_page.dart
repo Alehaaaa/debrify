@@ -10,6 +10,8 @@ import '../../services/desktop_schedule_service.dart';
 import '../../services/live_recording_service.dart';
 import '../../services/profiles/profile_preferences.dart';
 import '../../services/video_player_launcher.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/recording_limit_dialogs.dart';
@@ -304,6 +306,12 @@ class _RecordingsPageState extends State<RecordingsPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+            : null,
         title: const Text('Cancel recording?'),
         content: Text(
           schedule.programmeTitle.isEmpty
@@ -353,6 +361,12 @@ class _RecordingsPageState extends State<RecordingsPage>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+            : null,
         title: const Text('Delete recording?'),
         content: Text(
           '${display.title} (${_fmtBytes(entry.bytes)}) will be removed '
@@ -565,6 +579,12 @@ class _RecordingsPageState extends State<RecordingsPage>
     final choice = await showDialog<Object>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+            : null,
         title: const Text('Record for how long?'),
         children: [
           // ListTile, not SimpleDialogOption: the latter can't autofocus, so on
@@ -635,6 +655,12 @@ class _RecordingsPageState extends State<RecordingsPage>
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+              ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+              : null,
+          shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+              ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+              : null,
           title: const Text("That's a long recording"),
           content: Text(
             'Recording would run ${hours}h'

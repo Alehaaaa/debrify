@@ -13,6 +13,7 @@ import '../../services/mdblist/mdblist_list_source.dart';
 import '../../services/mdblist/mdblist_models.dart';
 import '../../services/watched_filter.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../widgets/see_all/mdblist_save_button.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
 import '../../widgets/see_all/see_all_filter_focus.dart';
@@ -667,6 +668,12 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+              : null,
+          shape: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.shape(AppThemeScope.of(context))
+              : null,
           title: const Text('MDBList Catalog Filters'),
           content: SizedBox(
             width: 520,
@@ -676,6 +683,9 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: draft.mediaType,
+                    dropdownColor: GlassChrome.enabled(AppThemeScope.of(context))
+                        ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                        : null,
                     decoration: const InputDecoration(labelText: 'Media type'),
                     items: const [
                       DropdownMenuItem(value: 'movie', child: Text('Movies')),

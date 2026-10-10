@@ -8,6 +8,8 @@ import 'package:debrify/services/mdblist/mdblist_models.dart';
 import 'package:debrify/services/mdblist/mdblist_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/widgets/see_all/stremio_dropdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +18,59 @@ import 'package:http/testing.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('Catalog filter popup follows Frosted and Classic appearance', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1600, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final source = MdblistDiscoverSource.forTesting(
+      MdblistService.forTesting(
+        client: MockClient((_) async => http.Response('{}', 200)),
+        apiKeyProvider: () async => 'test-key',
+      ),
+      fetchContinueWatching: ({bool force = false}) async =>
+          const MdblistResult.success(MdblistContinueWatchingSnapshot()),
+    );
+    Widget host(AppTheme theme) => MaterialApp(
+      home: AppThemeScope(
+        theme: theme,
+        child: MdblistSeeAllScreen(
+          source: source,
+          isAuthenticated: () async => true,
+          onOpen: (_) {},
+        ),
+      ),
+    );
+
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(StremioDropdown<MdblistDiscoverGroup>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Catalog').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+      GlassChrome.fill(glass, raised: true),
+    );
+
+    // Popup routes capture their launch theme. Close and reopen after changing
+    // appearance, as the actual Settings flow does.
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(host(AppThemes.legacy));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+      isNull,
+    );
+  });
 
   testWidgets('Catalog makes no query until the user presses Apply', (
     tester,

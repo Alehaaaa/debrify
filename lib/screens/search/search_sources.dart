@@ -1300,7 +1300,10 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: app.home.sheetBg,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.home.sheetBg,
+      shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
       builder: (sheetCtx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1364,7 +1367,10 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: app.home.sheetBg,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.home.sheetBg,
+      shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
       builder: (sheetCtx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -3251,18 +3257,24 @@ class _SrcDialogShell extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 440, maxHeight: 580),
         child: Container(
-          decoration: BoxDecoration(
-            color: app.home.dialogBg,
-            borderRadius: app.shape.br(22),
-            border: Border.all(color: app.fade(app.core.tx, 0.08)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 34,
-                offset: const Offset(0, 14),
-              ),
-            ],
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(
+                  app,
+                  raised: true,
+                  radius: app.shape.br(22),
+                )
+              : BoxDecoration(
+                  color: app.home.dialogBg,
+                  borderRadius: app.shape.br(22),
+                  border: Border.all(color: app.fade(app.core.tx, 0.08)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      blurRadius: 34,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
           // Group so DPAD directional focus stays inside the dialog and walks
           // the rows/actions in a predictable order (mirrors the debrid action
           // sheet, the app's proven TV-dialog pattern).

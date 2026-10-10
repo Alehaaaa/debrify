@@ -535,6 +535,24 @@ class _ReelsScreenState extends State<ReelsScreen> {
     final removed = _index - _historyBehind;
     final viewport = _pages.position.viewportDimension;
     if (viewport <= 0) return;
+    // Rebased-away pages may still own queued YouTube extractions. Revoke only
+    // clips that no retained page needs; otherwise a long session gradually
+    // spends resolution slots on videos the user can no longer revisit.
+    if (widget.resolver == null) {
+      final retainedKeys = _reels
+          .skip(removed)
+          .map((reel) => reel.title.clipKey)
+          .toSet();
+      final obsoleteKeys = _reels
+          .take(removed)
+          .where((reel) => reel.state == _ClipState.resolving)
+          .map((reel) => reel.title.clipKey)
+          .toSet()
+          .difference(retainedKeys);
+      for (final key in obsoleteKeys) {
+        YoutubeService.invalidateStreams(key);
+      }
+    }
     // The PageView keeps each page's ObjectKey across this rebase. Correcting
     // pixels in the same frame preserves the visible player's element and
     // avoids an animated jump (and unwanted pause/restart) on a long session.

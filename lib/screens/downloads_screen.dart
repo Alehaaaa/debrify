@@ -482,6 +482,12 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.shape(AppThemeScope.of(context))
+            : null,
         title: Text(
           group.length == 1
               ? 'Delete download?'
@@ -1339,6 +1345,12 @@ class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.shape(AppThemeScope.of(context))
+            : null,
         title: Text(
           deleteFile || !item.isReady
               ? 'Delete download?'
