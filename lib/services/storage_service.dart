@@ -1561,6 +1561,7 @@ class StorageService {
     'compact',
     'tiers',
     'cinema',
+    'glass',
     // The value shipped before the arrangements became selectable. Still
     // accepted on read so existing installs keep the dock they chose; it
     // means the same thing 'auto' does.
@@ -1570,11 +1571,11 @@ class StorageService {
   static Future<String> getPlayerDockStyle() async {
     final prefs = await ProfilePreferences.instance();
     final raw = prefs.getString(_playerDockStyleKey);
-    return _playerDockStyles.contains(raw) ? raw! : 'classic';
+    return _playerDockStyles.contains(raw) ? raw! : 'glass';
   }
 
   static Future<void> setPlayerDockStyle(String style) async {
-    final normalized = _playerDockStyles.contains(style) ? style : 'classic';
+    final normalized = _playerDockStyles.contains(style) ? style : 'glass';
     final prefs = await ProfilePreferences.instance();
     await prefs.setString(_playerDockStyleKey, normalized);
   }

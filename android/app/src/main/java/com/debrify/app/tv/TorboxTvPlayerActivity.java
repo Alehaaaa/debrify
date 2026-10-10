@@ -885,6 +885,14 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
                     C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_ONLY_IF_SEAMLESS);
         }
         player = playerBuilder.build();
+        // Own the device's audio: pause other apps on start, pause on a call
+        // or another player, release on exit (ExoPlayer manages the focus).
+        player.setAudioAttributes(
+                new androidx.media3.common.AudioAttributes.Builder()
+                        .setUsage(C.USAGE_MEDIA)
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                        .build(),
+                /* handleAudioFocus= */ true);
         player.setPlaybackSpeed(playbackSpeeds[playbackSpeedIndex]);
         player.addListener(playbackListener);
         player.addAnalyticsListener(decoderAnalyticsListener);

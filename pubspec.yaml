@@ -253,6 +253,7 @@ flutter:
     - assets/images/profile_avatars/
     - assets/splash_logo.png
     - assets/config/engines/
+    - assets/design/glass_tokens.json
 
   # Bundled subtitle fonts
   fonts:

@@ -56,6 +56,10 @@ class CatalogItemTile extends StatefulWidget {
   /// device: the poster starts dimmed and a clockwise sweep from 12 o'clock
   /// reveals it, with the percentage on top. [downloadStatus] (Paused,
   /// Queued, Failed) replaces the percentage's caption when set.
+  ///
+  /// A NEGATIVE value means the download is still preparing (searching for
+  /// or adding a source — no bytes, so no percentage): a wedge of the art
+  /// circles under the scrim and [downloadStatus] names the step.
   final double? downloadProgress;
   final String? downloadStatus;
 
@@ -246,10 +250,12 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       if (widget.downloadProgress != null)
         Positioned.fill(
           child: IgnorePointer(
-            child: _DownloadSweep(
-              value: widget.downloadProgress!.clamp(0.0, 1.0),
-              status: widget.downloadStatus,
-            ),
+            child: widget.downloadProgress! < 0
+                ? _PendingDownloadSweep(status: widget.downloadStatus)
+                : _DownloadSweep(
+                    value: widget.downloadProgress!.clamp(0.0, 1.0),
+                    status: widget.downloadStatus,
+                  ),
           ),
         ),
       // Bottom gradient — only when focused — for the inline title. Board
@@ -709,6 +715,96 @@ class _DownloadSweep extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A download still preparing its source: the same dark scrim as
+/// [_DownloadSweep] with one wedge of the art circling under it — the sweep
+/// "looking" before it can count — and the step named where the percentage
+/// will appear.
+class _PendingDownloadSweep extends StatefulWidget {
+  final String? status;
+  const _PendingDownloadSweep({this.status});
+
+  @override
+  State<_PendingDownloadSweep> createState() => _PendingDownloadSweepState();
+}
+
+class _PendingDownloadSweepState extends State<_PendingDownloadSweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _spin.stop();
+    } else if (!_spin.isAnimating) {
+      _spin.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const shadows = [Shadow(color: Colors.black54, blurRadius: 8)];
+    return CustomPaint(
+      painter: _PendingSweepPainter(_spin),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            widget.status ?? 'Preparing',
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              height: 1.15,
+              shadows: shadows,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingSweepPainter extends CustomPainter {
+  final Animation<double> turn;
+  _PendingSweepPainter(this.turn) : super(repaint: turn);
+
+  /// The revealed wedge, as a share of the full turn.
+  static const double _wedge = 0.14;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.longestSide;
+    const top = -math.pi / 2;
+    final start = top + 2 * math.pi * turn.value;
+    const open = 2 * math.pi * _wedge;
+    canvas.clipRect(Offset.zero & size);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      start + open,
+      2 * math.pi - open,
+      true,
+      Paint()..color = Colors.black.withValues(alpha: 0.62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PendingSweepPainter old) => old.turn != turn;
 }
 
 class _DownloadSweepPainter extends CustomPainter {

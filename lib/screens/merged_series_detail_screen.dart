@@ -30,6 +30,11 @@ import '../services/imdb_enrichment_service.dart';
 import '../services/imdb_parents_guide_service.dart';
 import '../services/main_page_bridge.dart';
 import '../services/storage_service.dart';
+import '../services/local_playback_resume_resolver.dart';
+import '../services/playback_restart_ticket.dart';
+import '../services/tracking_source_policy.dart';
+import '../models/tracking_source.dart';
+import '../widgets/detail/detail_resume_choice.dart';
 import '../services/watchlist_sync_service.dart';
 import '../services/movie_completion_service.dart';
 import '../services/mdblist/mdblist_service.dart';
@@ -214,6 +219,11 @@ class MergedDetailScreen extends StatefulWidget {
   /// button's old behavior (the source list / season packs).
   final Future<void> Function(int? season, int? episode)? onDownload;
 
+  /// Holding the Download button: pick the source to download by hand,
+  /// skipping the automatic/ask setting. Same starting episode as Play.
+  final Future<void> Function(int? season, int? episode)?
+  onDownloadChooseSource;
+
   /// Receives this page's best artwork (logo, backdrop, rating) for the play
   /// loader, which otherwise only has what the catalog row carried.
   final ValueChanged<PlayLoaderArt>? onLoaderArt;
@@ -261,6 +271,7 @@ class MergedDetailScreen extends StatefulWidget {
     this.seasonsLoader,
     this.episodeFilter,
     this.onDownload,
+    this.onDownloadChooseSource,
     this.onLoaderArt,
     this.onPlayEpisode,
     this.watchProgressLoader,
@@ -892,6 +903,18 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     return null;
   }
 
+  /// The Download button's hold: the source list, in download mode.
+  VoidCallback? get _downloadChooseSourceAction {
+    final choose = widget.onDownloadChooseSource;
+    if (choose == null || _downloadAction == null) return null;
+    return () => unawaited(
+      choose(
+        _isMovie ? null : (_resumeSeason ?? 1),
+        _isMovie ? null : (_resumeEpisode ?? 1),
+      ),
+    );
+  }
+
   bool _rewatchPending = false;
 
   /// Publishes the current best artwork for the play loader. Cheap and
@@ -928,6 +951,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       _resumeStarted = false;
       _resumeSeason = 1;
       _resumeEpisode = 1;
+      _resumePositionMs = null;
       _hasMergedEpisodeTarget = false;
     });
     await restart();
@@ -1199,6 +1223,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         generation == _movieCompletionGeneration &&
         finished != _localMovieFinished) {
       setState(() => _localMovieFinished = finished);
+      unawaited(_loadResumePosition());
     }
   }
 
@@ -1309,6 +1334,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         _pendingEngineTarget = null;
         if (fallback != null) _applyEngineTarget(fallback);
       }
+      if (mounted) unawaited(_loadResumePosition());
     }
   }
 
@@ -1388,6 +1414,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       _resumeSeason = next.season;
       _resumeEpisode = next.episode;
     });
+    unawaited(_loadResumePosition());
   }
 
   /// The primary-button label: "Start Watching" before any progress, otherwise
@@ -1406,7 +1433,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       if (_isMovie && _localMovieFinished) {
         return 'Rewatch';
       }
-      return _isMovie ? 'Play' : 'Resume';
+      return _isMovie ? 'Play' : 'Continue';
     }
     if (!_resumeStarted) {
       // A movie already finished on Simkl (status `completed`) has no resume
@@ -1417,11 +1444,106 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       }
       return _isMovie ? 'Play' : 'Start Watching';
     }
+    final position = _resumePositionMs;
+    final stamp = position == null ? '' : ' ${formatResumeTimestamp(position)}';
     if (_isMovie || _resumeSeason == null || _resumeEpisode == null) {
-      return 'Resume';
+      return 'Continue$stamp';
     }
-    return 'Resume · S${_resumeSeason}E$_resumeEpisode';
+    return 'Continue · S${_resumeSeason}E$_resumeEpisode$stamp';
   }
+
+  /// Where Continue would pick up, when this device knows it: the saved
+  /// position of the movie, or of the episode the button is promising. Null
+  /// when nothing is saved locally (the label then reads a plain "Continue")
+  /// or when local progress is not a resume source — the player would not
+  /// seek there, so the page must not promise it.
+  int? _resumePositionMs;
+  int _resumePositionGeneration = 0;
+
+  Future<void> _loadResumePosition() async {
+    final generation = ++_resumePositionGeneration;
+    int? position;
+    try {
+      final imdbId = _item.effectiveImdbId ?? _item.imdbId ?? _item.id;
+      final season = _resumeSeason;
+      final episode = _resumeEpisode;
+      final eligible =
+          _resumeLoaded &&
+          _resumeStarted &&
+          !_rewatchPending &&
+          !(_isMovie && _localMovieFinished) &&
+          (_isMovie || (season != null && episode != null));
+      if (eligible) {
+        final policy = (await TrackingSourcePolicy.load()).forContent(imdbId);
+        if (policy.progressFrom(TrackingSource.local)) {
+          final state = _isMovie
+              ? await StorageService.getVideoPlaybackStateByImdbId(imdbId)
+              : await LocalPlaybackResumeResolver.episode(
+                  seriesTitle: _item.name,
+                  season: season!,
+                  episode: episode!,
+                  imdbId: imdbId,
+                  policy: PlaybackResumePolicy.catalogCanonical,
+                );
+          position = resumeTimestampFrom(state);
+        }
+      }
+    } catch (_) {
+      // Non-critical — the label just drops its timestamp.
+    }
+    if (!mounted || generation != _resumePositionGeneration) return;
+    if (position != _resumePositionMs) {
+      setState(() => _resumePositionMs = position);
+    }
+  }
+
+  /// Holding Continue: continue from the saved time or start over, with the
+  /// hold's older job (the manual source list) kept one row below. Without a
+  /// saved time there is nothing to choose between, so the hold goes straight
+  /// to sources as it always has.
+  Future<void> _onPrimaryHold() async {
+    final position = _resumePositionMs;
+    if (position == null) {
+      if (_canBrowsePrimarySources) _browsePrimarySources();
+      return;
+    }
+    final season = _resumeSeason;
+    final episode = _resumeEpisode;
+    final choice = await showDetailResumeChoiceSheet(
+      context,
+      title: _item.name,
+      positionMs: position,
+      isTelevision: widget.isTelevision,
+      episodeLabel: _isMovie || season == null || episode == null
+          ? null
+          : 'S${season}E$episode',
+      canChooseSource: _canBrowsePrimarySources,
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case DetailResumeChoice.resume:
+        _playPrimary();
+      case DetailResumeChoice.restart:
+        PlaybackRestartTicket.request(
+          _item.effectiveImdbId ?? _item.imdbId ?? _item.id,
+          season: _isMovie ? null : season,
+          episode: _isMovie ? null : episode,
+          aliases: [_item.imdbId, _item.id, _item.progressId],
+        );
+        _playPrimary();
+      case DetailResumeChoice.sources:
+        _browsePrimarySources();
+    }
+  }
+
+  bool get _canBrowsePrimarySources =>
+      (_isMovie && widget.onBrowse != null) ||
+      (!_isMovie && widget.onBrowsePrimaryEpisodeSources != null);
+
+  VoidCallback? get _primaryHoldAction =>
+      _canBrowsePrimarySources || _resumePositionMs != null
+      ? () => unawaited(_onPrimaryHold())
+      : null;
 
   /// Pull a per-title accent from the poster (preferred — posters are more
   /// brand-saturated than backdrops). One tiny 32px decode; silent on failure,
@@ -2326,17 +2448,14 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       mdblistRating: _mdblistStatus?.rating,
       showPrimary: widget.showQuickPlay,
       onPrimary: _playPrimary,
-      onPrimaryLongPress:
-          ((_isMovie && widget.onBrowse != null) ||
-              (!_isMovie && widget.onBrowsePrimaryEpisodeSources != null))
-          ? _browsePrimarySources
-          : null,
+      onPrimaryLongPress: _primaryHoldAction,
       // A movie browses the full source list the host supplies; a series
       // browses season packs — the same search the More menu's "Search
       // season packs" row opens, promoted to a first-class button. Gated on
       // that row actually being in the menu so the button never mounts for a
       // host that didn't offer the action.
       onBrowse: _downloadAction,
+      onBrowseLongPress: _downloadChooseSourceAction,
       download: _downloads.summary,
       onTrailer: _playTrailer,
       onSelectSource: widget.onSelectSource == null
@@ -3216,11 +3335,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             busy: _primaryBusy,
             icon: Icons.play_arrow_rounded,
             onTap: _playPrimary,
-            onLongPress:
-                ((_isMovie && widget.onBrowse != null) ||
-                    (!_isMovie && widget.onBrowsePrimaryEpisodeSources != null))
-                ? _browsePrimarySources
-                : null,
+            onLongPress: _primaryHoldAction,
             focusNode: _leftEntryFocusNode,
             autofocus: widget.isTelevision && _isMovie,
             glow: _accent,
@@ -3232,6 +3347,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             label: _downloads.state.label,
             icon: _downloads.state.icon,
             onTap: _downloadAction!,
+            onLongPress: _downloadChooseSourceAction,
           ),
         if (_supportsMyWatchlist)
           _GhostButton(
@@ -3827,6 +3943,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         onOpen: widget.onRecommendationTap == null
             ? null
             : _openMetadataRecommendation,
+        onOptions: _recommendationOptions,
         isTelevision: widget.isTelevision,
       ),
     );
@@ -4470,10 +4587,14 @@ class _GhostButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
 
+  /// Touch long-press, or OK held on a remote.
+  final VoidCallback? onLongPress;
+
   const _GhostButton({
     required this.label,
     required this.icon,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -4482,9 +4603,32 @@ class _GhostButton extends StatefulWidget {
 
 class _GhostButtonState extends State<_GhostButton> {
   bool _focused = false;
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final button = _buildButton(context);
+    if (widget.onLongPress == null) return button;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) => isActivateOrSpaceKey(event.logicalKey)
+          ? _hold.handle(event)
+          : KeyEventResult.ignored,
+      child: button,
+    );
+  }
+
+  Widget _buildButton(BuildContext context) {
     return _FocusHalo(
       focused: _focused,
       radius: BorderRadius.circular(999),
@@ -4494,7 +4638,11 @@ class _GhostButtonState extends State<_GhostButton> {
         child: InkWell(
           borderRadius: BorderRadius.circular(999),
           onTap: widget.onTap,
-          onFocusChange: (f) => setState(() => _focused = f),
+          onLongPress: widget.onLongPress,
+          onFocusChange: (f) {
+            setState(() => _focused = f);
+            if (!f) _hold.reset();
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
             decoration: BoxDecoration(

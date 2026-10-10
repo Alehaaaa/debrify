@@ -225,6 +225,17 @@ String? _seLabel(int? season, int? episode) {
   return 'S$season · E$episode';
 }
 
+/// Inverse of [_seLabel]: the season/episode a Continue Watching card shows.
+({int season, int episode})? _parseSeLabel(String? label) {
+  if (label == null) return null;
+  final match = RegExp(r'S(\d+)\s*·\s*E(\d+)').firstMatch(label);
+  if (match == null) return null;
+  final season = int.parse(match.group(1)!);
+  final episode = int.parse(match.group(2)!);
+  if (season <= 0 || episode <= 0) return null;
+  return (season: season, episode: episode);
+}
+
 /// Dedicated Search tab.
 ///
 /// * CATALOG mode — a Stremio-style board (one horizontal row per addon
@@ -298,6 +309,7 @@ enum _TitleCardAction {
   watchlistAdd,
   watchlistRemove,
   markWatched,
+  markEpisodeWatched,
   markUnwatched,
   sources,
   stremioTv,
@@ -6108,7 +6120,12 @@ class _SearchScreenState extends State<SearchScreen>
       // library actions (watchlist, watched, sources) don't apply to them.
       final extras = row.kind == _CwKind.iptv
           ? const <CardMenuAction<_TitleCardAction>>[]
-          : await _titleCardExtraActions(item, offerCwRemoval: false);
+          : await _titleCardExtraActions(
+              item,
+              offerCwRemoval: false,
+              inProgress: true,
+              cwEpisode: isSeries ? episode : null,
+            );
       if (!mounted) return;
       action = await showCardActionMenu<_TitleCardAction>(
         context,
@@ -6158,7 +6175,17 @@ class _SearchScreenState extends State<SearchScreen>
         if (!mounted) return;
         _refocusAfterCwRemoval(cwIndex, col);
       default:
-        await _runTitleCardExtraAction(action, item, addon);
+        await _runTitleCardExtraAction(
+          action,
+          item,
+          addon,
+          cwEpisode: isSeries ? episode : null,
+        );
+        if (!mounted) return;
+        if (action == _TitleCardAction.markWatched ||
+            action == _TitleCardAction.markEpisodeWatched) {
+          _refocusAfterCwRemoval(cwIndex, col);
+        }
     }
   }
 
@@ -6264,9 +6291,16 @@ class _SearchScreenState extends State<SearchScreen>
   /// My Watchlist, watched state, pinned sources, Stremio TV, a random
   /// episode — and the Continue Watching removal when [offerCwRemoval]
   /// asks to check for it (a CW row supplies its own removal instead).
+  ///
+  /// [inProgress] marks a card opened from a Continue Watching row: it always
+  /// offers "Mark as watched" (which clears the resume position), even for a
+  /// title already watched once and now being rewatched. [cwEpisode] is the
+  /// card's 'S2 · E5' label, offered as its own per-episode mark.
   Future<List<CardMenuAction<_TitleCardAction>>> _titleCardExtraActions(
     StremioMeta item, {
     required bool offerCwRemoval,
+    bool inProgress = false,
+    String? cwEpisode,
   }) async {
     final type = item.type.toLowerCase();
     final isTitle = type == 'movie' || type == 'series';
@@ -6288,6 +6322,16 @@ class _SearchScreenState extends State<SearchScreen>
     final watched =
         imdb != null &&
         WatchedStatusService.instance.isWatchedForTicks(imdb, type);
+    // Any saved playback position (this device or a tracker's Continue
+    // Watching) — "Mark as watched" stays on offer so it can clear it.
+    final hasProgress =
+        inProgress ||
+        (imdb != null &&
+            (_cwIds.contains(imdb) ||
+                _traktByImdb.containsKey(imdb) ||
+                _mdblistByImdb[imdb]?.paused == true ||
+                _simklByImdb[_simklCardKey(item)]?.progress != null));
+    final episodeRef = isSeries ? _parseSeLabel(cwEpisode) : null;
     final bound = _isBound(item);
     return [
       if (isSeries && !_pikpakOnly)
@@ -6310,6 +6354,26 @@ class _SearchScreenState extends State<SearchScreen>
               label: 'Add to My Watchlist',
               description: 'Saves it to the watchlist row on Home.',
             ),
+      if (imdb != null && episodeRef != null)
+        CardMenuAction(
+          value: _TitleCardAction.markEpisodeWatched,
+          icon: Icons.check_rounded,
+          label: 'Mark S${episodeRef.season} · E${episodeRef.episode} as watched',
+          description:
+              'Clears its resume position here and on your synced trackers, '
+              'so the row moves on to the next episode.',
+        ),
+      if (imdb != null && watched && hasProgress)
+        CardMenuAction(
+          value: _TitleCardAction.markWatched,
+          icon: Icons.done_all_rounded,
+          label: isSeries ? 'Mark series as watched' : 'Mark as watched',
+          description: isSeries
+              ? 'Marks the whole series watched and clears its resume '
+                    'position, here and on your synced trackers.'
+              : 'Clears the resume position and marks it watched, here and '
+                    'on your synced trackers.',
+        ),
       if (imdb != null)
         watched
             ? CardMenuAction(
@@ -6325,11 +6389,19 @@ class _SearchScreenState extends State<SearchScreen>
             : CardMenuAction(
                 value: _TitleCardAction.markWatched,
                 icon: Icons.done_all_rounded,
-                label: 'Mark as watched',
+                label: isSeries ? 'Mark series as watched' : 'Mark as watched',
                 description: isSeries
-                    ? 'Marks the whole series watched here and on your synced '
-                          'trackers.'
-                    : 'Marks it watched here and on your synced trackers.',
+                    ? (hasProgress
+                          ? 'Marks the whole series watched and clears its '
+                                'resume position, here and on your synced '
+                                'trackers.'
+                          : 'Marks the whole series watched here and on your '
+                                'synced trackers.')
+                    : (hasProgress
+                          ? 'Clears the resume position and marks it watched, '
+                                'here and on your synced trackers.'
+                          : 'Marks it watched here and on your synced '
+                                'trackers.'),
               ),
       if (imdb != null)
         CardMenuAction(
@@ -6363,8 +6435,9 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _runTitleCardExtraAction(
     _TitleCardAction action,
     StremioMeta item,
-    StremioAddon addon,
-  ) async {
+    StremioAddon addon, {
+    String? cwEpisode,
+  }) async {
     switch (action) {
       case _TitleCardAction.play:
       case _TitleCardAction.open:
@@ -6409,15 +6482,28 @@ class _SearchScreenState extends State<SearchScreen>
                     'didn\'t update',
         );
         // A watched mark moves a title on or off the Continue Watching rows.
-        if (!widget.searchMode) {
-          _seriesResumeCache.clear();
-          await Future.wait([
-            _loadContinueWatching(),
-            _loadTraktContinueWatching(refreshBound: false),
-            _loadSimklContinueWatching(refreshBound: false),
-            _loadMdblistContinueWatching(refreshBound: false),
-          ]);
-        }
+        await _reloadAllContinueWatching();
+      case _TitleCardAction.markEpisodeWatched:
+        final ref = _parseSeLabel(cwEpisode);
+        final showId = item.progressId ?? _imdbOf(item);
+        if (ref == null || showId == null) return;
+        final result = await WatchedActionCoordinator.setEpisodeWatched(
+          imdbId: showId,
+          seriesTitle: item.name,
+          season: ref.season,
+          episode: ref.episode,
+          watched: true,
+        );
+        WatchedStatusService.instance.refresh();
+        if (!mounted) return;
+        HapticFeedback.mediumImpact();
+        _snack(
+          result.success
+              ? 'Marked S${ref.season} · E${ref.episode} as watched'
+              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
+                    'didn\'t update',
+        );
+        await _reloadAllContinueWatching();
       case _TitleCardAction.sources:
         _activeAddonId = addon.id;
         await _handleEditOrSelectSource(item.withSourceAddon(addon));
@@ -6427,6 +6513,20 @@ class _SearchScreenState extends State<SearchScreen>
       case _TitleCardAction.removeCw:
         await _removeLocalCwItem(item);
     }
+  }
+
+  /// Reload every Continue Watching row after a watched-state change (a mark
+  /// moves titles on or off them). Skipped on the Search tab, which has none.
+  Future<void> _reloadAllContinueWatching() async {
+    if (widget.searchMode || !mounted) return;
+    _seriesResumeCache.clear();
+    MdblistContinueWatchingService.instance.invalidate();
+    await Future.wait([
+      _loadContinueWatching(),
+      _loadTraktContinueWatching(refreshBound: false),
+      _loadSimklContinueWatching(refreshBound: false),
+      _loadMdblistContinueWatching(refreshBound: false),
+    ]);
   }
 
   /// Put TV focus back on the board after a removal: the card that had it is
@@ -7744,14 +7844,22 @@ class _SearchScreenState extends State<SearchScreen>
   /// cannot flash Classic's persistent search bar before its hero arrives.
   /// After loading, the hero guard still matters: CW/favourites-only content
   /// would otherwise render a large empty hero.
+  ///
+  /// The OPEN search sheet keeps the shell too, hero or not: a catalog search
+  /// clears the board before its results stream in, which briefly empties the
+  /// hero. Dropping to Classic in that gap rebuilt the page around a NEW
+  /// search field, so the focused one unmounted and iOS closed the keyboard
+  /// mid-typing — as if the user had pressed Search. The open sheet never
+  /// paints the hero, so the empty-hero guard does not apply to it.
   bool get _spotlightShellActive =>
       !widget.searchMode &&
       !widget.discoverMode &&
-      shouldUseOffTvSpotlightShell(
-        rawStyle: _tvHomeStyle,
-        loading: _loading,
-        hasHero: _spotlightHero.isNotEmpty,
-      );
+      ((_searchSheetOpen && _spotlightSelected) ||
+          shouldUseOffTvSpotlightShell(
+            rawStyle: _tvHomeStyle,
+            loading: _loading,
+            hasHero: _spotlightHero.isNotEmpty,
+          ));
 
   /// Search state that forces the header/sheet to be visible. Typing is
   /// covered by the focus latch (one can only type while the field is
@@ -14705,6 +14813,13 @@ class _SearchScreenState extends State<SearchScreen>
         onLoaderArt: (art) => _adoptDetailPlayArt(item, art),
         onDownload: (season, episode) =>
             _downloadFromDetail(item, addon, season: season, episode: episode),
+        onDownloadChooseSource: (season, episode) => _downloadFromDetail(
+          item,
+          addon,
+          season: season,
+          episode: episode,
+          chooseSource: true,
+        ),
         onItemSelected: (selection) => _browseSelection(
           selection,
           metadataAddonId: addon.id,
@@ -16861,11 +16976,14 @@ class _SearchScreenState extends State<SearchScreen>
 
   /// A detail page's Download button, via [DownloadCoordinator].
   /// [season]/[episode] are where Play would start.
+  /// [chooseSource]: the button was HELD — open the source list in download
+  /// mode instead of asking or downloading automatically.
   Future<void> _downloadFromDetail(
     StremioMeta item,
     StremioAddon addon, {
     int? season,
     int? episode,
+    bool chooseSource = false,
   }) async {
     final id = item.progressId ?? item.id;
     final request = item.type == 'series'
@@ -16898,6 +17016,24 @@ class _SearchScreenState extends State<SearchScreen>
           )
         : _movieSelection(item);
     final catalogItem = item.withSourceAddon(addon);
+    void openSources(DownloadScope? scope, SourcesNotice? notice) {
+      _browseSelection(
+        selectionFor(scope),
+        intent: SourceIntent.download,
+        wantedEpisodes: request.wantedEpisodes(scope),
+        notice: notice,
+        metadataAddonId: addon.id,
+        catalogItem: catalogItem,
+      );
+    }
+
+    if (chooseSource) {
+      await DownloadCoordinator.chooseSource(
+        request: request,
+        openSources: openSources,
+      );
+      return;
+    }
 
     await DownloadCoordinator.start(
       context,
@@ -16916,14 +17052,7 @@ class _SearchScreenState extends State<SearchScreen>
           catalogItem: catalogItem,
         ),
       ),
-      openSources: (scope, notice) => _browseSelection(
-        selectionFor(scope),
-        intent: SourceIntent.download,
-        wantedEpisodes: request.wantedEpisodes(scope),
-        notice: notice,
-        metadataAddonId: addon.id,
-        catalogItem: catalogItem,
-      ),
+      openSources: openSources,
     );
   }
 

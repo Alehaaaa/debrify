@@ -2,12 +2,14 @@ import '../models/media_identity.dart';
 import 'episode_tracker_snapshot_revision.dart';
 import '../models/custom_series_identity.dart';
 import 'local_series_completion_service.dart';
+import 'mdblist/mdblist_continue_watching_service.dart';
 import 'mdblist/mdblist_models.dart';
 import 'mdblist/mdblist_service.dart';
 import 'simkl/simkl_service.dart';
 import 'storage_service.dart';
 import 'tracking_source_policy.dart';
 import 'trakt/trakt_service.dart';
+import 'tracker_identity_service.dart';
 import 'watched_status_service.dart';
 
 class WatchedActionResult {
@@ -49,6 +51,15 @@ class WatchedActionCoordinator {
       await StorageService.setSeriesExplicitlyWatched(id, watched: watched);
       if (!watched) {
         await LocalSeriesCompletionService.instance.clearCompletedHistory(id);
+      } else {
+        // A watched series has nothing left to resume: drop it from Continue
+        // Watching and clear its in-progress bookmarks (finished-episode
+        // history stays, so the episode ticks survive).
+        await StorageService.removeContinueWatchingItem(id);
+        await StorageService.clearPlaybackStateByImdbId(
+          id,
+          preserveFinishedEpisodes: true,
+        );
       }
     } else if (watched) {
       await StorageService.markMovieAsFinished(id);
@@ -61,9 +72,17 @@ class WatchedActionCoordinator {
     final failures = <String>[];
     if (_writes(policy, forceTargets, TrackingSource.trakt) &&
         await TraktService.instance.isAuthenticated()) {
-      final ok = watched
+      var ok = watched
           ? await TraktService.instance.addToHistory(id, contentType)
           : await TraktService.instance.removeFromHistory(id, contentType);
+      if (watched && ok) {
+        // A history entry leaves Trakt's paused session behind, which keeps
+        // the title on Continue Watching — delete it too.
+        ok = await TraktService.instance.removePlaybackForContent(
+          id,
+          contentType,
+        );
+      }
       if (!ok) failures.add('Trakt');
     }
     if (_writes(policy, forceTargets, TrackingSource.simkl) &&
@@ -88,9 +107,12 @@ class WatchedActionCoordinator {
         await MdblistService.instance.isAuthenticated()) {
       final ids = MdblistMediaIds.forContent(id);
       final type = series ? 'show' : 'movie';
-      final ok = watched
+      var ok = watched
           ? await MdblistService.instance.markWatched(ids, type)
           : await MdblistService.instance.markUnwatched(ids, type);
+      if (watched && ok) {
+        ok = await _clearMdblistPlayback(id, series: series);
+      }
       if (!ok) failures.add('MDBList');
     }
     WatchedStatusService.instance.ensureStarted();
@@ -140,6 +162,14 @@ class WatchedActionCoordinator {
               season,
               episode,
             );
+      if (watched && ok) {
+        await TraktService.instance.removePlaybackForContent(
+          imdbId,
+          'series',
+          season: season,
+          episode: episode,
+        );
+      }
       if (!ok) failures.add('Trakt');
     }
     if (_writes(policy, forceTargets, TrackingSource.simkl) &&
@@ -181,8 +211,69 @@ class WatchedActionCoordinator {
               season: season,
               episode: episode,
             );
+      if (watched && ok) {
+        await _clearMdblistPlayback(
+          imdbId,
+          series: true,
+          season: season,
+          episode: episode,
+        );
+      }
       if (!ok) failures.add('MDBList');
     }
     return WatchedActionResult(failures);
+  }
+
+  /// Clear MDBList's paused sessions for a title (every episode of a show, or
+  /// just [season]x[episode]) so a watched mark also drops it from MDBList's
+  /// Continue Watching. True when nothing matching is left. Never throws.
+  static Future<bool> _clearMdblistPlayback(
+    String id, {
+    required bool series,
+    int? season,
+    int? episode,
+  }) async {
+    try {
+      final wanted = await TrackerIdentityService.instance.resolve(
+        id,
+        series ? 'series' : 'movie',
+      );
+      if (wanted == null || wanted.isEmpty) return false;
+      final sessions = await MdblistService.instance.fetchPlaybackSessions();
+      if (!sessions.isSuccess) return false;
+      var ok = true;
+      var cleared = false;
+      for (final session in sessions.data!) {
+        if (session.isEpisode != series) continue;
+        if (!TrackerIdentityService.matches(wanted, session.ids.toJson())) {
+          continue;
+        }
+        if (season != null &&
+            episode != null &&
+            (session.season != season || session.episode != episode)) {
+          continue;
+        }
+        final target = session.isEpisode
+            ? (session.season == null || session.episode == null
+                  ? null
+                  : MdblistScrobbleTarget.episode(
+                      session.ids,
+                      season: session.season!,
+                      episode: session.episode!,
+                    ))
+            : MdblistScrobbleTarget.movie(session.ids);
+        if (target == null) continue;
+        final result = await MdblistService.instance.scrobbleClear(target);
+        if (result.isSuccess) {
+          cleared = true;
+        } else {
+          ok = false;
+        }
+      }
+      if (cleared) MdblistContinueWatchingService.instance.invalidate();
+      return ok;
+    } catch (_) {
+      return false;
+    }
   }
 }

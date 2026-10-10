@@ -8,6 +8,9 @@ import 'trailer_engine.dart';
 class SerializedTrailerEngine implements TrailerEngine {
   SerializedTrailerEngine._(this._engine, this._released);
   final TrailerEngine _engine;
+
+  /// The wrapped engine, for engine-specific extras (frame capture).
+  TrailerEngine get inner => _engine;
   final Completer<void> _released;
   static Completer<void>? _holder;
   Future<void>? _opening;

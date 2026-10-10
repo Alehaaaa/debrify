@@ -14,6 +14,10 @@ import '../services/youtube_service.dart';
 import '../services/debrify_image_cache.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
+import '../screens/video_player/widgets/glass_dock.dart'
+    show GlassCircleButton, GlassGhostButton, GlassSurface, GlassVariant;
+import '../screens/video_player/widgets/liquid_glass.dart'
+    show GlassBrightnessProbe, GlassBrightnessScope, GlassTokens;
 import 'trailer_engine.dart';
 import 'serialized_trailer_engine.dart';
 import 'video_output_lease.dart';
@@ -309,6 +313,23 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   bool _playing = true;
   bool _controlsVisible = true;
 
+  /// The fullscreen chrome follows the player's control style (Settings →
+  /// Player Controls): Glass gets the frosted chrome; Dock and Classic keep
+  /// the plain round buttons, since a trailer has none of their tools.
+  bool _glassChrome = true;
+
+  /// Frame brightness for the dynamic glass; samples only while the glass
+  /// chrome is on screen.
+  late final GlassBrightnessProbe _glassProbe = GlassBrightnessProbe(
+    capture: _captureFrame,
+  );
+
+  Future<Uint8List?> _captureFrame() async {
+    var engine = _engine;
+    if (engine is SerializedTrailerEngine) engine = engine.inner;
+    return engine is MediaKitTrailerEngine ? engine.screenshot() : null;
+  }
+
   /// Phone only: the user tapped the rotate button, forcing the device into
   /// landscape for a bigger trailer. Reset (and orientation restored) when the
   /// fullscreen trailer closes or the widget is disposed.
@@ -409,6 +430,12 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   @override
   void initState() {
     super.initState();
+    unawaited(GlassTokens.load());
+    StorageService.getPlayerDockStyle().then((style) {
+      if (mounted && (style == 'glass') != _glassChrome) {
+        setState(() => _glassChrome = style == 'glass');
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     CollectionFocusPlayback.owner.addListener(_onFocusPreviewChanged);
     MainPageBridge.addExternalPlayerLaunchListener(_onExternalPlayerLaunched);
@@ -1084,6 +1111,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   @override
   void dispose() {
+    _glassProbe.dispose();
     appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     CollectionFocusPlayback.owner.removeListener(_onFocusPreviewChanged);
@@ -1146,6 +1174,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   @override
   Widget build(BuildContext context) {
+    _glassProbe.setActive(
+      _glassChrome && widget.foreground && _controlsVisible && _engine != null,
+    );
     final engine = _engine;
     final t = _fg.value; // 0 ambient → 1 foreground
     // Do not animate a full-screen ImageFilter over the live video. Each
@@ -1255,6 +1286,15 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     return KeyEventResult.ignored;
   }
 
+  void _seekBy(int seconds) {
+    var target = _position + Duration(seconds: seconds);
+    if (target < Duration.zero) target = Duration.zero;
+    if (_duration > Duration.zero && target > _duration) target = _duration;
+    setState(() => _position = target);
+    _engine?.seek(target);
+    _showControlsTemporarily();
+  }
+
   /// Downward travel (px) of a swipe that started near the center of the
   /// fullscreen trailer; null when no such swipe is in progress.
   double? _dismissDrag;
@@ -1335,83 +1375,94 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
                   ),
                 ),
               ),
-              // Bottom scrim so controls stay legible over bright frames.
-              if (_controlsVisible)
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.center,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black87],
-                      ),
+              if (_controlsVisible && _glassChrome)
+                Positioned.fill(
+                  child: GlassBrightnessScope(
+                    brightness: _glassProbe.brightness,
+                    child: BackdropGroup(
+                      child: Stack(children: _glassChromeLayer()),
                     ),
                   ),
                 ),
-              // Close (top-right). Hides with the rest of the chrome — a click
-              // brings it back, and hardware/browser Back always exits (PopScope).
-              if (_controlsVisible)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: _CircleControl(
-                        icon: Icons.close_rounded,
-                        tooltip: 'Close trailer',
-                        onTap: () => widget.onRequestClose?.call(),
+              if (!_glassChrome) ...[
+                // Bottom scrim so controls stay legible over bright frames.
+                if (_controlsVisible)
+                  const Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.center,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black87],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              // Center play/pause.
-              if (_controlsVisible)
-                Center(
-                  child: _CircleControl(
-                    icon: _playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                    tooltip: _playing ? 'Pause' : 'Play',
-                    large: true,
-                    onTap: _togglePlay,
+                // Close (top-right). Hides with the rest of the chrome — a click
+                // brings it back, and hardware/browser Back always exits (PopScope).
+                if (_controlsVisible)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: _CircleControl(
+                          icon: Icons.close_rounded,
+                          tooltip: 'Close trailer',
+                          onTap: () => widget.onRequestClose?.call(),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              // Bottom bar: seek + mute.
-              if (_controlsVisible)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-                      child: Row(
-                        children: [
-                          Expanded(child: _buildSeekBar()),
-                          _CircleControl(
-                            icon: _userMuted
-                                ? Icons.volume_off_rounded
-                                : Icons.volume_up_rounded,
-                            tooltip: _userMuted ? 'Unmute' : 'Mute',
-                            onTap: _toggleMute,
-                          ),
-                          // Phone only: rotate the device for a full-width view.
-                          if (_isPhone)
+                // Center play/pause.
+                if (_controlsVisible)
+                  Center(
+                    child: _CircleControl(
+                      icon: _playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      tooltip: _playing ? 'Pause' : 'Play',
+                      large: true,
+                      onTap: _togglePlay,
+                    ),
+                  ),
+                // Bottom bar: seek + mute.
+                if (_controlsVisible)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                        child: Row(
+                          children: [
+                            Expanded(child: _buildSeekBar()),
                             _CircleControl(
-                              icon: _forcedLandscape
-                                  ? Icons.screen_lock_rotation_rounded
-                                  : Icons.screen_rotation_rounded,
-                              tooltip: _forcedLandscape
-                                  ? 'Portrait'
-                                  : 'Rotate to fullscreen',
-                              onTap: _toggleOrientation,
+                              icon: _userMuted
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
+                              tooltip: _userMuted ? 'Unmute' : 'Mute',
+                              onTap: _toggleMute,
                             ),
-                        ],
+                            // Phone only: rotate the device for a full-width view.
+                            if (_isPhone)
+                              _CircleControl(
+                                icon: _forcedLandscape
+                                    ? Icons.screen_lock_rotation_rounded
+                                    : Icons.screen_rotation_rounded,
+                                tooltip: _forcedLandscape
+                                    ? 'Portrait'
+                                    : 'Rotate to fullscreen',
+                                onTap: _toggleOrientation,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+              ],
             ],
           ),
         ),
@@ -1419,19 +1470,143 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     );
   }
 
-  Widget _buildSeekBar() {
+  /// The Glass player's chrome for the fullscreen trailer: frosted close,
+  /// −10 / play / +10 in the middle, one frosted panel with the scrubber.
+  List<Widget> _glassChromeLayer() {
+    final compact = MediaQuery.sizeOf(context).shortestSide < 500;
+    return [
+      const Positioned.fill(
+        child: IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.center,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00000000), Color(0x8C000000)],
+              ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        top: 0,
+        right: 0,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: GlassCircleButton(
+              variant: GlassVariant.translucent,
+              icon: Icons.close_rounded,
+              tooltip: 'Close trailer',
+              size: 42,
+              onPressed: () => widget.onRequestClose?.call(),
+            ),
+          ),
+        ),
+      ),
+      Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GlassCircleButton(
+              icon: Icons.replay_10_rounded,
+              tooltip: 'Back 10 seconds',
+              size: compact ? 50 : 58,
+              onPressed: () => _seekBy(-10),
+            ),
+            SizedBox(width: compact ? 36 : 56),
+            GlassCircleButton(
+              icon: _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              tooltip: _playing ? 'Pause' : 'Play',
+              size: compact ? 68 : 80,
+              iconScale: 0.5,
+              strong: true,
+              onPressed: _togglePlay,
+            ),
+            SizedBox(width: compact ? 36 : 56),
+            GlassCircleButton(
+              icon: Icons.forward_10_rounded,
+              tooltip: 'Forward 10 seconds',
+              size: compact ? 50 : 58,
+              onPressed: () => _seekBy(10),
+            ),
+          ],
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 12 : 24,
+              0,
+              compact ? 12 : 24,
+              compact ? 10 : 18,
+            ),
+            child: Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: GlassSurface(
+                  variant: GlassVariant.dynamic,
+                  radius: BorderRadius.circular(
+                    compact
+                        ? GlassTokens.current.radiusPanelCompact
+                        : GlassTokens.current.radiusPanel,
+                  ),
+                  padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 2, 6, 2),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildSeekBar(glass: true)),
+                      GlassGhostButton(
+                        icon: _userMuted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        tooltip: _userMuted ? 'Unmute' : 'Mute',
+                        onPressed: _toggleMute,
+                      ),
+                      if (_isPhone)
+                        GlassGhostButton(
+                          icon: _forcedLandscape
+                              ? Icons.screen_lock_rotation_rounded
+                              : Icons.screen_rotation_rounded,
+                          tooltip: _forcedLandscape
+                              ? 'Portrait'
+                              : 'Rotate to fullscreen',
+                          onPressed: _toggleOrientation,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildSeekBar({bool glass = false}) {
     final durMs = _duration.inMilliseconds;
     final posMs = _position.inMilliseconds.clamp(0, durMs == 0 ? 1 : durMs);
     final value = durMs == 0 ? 0.0 : posMs / durMs;
     return Row(
       children: [
-        Text(_fmt(_position), style: _timeStyle),
+        Text(_fmt(_position), style: glass ? _glassTimeStyle : _timeStyle),
         Expanded(
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 3,
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              // Glass: the player's white-on-frost scrubber.
+              activeTrackColor: glass ? Colors.white : null,
+              inactiveTrackColor: glass ? const Color(0x40FFFFFF) : null,
+              thumbColor: glass ? Colors.white : null,
+              overlayColor: glass ? const Color(0x1FFFFFFF) : null,
             ),
             child: Slider(
               value: value.clamp(0.0, 1.0),
@@ -1461,10 +1636,17 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
             ),
           ),
         ),
-        Text(_fmt(_duration), style: _timeStyle),
+        Text(_fmt(_duration), style: glass ? _glassTimeStyle : _timeStyle),
       ],
     );
   }
+
+  static const TextStyle _glassTimeStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 12.5,
+    fontWeight: FontWeight.w500,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
 
   static const TextStyle _timeStyle = TextStyle(
     color: Colors.white70,

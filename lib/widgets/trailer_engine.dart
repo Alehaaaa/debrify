@@ -310,6 +310,10 @@ class MediaKitTrailerEngine implements TrailerEngine {
   final VideoOutputLeaseHandle _lease;
   final bool _reportPlaybackErrors;
   late final mk.Player _player;
+
+  /// One encoded frame for the glass chrome's brightness sampling.
+  Future<Uint8List?> screenshot() =>
+      _player.screenshot(format: 'image/jpeg');
   late final mkv.VideoController _controller;
   bool _disposed = false;
 

@@ -20,12 +20,14 @@ import '../utils/app_storage.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter/services.dart';
 import '../services/player_display_controls.dart';
+import '../services/system_volume.dart';
 import 'package:synchronized/synchronized.dart';
 
 // Removed volume_controller; using media_kit player volume instead
 import '../theme/theme_palette.dart';
 import '../services/storage_service.dart';
 import '../services/local_playback_resume_resolver.dart';
+import '../services/playback_restart_ticket.dart';
 import '../services/startup_stream_policy.dart';
 import '../services/direct_source_authorization.dart';
 import '../services/media_server_watch_sync.dart';
@@ -87,6 +89,7 @@ import 'video_player/widgets/seek_hud.dart';
 import 'video_player/widgets/vertical_hud.dart';
 import 'video_player/widgets/aspect_ratio_hud.dart';
 import 'video_player/widgets/controls.dart';
+import 'video_player/widgets/liquid_glass.dart';
 import 'video_player/widgets/dock_style.dart';
 import 'video_player/widgets/tv_controls.dart';
 import 'video_player/widgets/aspect_ratio_video.dart';
@@ -975,7 +978,19 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   PlayerGuideStyle _playerGuideStyle = PlayerGuideStyle.classic;
 
   // Player dock prefs, read once at launch alongside the guide style.
-  PlayerDockStyle _dockStyle = PlayerDockStyle.classic;
+  PlayerDockStyle _dockStyle = PlayerDockStyle.glass;
+
+  /// Frame brightness for the Glass controls' dynamic glass. Samples only
+  /// while the controls are visible (see [_syncGlassProbe]).
+  late final GlassBrightnessProbe _glassProbe = GlassBrightnessProbe(
+    capture: () => _player.screenshot(format: 'image/jpeg'),
+  );
+
+  void _syncGlassProbe() => _glassProbe.setActive(
+    _controlsVisible.value &&
+        _dockStyle == PlayerDockStyle.glass &&
+        !PlatformUtil.isTelevision,
+  );
   PlayerDockPalette _dockPalette = PlayerDockPalette.ultraviolet;
   Color? _dockAccent;
   PlayerDockSize _dockSize = PlayerDockSize.auto;
@@ -1688,6 +1703,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   @override
   void initState() {
     super.initState();
+    unawaited(GlassTokens.load());
+    _controlsVisible.addListener(_syncGlassProbe);
     _continuousShuffleEnabled = widget.initialContinuousShuffle;
     _activeHttpHeaders = widget.httpHeaders;
     PlayerVisibility.opened(this);
@@ -6627,6 +6644,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // seed would never be corrected. 0 means `_dockBand` yields the legacy
       // constant, which is exactly right for both.
     });
+    _syncGlassProbe();
   }
 
   Future<void> _loadPlayerDefaults() async {
@@ -12178,6 +12196,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _tvProgressFocus.dispose();
     _tvRootFocus.dispose();
     _controlsVisible.removeListener(_onControlsVisibilityChanged);
+    _controlsVisible.removeListener(_syncGlassProbe);
+    _glassProbe.dispose();
     _controlsVisible.dispose();
     _seekHud.dispose();
     _verticalHud.dispose();
@@ -12421,6 +12441,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _launchSimklPercentSpent = true;
     final mdblistFirstLoad = !_launchMdblistPercentSpent;
     _launchMdblistPercentSpent = true;
+
+    // The detail page's "Start from beginning": open at 0:00 this once,
+    // leaving every saved position and tracker session untouched.
+    if (firstLoad && !preferLocalResume) {
+      final se = _traktSeasonEpisode();
+      if (PlaybackRestartTicket.take(
+        _effectiveContentImdbId,
+        season: se.season,
+        episode: se.episode,
+      )) {
+        debugPrint('Resume: restart requested — starting from the beginning');
+        return;
+      }
+    }
 
     await _waitForDuration();
     final dur = _duration;
@@ -13837,6 +13871,24 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     });
   }
 
+  /// The glass dock's ±10 s buttons: the double-tap step, with the same
+  /// scrobble bookkeeping, and the resume guard released like a slider drag.
+  Future<void> _seekRelative(bool forward) async {
+    if (!_isReady) return;
+    final delta = VideoPlayerTimingConstants.seekDelta;
+    var target = _position + (forward ? delta : -delta);
+    if (target < Duration.zero) target = Duration.zero;
+    if (_duration > Duration.zero && target > _duration) target = _duration;
+    _stremioTvStartupSeek.cancel();
+    _resumeWriteGuard.noteUserSeek();
+    _playbackUiClock.updatePosition(target, immediate: true);
+    _scheduleAutoHide();
+    await _player.seek(target);
+    _traktScrobbleSeek(target);
+    _simklScrobbleSeek(target);
+    _mdblistScrobbleSeek(target);
+  }
+
   Future<void> _handleDoubleTap(TapDownDetails details) async {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null) return;
@@ -14016,7 +14068,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _gestureStartPosition = details.localPosition;
     _gestureStartVideoPosition = _position;
     _gestureStartVolume = (_player.state.volume / 100.0).clamp(0.0, 1.0);
+    final systemVolume = SystemVolume.get();
     _gestureStartBrightness = await PlayerDisplayControls.instance.brightness();
+    // Phones and tablets swipe the DEVICE volume (see SystemVolume).
+    final deviceVolume = await systemVolume;
+    if (deviceVolume != null) _gestureStartVolume = deviceVolume;
     if (!mounted) return;
     _mode = GestureMode.none;
     _verticalHud.value = null;
@@ -14039,8 +14095,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         final isLeftHalf = _gestureStartPosition.dx < size.width / 2;
         if (isLeftHalf && !PlayerDisplayControls.supportsBrightness) return;
         // Hand-held devices and televisions own volume at the OS level.
-        // Do not turn a right-edge swipe into an independent player gain.
-        if (!isLeftHalf && _usesSystemVolume) return;
+        // Do not turn a right-edge swipe into an independent player gain:
+        // on phones and tablets it moves the device volume itself; a TV
+        // leaves volume to its remote.
+        if (!isLeftHalf && _usesSystemVolume && !SystemVolume.supported) {
+          return;
+        }
         _mode = isLeftHalf ? GestureMode.brightness : GestureMode.volume;
       }
     }
@@ -14062,7 +14122,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       );
     } else if (_mode == GestureMode.volume) {
       var newVol = (_gestureStartVolume - dy / size.height).clamp(0.0, 1.0);
-      _player.setVolume((newVol * 100).clamp(0.0, 100.0));
+      if (SystemVolume.supported) {
+        unawaited(SystemVolume.set(newVol));
+      } else {
+        _player.setVolume((newVol * 100).clamp(0.0, 100.0));
+      }
       _verticalHud.value = VerticalHudState(
         kind: VerticalKind.volume,
         value: newVol,
@@ -16038,6 +16102,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                     _player.seek(newPos);
                                     _lastSliderSeekPos = newPos;
                                   },
+                                  onSeekBackward: () => _seekRelative(false),
+                                  onSeekForward: () => _seekRelative(true),
+                                  glassBrightness: _glassProbe.brightness,
                                   onSeekBarChangeEnd: () {
                                     _isSeekingWithSlider = false;
                                     _scheduleAutoHide();

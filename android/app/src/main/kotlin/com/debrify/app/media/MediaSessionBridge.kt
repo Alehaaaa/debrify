@@ -11,6 +11,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -50,6 +53,80 @@ class MediaSessionBridge(
 
     private val notificationManager =
         activity.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    // ── Audio focus ──────────────────────────────────────────────────────
+    //
+    // mpv's Android audio output never asks for audio focus, so without this
+    // the film played on top of whatever music app was running. The player
+    // takes focus the moment it starts playing (music pauses), gives it up
+    // when it closes (music may resume), and reacts to losing it like every
+    // media app: a call or another player pauses it; a short interruption
+    // resumes it afterwards. Trailers and reels never reach this bridge, so
+    // a muted ambient video never takes focus.
+    private val audioManager =
+        activity.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var hasAudioFocus = false
+    private var resumeOnFocusGain = false
+    private var focusRequest: AudioFocusRequest? = null
+
+    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        when (change) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeOnFocusGain = false
+                hasAudioFocus = false
+                if (playing) send("pause")
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                resumeOnFocusGain = playing
+                if (playing) send("pause")
+            }
+            // The system ducks us on O+; a film keeps playing quieter.
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> Unit
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                hasAudioFocus = true
+                if (resumeOnFocusGain) send("play")
+                resumeOnFocusGain = false
+            }
+        }
+    }
+
+    private fun requestAudioFocus() {
+        if (hasAudioFocus) return
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = focusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build(),
+                )
+                .setWillPauseWhenDucked(false)
+                .setOnAudioFocusChangeListener(focusListener)
+                .build()
+                .also { focusRequest = it }
+            audioManager.requestAudioFocus(request)
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(
+                focusListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN,
+            )
+        }
+        hasAudioFocus = granted == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        resumeOnFocusGain = false
+        if (!hasAudioFocus) return
+        hasAudioFocus = false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(focusListener)
+        }
+    }
 
     private val actionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -146,6 +223,7 @@ class MediaSessionBridge(
         rate = (args["rate"] as? Number)?.toFloat() ?: rate
         canNext = args["canNext"] as? Boolean ?: canNext
         canPrevious = args["canPrevious"] as? Boolean ?: canPrevious
+        if (args["playing"] == true) requestAudioFocus()
 
         if (metadataChanged) {
             val metadata = MediaMetadata.Builder()
@@ -295,6 +373,7 @@ class MediaSessionBridge(
     }
 
     fun clear() {
+        abandonAudioFocus()
         try {
             notificationManager.cancel(NOTIFICATION_ID)
         } catch (_: Throwable) {

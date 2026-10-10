@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 
+import 'mdblist/mdblist_models.dart';
+import 'mdblist/mdblist_service.dart';
 import 'profiles/profile_preferences.dart';
 import 'simkl/simkl_service.dart';
 import 'trakt/trakt_service.dart';
@@ -61,9 +63,11 @@ class TrackerScrobbleOutbox {
       final values = _read(prefs.getString(_key));
       final remaining = <Map<String, dynamic>>[];
       for (final entry in values) {
-        final ok = entry['tracker'] == 'trakt'
-            ? await _sendTrakt(entry)
-            : await _sendSimkl(entry);
+        final ok = switch (entry['tracker']) {
+          'trakt' => await _sendTrakt(entry),
+          'mdblist' => await _sendMdblist(entry),
+          _ => await _sendSimkl(entry),
+        };
         if (!ok) remaining.add(entry);
       }
       await prefs.setString(_key, jsonEncode(remaining));
@@ -84,6 +88,27 @@ class TrackerScrobbleOutbox {
     'pause' => TraktService.instance.scrobblePause(e['imdbId'], (e['progress'] as num).toDouble(), season: e['season'], episode: e['episode'], contentType: e['contentType'], queueOnFailure: false),
     _ => TraktService.instance.scrobbleStop(e['imdbId'], (e['progress'] as num).toDouble(), season: e['season'], episode: e['episode'], contentType: e['contentType'], queueOnFailure: false),
   };
+  Future<bool> _sendMdblist(Map<String, dynamic> e) async {
+    final ids = MdblistMediaIds.forContent(e['imdbId'] as String);
+    final season = e['season'] as int?;
+    final episode = e['episode'] as int?;
+    final target = season != null && episode != null
+        ? MdblistScrobbleTarget.episode(ids, season: season, episode: episode)
+        : MdblistScrobbleTarget.movie(ids);
+    final progress = (e['progress'] as num).toDouble();
+    final service = MdblistService.instance;
+    final result = await switch (e['action']) {
+      'start' => service.scrobbleStart(target, progress, queueOnFailure: false),
+      'pause' => service.scrobblePause(target, progress, queueOnFailure: false),
+      _ => service.scrobbleStop(target, progress, queueOnFailure: false),
+    };
+    // Stay queued only while still unreachable; MDBList refusing the entry
+    // (title unknown, account disconnected) would otherwise retry forever.
+    if (result.isSuccess) return true;
+    final states = await Connectivity().checkConnectivity();
+    return !states.every((s) => s == ConnectivityResult.none);
+  }
+
   Future<bool> _sendSimkl(Map<String, dynamic> e) => switch (e['action']) {
     'start' => SimklService.instance.scrobbleStart(e['imdbId'], (e['progress'] as num).toDouble(), season: e['season'], episode: e['episode'], queueOnFailure: false),
     'pause' => SimklService.instance.scrobblePause(e['imdbId'], (e['progress'] as num).toDouble(), season: e['season'], episode: e['episode'], queueOnFailure: false),

@@ -1318,6 +1318,33 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
         )
 		com.debrify.app.security.DeviceSecretCipherPlugin.register(this, flutterEngine)
+        // The player's right-side swipe sets the DEVICE media volume, like the
+        // left side sets screen brightness. Flag 0: no system volume panel —
+        // the player draws its own level.
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "debrify/system_volume",
+        ).setMethodCallHandler { call, result ->
+            val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            val stream = android.media.AudioManager.STREAM_MUSIC
+            val max = audio.getStreamMaxVolume(stream)
+            when (call.method) {
+                "get" -> result.success(
+                    if (max > 0) audio.getStreamVolume(stream).toDouble() / max else 0.0,
+                )
+                "set" -> {
+                    val value = (call.argument<Number>("value")?.toDouble() ?: 0.0)
+                        .coerceIn(0.0, 1.0)
+                    try {
+                        audio.setStreamVolume(stream, Math.round(value * max).toInt(), 0)
+                    } catch (_: SecurityException) {
+                        // Do Not Disturb can refuse volume changes; never crash.
+                    }
+                    result.success(null)
+                }
+                else -> result.notImplemented()
+            }
+        }
 		MethodChannel(
 			flutterEngine.dartExecutor.binaryMessenger,
 			"com.debrify.app/profile_privacy",

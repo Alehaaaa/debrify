@@ -35,6 +35,7 @@ import '../services/main_page_bridge.dart';
 import '../services/next_episode_service.dart';
 import '../services/episode_tracker_snapshot_service.dart';
 import '../services/local_playback_resume_resolver.dart';
+import '../services/playback_restart_ticket.dart';
 import '../services/series_source_fetcher.dart';
 import '../services/storage_service.dart';
 import '../services/torbox_service.dart';
@@ -685,6 +686,39 @@ class VideoPlayerLauncher {
   /// Generic playback remains exact-source-first. Catalog playback reverses
   /// that precedence so the newest record for the stable IMDb id wins even
   /// when the selected source has an older bookmark of its own.
+  /// Honours a detail-page "Start from beginning" on the native Android TV
+  /// player: the targeted item opens at 0:00 and carries no tracker percent,
+  /// so neither the local bookmark nor a tracker session moves the start.
+  static void _applyRestartTicket(
+    Map<String, dynamic> payload,
+    VideoPlayerLaunchArgs args,
+  ) {
+    final imdbId = args.contentImdbId ?? payload['imdbId'] as String?;
+    final season = args.contentSeason;
+    final episode = args.contentEpisode;
+    if (!PlaybackRestartTicket.take(
+      imdbId,
+      season: season,
+      episode: episode,
+    )) {
+      return;
+    }
+    payload.remove('traktProgressPercent');
+    payload.remove('startAtPercent');
+    final items = payload['items'];
+    if (items is! List) return;
+    for (final item in items) {
+      if (item is! Map) continue;
+      final targeted =
+          season == null ||
+          episode == null ||
+          (item['season'] == season && item['episode'] == episode);
+      if (!targeted) continue;
+      item['resumePositionMs'] = 0;
+      item.remove('traktProgressPercent');
+    }
+  }
+
   static Future<Map<String, dynamic>?> readMovieResumeState({
     required PlaylistEntry entry,
     required String? imdbId,
@@ -3166,6 +3200,7 @@ class VideoPlayerLauncher {
 
       // Build payload with Stremio TV guide data
       final payloadMap = result.payload.toMap();
+      _applyRestartTicket(payloadMap, args);
       payloadMap['startupHasRemainingSavedSources'] =
           args.startupHasRemainingSavedSources;
       payloadMap['useAddonTextFormatting'] =

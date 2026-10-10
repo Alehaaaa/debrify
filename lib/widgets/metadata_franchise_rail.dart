@@ -17,9 +17,14 @@ class MetadataFranchiseRail extends StatefulWidget {
     required this.onOpen,
     required this.isTelevision,
     this.service,
+    this.onOptions,
   });
   final StremioMeta item;
   final ValueChanged<StremioMeta>? onOpen;
+
+  /// Hold / right-click on a franchise title: the host's title menu (Mark as
+  /// watched, watchlist, sources…). Null keeps the tiles tap-only.
+  final ValueChanged<StremioMeta>? onOptions;
   final bool isTelevision;
   final MetadataExploreService? service;
   @override
@@ -131,6 +136,12 @@ class _MetadataFranchiseRailState extends State<MetadataFranchiseRail> {
                   focusNode: null,
                   hasBoundSource: false,
                   onOpen: () => widget.onOpen!(data.franchise[i]),
+                  onLongPress: widget.onOptions == null
+                      ? null
+                      : () => widget.onOptions!(data.franchise[i]),
+                  onSecondaryTap: widget.onOptions == null
+                      ? null
+                      : () => widget.onOptions!(data.franchise[i]),
                 ),
               ),
             ),

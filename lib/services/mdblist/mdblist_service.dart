@@ -1,4 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +9,7 @@ import 'package:http/http.dart' as http;
 import '../../models/tracking_source.dart';
 import '../storage_service.dart';
 import '../tracker_identity_service.dart';
+import '../tracker_scrobble_outbox.dart';
 import '../episode_tracker_snapshot_revision.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../profiles/profile_async_authorization.dart';
@@ -931,19 +935,40 @@ class MdblistService {
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-  }) => _scrobble('start', target, progress, capability: capability);
+    bool queueOnFailure = true,
+  }) => _scrobble(
+    'start',
+    target,
+    progress,
+    capability: capability,
+    queueOnFailure: queueOnFailure,
+  );
 
   Future<MdblistResult<Map<String, dynamic>>> scrobblePause(
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-  }) => _scrobble('pause', target, progress, capability: capability);
+    bool queueOnFailure = true,
+  }) => _scrobble(
+    'pause',
+    target,
+    progress,
+    capability: capability,
+    queueOnFailure: queueOnFailure,
+  );
 
   Future<MdblistResult<Map<String, dynamic>>> scrobbleStop(
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-  }) => _scrobble('stop', target, progress, capability: capability);
+    bool queueOnFailure = true,
+  }) => _scrobble(
+    'stop',
+    target,
+    progress,
+    capability: capability,
+    queueOnFailure: queueOnFailure,
+  );
 
   Future<MdblistResult<Map<String, dynamic>>> scrobbleClear(
     MdblistScrobbleTarget target, {
@@ -951,6 +976,60 @@ class MdblistService {
   }) => _scrobble('clear', target, 0, capability: capability);
 
   Future<MdblistResult<Map<String, dynamic>>> _scrobble(
+    String action,
+    MdblistScrobbleTarget target,
+    double progress, {
+    ProfileAsyncAuthorization? capability,
+    bool queueOnFailure = false,
+  }) async {
+    final result = await _scrobbleOnce(
+      action,
+      target,
+      progress,
+      capability: capability,
+    );
+    if (queueOnFailure && !result.isSuccess) {
+      unawaited(_queueScrobble(action, target, progress, result.kind));
+    }
+    return result;
+  }
+
+  /// Progress that could not reach MDBList because this device is offline
+  /// (a downloaded title watched on a plane) joins the shared outbox and is
+  /// delivered on reconnect, exactly like Trakt and Simkl. Failures while
+  /// online are MDBList's answer, not a delivery problem, and are not retried.
+  /// (Offline even the id lookup fails, as "not found", so the result kind
+  /// alone can't tell the two apart.)
+  Future<void> _queueScrobble(
+    String action,
+    MdblistScrobbleTarget target,
+    double progress,
+    MdblistResultKind kind,
+  ) async {
+    try {
+      if (kind == MdblistResultKind.disabled ||
+          kind == MdblistResultKind.unauthenticated) {
+        return;
+      }
+      final states = await Connectivity().checkConnectivity();
+      final offline = states.every((s) => s == ConnectivityResult.none);
+      final id = target.ids.contentId ?? target.ids.imdb;
+      if (!offline || id == null || id.isEmpty) return;
+      await TrackerScrobbleOutbox.instance.enqueue(
+        tracker: 'mdblist',
+        action: action,
+        imdbId: id,
+        progress: progress,
+        contentType: target.isEpisode ? 'series' : 'movie',
+        season: target.season,
+        episode: target.episode,
+      );
+    } catch (_) {
+      // Best effort — the live session already failed; nothing to undo.
+    }
+  }
+
+  Future<MdblistResult<Map<String, dynamic>>> _scrobbleOnce(
     String action,
     MdblistScrobbleTarget target,
     double progress, {

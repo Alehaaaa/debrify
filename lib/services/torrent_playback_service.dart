@@ -61,6 +61,7 @@ import 'downloaded_media_service.dart';
 import 'downloads/download_feedback.dart';
 import 'downloads/download_outcome.dart';
 import 'downloads/download_request.dart';
+import 'downloads/pending_title_downloads.dart';
 import 'local_bound_source_service.dart';
 import 'local_playback_resume_resolver.dart';
 import 'main_page_bridge.dart';

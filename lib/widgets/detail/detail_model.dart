@@ -172,6 +172,10 @@ class DetailModel {
   // Downloaded or downloading: opens this title's download page.
   final VoidCallback? onBrowse;
 
+  /// Holding the Download button: pick the source to download by hand,
+  /// whatever the button's automatic/ask setting says.
+  final VoidCallback? onBrowseLongPress;
+
   /// Drives the Download button's label and icon.
   /// Where this title's downloads stand (drives the Download button).
   final TitleDownloadSummary download;
@@ -272,6 +276,7 @@ class DetailModel {
     required this.onPrimary,
     this.onPrimaryLongPress,
     required this.onBrowse,
+    this.onBrowseLongPress,
     this.download = TitleDownloadSummary.none,
     required this.onTrailer,
     required this.onSelectSource,

@@ -59,8 +59,13 @@ def validate(source: dict) -> None:
             need(isinstance(app.get(key), str) and app[key], f"app {key} missing")
         url(app.get("iconURL"), "app iconURL")
         need(HEX_RE.match(app.get("tintColor", "#000")) is not None, "app tintColor")
-        for shot in app.get("screenshots", []):
-            url(shot, "screenshot")
+        shots = app.get("screenshots", {})
+        need(isinstance(shots, dict), "screenshots must be grouped by device")
+        for device, items in shots.items():
+            need(device in ("iphone", "ipad"), f"screenshot device {device}")
+            for shot in items:
+                url(shot.get("imageURL"), "screenshot")
+                need(isinstance(shot.get("width"), int) and isinstance(shot.get("height"), int), "screenshot size")
         perms = app.get("appPermissions", {})
         need(all(isinstance(e, str) for e in perms.get("entitlements", [])), "entitlements")
         need(all(isinstance(v, str) and v for v in perms.get("privacy", {}).values()), "privacy usage descriptions")
@@ -76,6 +81,39 @@ def validate(source: dict) -> None:
             vid = f"{v['version']}|{v['buildVersion']}"
             need(vid not in seen, f"duplicate version {vid}")
             seen.add(vid)
+
+
+SCREENSHOT_DIR = Path("assets/screenshots/ios")
+
+
+def png_size(path: Path) -> tuple[int, int] | None:
+    head = path.read_bytes()[:24]
+    if head[:8] != b"\x89PNG\r\n\x1a\n":
+        return None
+    return int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")
+
+
+def screenshots(raw: str) -> dict:
+    """iPhone/iPad screenshots from assets/screenshots/ios/<device>/, in filename order.
+
+    Name them 01-home.png, 02-reels.png, … to set the order. Only portrait
+    PNGs taken on the device are used; anything else is skipped.
+    """
+    shots: dict = {}
+    for device in ("iphone", "ipad"):
+        items = []
+        for path in sorted((SCREENSHOT_DIR / device).glob("*.png")):
+            size = png_size(path)
+            if not size or size[0] >= size[1]:
+                continue
+            items.append({
+                "imageURL": f"{raw}/{path.as_posix()}",
+                "width": size[0],
+                "height": size[1],
+            })
+        if items:
+            shots[device] = items
+    return shots
 
 
 COMMIT_RE = re.compile(r"/(?:commit/|compare/[0-9a-f]+\.\.\.)([0-9a-f]{7,40})")
@@ -179,35 +217,47 @@ def main() -> None:
 
     versions = ([new_version] + previous_versions)[: args.keep]
 
-    screenshots = [
-        f"{raw}/assets/screenshots/{name}"
-        for name in ("search.png", "player.png", "episodes.png", "downloads.png", "stremio-catalog.png")
-        if (Path("assets/screenshots") / name).is_file()
-    ]
-
     source = {
-        "name": "Debrify Latest Builds",
+        "name": "Nextup",
         "identifier": f"io.github.{args.repo.split('/')[0].lower()}.debrify.commits",
-        "subtitle": f"Fresh iOS builds of every {args.branch} commit.",
-        "description": f"Debrify built automatically from every commit to {args.branch} in {args.repo}, "
-        "each with a changelog of what changed since the previous build.",
+        "subtitle": "Nextup for iPhone and iPad, built from every commit.",
+        "description": "Nextup is an independent, unofficial fork of Debrify with a Reels feed, "
+        "Continue Watching synced across Trakt, Simkl and MDBList, offline-first downloads "
+        "and a reworked glass interface.\n\n"
+        f"Every commit to {args.branch} in {args.repo} is built automatically and published "
+        "here with a changelog of what changed since the previous build, so updates show up "
+        "right in SideStore or AltStore. The source keeps the last few builds, so you can "
+        "always roll back.\n\n"
+        "Not affiliated with or endorsed by the official Debrify project.",
         "iconURL": f"{raw}/assets/icon/app_icon_flat.png",
         "website": repo_url,
         "tintColor": "#7C4DFF",
         "featuredApps": [bundle_id],
         "apps": [
             {
-                "name": "Debrify",
+                "name": "Nextup",
                 "bundleIdentifier": bundle_id,
                 "developerName": args.repo.split("/")[0],
-                "subtitle": "Torrent search and debrid management.",
-                "localizedDescription": "A modern torrent search and debrid management app.\n\n"
-                "These are unsigned commit builds produced by GitHub Actions; "
-                "SideStore re-signs them with your own certificate on install.",
+                "subtitle": "Your movies and shows, one swipe away.",
+                "localizedDescription": "Nextup brings your cloud accounts, WebDAV servers, "
+                "Stremio catalogs, IPTV and YouTube into one library, with a player built for "
+                "movies and TV.\n\n"
+                "• Reels: swipe through official scenes and trailers, then jump straight into the title\n"
+                "• Continue Watching that follows you across Trakt, Simkl and MDBList\n"
+                "• Up Next links: open any episode straight from Up Next for Trakt\n"
+                "• Downloads that work fully offline, with auto-download filters\n"
+                "• A glass interface with your own looks and colour palettes\n"
+                "• Lock-screen controls, touch lock, pinch to fill, double-tap to pause\n"
+                "• WebDAV sync with snapshots, and backups that restore cleanly\n\n"
+                "Nextup doesn't host or provide any content; you connect the services you "
+                "already use.\n\n"
+                "These are untested builds of every commit, made by GitHub Actions. SideStore or "
+                "AltStore re-signs them with your own certificate on install. Nextup is an "
+                "independent fork of Debrify and isn't affiliated with the official project.",
                 "iconURL": f"{raw}/assets/icon/app_icon_flat.png",
                 "tintColor": "#7C4DFF",
                 "category": "entertainment",
-                "screenshots": screenshots,
+                "screenshots": screenshots(raw),
                 "versions": versions,
                 "appPermissions": {
                     "entitlements": entitlements(args.app),

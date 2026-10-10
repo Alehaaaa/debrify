@@ -1281,9 +1281,8 @@ class SpotlightBoardState extends State<SpotlightBoard>
   /// is a grab, not a choice.
   void _onHeroTap() {
     if (_heroSwiping) return;
-    // A live trailer owns the backdrop: tapping video must never unexpectedly
-    // navigate away. Its title/logo remains an explicit detail affordance.
-    if (widget.trailer != null) return;
+    // Trailers roll as soon as the hero settles, so gating on a live trailer
+    // left the backdrop dead nearly all the time. A tap always opens.
     if (widget.heroAddon != null) _openHero();
   }
 

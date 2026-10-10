@@ -797,6 +797,7 @@ class ShowcaseIdentity extends StatelessWidget {
           icon: m.downloadState.icon,
           label: m.downloadLabel,
           onTap: m.onBrowse!,
+          onLongPress: m.onBrowseLongPress,
         ),
       );
     }
@@ -1776,11 +1777,15 @@ class _Circle extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
 
+  /// Touch long-press, or OK held on a remote.
+  final VoidCallback? onLongPress;
+
   const _Circle({
     required this.node,
     required IconData this.icon,
     required this.label,
     required this.onTap,
+    this.onLongPress,
   }) : mark = null;
 
   const _Circle.mark({
@@ -1788,7 +1793,8 @@ class _Circle extends StatefulWidget {
     required Widget this.mark,
     required this.label,
     required this.onTap,
-  }) : icon = null;
+  }) : icon = null,
+       onLongPress = null;
 
   @override
   State<_Circle> createState() => _CircleState();
@@ -1797,23 +1803,38 @@ class _Circle extends StatefulWidget {
 class _CircleState extends State<_Circle> {
   bool _f = false;
   bool _h = false;
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Focus(
     focusNode: widget.node,
     onFocusChange: (v) {
       setState(() => _f = v);
+      if (!v) _hold.reset();
       if (v) _keepVisible(context);
     },
     // Without this the tracker, trailer and More buttons focus correctly
-    // and do NOTHING on a remote.
-    onKeyEvent: (_, e) => _activate(e, widget.onTap),
+    // and do NOTHING on a remote. A hold action makes OK open on release.
+    onKeyEvent: (_, e) =>
+        widget.onLongPress != null && isActivateOrSpaceKey(e.logicalKey)
+        ? _hold.handle(e)
+        : _activate(e, widget.onTap),
     child: MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _h = true),
       onExit: (_) => setState(() => _h = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         child: Builder(
           builder: (context) {
             final m = ShowcaseMetrics.of(context);
@@ -1874,7 +1895,8 @@ class _CircleState extends State<_Circle> {
                       ),
               ),
             );
-            if (!compact) return body;
+            // A held circle already has a job; its tooltip would fight it.
+            if (!compact || widget.onLongPress != null) return body;
             return Tooltip(
               message: widget.label,
               triggerMode: TooltipTriggerMode.longPress,

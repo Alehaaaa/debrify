@@ -5,6 +5,7 @@ import 'dock_style.dart';
 import 'styled_dock.dart';
 import '../models/gesture_state.dart';
 import '../services/playback_ui_clock.dart';
+import 'glass_dock.dart';
 import 'netflix_control_button.dart';
 
 class Controls extends StatelessWidget {
@@ -36,6 +37,14 @@ class Controls extends StatelessWidget {
   final VoidCallback onSeekBarChangedStart;
   final ValueChanged<double> onSeekBarChanged;
   final VoidCallback onSeekBarChangeEnd;
+
+  /// Glass dock only: the −10 s / +10 s transport buttons. Null hides them.
+  final VoidCallback? onSeekBackward;
+  final VoidCallback? onSeekForward;
+
+  /// Glass dock only: how bright the picture is (0..1), so the dynamic glass
+  /// can thicken over bright scenes. Null uses the token default.
+  final ValueListenable<double>? glassBrightness;
   final VoidCallback? onNext;
   final VoidCallback? onNextChannel;
   final VoidCallback? onShowGuide;
@@ -148,6 +157,9 @@ class Controls extends StatelessWidget {
     required this.onSeekBarChangedStart,
     required this.onSeekBarChanged,
     required this.onSeekBarChangeEnd,
+    this.onSeekBackward,
+    this.onSeekForward,
+    this.glassBrightness,
     this.onNext,
     this.onNextChannel,
     this.onShowGuide,
@@ -372,6 +384,7 @@ class Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     // Branch FIRST. Everything below this line is the legacy tree, reached
     // only by `classic`, which is what makes it provably unchanged.
+    if (dockStyle == PlayerDockStyle.glass) return GlassDock(c: this);
     if (dockStyle.isStyled) {
       final styled = _buildStyled(context);
       if (styled != null) return styled;

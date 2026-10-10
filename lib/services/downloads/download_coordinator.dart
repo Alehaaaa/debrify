@@ -23,6 +23,21 @@ import 'download_request.dart';
 ///    automatic that found nothing says why and offers that list (with the
 ///    explanation on top) instead of opening it unasked.
 abstract final class DownloadCoordinator {
+  /// The Download button HELD: straight to the source list in download mode,
+  /// whatever "Always ask" and automatic say. A series covers the remembered
+  /// episode range from where Play would start.
+  static Future<void> chooseSource({
+    required DownloadRequest request,
+    required FutureOr<void> Function(
+      DownloadScope? scope,
+      SourcesNotice? notice,
+    )
+    openSources,
+  }) async {
+    final prefs = await DownloadPreferences.load();
+    await openSources(request.isSeries ? prefs.seriesScope : null, null);
+  }
+
   static Future<void> start(
     BuildContext context, {
     required DownloadRequest request,

@@ -1,0 +1,53 @@
+{
+  "$comment": "Liquid glass design tokens for the Glass player controls and trailer chrome. Colours are #AARRGGBB; blur values are Gaussian sigma in logical pixels; saturation is a multiplier applied to what is behind the glass. Loaded by GlassTokens.load(); the compiled defaults in liquid_glass.dart must match this file (test/glass_tokens_test.dart).",
+  "radius": {
+    "panel": 24,
+    "panelCompact": 20,
+    "sheet": 26
+  },
+  "rim": {
+    "width": 1.0,
+    "highlight": "#8CFFFFFF",
+    "mid": "#12FFFFFF",
+    "lowlight": "#33FFFFFF"
+  },
+  "sheen": "#26FFFFFF",
+  "shadow": {
+    "color": "#33000000",
+    "blur": 36,
+    "offsetY": 14
+  },
+  "variants": {
+    "frosted": {
+      "blur": 24,
+      "saturation": 1.8,
+      "tint": "#14FFFFFF",
+      "shade": "#29000000"
+    },
+    "translucent": {
+      "blur": 6,
+      "saturation": 1.25,
+      "tint": "#0DFFFFFF",
+      "shade": "#8C0E0E12"
+    },
+    "dynamic": {
+      "blur": 20,
+      "saturation": 1.7,
+      "tint": "#1AFFFFFF",
+      "shade": "#1A000000",
+      "bright": {
+        "blur": 28,
+        "saturation": 1.15,
+        "tint": "#0AFFFFFF",
+        "shade": "#6B000000"
+      }
+    }
+  },
+  "dynamic": {
+    "defaultBrightness": 0.35,
+    "transitionMs": 400
+  },
+  "reducedTransparency": {
+    "shade": "#E6141418"
+  }
+}

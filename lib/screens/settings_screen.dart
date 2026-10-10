@@ -281,7 +281,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _playLoaderStyle = PlayLoaderStyleController.defaultStyle;
   String _tvPlayerControlsStyle = 'ott';
   String _debrifyTvPlayerStyle = 'cinema';
-  String _playerDockStyle = 'classic';
+  String _playerDockStyle = 'glass';
   String _playerDockPalette = 'ultraviolet';
   String _playerDockSize = 'auto';
   // The placeholder the Appearance row shows for the one frame before the
@@ -2324,6 +2324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'layout',
             'accent',
             ...labels(kPlayerDockStyleChoices.map((choice) => choice.label)),
+            ...labels(kPlayerDockLayoutChoices.map((choice) => choice.label)),
             ...labels(kPlayerDockPaletteChoices.map((choice) => choice.label)),
             ...labels(kPlayerDockSizeChoices.map((choice) => choice.label)),
           ],

@@ -12,14 +12,19 @@ import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
 import '../services/stremio_service.dart';
 import '../services/trakt/trakt_episode_model.dart';
+import '../services/watched_action_coordinator.dart';
+import '../services/watched_status_service.dart';
 import '../theme/app_theme_controller.dart';
 import '../theme/app_theme_scope.dart';
+import '../services/downloads/pending_title_downloads.dart';
 import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../theme/theme_core_resolver.dart';
 import '../theme/theme_overrides.dart';
 import '../utils/artwork_url.dart';
 import '../widgets/card_action_menu.dart';
+import '../models/downloaded_media.dart';
 import '../widgets/detail/detail_identity.dart';
+import '../widgets/detail/detail_resume_choice.dart';
 import '../widgets/detail/detail_style.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/home/home_theme.dart';
@@ -35,6 +40,8 @@ enum _DownloadCardAction {
   play,
   open,
   files,
+  markWatched,
+  markUnwatched,
   fixMatch,
   resetMatch,
   pause,
@@ -56,6 +63,12 @@ class DownloadsScreen extends StatefulWidget {
 class _DownloadsScreenState extends State<DownloadsScreen> {
   List<LocalDownload> _items = [];
   final Map<String, double> _progress = {};
+
+  /// How far into each title the user is (0..1), by library group key — the
+  /// same thin white bar Home's tiles carry. Read from this device only.
+  Map<String, double> _watched = const {};
+  int _watchedGeneration = 0;
+  String _watchedSignature = '';
   StreamSubscription? _status, _moves, _progressSub;
   Timer? _folderPoll;
   // The empty local library is immediately useful; a scan can populate it
@@ -83,7 +96,47 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     // polling interval keeps files copied in or removed externally reflected
     // in the library without waiting for a download queue event.
     _folderPoll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
+    _pendingSeen = PendingTitleDownloads.entries.value.keys.toSet();
+    PendingTitleDownloads.entries.addListener(_onPendingChanged);
     _refresh();
+  }
+
+  /// Automatic downloads still finding their source show as posters too.
+  /// When one leaves the list its real task usually just appeared — reload
+  /// so the tile hands over to the progress sweep without a gap.
+  Set<String> _pendingSeen = const {};
+  void _onPendingChanged() {
+    if (!mounted) return;
+    final now = PendingTitleDownloads.entries.value.keys.toSet();
+    final ended = _pendingSeen.difference(now).isNotEmpty;
+    _pendingSeen = now;
+    setState(() {});
+    if (ended) _refresh();
+  }
+
+  Future<void> _showPendingOptions(PendingTitleDownload pending) async {
+    final cancel = pending.onCancel;
+    if (cancel == null) return;
+    final stop = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(pending.title),
+              subtitle: Text(pending.phase.label),
+            ),
+            ListTile(
+              leading: const Icon(Icons.close_rounded),
+              title: const Text('Stop download'),
+              onTap: () => Navigator.of(sheetContext).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (stop == true) cancel();
   }
 
   Future<void> _refresh() async {
@@ -98,6 +151,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           _loading = false;
           _error = null;
         });
+        // The folder poll lands here every few seconds; only re-read watch
+        // progress when the set of finished files actually changed.
+        final signature = (items.where((e) => e.isReady).map(
+          (e) => '${e.groupKey}|${e.location}',
+        ).toList()..sort()).join(',');
+        if (signature != _watchedSignature) {
+          _watchedSignature = signature;
+          unawaited(_loadWatched());
+        }
       }
     } catch (_) {
       if (mounted && generation == _generation) {
@@ -109,12 +171,36 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     }
   }
 
+  Future<void> _loadWatched() async {
+    final generation = ++_watchedGeneration;
+    final groups = <String, List<LocalDownload>>{};
+    for (final item in _items) {
+      if (!item.isReady || item.media?.isCatalogLinked != true) continue;
+      groups.putIfAbsent(item.groupKey, () => []).add(item);
+    }
+    final next = <String, double>{};
+    for (final entry in groups.entries) {
+      try {
+        final fraction = await downloadedWatchFraction(
+          entry.value.first.media!,
+          sortDownloads(entry.value),
+        );
+        if (fraction != null) next[entry.key] = fraction;
+      } catch (_) {
+        // One unreadable record must not hide every other title's bar.
+      }
+    }
+    if (!mounted || generation != _watchedGeneration) return;
+    setState(() => _watched = next);
+  }
+
   @override
   void dispose() {
     _status?.cancel();
     _moves?.cancel();
     _progressSub?.cancel();
     _folderPoll?.cancel();
+    PendingTitleDownloads.entries.removeListener(_onPendingChanged);
     super.dispose();
   }
 
@@ -162,6 +248,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
               'E${first.episode.toString().padLeft(2, '0')}'
         : null;
     final summary = _summary(group);
+    // Watched state for catalog-linked titles (same identity the poster ticks
+    // read), so the menu offers the mark that applies.
+    final media = group.first.media;
+    final watchedId = media != null && media.isCatalogLinked ? media.id : null;
+    WatchedStatusService.instance.ensureStarted();
+    final watched =
+        watchedId != null &&
+        WatchedStatusService.instance.isWatchedForTicks(
+          watchedId,
+          series ? 'series' : 'movie',
+        );
     _DownloadCardAction? action;
     try {
       var manualMatch = false;
@@ -209,6 +306,24 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ? 'Each downloaded episode, with its size and progress.'
                   : 'The file on this device, with its size.',
             ),
+          if (watchedId != null)
+            watched
+                ? CardMenuAction(
+                    value: _DownloadCardAction.markUnwatched,
+                    icon: Icons.remove_done_rounded,
+                    label: 'Mark as unwatched',
+                    description:
+                        'Clears the watched mark here and on your synced '
+                        'trackers.',
+                  )
+                : CardMenuAction(
+                    value: _DownloadCardAction.markWatched,
+                    icon: Icons.done_all_rounded,
+                    label: series ? 'Mark series as watched' : 'Mark as watched',
+                    description:
+                        'Marks it watched and clears any resume position, here '
+                        'and on your synced trackers.',
+                  ),
           CardMenuAction(
             value: _DownloadCardAction.fixMatch,
             icon: Icons.manage_search_rounded,
@@ -285,6 +400,23 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           MaterialPageRoute<void>(
             builder: (_) => DownloadedTitleScreen(items: group),
           ),
+        );
+      case _DownloadCardAction.markWatched:
+      case _DownloadCardAction.markUnwatched:
+        if (watchedId == null) break;
+        final mark = action == _DownloadCardAction.markWatched;
+        final result = await WatchedActionCoordinator.setTitleWatched(
+          imdbId: watchedId,
+          contentType: series ? 'series' : 'movie',
+          watched: mark,
+        );
+        WatchedStatusService.instance.refresh();
+        if (!mounted) break;
+        _snack(
+          result.success
+              ? (mark ? 'Marked as watched' : 'Marked as unwatched')
+              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
+                    'didn\'t update',
         );
       case _DownloadCardAction.fixMatch:
         final picked = await showFixMatchDialog(
@@ -411,7 +543,25 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       if (_availability == 'Downloading' && item.isReady) continue;
       groups.putIfAbsent(item.groupKey, () => []).add(item);
     }
+    // Keyed like a title's files ('type:id'), so a series already holding
+    // episodes shows the next one's search on its existing poster.
+    final pendingByKey = <String, PendingTitleDownload>{
+      for (final p in PendingTitleDownloads.entries.value.values)
+        if ((_filter == 'All' ||
+                _filter == (p.type == 'series' ? 'Shows' : 'Movies')) &&
+            _availability != 'Downloaded')
+          '${p.type}:${p.id}': p,
+    };
     final posters = [
+      for (final entry in pendingByKey.entries)
+        if (!groups.containsKey(entry.key))
+          StremioMeta(
+            id: entry.key,
+            type: entry.value.type,
+            name: entry.value.title,
+            poster: entry.value.poster,
+            year: entry.value.year,
+          ),
       for (final entry in groups.entries)
         StremioMeta(
           id: entry.key,
@@ -564,7 +714,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           loadingMore: false,
                           exhausted: true,
                           onLoadMore: () {},
+                          progressOf: (item) => _watched[item.id],
                           downloadOf: (item) {
+                            final pending = pendingByKey[item.id];
+                            if (pending != null) {
+                              // Negative: preparing, no percentage yet.
+                              return (value: -1, status: pending.phase.label);
+                            }
                             final summary = _summary(groups[item.id]!);
                             return summary.inFlight
                                 ? (
@@ -574,11 +730,29 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 : null;
                           },
                           onOpen: (item) async {
-                            await openDownloadedItem(context, groups[item.id]!);
+                            final group = groups[item.id];
+                            if (group == null) {
+                              final pending = pendingByKey[item.id];
+                              if (pending != null) {
+                                await _showPendingOptions(pending);
+                              }
+                              return;
+                            }
+                            await openDownloadedItem(context, group);
                             _refresh();
+                            // Back from the detail page, likely from playing:
+                            // the bar must show where they stopped.
+                            unawaited(_loadWatched());
                           },
-                          onOptions: (item) =>
-                              _showOptions(item, groups[item.id]!),
+                          onOptions: (item) {
+                            final group = groups[item.id];
+                            final pending = pendingByKey[item.id];
+                            if (group != null) {
+                              unawaited(_showOptions(item, group));
+                            } else if (pending != null) {
+                              unawaited(_showPendingOptions(pending));
+                            }
+                          },
                         ),
                       ),
               ),
@@ -712,7 +886,14 @@ Future<void> openDownloadedItem(
             : null,
         initialSeason: ready.first.media?.season,
         initialEpisode: ready.first.media?.episode,
-        onResume: (_) => playFallback(routeContext),
+        // Read from this device only, so the button says "Continue 21:44"
+        // in airplane mode exactly as it does online.
+        resumeInfoLoader: () => downloadedResumeInfo(media, ready),
+        onResume: (promised) => playFallback(
+          routeContext,
+          season: promised?.season,
+          episode: promised?.episode,
+        ),
         onQuickPlay: (selection) => playFallback(
           routeContext,
           season: selection.season,
@@ -735,6 +916,75 @@ Future<void> openDownloadedItem(
       ),
     ),
   );
+}
+
+/// Where a downloaded title's Continue button lands, from progress saved on
+/// this device: a movie with a saved position, or the most recently watched
+/// downloaded episode that is still in progress. Falls back to the first
+/// downloaded episode, not started.
+@visibleForTesting
+Future<({bool started, int? season, int? episode})> downloadedResumeInfo(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  final latest = await _latestDownloadedProgress(media, ready);
+  if (latest != null) {
+    return (started: true, season: latest.season, episode: latest.episode);
+  }
+  if (media.type != 'series') {
+    return (started: false, season: null, episode: null);
+  }
+  final first = ready.isEmpty ? null : ready.first.media;
+  return (started: false, season: first?.season, episode: first?.episode);
+}
+
+/// How far into a downloaded title the user is (0..1) for its library tile:
+/// the movie, or the most recently watched downloaded episode still in
+/// progress. Null when nothing is in progress.
+@visibleForTesting
+Future<double?> downloadedWatchFraction(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  final latest = await _latestDownloadedProgress(media, ready);
+  if (latest == null) return null;
+  final position = (latest.state['positionMs'] as num?)?.toInt() ?? 0;
+  final duration = (latest.state['durationMs'] as num?)?.toInt() ?? 0;
+  if (duration <= 0) return null;
+  return (position / duration).clamp(0.0, 1.0);
+}
+
+/// The in-progress saved position for a downloaded title: the movie's, or
+/// the most recently updated one among its downloaded episodes.
+Future<({int? season, int? episode, Map<String, dynamic> state})?>
+_latestDownloadedProgress(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  if (media.type != 'series') {
+    final state = await StorageService.getVideoPlaybackStateByImdbId(media.id);
+    if (resumeTimestampFrom(state) == null) return null;
+    return (season: null, episode: null, state: state!);
+  }
+  final progress = await StorageService.getMergedEpisodeProgress(
+    seriesTitle: media.title,
+    imdbId: media.id,
+  );
+  ({int? season, int? episode, Map<String, dynamic> state})? latest;
+  var latestAt = -1;
+  for (final item in ready) {
+    final season = item.media?.season;
+    final episode = item.media?.episode;
+    if (season == null || episode == null) continue;
+    final state = progress['${season}_$episode'];
+    if (resumeTimestampFrom(state) == null) continue;
+    final at = (state!['updatedAt'] as num?)?.toInt() ?? 0;
+    if (at > latestAt) {
+      latestAt = at;
+      latest = (season: season, episode: episode, state: state);
+    }
+  }
+  return latest;
 }
 
 /// The user's Cinemeta install when present, else the stock one — the

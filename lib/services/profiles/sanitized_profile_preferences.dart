@@ -285,6 +285,7 @@ abstract final class SanitizedProfilePreferences {
     'compact',
     'tiers',
     'cinema',
+    'glass',
     'two_tier',
   };
 

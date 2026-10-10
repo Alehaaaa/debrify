@@ -3,6 +3,7 @@ import Flutter
 import TVServices
 import AVFoundation
 import AVKit
+import MediaPlayer
 import CryptoKit
 import Security
 
@@ -621,10 +622,119 @@ private final class TvOsProfilePrivacyController {
     }
 }
 
+// MARK: - Now Playing (Control Center, Siri Remote, AirPods)
+
+/// The in-app player's Now Playing entry on Apple TV: title, poster and
+/// progress in Control Center, with play/pause/skip/seek routed back to Dart
+/// over `debrify/media_session` (fed by MediaSessionService). It deliberately
+/// leaves AVAudioSession alone: on tvOS mpv's audio output owns the session
+/// (see `outputChannelCount` below) and already plays exclusively.
+private final class TvNowPlayingBridge {
+    private var channel: FlutterMethodChannel?
+    private var commandsInstalled = false
+    private var info: [String: Any] = [:]
+    private var canNext = false
+    private var canPrevious = false
+
+    func install(on messenger: FlutterBinaryMessenger) -> FlutterMethodChannel {
+        let channel = FlutterMethodChannel(name: "debrify/media_session", binaryMessenger: messenger)
+        channel.setMethodCallHandler { [weak self] call, result in
+            guard let self else { result(nil); return }
+            switch call.method {
+            case "update":
+                self.update(call.arguments as? [String: Any] ?? [:])
+                result(nil)
+            case "clear":
+                self.clear()
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+        self.channel = channel
+        return channel
+    }
+
+    private func send(_ action: String, _ extra: [String: Any] = [:]) {
+        var args = extra
+        args["action"] = action
+        DispatchQueue.main.async { self.channel?.invokeMethod("command", arguments: args) }
+    }
+
+    private func installCommands() {
+        guard !commandsInstalled else { return }
+        commandsInstalled = true
+        let center = MPRemoteCommandCenter.shared()
+        center.playCommand.addTarget { [weak self] _ in self?.send("play"); return .success }
+        center.pauseCommand.addTarget { [weak self] _ in self?.send("pause"); return .success }
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in self?.send("toggle"); return .success }
+        center.nextTrackCommand.addTarget { [weak self] _ in self?.send("next"); return .success }
+        center.previousTrackCommand.addTarget { [weak self] _ in self?.send("previous"); return .success }
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            self?.send("seek", ["positionMs": Int(event.positionTime * 1000)])
+            return .success
+        }
+    }
+
+    private func setCommandsEnabled(_ enabled: Bool) {
+        let center = MPRemoteCommandCenter.shared()
+        for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
+                        center.changePlaybackPositionCommand] {
+            command.isEnabled = enabled
+        }
+        center.nextTrackCommand.isEnabled = enabled && canNext
+        center.previousTrackCommand.isEnabled = enabled && canPrevious
+    }
+
+    private func update(_ args: [String: Any]) {
+        installCommands()
+        if let value = args["title"] as? String { info[MPMediaItemPropertyTitle] = value }
+        if args.keys.contains("subtitle") {
+            if let value = args["subtitle"] as? String {
+                info[MPMediaItemPropertyArtist] = value
+            } else {
+                info.removeValue(forKey: MPMediaItemPropertyArtist)
+            }
+        }
+        if let value = args["canNext"] as? Bool { canNext = value }
+        if let value = args["canPrevious"] as? Bool { canPrevious = value }
+        info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
+        if let ms = args["durationMs"] as? NSNumber {
+            info[MPMediaItemPropertyPlaybackDuration] = ms.doubleValue / 1000
+        }
+        if let ms = args["positionMs"] as? NSNumber {
+            info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = ms.doubleValue / 1000
+        }
+        if let playing = args["playing"] as? Bool {
+            let rate = (args["rate"] as? NSNumber)?.doubleValue ?? 1
+            info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? rate : 0
+            info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+        }
+        if args["clearArtwork"] as? Bool == true {
+            info.removeValue(forKey: MPMediaItemPropertyArtwork)
+        }
+        if let data = (args["artwork"] as? FlutterStandardTypedData)?.data,
+           let image = UIImage(data: data) {
+            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        }
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        setCommandsEnabled(true)
+    }
+
+    private func clear() {
+        info = [:]
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        if commandsInstalled { setCommandsEnabled(false) }
+    }
+}
+
 @main
 class AppDelegate: FlutterAppDelegate {
     /// Retained so the channel outlives `application(_:didFinishLaunchingWithOptions:)`.
     private var logChannel: FlutterMethodChannel?
+    private let nowPlaying = TvNowPlayingBridge()
+    private var nowPlayingChannel: FlutterMethodChannel?
     private var packageInfoChannel: FlutterMethodChannel?
     private var keyboardChannel: FlutterMethodChannel?
     private var urlChannel: FlutterMethodChannel?
@@ -709,6 +819,7 @@ class AppDelegate: FlutterAppDelegate {
             result(nil)
         }
         self.logChannel = logChannel
+        nowPlayingChannel = nowPlaying.install(on: flutterViewController.binaryMessenger)
 
         // SecretVault derives its at-rest encryption key from a stable
         // per-install identifier; device_info_plus has no tvOS implementation,

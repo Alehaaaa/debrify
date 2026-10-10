@@ -3057,6 +3057,16 @@ class AndroidTvTorrentPlayerActivity : AppCompatActivity() {
         }
 
         player = playerBuilder.build()
+        // Own the device's audio like every media player: pause whatever else
+        // is playing on start, pause on a call or another player, and give
+        // focus back on exit. ExoPlayer manages focus itself given this flag.
+        player?.setAudioAttributes(
+            androidx.media3.common.AudioAttributes.Builder()
+                .setUsage(C.USAGE_MEDIA)
+                .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
+                .build(),
+            /* handleAudioFocus = */ true,
+        )
         player?.setPlaybackSpeed(playbackSpeeds[playbackSpeedIndex])
 
         player?.addListener(playbackListener)

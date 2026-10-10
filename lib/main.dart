@@ -56,6 +56,7 @@ import 'services/iptv_catalog_refresh_service.dart';
 import 'services/profiles/local_backup/local_backup_archive.dart'
     show LocalBackupScratch;
 import 'services/profiles/profile_bootstrap.dart';
+import 'services/tracker_scrobble_outbox.dart';
 import 'services/profiles/profile_database_adoption_gate.dart';
 import 'services/profiles/profile_migration_service.dart';
 import 'services/profiles/profile_native_lock_bridge.dart';
@@ -616,6 +617,10 @@ Future<void> _continueApplicationStartup() async {
   // any crash-interrupted generation adoption, but still before ProfileGate
   // paints the recreated session.
   await TvPlaybackRecovery.initialize();
+  // Deliver tracker progress queued while offline (a downloaded title watched
+  // on a plane) now, and again whenever the connection comes back — not only
+  // after the next play happens to queue something new.
+  TrackerScrobbleOutbox.instance.initialize();
   // These initializers may touch profile-sensitive state and therefore start
   // only after the immutable runtime mode and active scope are installed.
   if (!ProfileRuntime.isProfileCommitted) {
@@ -2826,6 +2831,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     // otherwise tap-tap-back inside the 2s window could exit on what the
     // user experienced as a single back press.
     if (changed) _lastBackPressTime = null;
+    // Swiped/tapped tabs stay mounted in the pager, so a text field focused on
+    // the page being left keeps its focus — and its soft keyboard — over every
+    // page after it. Leaving a page ends its editing. TV is excluded: there
+    // focus IS the remote's cursor, which the sidebar hand-off owns.
+    if (changed && !_isAndroidTv) {
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() {
       _selectedIndex = index;
     });

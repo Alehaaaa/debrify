@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../utils/platform_util.dart';
+import '../../utils/tv_keys.dart';
 
 import '../../services/debrify_image_cache.dart';
 import '../../services/imdb_enrichment_service.dart';
@@ -238,6 +239,7 @@ class _DetailStageState extends State<DetailStage> {
                 onUp: () => m.focus.focusEntry(),
                 onDown: _focusPanel,
                 onTap: m.onBrowse!,
+                onLongPress: m.onBrowseLongPress,
               ),
             ],
           ],
@@ -522,6 +524,7 @@ class _TabButton extends StatefulWidget {
   final bool trapLeft;
   final bool trapRight;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback onUp;
   final VoidCallback onDown;
 
@@ -532,6 +535,7 @@ class _TabButton extends StatefulWidget {
     required this.trapLeft,
     required this.trapRight,
     required this.onTap,
+    this.onLongPress,
     required this.onUp,
     required this.onDown,
   });
@@ -543,6 +547,16 @@ class _TabButton extends StatefulWidget {
 class _TabButtonState extends State<_TabButton> {
   bool _focused = false;
   static final _tv = PlatformUtil.isAndroidTvCached;
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -559,6 +573,7 @@ class _TabButtonState extends State<_TabButton> {
         focusNode: widget.focusNode,
         onFocusChange: (f) {
           setState(() => _focused = f);
+          if (!f) _hold.reset();
           if (f) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || !context.mounted) return;
@@ -572,6 +587,10 @@ class _TabButtonState extends State<_TabButton> {
           }
         },
         onKeyEvent: (node, event) {
+          // With a hold action, OK opens on release and a held OK holds.
+          if (widget.onLongPress != null && isActivate(event.logicalKey)) {
+            return _hold.handle(event);
+          }
           if (event is KeyDownEvent && isActivate(event.logicalKey)) {
             widget.onTap();
             return KeyEventResult.handled;
@@ -580,6 +599,7 @@ class _TabButtonState extends State<_TabButton> {
         },
         child: GestureDetector(
           onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
           behavior: HitTestBehavior.opaque,
           child: Container(
             padding: const EdgeInsets.fromLTRB(2, 12, 2, 9),

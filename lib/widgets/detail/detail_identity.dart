@@ -185,6 +185,9 @@ class DetailGhostButton extends StatefulWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+
+  /// Touch long-press, or OK held on a remote.
+  final VoidCallback? onLongPress;
   final bool busy;
   final FocusNode? focusNode;
 
@@ -196,6 +199,7 @@ class DetailGhostButton extends StatefulWidget {
     required this.label,
     required this.icon,
     required this.onTap,
+    this.onLongPress,
     this.busy = false,
     this.focusNode,
     this.progress,
@@ -207,9 +211,32 @@ class DetailGhostButton extends StatefulWidget {
 
 class _DetailGhostButtonState extends State<DetailGhostButton> {
   bool _focused = false;
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final button = _buildButton(context);
+    if (widget.onLongPress == null) return button;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) => isActivateOrSpaceKey(event.logicalKey)
+          ? _hold.handle(event)
+          : KeyEventResult.ignored,
+      child: button,
+    );
+  }
+
+  Widget _buildButton(BuildContext context) {
     final t = DetailThemeScope.of(context);
     return DetailFocusRing(
       focused: _focused,
@@ -221,7 +248,11 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
           focusNode: widget.focusNode,
           borderRadius: t.brBtn,
           onTap: widget.onTap,
-          onFocusChange: (f) => setState(() => _focused = f),
+          onLongPress: widget.onLongPress,
+          onFocusChange: (f) {
+            setState(() => _focused = f);
+            if (!f) _hold.reset();
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -786,6 +817,7 @@ class DetailActionRow extends StatelessWidget {
           label: model.downloadLabel,
           icon: model.downloadState.icon,
           onTap: model.onBrowse!,
+          onLongPress: model.onBrowseLongPress,
           progress: model.downloadProgress,
         ),
       if (model.onToggleMyWatchlist != null)

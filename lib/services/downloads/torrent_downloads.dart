@@ -333,6 +333,25 @@ abstract final class TorrentDownloads {
 
     BuildContext? live() => context.mounted ? context : appContext;
 
+    // The title shows on the Downloads page from here on — poster plus the
+    // phase — until a real download task takes over (or the search ends).
+    final pending = PendingTitleDownloads.begin(
+      PendingTitleDownload(
+        id: imdbId,
+        title: label.isEmpty ? request.title : label,
+        type: isMovie ? 'movie' : 'series',
+        poster: meta.posterUrl,
+        year: meta.year,
+        phase: PendingDownloadPhase.searching,
+        onCancel: () {
+          cancelled = true;
+          closeOverlay();
+        },
+      ),
+    );
+    void phase(PendingDownloadPhase value) =>
+        PendingTitleDownloads.update(pending, imdbId, value);
+
     try {
       final rules = await StorageService.getQuickPlayRules(isMovie: isMovie);
       var filters = await SavedSourceFilters.load();
@@ -346,6 +365,7 @@ abstract final class TorrentDownloads {
         Set<int>? wanted,
         required PlaybackMeta itemMeta,
       }) async {
+        phase(PendingDownloadPhase.searching);
         final List<Torrent> found;
         if (isMovie || ep != null) {
           found = await TorrentPlaybackService.searchCuratedSources(
@@ -382,6 +402,7 @@ abstract final class TorrentDownloads {
           rules: rules,
         );
         if (torrents.isNotEmpty) {
+          phase(PendingDownloadPhase.checking);
           final (
             resolved,
             winner,
@@ -400,6 +421,7 @@ abstract final class TorrentDownloads {
           if (target == null) return null;
           if (resolved != null && winner != null) {
             closeOverlay();
+            phase(PendingDownloadPhase.adding);
             await _download(
               target,
               resolved,
@@ -422,6 +444,7 @@ abstract final class TorrentDownloads {
         final target = live();
         if (direct.isNotEmpty && target != null) {
           closeOverlay();
+          phase(PendingDownloadPhase.adding);
           await downloadDirectStream(target, direct.first, meta: itemMeta);
           return null;
         }
@@ -487,6 +510,7 @@ abstract final class TorrentDownloads {
       return done;
     } finally {
       closeOverlay();
+      PendingTitleDownloads.end(pending, imdbId);
     }
   }
 

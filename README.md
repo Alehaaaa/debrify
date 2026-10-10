@@ -1,243 +1,210 @@
 <p align="center">
-  <img src="assets/app_icon.png" alt="Debrify" width="120" height="120">
+  <img src="assets/app_icon.png" alt="Nextup" width="120" height="120">
 </p>
 
-<h1 align="center">Debrify</h1>
-
-> This personal fork adds `debrify://episode` links, allowing Up Next for Trakt
-> to open a Debrify show directly at the requested season and episode. GitHub
-> Actions keeps the `nextup` branch current with upstream and builds macOS releases.
+<h1 align="center">Nextup</h1>
 
 <p align="center">
-  <strong>Your personal media hub</strong><br>
-  One app to browse, stream, and organize media from your own services — with a cinematic player built in
+  <strong>An independent, unofficial fork of <a href="https://github.com/varunsalian/debrify">Debrify</a></strong><br>
+  The same media hub underneath, with a reworked interface, a Reels feed, cross-tracker sync, offline downloads, and per-commit iOS builds.
 </p>
 
 <p align="center">
-  <a href="https://github.com/varunsalian/debrify/releases"><img src="https://img.shields.io/github/v/release/varunsalian/debrify?style=flat-square&color=6366f1" alt="Release"></a>
-  <a href="https://github.com/varunsalian/debrify/stargazers"><img src="https://img.shields.io/github/stars/varunsalian/debrify?style=flat-square&color=f59e0b" alt="Stars"></a>
-  <a href="https://github.com/varunsalian/debrify/releases"><img src="https://img.shields.io/github/downloads/varunsalian/debrify/total?style=flat-square&color=22c55e" alt="Downloads"></a>
+  <a href="https://github.com/Alehaaaa/debrify/releases/latest"><img src="https://img.shields.io/github/v/release/Alehaaaa/debrify?include_prereleases&style=flat-square&color=6366f1" alt="Latest release"></a>
+  <a href="https://github.com/Alehaaaa/debrify/releases"><img src="https://img.shields.io/github/downloads/Alehaaaa/debrify/total?style=flat-square&color=22c55e" alt="Downloads"></a>
+  <a href="https://github.com/Alehaaaa/debrify/commits/nextup"><img src="https://img.shields.io/github/last-commit/Alehaaaa/debrify/nextup?style=flat-square&color=f59e0b" alt="Last commit"></a>
   <img src="https://img.shields.io/badge/Flutter-3.8+-02569B?style=flat-square&logo=flutter&logoColor=white" alt="Flutter">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue?style=flat-square" alt="GNU AGPL v3"></a>
 </p>
 
 <p align="center">
-  <a href="https://debrify.tv/"><strong>Website</strong></a> &bull;
-  <a href="https://github.com/varunsalian/debrify/releases"><strong>Download</strong></a> &bull;
-  <a href="#-features">Features</a> &bull;
-  <a href="#-supported-platforms">Platforms</a> &bull;
-  <a href="https://www.reddit.com/r/debrify/">Reddit</a> &bull;
-  <a href="https://discord.gg/xuAc4Q2c9G">Discord</a>
+  <a href="https://github.com/Alehaaaa/debrify/releases/latest"><strong>Download</strong></a> &bull;
+  <a href="#-whats-different-in-nextup">What's different</a> &bull;
+  <a href="#-installation">Install</a> &bull;
+  <a href="#-iphone--ipad-sidestore--altstore-source">SideStore source</a> &bull;
+  <a href="https://github.com/Alehaaaa/debrify/issues">Issues</a>
 </p>
+
+> [!IMPORTANT]
+> Nextup is a personal fork of Debrify maintained by [@Alehaaaa](https://github.com/Alehaaaa). It is **not** the official Debrify
+> app and is not endorsed by or affiliated with the Debrify project. For the official app, go to
+> [varunsalian/debrify](https://github.com/varunsalian/debrify) and [debrify.tv](https://debrify.tv/).
+> Please report problems with Nextup **here**, not in the official Debrify channels.
 
 ---
 
 ## What is Debrify?
 
-Debrify is an open-source, cross-platform **media hub**. It brings the services you already use — cloud storage accounts, personal WebDAV servers, IPTV playlists, Stremio addon catalogs, YouTube — into one place, with a **built-in player** tuned for movies and TV, a **download manager**, **Trakt/Simkl/MDBList tracking**, and a **cinematic UI** that works just as well on a phone, a desktop, or a TV with a remote.
+Debrify is an open-source, cross-platform **media hub** by Varun Salian and contributors. It brings the services you already use — cloud storage accounts, personal WebDAV servers, IPTV playlists, Stremio addon catalogs, YouTube — into one place, with a built-in player tuned for movies and TV, a download manager, Trakt/Simkl/MDBList tracking, and a UI that works on a phone, a desktop, or a TV with a remote.
 
-You connect your own accounts and sources. Debrify gives them one library, one player, and one interface everywhere.
+Nextup keeps all of that and tracks upstream on the `nextup` branch, layering the changes below on top.
 
-## Responsible Use
+## ✨ What's different in Nextup
 
-Debrify does not host, sell, provide, or bundle media content. Search sources, addons, indexers, WebDAV servers, IPTV playlists, and cloud accounts are user-configured integrations. Only use Debrify with content, services, and sources that you own, created, licensed, or are otherwise authorized to access.
+### 🎞️ Reels
+- A vertical, swipeable **Reels** tab of official scene clips and trailers pulled from TMDB
+- Clips start on arrival, the next one is prepared before you swipe, tap to pause, full-HD playback
+- YouTube trailers resolve through a Cobalt relay on every platform (including iOS and tvOS), with the old low-res path as a fallback
+- Share a reel, or jump straight from a clip to its title
 
-Third-party plugins, addons, indexers, playlists, and services are controlled by their respective providers or users. Debrify does not endorse using any integration to infringe copyright or violate a provider's terms. Do not submit or distribute configurations intended to facilitate unauthorized access to copyrighted content.
+### 📈 Tracking & sync
+- **Continue Watching syncs across Trakt, Simkl and MDBList**, always moving to the furthest point you've reached on any of them
+- Watch history and watchlists sync between trackers; local-only tracking still works offline
+- **`debrify://episode` deep links** — apps like *Up Next for Trakt* can open a show directly at a given season and episode
+- OMDb ratings and IMDb credits on title pages
 
-For more detail, see [Content Responsibility](https://debrify.tv/content-responsibility/).
+### ⬇️ Downloads, offline-first
+- Downloads rebuilt as one system: background downloads, one question to start, season/series scopes
+- **Auto-download** with saved filters, including a codec filter
+- A local library that opens fully **offline** — artwork, title pages and playback all work with no network or provider connected
+- Radial progress on posters, and only downloaded episodes shown in the downloaded view
 
----
+### 🎨 Interface
+- A new app icon and splash animation
+- **Looks** split into independent *Structure* and *Colour palette* choices; the player dock can follow the app colour or use its own
+- Frosted-glass surfaces, glass search and navigation, refreshed fonts and motion
+- Continuous swipe navigation between tabs
+- **Hold / right-click menus on every card** across Home, Discover, Downloads and the calendar
+- One detail page for every catalog title; *More Like This* and a Top 10 rail
+- Customisable sidebar — reorder or hide sections, on desktop and phone
 
-## ✨ Features
+### ▶️ Player
+- One loader for every stream; downloaded files skip the stream startup screen
+- Double-tap the centre to play/pause, touch lock, pinch-to-fill framing
+- Playback published to the OS media controls (lock screen, Control Center, media keys)
 
-### 🎬 Built-in Player
-A native player (media_kit/libmpv) designed for long-form viewing:
-- Audio and subtitle track switching on the fly
-- Subtitle search, autoload, styling, and a real-time sync slider
-- Resume playback — picks up where you left off, even across sources and devices
-- Episode guides, next-episode navigation, sleep timer, playback speed
-- Gesture controls on mobile; fully remote-driven on TV
+### ☁️ Backup & devices
+- **WebDAV saved syncs** with snapshot versions you can roll back to
+- Restoring a backup updates matching profiles instead of duplicating them
+- An optional [Personal build](docs/PERSONAL_BUILD.md) that installs side by side with the normal app
 
-### ☁️ Your Cloud Services
-Connect the storage and streaming-cache accounts you already pay for — Real-Debrid, Torbox, Premiumize, PikPak, and AllDebrid are all supported with full parity:
-- Stream or download any file in your account
-- Browse and manage your cloud library
-- Account dashboard with status, expiration, and usage
-- Playlists and episode tracking across every provider
-
-### 🏠 Personal Servers
-- **WebDAV** — browse your own server, stream with credentials handled by the app, build playlists, download locally
-- **Remote Setup** — securely send your full configuration between your own devices
-- **Backup & Restore** — export everything to a single file, restore anywhere
-
-### 🔎 Discovery & Catalogs
-- **Stremio addons** — install addon catalogs, search across them, and play through your connected accounts
-- **Catalog browsing** — poster grids, detail pages with ratings and Parents Guide, Watch Next recommendations
-- **Quick Play** — long-press any poster to go straight into playback
-- **Optional search plugins** — bring your own sources, including self-hosted Jackett and Prowlarr indexers
-
-### 📡 Live & Lean-Back TV
-- **IPTV** — M3U and Xtream playlists with an EPG guide, catchup, DVR recording, favorites, categories, and playlists that scale to tens of thousands of channels
-- **Stremio TV** — browse catalogs as live channels with a cinematic tuner
-- **Debrify TV** — build your own always-on channels from keyword recipes and your connected accounts
-
-### 📈 Tracking
-- **Trakt** — in-player scrobbling, a live Now Playing card, continue-watching rails, and an upcoming-episodes calendar
-- **Simkl and MDBList** — sync progress and lists across services; local-only tracking works fully offline
-
-### ⬇️ Download Manager
-- Background queue with pause/resume and batch operations
-- Save from any connected source — cloud accounts, WebDAV, YouTube
-- Works on mobile and desktop, with scoped-folder support on Android
-
-### ▶️ YouTube
-- On-device search, no account or proxy required
-- Resolution picker, endless scroll, downloads, and proper audio muxing into the built-in player
-
-### 🔌 External Players
-- Hand any stream to your preferred player app, including DeoVR for VR playback
+### 🧹 Removed or hidden
+- Upstream analytics removed
+- Donation and support prompts removed
+- Plain keyword (torrent) search and the catalog Sources picker hidden for now
+- The in-app updater checks **Nextup's** releases
 
 ---
 
-## 📺 Android TV & Apple TV
+## 📱 Downloads
 
-A dedicated lean-back experience for the living room:
+All builds are on the [**Releases**](https://github.com/Alehaaaa/debrify/releases) page. Grab the [latest release](https://github.com/Alehaaaa/debrify/releases/latest) unless you know you want an older one.
 
-- **Cinematic UI** — poster grids, detail screens, and episode guides designed for big screens and low-end hardware
-- **Remote-first** — full D-pad navigation everywhere, including an in-app keyboard with voice input
-- **Quick Play** — long-press any card to start watching immediately
-- **Subtitle tools** — search, offset sync, and full styling from the couch
-- **Channel surfing** — IPTV EPG, quick guide, and instant zapping
+| Platform | File | Notes |
+|:---------|:-----|:------|
+| **Android** | `debrify-<version>-android.apk` | Phones and tablets |
+| **Android TV** | `debrify-<version>-androidtv.apk` | Full D-pad and remote support |
+| **Windows** | Installer | Windows 10/11 |
+| **macOS** | DMG | Intel and Apple Silicon |
+| **Linux** | AppImage | x86_64 and ARM64; needs dependencies ([see below](#linux)) |
+| **iOS / iPadOS** | IPA | Unsigned, sideload — or use the [SideStore source](#-iphone--ipad-sidestore--altstore-source) |
+| **Apple TV** | tvOS IPA | Unsigned, sideload |
 
----
-
-## 📱 Supported Platforms
-
-One codebase, full feature support across all platforms.
-
-| Platform | Download | Notes |
-|:---------|:---------|:------|
-| **Android** | [APK](https://github.com/varunsalian/debrify/releases) | Phones and tablets |
-| **Android TV** | [APK](https://github.com/varunsalian/debrify/releases) | Full D-pad navigation and remote support |
-| **Windows** | [Installer](https://github.com/varunsalian/debrify/releases) | Windows 10/11 |
-| **macOS** | [DMG](https://github.com/varunsalian/debrify/releases) | Intel and Apple Silicon |
-| **Linux** | [AppImage](https://github.com/varunsalian/debrify/releases) | x86_64 and ARM64. Requires dependencies ([see install notes](#linux)) |
-| **iOS** | [IPA](https://github.com/varunsalian/debrify/releases) | Unsigned — requires sideloading ([guide](docs/iOS-Installation.md)) |
-| **Apple TV** | [IPA](https://github.com/varunsalian/debrify/releases) | Unsigned tvOS build — requires sideloading; ships with alpha releases |
+Release builds are produced by GitHub Actions whenever a release is published. Already-installed copies on Android, Windows, macOS and Linux will offer the update in-app; on iPhone, iPad and Apple TV the app tells you to download and reinstall the new IPA.
 
 ---
 
 ## 🚀 Installation
 
 ### Android / Android TV
-Download the APK from [Releases](https://github.com/varunsalian/debrify/releases) and install. On TV, use a file manager app like Downloader or install via ADB.
+Download the APK from [Releases](https://github.com/Alehaaaa/debrify/releases/latest) and install it. On TV, use a file manager such as Downloader, or install over ADB.
 
 ### Windows
-Download the installer, run it, and launch from the Start Menu. First run may trigger SmartScreen — click "More info" → "Run anyway".
+Run the installer and launch from the Start Menu. SmartScreen may warn on first run — click **More info → Run anyway**.
 
 ### macOS
-Download the DMG, drag Debrify to Applications. First launch: right-click → Open (app is not notarized).
+Open the DMG and drag the app to Applications. The app isn't notarized, so the first time, right-click it → **Open**.
 
 ### Linux
 ```bash
-# Install dependencies (required)
+# Dependencies (required)
 # Ubuntu 24.04+
 sudo apt install libmpv2 libsqlite3-dev libfuse2
-
 # Ubuntu 22.04 / Debian
 sudo apt install libmpv1 libsqlite3-dev libfuse2
-
 # Fedora
 sudo dnf install mpv-libs sqlite-devel fuse-libs
-
 # Arch
 sudo pacman -S mpv sqlite fuse2
 
-# Run the AppImage
 chmod +x debrify-*.AppImage
 ./debrify-*.AppImage
 ```
 
-### iOS
-Download the unsigned IPA and sideload using **AltStore** or **Sideloadly**. See the [iOS Installation Guide](docs/iOS-Installation.md) for step-by-step instructions.
+### iOS / Apple TV
+Download the unsigned IPA and sideload it with **SideStore**, **AltStore** or **Sideloadly** (Apple TV: Sideloadly or atvloadly). See the [iOS installation guide](docs/iOS-Installation.md).
 
-#### SideStore / AltStore source (commit builds)
-This fork builds an IPA for every commit to `nextup` and publishes it to a source, so updates show up in the app. In SideStore (or AltStore), open **Sources → +** and add:
+> **Note:** Sideloaded apps with a free Apple account need re-signing every 7 days. SideStore and AltStore can do this automatically.
+
+## 📲 iPhone & iPad: SideStore / AltStore source
+
+Every commit to `nextup` builds an IPA and publishes it to a source, so new builds show up as updates inside SideStore or AltStore. Open **Sources → +** and add:
 
 ```
 https://raw.githubusercontent.com/Alehaaaa/debrify/sidestore/apps.json
 ```
 
-Each build lists what changed since the previous one, and the source keeps the last 10 builds. A new build only replaces the listed one after its IPA has finished uploading, so there's always an installable version. The older `releases/download/ios-commits/apps.json` URL is retired; use the one above.
+- Each build lists the commits since the previous one
+- The source keeps the last 10 builds
+- A new build only replaces the listed one once its IPA has finished uploading, so there's always an installable version
+- The IPAs themselves live on the rolling [`ios-commits`](https://github.com/Alehaaaa/debrify/releases/tag/ios-commits) pre-release
 
-> **Note:** Sideloaded apps require re-signing every 7 days. AltStore can handle this automatically.
+These are untested commit builds — use a numbered [release](https://github.com/Alehaaaa/debrify/releases/latest) if you want something steadier. The older `releases/download/ios-commits/apps.json` URL is retired.
 
 ---
 
-## Before You Read the Code
+## Responsible Use
 
-A warning: this is not a clean codebase.
+Debrify does not host, sell, provide, or bundle media content. Search sources, addons, indexers, WebDAV servers, IPTV playlists, and cloud accounts are user-configured integrations. Only use this app with content, services, and sources that you own, created, licensed, or are otherwise authorized to access.
 
-Debrify grew rapidly around features rather than a planned architecture. It contains enormous files, god classes, static state, duplicated provider logic, tightly coupled UI and business logic, inconsistent abstractions, legacy implementations, and more special cases than anyone should be proud of.
+Third-party plugins, addons, indexers, playlists, and services are controlled by their respective providers or users. Using any integration to infringe copyright or violate a provider's terms is not endorsed. See the upstream [Content Responsibility](https://debrify.tv/content-responsibility/) page for more detail.
 
-Some newer subsystems are better structured and heavily tested, but the repository as a whole does not represent Flutter best practices. It represents a product that kept growing while architectural cleanup repeatedly lost to the next feature or platform problem.
+---
 
-The application works and solves difficult problems, but maintaining it can be painful. Refactoring, simplification, and removal of legacy code are welcome.
-
-## 🛠️ Building from Source
+## 🛠️ Building from source
 
 ```bash
-git clone https://github.com/varunsalian/debrify.git
+git clone -b nextup https://github.com/Alehaaaa/debrify.git
 cd debrify
 flutter pub get
 flutter run
 ```
 
-**Build commands:**
 ```bash
-flutter build apk --release              # Android
+flutter build apk --release               # Android
 flutter build ios --release --no-codesign # iOS (unsigned)
-flutter build windows --release          # Windows
-flutter build macos --release            # macOS
-flutter build linux --release            # Linux
+flutter build windows --release           # Windows
+flutter build macos --release             # macOS
+flutter build linux --release             # Linux
 ```
 
+TMDB metadata needs a read-access token passed at build time (`--dart-define-from-file`, with `TMDB_READ_ACCESS_TOKEN` and optionally `OMDB_API_KEY`); without it the app builds but metadata is disabled. To install a second copy alongside the normal one, see [Personal build](docs/PERSONAL_BUILD.md).
+
+### Branches
+- **`nextup`** — Nextup's main branch; upstream is merged in regularly
+- **`sidestore`** — generated; holds the SideStore/AltStore source, don't commit to it
+
+### A note on the code
+Upstream is candid that this isn't a clean codebase: it grew around features rather than a planned architecture, with large files, static state and duplicated provider logic alongside newer, well-tested subsystems. That's still true here. [CODEMAP.md](CODEMAP.md) is a good place to start finding your way around.
+
 ---
 
-## 🤝 Contributing
+## 🤝 Contributing & support
 
-1. Fork the repo
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Commit changes: `git commit -am 'Add my feature'`
-4. Push: `git push origin feature/my-feature`
-5. Open a pull request
+Bug reports and pull requests for **Nextup** are welcome on [Issues](https://github.com/Alehaaaa/debrify/issues). Changes that aren't specific to Nextup are often better sent [upstream](https://github.com/varunsalian/debrify) so everyone gets them.
 
----
-
-## 💬 Community
-
-- **Reddit** — [r/debrify](https://www.reddit.com/r/debrify/) for discussion and tips
-- **Discord** — [Join the server](https://discord.gg/xuAc4Q2c9G) for help and updates
-- **Issues** — [Report bugs](https://github.com/varunsalian/debrify/issues) or request features
+Please don't take Nextup problems to the official Debrify Reddit or Discord — they don't support this build.
 
 ---
 
 ## 📄 License
 
-Copyright © 2025–2026 Varun Salian and contributors.
+Debrify is copyright © 2025–2026 Varun Salian and contributors. Nextup's changes are copyright © 2026 Alehaaaa.
 
-Debrify's original source code is free software licensed under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you distribute a modified or unmodified build, you must comply with the AGPL, including its corresponding-source requirements. Modified network-accessible versions must also offer their corresponding source to users.
+The source code is free software under the [GNU Affero General Public License v3.0 only](LICENSE) (`AGPL-3.0-only`). If you distribute a modified or unmodified build, you must comply with the AGPL, including its corresponding-source requirements.
 
-Third-party components and assets remain under their respective licenses. The AGPL does not grant permission to use the Debrify name, logo, or other project branding for modified or unofficial distributions; see the [Trademark Policy](TRADEMARKS.md).
-
----
+Third-party components and assets remain under their own licenses. The AGPL does not grant rights to the Debrify name or branding; see the upstream [Trademark Policy](TRADEMARKS.md).
 
 <p align="center">
-  <a href="https://debrify.tv/">
-    <img src="https://img.shields.io/badge/Visit_Website-debrify.tv-6366f1?style=for-the-badge" alt="Website">
-  </a>
-</p>
-
-<p align="center">
-  <sub>Made with Flutter. Free and open-source software.</sub>
+  <sub>Nextup — built with Flutter. Free and open-source software. Based on <a href="https://github.com/varunsalian/debrify">Debrify</a>.</sub>
 </p>

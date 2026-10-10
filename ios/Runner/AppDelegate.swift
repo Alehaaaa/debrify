@@ -1,3 +1,4 @@
+import AVFoundation
 import Flutter
 import MediaPlayer
 import UIKit
@@ -152,6 +153,75 @@ private final class NowPlayingBridge {
   private var canNext = false
   private var canPrevious = false
 
+  // MARK: Audio ownership
+  //
+  // The player must OWN the device's audio while it plays: pause the user's
+  // music, and be the app iOS lists in Now Playing (iOS only shows an app
+  // whose session is not mixable). mpv's audio output used to take that by
+  // itself, but the ambient trailer / reel engine (`video_player` with
+  // mixWithOthers) switches the app-wide session to playback+mixWithOthers
+  // and never switches it back — after any trailer, the film played OVER the
+  // music and never reached Now Playing.
+  //
+  // So the player claims the session explicitly when it starts playing, and
+  // on close restores whatever the app had before (a muted trailer still on
+  // screen behind the player must stay mixable and silent), then deactivates
+  // with notifyOthers so the music the user was listening to resumes.
+  private var ownsAudio = false
+  private var savedCategory: AVAudioSession.Category?
+  private var savedMode: AVAudioSession.Mode?
+  private var savedOptions: AVAudioSession.CategoryOptions = []
+  private var interruptionObserver: NSObjectProtocol?
+
+  private func claimAudio() {
+    let session = AVAudioSession.sharedInstance()
+    let exclusive = session.category == .playback && session.mode == .moviePlayback
+      && !session.categoryOptions.contains(.mixWithOthers)
+      && !session.categoryOptions.contains(.duckOthers)
+    if ownsAudio && exclusive { return }
+    if !ownsAudio {
+      savedCategory = session.category
+      savedMode = session.mode
+      savedOptions = session.categoryOptions
+    }
+    do {
+      try session.setCategory(.playback, mode: .moviePlayback, options: [])
+      try session.setActive(true)
+      ownsAudio = true
+    } catch {
+      NSLog("NowPlaying: could not claim the audio session: \(error)")
+    }
+    if interruptionObserver == nil {
+      // A call, Siri or another app starting audio takes the session away:
+      // pause like every media app does rather than play on unheard.
+      interruptionObserver = NotificationCenter.default.addObserver(
+        forName: AVAudioSession.interruptionNotification, object: session, queue: .main
+      ) { [weak self] note in
+        guard let self, self.ownsAudio,
+              let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+        self.send("pause")
+      }
+    }
+  }
+
+  private func releaseAudio() {
+    guard ownsAudio else { return }
+    ownsAudio = false
+    if let observer = interruptionObserver {
+      NotificationCenter.default.removeObserver(observer)
+      interruptionObserver = nil
+    }
+    let session = AVAudioSession.sharedInstance()
+    try? session.setActive(false, options: .notifyOthersOnDeactivation)
+    if let category = savedCategory {
+      try? session.setCategory(category, mode: savedMode ?? .default, options: savedOptions)
+    }
+    savedCategory = nil
+    savedMode = nil
+    savedOptions = []
+  }
+
   func install(on messenger: FlutterBinaryMessenger) -> FlutterMethodChannel {
     let channel = FlutterMethodChannel(name: "debrify/media_session", binaryMessenger: messenger)
     channel.setMethodCallHandler { [weak self] call, result in
@@ -250,7 +320,7 @@ private final class NowPlayingBridge {
     #if os(macOS)
     if let playing { center.playbackState = playing ? .playing : .paused }
     #endif
-    _ = playing
+    if playing == true { claimAudio() }
     setCommandsEnabled(true)
   }
 
@@ -264,6 +334,7 @@ private final class NowPlayingBridge {
     center.playbackState = .stopped
     #endif
     if commandsInstalled { setCommandsEnabled(false) }
+    releaseAudio()
   }
 
   private func makeArtwork(_ data: Data) -> MPMediaItemArtwork? {
@@ -273,6 +344,61 @@ private final class NowPlayingBridge {
     guard let image = UIImage(data: data) else { return nil }
     #endif
     return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+  }
+}
+
+// MARK: - System volume (the player's volume swipe)
+
+/// Reads and sets the DEVICE volume for the player's right-side swipe, the
+/// same way the left side sets screen brightness. iOS has no public setter:
+/// the supported route is MPVolumeView's slider. Keeping that (invisible)
+/// view in the window is also what stops iOS drawing its own volume HUD over
+/// the player's.
+private final class SystemVolumeBridge {
+  private var volumeView: MPVolumeView?
+
+  func install(
+    on messenger: FlutterBinaryMessenger,
+    controller: @escaping () -> UIViewController?
+  ) -> FlutterMethodChannel {
+    let channel = FlutterMethodChannel(name: "debrify/system_volume", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { result(nil); return }
+      switch call.method {
+      case "get":
+        result(Double(AVAudioSession.sharedInstance().outputVolume))
+      case "set":
+        let args = call.arguments as? [String: Any]
+        let value = min(max((args?["value"] as? NSNumber)?.floatValue ?? 0, 0), 1)
+        self.set(value, host: controller()?.view)
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    return channel
+  }
+
+  private func slider(host: UIView?) -> UISlider? {
+    if volumeView == nil, let host {
+      // On screen but out of sight: a hidden or alpha-0 view stops working
+      // (and lets the system HUD back in), so park it just off the corner.
+      let view = MPVolumeView(frame: CGRect(x: -2000, y: -2000, width: 1, height: 1))
+      view.alpha = 0.01
+      view.isUserInteractionEnabled = false
+      host.addSubview(view)
+      volumeView = view
+    }
+    return volumeView?.subviews.compactMap { $0 as? UISlider }.first
+  }
+
+  private func set(_ value: Float, host: UIView?) {
+    guard let slider = slider(host: host) else { return }
+    // The slider lays out lazily; a value set before that is dropped.
+    DispatchQueue.main.async {
+      slider.setValue(value, animated: false)
+      slider.sendActions(for: .valueChanged)
+    }
   }
 }
 
@@ -339,6 +465,8 @@ private final class ReelShareBridge {
   private var nowPlayingChannel: FlutterMethodChannel?
   private let reelShare = ReelShareBridge()
   private var reelShareChannel: FlutterMethodChannel?
+  private let systemVolume = SystemVolumeBridge()
+  private var systemVolumeChannel: FlutterMethodChannel?
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
@@ -395,6 +523,7 @@ private final class ReelShareBridge {
       profilePrivacyChannel = profilePrivacy.install(on: registrar.messenger())
       nowPlayingChannel = nowPlaying.install(on: registrar.messenger())
       reelShareChannel = reelShare.install(on: registrar.messenger()) { registrar.viewController }
+      systemVolumeChannel = systemVolume.install(on: registrar.messenger()) { registrar.viewController }
     }
   }
 

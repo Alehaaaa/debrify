@@ -13,29 +13,58 @@ class PlayerDockChoice {
   const PlayerDockChoice(this.value, this.label, this.subtitle);
 }
 
+/// The three genuinely different looks. Adaptive, Compact, Two-Tier and
+/// Cinema Bar are one dock in four arrangements, so they live under
+/// [kPlayerDockLayoutChoices] rather than posing as separate styles.
 const List<PlayerDockChoice> kPlayerDockStyleChoices = [
-  PlayerDockChoice('classic', 'Classic', "Today's controls"),
   PlayerDockChoice(
-    'auto',
-    'Adaptive',
-    'Picks the best layout for the window — recommended',
+    'glass',
+    'Glass',
+    'Minimal frosted controls: play in the middle, one panel below',
   ),
   PlayerDockChoice(
-    'compact',
-    'Compact',
-    'One row: transport, three tools and a More sheet',
+    'dock',
+    'Dock',
+    'Every tool on screen, in your accent colour',
   ),
   PlayerDockChoice(
-    'tiers',
-    'Two-Tier',
-    'Centred transport above the bar, tools wrapping below',
-  ),
-  PlayerDockChoice(
-    'cinema',
-    'Cinema Bar',
-    'Full-width bar — transport, volume and time, tools right',
+    'classic',
+    'Classic',
+    'The original row of labelled buttons',
   ),
 ];
+
+/// How the Dock arranges itself. Stored as the `player_dock_style` value.
+///
+/// Only two real choices: Automatic already picks the one-row, two-row or
+/// wide-bar arrangement from the window size, so forcing two-row or wide is
+/// not offered. Installs that stored `tiers` / `cinema` keep them (the player
+/// still honours both) and show here as Automatic.
+const List<PlayerDockChoice> kPlayerDockLayoutChoices = [
+  PlayerDockChoice(
+    'auto',
+    'Automatic',
+    'One row on phones, a fuller bar on bigger screens',
+  ),
+  PlayerDockChoice('compact', 'Compact', 'Always one row, the rest under More'),
+];
+
+/// Stored `player_dock_style` values that mean "the Dock".
+bool isPlayerDockLayout(String style) => const {
+  'auto',
+  'compact',
+  'tiers',
+  'cinema',
+  'two_tier',
+}.contains(style);
+
+/// The Layout radio a stored Dock value belongs to.
+String playerDockLayoutGroup(String style) =>
+    style == 'compact' ? 'compact' : 'auto';
+
+/// The Style radio a stored value belongs to.
+String playerDockStyleGroup(String style) =>
+    isPlayerDockLayout(style) ? 'dock' : style;
 
 const List<PlayerDockChoice> kPlayerDockPaletteChoices = [
   PlayerDockChoice('app', 'App colour', 'Follows your colour palette'),
@@ -60,33 +89,19 @@ const List<PlayerDockChoice> kPlayerDockSizeChoices = [
 /// Row caption for the Appearance list — the chosen style, plus the palette
 /// when one is actually in effect.
 String playerDockLabel(String style, String palette, [String size = 'auto']) {
-  // Installs from before the arrangements were selectable still store the old
-  // value; it means what 'auto' means.
-  final normalized = style == 'two_tier' ? 'auto' : style;
-  final styleLabel = kPlayerDockStyleChoices
-      .firstWhere(
-        (c) => c.value == normalized,
-        orElse: () => kPlayerDockStyleChoices.first,
-      )
+  final group = playerDockStyleGroup(style);
+  String labelOf(List<PlayerDockChoice> list, String value) => list
+      .firstWhere((c) => c.value == value, orElse: () => list.first)
       .label;
-  if (style == 'classic') return styleLabel;
-  final paletteLabel = kPlayerDockPaletteChoices
-      .firstWhere(
-        (c) => c.value == palette,
-        orElse: () => kPlayerDockPaletteChoices.first,
-      )
-      .label;
-  final sizeLabel = size == 'auto'
-      ? null
-      : kPlayerDockSizeChoices
-            .firstWhere(
-              (c) => c.value == size,
-              orElse: () => kPlayerDockSizeChoices.first,
-            )
-            .label;
-  return sizeLabel == null
-      ? '$styleLabel · $paletteLabel'
-      : '$styleLabel · $paletteLabel · $sizeLabel';
+  final styleLabel = labelOf(kPlayerDockStyleChoices, group);
+  if (group != 'dock') return styleLabel;
+  final layout = playerDockLayoutGroup(style);
+  return [
+    styleLabel,
+    if (layout != 'auto') labelOf(kPlayerDockLayoutChoices, layout),
+    labelOf(kPlayerDockPaletteChoices, palette),
+    if (size != 'auto') labelOf(kPlayerDockSizeChoices, size),
+  ].join(' · ');
 }
 
 /// Player control style, colour and size (`player_dock_style`,
@@ -95,9 +110,9 @@ String playerDockLabel(String style, String palette, [String size = 'auto']) {
 /// Three sections on one page rather than three Appearance rows: the section
 /// is already long, and the three prefs are one decision.
 ///
-/// Palette and size are inert under Classic — their sections render disabled
-/// with a hint rather than disappearing, so the options are discoverable and
-/// the stored values survive a round trip through Classic.
+/// Layout, colour and size only exist for the Dock, so they only show while
+/// it is selected. Their stored values survive a round trip through Glass or
+/// Classic.
 ///
 /// The dock reads all three once at launch, so a change applies to the next
 /// playback session; persist-on-tap is all that is needed.
@@ -110,7 +125,7 @@ class PlayerDockPage extends StatefulWidget {
 
 class _PlayerDockPageState extends State<PlayerDockPage> {
   bool _loading = true;
-  String _style = 'classic';
+  String _style = 'glass';
   String _palette = 'ultraviolet';
   String _size = 'auto';
 
@@ -142,6 +157,9 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     if (!mounted) return;
     setState(() {
       _style = style;
+      if (isPlayerDockLayout(style)) {
+        _lastLayout = playerDockLayoutGroup(style);
+      }
       _palette = palette;
       _customSwatch = swatch;
       _size = size;
@@ -157,9 +175,22 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     }
   }
 
-  Future<void> _selectStyle(String value) async {
-    if (value == _style) return;
+  /// Remembered Dock layout, so Glass → Dock returns to the last layout.
+  String _lastLayout = 'auto';
+
+  Future<void> _selectStyle(String group) async {
+    if (group == playerDockStyleGroup(_style)) return;
+    final value = group == 'dock' ? _lastLayout : group;
     setState(() => _style = value);
+    await StorageService.setPlayerDockStyle(value);
+  }
+
+  Future<void> _selectLayout(String value) async {
+    if (value == _layout) return;
+    setState(() {
+      _style = value;
+      _lastLayout = value;
+    });
     await StorageService.setPlayerDockStyle(value);
   }
 
@@ -236,10 +267,10 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     await StorageService.setPlayerDockSize(value);
   }
 
-  bool get _styled => _style != 'classic';
+  /// Layout, colour and size only apply to the Dock.
+  bool get _styled => isPlayerDockLayout(_style);
 
-  bool _isSelected(String value) =>
-      _style == value || (value == 'auto' && _style == 'two_tier');
+  String get _layout => playerDockLayoutGroup(_style);
 
   @override
   Widget build(BuildContext context) {
@@ -279,60 +310,66 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
                       for (final choice in kPlayerDockStyleChoices)
                         _optionRow(
                           choice,
-                          selected: _isSelected(choice.value)
-                              ? choice.value
-                              : _style,
+                          selected: playerDockStyleGroup(_style),
                           onSelect: _selectStyle,
                         ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
-                SettingsSection(
-                  title: 'Colour',
-                  blurb: 'App colour follows your colour palette. Manual '
-                      'colour detaches the player so it keeps its own.',
-                  children: [
-                    for (final choice in kPlayerDockPaletteChoices)
-                      _optionRow(
-                        choice,
-                        selected: _palette,
-                        onSelect: (v) async {
-                          if (v == 'custom' && _customSwatch == null) {
-                            // No manual colour picked yet: start from the
-                            // first swatch, then the grid below takes over.
-                            await _selectSwatch(ThemePalette.all.first.id);
-                            return;
-                          }
-                          await _selectPalette(v);
-                        },
-                        enabled: _styled,
-                        dot: _dotFor(choice.value),
-                      ),
-                  ],
-                ),
-                if (_palette == 'custom') _swatchGrid(),
-                const SizedBox(height: 20),
-                SettingsSection(
-                  title: 'Size',
-                  children: [
-                    for (final choice in kPlayerDockSizeChoices)
-                      _optionRow(
-                        choice,
-                        selected: _size,
-                        onSelect: _selectSize,
-                        enabled: _styled,
-                      ),
-                  ],
-                ),
+                if (_styled) ...[
+                  const SizedBox(height: 20),
+                  SettingsSection(
+                    title: 'Layout',
+                    children: [
+                      for (final choice in kPlayerDockLayoutChoices)
+                        _optionRow(
+                          choice,
+                          selected: _layout,
+                          onSelect: _selectLayout,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SettingsSection(
+                    title: 'Colour',
+                    blurb: 'App colour follows your colour palette. Manual '
+                        'colour detaches the player so it keeps its own.',
+                    children: [
+                      for (final choice in kPlayerDockPaletteChoices)
+                        _optionRow(
+                          choice,
+                          selected: _palette,
+                          onSelect: (v) async {
+                            if (v == 'custom' && _customSwatch == null) {
+                              // No manual colour picked yet: start from the
+                              // first swatch, then the grid below takes over.
+                              await _selectSwatch(ThemePalette.all.first.id);
+                              return;
+                            }
+                            await _selectPalette(v);
+                          },
+                          dot: _dotFor(choice.value),
+                        ),
+                    ],
+                  ),
+                  if (_palette == 'custom') _swatchGrid(),
+                  const SizedBox(height: 20),
+                  SettingsSection(
+                    title: 'Size',
+                    children: [
+                      for (final choice in kPlayerDockSizeChoices)
+                        _optionRow(
+                          choice,
+                          selected: _size,
+                          onSelect: _selectSize,
+                        ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 14),
                 Text(
-                  _styled
-                      ? 'Applies to the next playback session. Televisions '
-                            'use their own remote-friendly controls and are '
-                            'not affected.'
-                      : 'Colour and size apply to control styles other than '
-                            'Classic. Your choices are kept.',
+                  'Applies to the next playback session. Televisions use '
+                  'their own remote-friendly controls and are not affected.',
                   style: TextStyle(fontSize: 12.5, height: 1.45, color: t.dim),
                 ),
               ],

@@ -1139,6 +1139,65 @@ class TraktService {
     return true;
   }
 
+  /// Delete the paused playback sessions for a title — a movie, every episode
+  /// of a show, or just [season]x[episode] when both are given — so marking it
+  /// watched also takes it off Trakt's Continue Watching (a history entry on
+  /// its own leaves the paused session behind). True when nothing matching is
+  /// left; false when the read or any delete failed. Never throws.
+  Future<bool> removePlaybackForContent(
+    String id,
+    String contentType, {
+    int? season,
+    int? episode,
+  }) async {
+    try {
+      final series =
+          contentType == 'series' || contentType == 'show' || season != null;
+      final wanted = await _idsForContent(id, series ? 'series' : 'movie');
+      if (wanted == null || wanted.isEmpty) return false;
+      final items = await fetchPlaybackItemsOrNull(
+        series ? 'episodes' : 'movies',
+      );
+      if (items == null) return false;
+      final playbackIds = <int>{};
+      for (final raw in items) {
+        if (raw is! Map) continue;
+        final content = raw[series ? 'show' : 'movie'];
+        final ids = content is Map ? content['ids'] : null;
+        if (ids is! Map) continue;
+        if (!TrackerIdentityService.matches(
+          wanted,
+          Map<String, dynamic>.from(ids),
+        )) {
+          continue;
+        }
+        if (season != null && episode != null) {
+          final ep = raw['episode'];
+          if (ep is! Map) continue;
+          if ((ep['season'] as num?)?.toInt() != season ||
+              (ep['number'] as num?)?.toInt() != episode) {
+            continue;
+          }
+        }
+        final playbackId = (raw['id'] as num?)?.toInt();
+        if (playbackId != null) playbackIds.add(playbackId);
+      }
+      var ok = true;
+      for (final playbackId in playbackIds) {
+        if (!await removePlaybackItem(playbackId)) ok = false;
+      }
+      if (playbackIds.isNotEmpty && series) {
+        EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', id);
+      }
+      return ok;
+    } catch (error) {
+      debugPrint(
+        'Trakt: removePlaybackForContent error (${error.runtimeType})',
+      );
+      return false;
+    }
+  }
+
   /// Fetch a standard Trakt list (watchlist, collection, ratings, recommendations).
   /// [listType] is one of: watchlist, collection, ratings, recommendations.
   /// [contentType] is one of: movies, shows.

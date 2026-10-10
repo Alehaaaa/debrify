@@ -48,7 +48,12 @@ enum PlayerDockStyle {
 
   /// Force the zoned bar: transport + volume + time / title / icon-only
   /// tools. Needs real width; falls back when it cannot fit.
-  cinema;
+  cinema,
+
+  /// Minimal frosted glass: a centred transport, one glass panel with the
+  /// scrubber and the two or three key actions, everything else under More.
+  /// Built by `GlassDock`; ignores palette and size.
+  glass;
 
   static PlayerDockStyle fromPref(String? raw) => switch (raw) {
     // `two_tier` is the value shipped before the arrangements became
@@ -57,6 +62,7 @@ enum PlayerDockStyle {
     'compact' => PlayerDockStyle.compact,
     'tiers' => PlayerDockStyle.tiers,
     'cinema' => PlayerDockStyle.cinema,
+    'glass' => PlayerDockStyle.glass,
     _ => PlayerDockStyle.classic,
   };
 
@@ -66,6 +72,7 @@ enum PlayerDockStyle {
     PlayerDockStyle.compact => 'compact',
     PlayerDockStyle.tiers => 'tiers',
     PlayerDockStyle.cinema => 'cinema',
+    PlayerDockStyle.glass => 'glass',
   };
 
   bool get isStyled => this != PlayerDockStyle.classic;
@@ -73,7 +80,9 @@ enum PlayerDockStyle {
   /// The arrangement this style demands, or null when it defers to the
   /// viewport.
   DockArrangement? get forcedArrangement => switch (this) {
-    PlayerDockStyle.classic || PlayerDockStyle.auto => null,
+    PlayerDockStyle.classic ||
+    PlayerDockStyle.auto ||
+    PlayerDockStyle.glass => null,
     PlayerDockStyle.compact => DockArrangement.narrow,
     PlayerDockStyle.tiers => DockArrangement.regular,
     PlayerDockStyle.cinema => DockArrangement.wide,

@@ -92,13 +92,13 @@ void main() {
     await pumpSeriesDetail(tester, progress: const {});
 
     expect(find.text('Start Watching'), findsOneWidget);
-    expect(find.text('Resume · S1E1'), findsNothing);
+    expect(find.text('Continue · S1E1'), findsNothing);
   });
 
   testWidgets('real S1E1 progress renders Resume', (tester) async {
     await pumpSeriesDetail(tester, progress: const {'1-1': 25});
 
-    expect(find.text('Resume · S1E1'), findsOneWidget);
+    expect(find.text('Continue · S1E1'), findsOneWidget);
   });
 
   // The bug this pins: the label is resolved by this screen's episode engine
@@ -123,9 +123,9 @@ void main() {
     // Engine-derived: the loader stub reports started:false, so a label reading
     // "Resume" can only have come from the watch-progress engine — exactly the
     // source the host cannot see.
-    expect(find.text('Resume · S1E1'), findsOneWidget);
+    expect(find.text('Continue · S1E1'), findsOneWidget);
 
-    await tester.tap(find.text('Resume · S1E1'));
+    await tester.tap(find.text('Continue · S1E1'));
     await tester.pump();
 
     expect(pressed, isTrue);
@@ -173,7 +173,7 @@ void main() {
       onTraktAction: (_) {},
     );
 
-    await tester.longPress(find.text('Resume · S1E1'));
+    await tester.longPress(find.text('Continue · S1E1'));
     await tester.pumpAndSettle();
 
     expect(find.text('Season pack sources'), findsOneWidget);

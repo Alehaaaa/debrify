@@ -260,6 +260,7 @@ void main() {
     test('only Adaptive defers to the viewport', () {
       expect(PlayerDockStyle.auto.forcedArrangement, isNull);
       expect(PlayerDockStyle.classic.forcedArrangement, isNull);
+      expect(PlayerDockStyle.glass.forcedArrangement, isNull);
       expect(
         PlayerDockStyle.compact.forcedArrangement,
         DockArrangement.narrow,
