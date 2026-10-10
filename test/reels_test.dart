@@ -17,11 +17,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// A fake TMDB: two pages of two titles per type. Titles whose id is in
 /// [noClip] only have a trailer. Every request is recorded.
 class FakeTmdb {
-  FakeTmdb({this.noClip = const {}, this.description, this.rating = 7.8});
+  FakeTmdb({
+    this.noClip = const {},
+    this.description,
+    this.rating = 7.8,
+    this.pages = 2,
+  });
 
   final Set<int> noClip;
   final String? description;
   final double? rating;
+  final int pages;
   final requests = <String>[];
 
   int get detailRequests =>
@@ -39,8 +45,8 @@ class FakeTmdb {
       final page = int.parse(query['page']!);
       final base = type == 'movie' ? 1000 : 2000;
       return {
-        'total_pages': 2,
-        'results': page > 2
+        'total_pages': pages,
+        'results': page > pages
             ? []
             : [
                 for (var i = 0; i < 2; i++)
@@ -158,6 +164,20 @@ void main() {
       while ((await first.take(4)).isNotEmpty) {}
       expect(await feedFor(FakeTmdb()).take(4), isEmpty);
     });
+
+    test(
+      'long-running discovery bounds its metadata and alternate-clip cache',
+      () async {
+        final feed = feedFor(FakeTmdb(pages: 200));
+        for (var i = 0; i < 700; i++) {
+          expect(await feed.take(1), hasLength(1));
+        }
+        final (known, clips, seen) = ReelsFeed.sessionCacheSizes;
+        expect(known, lessThanOrEqualTo(512));
+        expect(clips, lessThanOrEqualTo(640));
+        expect(seen, greaterThanOrEqualTo(700));
+      },
+    );
 
     test(
       'startup searches beyond six titles and queues confirmed clips',
@@ -461,6 +481,26 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('first-frame readiness follows decoding, not URL resolution', (
+      tester,
+    ) async {
+      ReelPlayback? playingReel;
+      await tester.pumpWidget(
+        host(
+          feedFor(FakeTmdb()),
+          onPlayer: (playback) {
+            if (playback.active) playingReel = playback;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(playingReel!.streams, isNotNull);
+      expect(playingReel!.firstFrameReady, isFalse);
+      playingReel!.onFirstFrameReady!();
+      await tester.pump();
+      expect(playingReel!.firstFrameReady, isTrue);
+    });
+
     testWidgets(
       'playback follows the swipe midpoint and reverses before release',
       (tester) async {
@@ -617,6 +657,32 @@ void main() {
       }
       expect(visited.length, 8);
       expect(find.text('Retry feed'), findsNothing);
+    });
+
+    testWidgets('long sessions retain a bounded history and can swipe back', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(feedFor(FakeTmdb(pages: 45))));
+      await tester.pumpAndSettle();
+      final controller = tester
+          .widget<PageView>(find.byType(PageView))
+          .controller!;
+      final visited = <String>{};
+      for (var step = 0; step < 56; step++) {
+        final before = activeId(tester)!;
+        visited.add(before);
+        controller.jumpToPage((controller.page ?? 0).round() + 1);
+        await tester.pumpAndSettle();
+        expect(activeId(tester), isNotNull);
+      }
+      expect(visited.length, greaterThan(48));
+      // The visible page has been rebased, with 32 preceding pages retained.
+      expect(controller.page, lessThan(48));
+      final current = activeId(tester)!;
+      await tester.fling(find.byType(PageView), const Offset(0, 500), 2000);
+      await tester.pumpAndSettle();
+      expect(activeId(tester), isNot(current));
+      expect(playing(activeId(tester)!), findsOneWidget);
     });
 
     testWidgets('Space pauses and resumes the active reel', (tester) async {

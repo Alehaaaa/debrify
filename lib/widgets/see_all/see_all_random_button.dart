@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/tv_keys.dart';
 
 /// The Discover filter bar's "Random" action: picks a random item matching the
@@ -103,15 +104,19 @@ class _SeeAllRandomButtonState extends State<SeeAllRandomButton> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 9, 14, 9),
       decoration: BoxDecoration(
-        color: app.seeAll.panel,
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: active)
+            : app.seeAll.panel,
         borderRadius: app.shape.br(11),
         border: Border.all(
           width: 2,
-          color: _focused
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app, active: active && widget.enabled)
+              : _focused
               ? app.seeAll.accent
               : (active && widget.enabled
-                  ? app.seeAll.accentBorder
-                  : app.seeAll.line),
+                    ? app.seeAll.accentBorder
+                    : app.seeAll.line),
         ),
       ),
       child: Row(
@@ -148,8 +153,8 @@ class _SeeAllRandomButtonState extends State<SeeAllRandomButton> {
           color: _focused
               ? app.fade(app.seeAll.accent2, 0.45)
               : (active && widget.enabled
-                  ? app.seeAll.accentBorder
-                  : Colors.transparent),
+                    ? app.seeAll.accentBorder
+                    : Colors.transparent),
         ),
       ),
       child: _leadingIcon(
@@ -157,8 +162,8 @@ class _SeeAllRandomButtonState extends State<SeeAllRandomButton> {
         !widget.enabled
             ? app.fade(app.seeAll.accent2, 0.4)
             : _focused
-                ? app.core.tx
-                : app.seeAll.accent2,
+            ? app.core.tx
+            : app.seeAll.accent2,
       ),
     );
   }

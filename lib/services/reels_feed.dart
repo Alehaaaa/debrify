@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
+
 import '../models/stremio_addon.dart';
 import 'metadata_preferences_service.dart';
 import 'simkl/simkl_list_source.dart';
@@ -81,6 +83,29 @@ class ReelsFeed {
   static final Map<String, ReelTitle> _known = {};
   static final Map<String, List<({String key, String name, bool official})>>
   _clipsByTitle = {};
+
+  // Catalog cursors can keep finding new movies for hours. Only the recent
+  // confirmed clips need metadata for alternative-scene replay; older titles
+  // stay in the lightweight seen set so they do not immediately repeat.
+  static const int _knownLimit = 512;
+  static const int _clipPoolLimit = 640;
+  static const int _seenLimit = 4096;
+
+  static void _trimSessionCache() {
+    while (_known.length > _knownLimit) {
+      _known.remove(_known.keys.first);
+    }
+    while (_clipsByTitle.length > _clipPoolLimit) {
+      _clipsByTitle.remove(_clipsByTitle.keys.first);
+    }
+    while (_shown.length > _seenLimit) {
+      _shown.remove(_shown.first);
+    }
+  }
+
+  @visibleForTesting
+  static (int known, int clips, int seen) get sessionCacheSizes =>
+      (_known.length, _clipsByTitle.length, _shown.length);
 
   /// Test seam: forget what this session showed.
   static void resetSession() {
@@ -187,10 +212,7 @@ class ReelsFeed {
     final result = _takeTail.then(
       (_) => _take(count, allowRepeat: allowRepeat),
     );
-    _takeTail = result.then<void>(
-      (_) {},
-      onError: (Object _, StackTrace _) {},
-    );
+    _takeTail = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return result;
   }
 
@@ -212,6 +234,7 @@ class ReelsFeed {
         if (_shown.add(key)) {
           found.add(title);
           _known[key] = title;
+          _trimSessionCache();
           _rememberSelection(title);
         }
       }
@@ -245,6 +268,7 @@ class ReelsFeed {
             if (title != null) {
               final key = '$type:${row['id']}';
               _known[key] = title;
+              _trimSessionCache();
               _ready.add((key, title));
             }
             _pendingConfirmations--;
@@ -478,6 +502,7 @@ class ReelsFeed {
               as String?;
       if (title == null || title.isEmpty) return null;
       _clipsByTitle['$type:${row['id']}'] = _clipPool(data['videos']);
+      _trimSessionCache();
       final date = (data['release_date'] ?? data['first_air_date']) as String?;
       return ReelTitle(
         item: StremioMeta(

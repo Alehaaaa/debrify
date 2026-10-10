@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
+
 /// View modes for folder/content browsing
-enum FolderViewMode {
-  raw,
-  sortedAZ,
-  seriesArrange,
-}
+enum FolderViewMode { raw, sortedAZ, seriesArrange }
 
 /// Reusable dropdown for selecting folder view modes
 /// Used in RD/Torbox/PikPak download screens and playlist content viewer
@@ -50,14 +49,20 @@ class ViewModeDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: glass
+            ? GlassChrome.fill(app)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
           bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.1),
+            color: glass
+                ? GlassChrome.edge(app)
+                : theme.dividerColor.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -73,21 +78,29 @@ class ViewModeDropdown extends StatelessWidget {
             _getIconForMode(currentMode),
             color: theme.colorScheme.primary,
           ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
-          fillColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          fillColor: glass
+              ? GlassChrome.field(app)
+              : theme.colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.3,
+                ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
         ),
         items: FolderViewMode.values
-            .where((mode) => showSeriesView || mode != FolderViewMode.seriesArrange)
+            .where(
+              (mode) => showSeriesView || mode != FolderViewMode.seriesArrange,
+            )
             .map((mode) {
-          return DropdownMenuItem(
-            value: mode,
-            child: Text(_getLabelForMode(mode)),
-          );
-        }).toList(),
+              return DropdownMenuItem(
+                value: mode,
+                child: Text(_getLabelForMode(mode)),
+              );
+            })
+            .toList(),
         onChanged: (value) {
           if (value != null) onModeChanged(value);
         },

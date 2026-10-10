@@ -131,6 +131,7 @@ class ReelPlayback {
     this.initialPosition,
     this.onPosition,
     this.onFirstFrameReady,
+    this.firstFrameReady = false,
     this.failed = false,
     this.onPlaybackFailed,
   });
@@ -154,6 +155,7 @@ class ReelPlayback {
   final Duration? initialPosition;
   final ValueChanged<Duration>? onPosition;
   final VoidCallback? onFirstFrameReady;
+  final bool firstFrameReady;
 }
 
 class _ReelsScreenState extends State<ReelsScreen> {
@@ -170,6 +172,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// through several in a row lands on clips that start straight away. Each
   /// costs one YouTube lookup.
   static const int _streamsAhead = 3;
+
+  /// Keep a useful backwards history without retaining every title, artwork
+  /// and playback position in a feed that can run for hours.
+  static const int _historyBehind = 32;
+  static const int _historyTrimAt = 48;
 
   /// How far the first reel must be pulled down to refresh it.
   static const double _refreshPull = 90;
@@ -472,6 +479,36 @@ class _ReelsScreenState extends State<ReelsScreen> {
     // devices. Start them after, never during, the page animation.
     unawaited(_fill());
     _prepare();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _trimHistory());
+  }
+
+  void _trimHistory() {
+    if (!_current ||
+        _index < _historyTrimAt ||
+        _dragPage != null ||
+        !_pages.hasClients ||
+        _pages.position.isScrollingNotifier.value) {
+      return;
+    }
+    final removed = _index - _historyBehind;
+    final viewport = _pages.position.viewportDimension;
+    if (viewport <= 0) return;
+    // The PageView keeps each page's ObjectKey across this rebase. Correcting
+    // pixels in the same frame preserves the visible player's element and
+    // avoids an animated jump (and unwanted pause/restart) on a long session.
+    setState(() {
+      _reels.removeRange(0, removed);
+      _index -= removed;
+      _postersPrepared.removeWhere(
+        (url) => !_reels.any(
+          (reel) => (reel.item.background ?? reel.item.poster) == url,
+        ),
+      );
+      _inWatchlist.removeWhere(
+        (key, _) => !_reels.any((reel) => _watchKey(reel.item) == key),
+      );
+      _pages.position.correctPixels(_index * viewport);
+    });
   }
 
   void _playbackFailed(_Reel reel, int revision) {
@@ -804,6 +841,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
         onNotification: _onScroll,
         child: PageView.builder(
           controller: _pages,
+          findChildIndexCallback: (key) {
+            if (key is! ObjectKey || key.value is! _Reel) return null;
+            final index = _reels.indexOf(key.value as _Reel);
+            return index < 0 ? null : index;
+          },
           // Lay out the adjacent page before a gesture. KeepAlive alone cannot
           // prepare an item that the sliver has never built.
           allowImplicitScrolling: true,
@@ -819,7 +861,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
             final reel = _reels[i];
             final revision = reel.revision;
             return _ReelPage(
-              key: ValueKey('$i:${_watchKey(reel.item)}'),
+              key: ObjectKey(reel),
               reel: reel,
               active: i == _index,
               playbackActive: widget.isActive && i == _index,
@@ -1147,7 +1189,12 @@ class _ReelPageState extends State<_ReelPage>
           reel.state != _ClipState.failed,
       initialPosition: reel.position > Duration.zero ? reel.position : null,
       onPosition: widget.onPosition,
-      onFirstFrameReady: () => reel.framed = true,
+      firstFrameReady: reel.framed,
+      onFirstFrameReady: () {
+        if (reel.framed) return;
+        reel.framed = true;
+        if (mounted) setState(() {});
+      },
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
     );
@@ -1487,7 +1534,9 @@ class ReelVideoSurface extends StatelessWidget {
             skipIntro: false,
           ),
         ),
-        if (playback.active && streams == null && !playback.failed)
+        // A resolved URL is not a decoded frame. Retain the poster and show
+        // buffering feedback until the actual first frame has reached Flutter.
+        if (playback.active && !playback.firstFrameReady && !playback.failed)
           const Center(
             child: SizedBox(
               width: 28,

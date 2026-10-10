@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
+import '../theme/widgets/glass_surface.dart';
 import '../models/stremio_addon.dart';
 import '../services/stremio_service.dart';
 import '../services/trakt/trakt_service.dart';
@@ -7,20 +10,20 @@ import '../utils/tv_keys.dart';
 
 /// Represents a search source type
 enum SearchSourceType {
-  all,      // Search across all sources
-  keyword,  // Keyword/torrent search
-  addon,    // Specific addon catalog
-  trakt,    // Trakt lists (watchlist, collection, etc.)
-  reddit,   // Reddit video search
-  lemmy,    // Lemmy video search (federated)
-  youtube,  // YouTube video search (on-device via youtube_explode)
-  iptv,     // IPTV M3U playlists
+  all, // Search across all sources
+  keyword, // Keyword/torrent search
+  addon, // Specific addon catalog
+  trakt, // Trakt lists (watchlist, collection, etc.)
+  reddit, // Reddit video search
+  lemmy, // Lemmy video search (federated)
+  youtube, // YouTube video search (on-device via youtube_explode)
+  iptv, // IPTV M3U playlists
 }
 
 /// Represents a selectable search source option
 class SearchSourceOption {
   final SearchSourceType type;
-  final StremioAddon? addon;  // Only set for addon-specific options
+  final StremioAddon? addon; // Only set for addon-specific options
   final String label;
   final IconData icon;
 
@@ -81,12 +84,13 @@ class SearchSourceOption {
   );
 
   /// Create addon-specific option
-  factory SearchSourceOption.fromAddon(StremioAddon addon) => SearchSourceOption(
-    type: SearchSourceType.addon,
-    addon: addon,
-    label: addon.displayName,
-    icon: Icons.extension,
-  );
+  factory SearchSourceOption.fromAddon(StremioAddon addon) =>
+      SearchSourceOption(
+        type: SearchSourceType.addon,
+        addon: addon,
+        label: addon.displayName,
+        icon: Icons.extension,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -112,12 +116,16 @@ class SearchSourceDropdown extends StatefulWidget {
   final ValueChanged<SearchSourceOption> onChanged;
   final FocusNode? focusNode;
   final bool isTelevision;
+
   /// Callback when left arrow is pressed (for DPAD navigation back to search bar)
   final VoidCallback? onLeftArrowPressed;
+
   /// Callback when right arrow is pressed (for DPAD navigation to Sources)
   final VoidCallback? onRightArrowPressed;
+
   /// Callback when down arrow is pressed (for DPAD navigation)
   final VoidCallback? onDownArrowPressed;
+
   /// Callback when up arrow is pressed (for DPAD navigation to search bar)
   final VoidCallback? onUpArrowPressed;
 
@@ -144,12 +152,26 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
   bool _isExpanded = false;
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
+  Object? _overlayTheme;
 
   @override
   void initState() {
     super.initState();
     _focusNode = widget.focusNode ?? FocusNode();
     _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final theme = AppThemeScope.of(context);
+    if (_overlayTheme != null && !identical(_overlayTheme, theme)) {
+      // OverlayEntry captures its host theme when opened. Close the old menu
+      // on an appearance switch so it cannot outlive its material and ink.
+      _removeOverlay();
+      _isExpanded = false;
+    }
+    _overlayTheme = theme;
   }
 
   @override
@@ -194,6 +216,8 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
   }
 
   OverlayEntry _createOverlayEntry() {
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final triggerPos = renderBox.localToGlobal(Offset.zero);
@@ -204,7 +228,9 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
     final dropdownWidth = minDropdownWidth.clamp(0.0, maxAvailableWidth);
     // Offset to prevent overflowing right edge (8px margin)
     final rightEdge = triggerPos.dx + dropdownWidth;
-    final dx = rightEdge > screenWidth - 8 ? -(rightEdge - screenWidth + 8) : 0.0;
+    final dx = rightEdge > screenWidth - 8
+        ? -(rightEdge - screenWidth + 8)
+        : 0.0;
 
     return OverlayEntry(
       builder: (context) => Stack(
@@ -232,37 +258,13 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
                 elevation: 16,
                 shadowColor: Colors.black.withValues(alpha: 0.5),
                 borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFF141420),
-                child: _DropdownMenu(
-                  options: widget.options,
-                  selectedOption: widget.selectedOption,
-                  isTelevision: widget.isTelevision,
-                  onSelected: (option) {
-                    _removeOverlay();
-                    setState(() => _isExpanded = false);
-                    widget.onChanged(option);
-                    if (widget.isTelevision) {
-                      _focusNode.requestFocus();
-                    } else {
-                      _focusNode.unfocus();
-                    }
-                  },
-                  onClose: () {
-                    _removeOverlay();
-                    setState(() => _isExpanded = false);
-                    if (widget.isTelevision) {
-                      _focusNode.requestFocus();
-                    } else {
-                      _focusNode.unfocus();
-                    }
-                  },
-                  onLeftArrowPressed: () {
-                    _removeOverlay();
-                    setState(() => _isExpanded = false);
-                    // Go to search box via parent callback
-                    widget.onLeftArrowPressed?.call();
-                  },
-                ),
+                color: glass ? Colors.transparent : const Color(0xFF141420),
+                child: glass
+                    ? GlassSurface(
+                        borderRadius: BorderRadius.circular(16),
+                        child: _buildDropdownMenu(),
+                      )
+                    : _buildDropdownMenu(),
               ),
             ),
           ),
@@ -270,6 +272,37 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
       ),
     );
   }
+
+  Widget _buildDropdownMenu() => _DropdownMenu(
+    options: widget.options,
+    selectedOption: widget.selectedOption,
+    isTelevision: widget.isTelevision,
+    onSelected: (option) {
+      _removeOverlay();
+      setState(() => _isExpanded = false);
+      widget.onChanged(option);
+      if (widget.isTelevision) {
+        _focusNode.requestFocus();
+      } else {
+        _focusNode.unfocus();
+      }
+    },
+    onClose: () {
+      _removeOverlay();
+      setState(() => _isExpanded = false);
+      if (widget.isTelevision) {
+        _focusNode.requestFocus();
+      } else {
+        _focusNode.unfocus();
+      }
+    },
+    onLeftArrowPressed: () {
+      _removeOverlay();
+      setState(() => _isExpanded = false);
+      // Go to search box via parent callback
+      widget.onLeftArrowPressed?.call();
+    },
+  );
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
@@ -318,6 +351,8 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
     return CompositedTransformTarget(
       link: _layerLink,
       child: Focus(
@@ -329,10 +364,14 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
             duration: const Duration(milliseconds: 150),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: _isFocused ? 0.2 : 0.12),
+              color: glass
+                  ? GlassChrome.fill(app, raised: _isFocused || _isExpanded)
+                  : Colors.white.withValues(alpha: _isFocused ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(22),
               border: Border.all(
-                color: Colors.white.withValues(alpha: _isFocused ? 0.4 : 0.2),
+                color: glass
+                    ? GlassChrome.edge(app, active: _isFocused || _isExpanded)
+                    : Colors.white.withValues(alpha: _isFocused ? 0.4 : 0.2),
                 width: 1,
               ),
             ),
@@ -342,7 +381,9 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
                 Icon(
                   widget.selectedOption.icon,
                   size: 16,
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: glass
+                      ? app.core.tx
+                      : Colors.white.withValues(alpha: 0.9),
                 ),
                 const SizedBox(width: 8),
                 Flexible(
@@ -351,7 +392,9 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.9),
+                      color: glass
+                          ? app.core.tx
+                          : Colors.white.withValues(alpha: 0.9),
                       letterSpacing: 0.3,
                     ),
                     maxLines: 1,
@@ -365,7 +408,9 @@ class _SearchSourceDropdownState extends State<SearchSourceDropdown> {
                   child: Icon(
                     Icons.keyboard_arrow_down,
                     size: 18,
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: glass
+                        ? app.core.tx2
+                        : Colors.white.withValues(alpha: 0.4),
                   ),
                 ),
               ],
@@ -407,14 +452,8 @@ class _DropdownMenuState extends State<_DropdownMenu> {
   @override
   void initState() {
     super.initState();
-    _itemFocusNodes = List.generate(
-      widget.options.length,
-      (i) => FocusNode(),
-    );
-    _itemKeys = List.generate(
-      widget.options.length,
-      (i) => GlobalKey(),
-    );
+    _itemFocusNodes = List.generate(widget.options.length, (i) => FocusNode());
+    _itemKeys = List.generate(widget.options.length, (i) => GlobalKey());
     // Always auto-focus the selected item when dropdown opens
     final selectedIndex = widget.options.indexOf(widget.selectedOption);
     final indexToFocus = selectedIndex >= 0 ? selectedIndex : 0;
@@ -446,7 +485,11 @@ class _DropdownMenuState extends State<_DropdownMenu> {
     super.dispose();
   }
 
-  KeyEventResult _handleItemKeyEvent(FocusNode node, KeyEvent event, int index) {
+  KeyEventResult _handleItemKeyEvent(
+    FocusNode node,
+    KeyEvent event,
+    int index,
+  ) {
     if (event is KeyDownEvent) {
       // Select/Enter picks the option
       if (isActivateKey(event.logicalKey)) {
@@ -492,7 +535,9 @@ class _DropdownMenuState extends State<_DropdownMenu> {
   }
 
   /// Build a section header widget
-  Widget _buildSectionHeader(ThemeData theme, ColorScheme colorScheme, String label) {
+  Widget _buildSectionHeader(String label) {
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
     return Padding(
       padding: const EdgeInsets.only(left: 16, right: 16, top: 14, bottom: 6),
       child: Row(
@@ -501,7 +546,9 @@ class _DropdownMenuState extends State<_DropdownMenu> {
             width: 3,
             height: 12,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
+              color: glass
+                  ? GlassChrome.edge(app)
+                  : Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -509,7 +556,9 @@ class _DropdownMenuState extends State<_DropdownMenu> {
           Text(
             label.toUpperCase(),
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.35),
+              color: glass
+                  ? app.core.tx2
+                  : Colors.white.withValues(alpha: 0.35),
               fontWeight: FontWeight.w700,
               letterSpacing: 1.2,
               fontSize: 10,
@@ -522,8 +571,8 @@ class _DropdownMenuState extends State<_DropdownMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
 
     // Find the index of first addon to show Stremio section header
     int? firstAddonIndex;
@@ -542,141 +591,170 @@ class _DropdownMenuState extends State<_DropdownMenu> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
+            color: glass
+                ? GlassChrome.edge(app)
+                : Colors.white.withValues(alpha: 0.08),
             width: 1,
           ),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: ListView.builder(
-          shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          itemCount: widget.options.length,
-          itemBuilder: (context, index) {
-            final option = widget.options[index];
-            final isSelected = option == widget.selectedOption;
-            final isFocusedItem = _focusedIndex == index;
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            itemCount: widget.options.length,
+            itemBuilder: (context, index) {
+              final option = widget.options[index];
+              final isSelected = option == widget.selectedOption;
+              final isFocusedItem = _focusedIndex == index;
 
-            // Check if this is the first addon to show Stremio section header
-            final showStremioHeader = firstAddonIndex != null && index == firstAddonIndex;
-            // Check if this is the first "browse separately" item (Trakt, IPTV, or Reddit)
-            final showBrowseSeparatelyHeader = (option.type == SearchSourceType.trakt ||
-                option.type == SearchSourceType.iptv) &&
-                (index == 0 || widget.options[index - 1].type != SearchSourceType.trakt);
+              // Check if this is the first addon to show Stremio section header
+              final showStremioHeader =
+                  firstAddonIndex != null && index == firstAddonIndex;
+              // Check if this is the first "browse separately" item (Trakt, IPTV, or Reddit)
+              final showBrowseSeparatelyHeader =
+                  (option.type == SearchSourceType.trakt ||
+                      option.type == SearchSourceType.iptv) &&
+                  (index == 0 ||
+                      widget.options[index - 1].type != SearchSourceType.trakt);
 
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Stremio Addons section header
-                if (showStremioHeader)
-                  _buildSectionHeader(theme, colorScheme, 'Stremio Addons'),
-                // Extras section header (IPTV, Reddit - not included in "All" search)
-                if (showBrowseSeparatelyHeader)
-                  _buildSectionHeader(theme, colorScheme, 'Extras'),
-                // The actual option item
-                Focus(
-                  key: _itemKeys[index],
-                  focusNode: _itemFocusNodes[index],
-                  onFocusChange: (focused) {
-                    setState(() {
-                      _focusedIndex = focused ? index : -1;
-                    });
-                    if (focused) {
-                      _scrollToItem(index);
-                    }
-                  },
-                  onKeyEvent: (node, event) => _handleItemKeyEvent(node, event, index),
-                  child: InkWell(
-                    onTap: () => widget.onSelected(option),
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                      decoration: BoxDecoration(
-                        color: isFocusedItem
-                            ? Colors.white.withValues(alpha: 0.12)
-                            : isSelected
-                                ? Colors.white.withValues(alpha: 0.06)
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: isFocusedItem
-                            ? Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1)
-                            : null,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.white.withValues(alpha: 0.12)
-                                  : Colors.white.withValues(alpha: 0.06),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              option.icon,
-                              size: 16,
-                              color: isSelected
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.5),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  option.label,
-                                  style: TextStyle(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.white.withValues(alpha: 0.8),
-                                    fontSize: 14,
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.w400,
-                                  ),
-                                ),
-                                if (option.type == SearchSourceType.addon &&
-                                    option.addon != null)
-                                  Text(
-                                    option.addon!.supportsCatalogs
-                                        ? '${option.addon!.catalogs.length} catalog${option.addon!.catalogs.length != 1 ? 's' : ''}'
-                                        : 'Search only',
-                                    style: TextStyle(
-                                      color: Colors.white.withValues(alpha: 0.35),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (isSelected)
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Stremio Addons section header
+                  if (showStremioHeader) _buildSectionHeader('Stremio Addons'),
+                  // Extras section header (IPTV, Reddit - not included in "All" search)
+                  if (showBrowseSeparatelyHeader) _buildSectionHeader('Extras'),
+                  // The actual option item
+                  Focus(
+                    key: _itemKeys[index],
+                    focusNode: _itemFocusNodes[index],
+                    onFocusChange: (focused) {
+                      setState(() {
+                        _focusedIndex = focused ? index : -1;
+                      });
+                      if (focused) {
+                        _scrollToItem(index);
+                      }
+                    },
+                    onKeyEvent: (node, event) =>
+                        _handleItemKeyEvent(node, event, index),
+                    child: InkWell(
+                      onTap: () => widget.onSelected(option),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: glass && (isFocusedItem || isSelected)
+                              ? GlassChrome.fill(app, raised: isFocusedItem)
+                              : isFocusedItem
+                              ? Colors.white.withValues(alpha: 0.12)
+                              : isSelected
+                              ? Colors.white.withValues(alpha: 0.06)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(10),
+                          border: isFocusedItem
+                              ? Border.all(
+                                  color: glass
+                                      ? GlassChrome.edge(app, active: true)
+                                      : Colors.white.withValues(alpha: 0.25),
+                                  width: 1,
+                                )
+                              : null,
+                        ),
+                        child: Row(
+                          children: [
                             Container(
-                              width: 20,
-                              height: 20,
+                              width: 32,
+                              height: 32,
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
+                                color: glass
+                                    ? GlassChrome.fill(app, raised: isSelected)
+                                    : isSelected
+                                    ? Colors.white.withValues(alpha: 0.12)
+                                    : Colors.white.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: Icon(
-                                Icons.check_rounded,
-                                size: 14,
-                                color: Colors.white.withValues(alpha: 0.9),
+                                option.icon,
+                                size: 16,
+                                color: glass
+                                    ? (isSelected ? app.core.tx : app.core.tx2)
+                                    : isSelected
+                                    ? Colors.white
+                                    : Colors.white.withValues(alpha: 0.5),
                               ),
                             ),
-                        ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    option.label,
+                                    style: TextStyle(
+                                      color: glass
+                                          ? (isSelected
+                                                ? app.core.tx
+                                                : app.core.tx2)
+                                          : isSelected
+                                          ? Colors.white
+                                          : Colors.white.withValues(alpha: 0.8),
+                                      fontSize: 14,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                  if (option.type == SearchSourceType.addon &&
+                                      option.addon != null)
+                                    Text(
+                                      option.addon!.supportsCatalogs
+                                          ? '${option.addon!.catalogs.length} catalog${option.addon!.catalogs.length != 1 ? 's' : ''}'
+                                          : 'Search only',
+                                      style: TextStyle(
+                                        color: glass
+                                            ? app.core.tx2
+                                            : Colors.white.withValues(
+                                                alpha: 0.35,
+                                              ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              Container(
+                                width: 20,
+                                height: 20,
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.15),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.check_rounded,
+                                  size: 14,
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
-      ),
       ),
     );
   }
