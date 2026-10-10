@@ -7,6 +7,7 @@ import '../../utils/platform_util.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// Settings page for the MDBList integration.
 ///
@@ -334,17 +335,20 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
   }
 
   Widget _buildConnectedActions() {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: t.panel2,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: t.line),
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(app, radius: app.shape.br(8))
+              : BoxDecoration(
+                  color: t.panel2,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: t.line),
+                ),
           child: Row(
             children: [
               Expanded(

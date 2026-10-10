@@ -9,6 +9,7 @@ import '../../services/trakt/trakt_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class TraktSettingsPage extends StatefulWidget {
   const TraktSettingsPage({super.key});
@@ -422,11 +423,13 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: t.panel2,
-            borderRadius: app.shape.br(12),
-            border: Border.all(color: t.line),
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(app, radius: app.shape.br(12))
+              : BoxDecoration(
+                  color: t.panel2,
+                  borderRadius: app.shape.br(12),
+                  border: Border.all(color: t.line),
+                ),
           child: Column(
             children: [
               Text(

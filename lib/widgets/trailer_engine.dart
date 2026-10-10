@@ -102,6 +102,8 @@ class PlatformViewTrailerEngine implements TrailerEngine {
   bool _disposed = false;
   bool _detached = false;
   bool _lastPlaying = false;
+  bool _errorReported = false;
+  Future<void>? _disposal;
 
   @override
   Stream<bool> get playingStream => _playing.stream;
@@ -118,7 +120,12 @@ class PlatformViewTrailerEngine implements TrailerEngine {
     final value = _controller?.value;
     if (_disposed || _detached || value == null) return;
     if (value.hasError) {
-      _errors.add(null);
+      // The video_player value listener can fire repeatedly with the same
+      // fatal error. A single failure belongs to a single player instance.
+      if (!_errorReported) {
+        _errorReported = true;
+        _errors.add(null);
+      }
       return;
     }
     if (!value.isInitialized) return;
@@ -214,19 +221,26 @@ class PlatformViewTrailerEngine implements TrailerEngine {
   @override
   void detach() => _detached = true;
   @override
-  Future<void> dispose() async {
-    if (_disposed) return;
+  Future<void> dispose() {
+    if (_disposed) return _disposal ?? Future<void>.value();
     _disposed = true;
+    return _disposal ??= _disposeResources();
+  }
+
+  Future<void> _disposeResources() async {
     final controller = _controller;
     _controller = null;
-    if (controller != null) {
-      controller.removeListener(_onValue);
-      await controller.dispose();
+    try {
+      if (controller != null) {
+        controller.removeListener(_onValue);
+        await controller.dispose();
+      }
+    } finally {
+      await _playing.close();
+      await _position.close();
+      await _duration.close();
+      await _errors.close();
     }
-    await _playing.close();
-    await _position.close();
-    await _duration.close();
-    await _errors.close();
   }
 
   @override
@@ -265,16 +279,27 @@ class MediaKitTrailerEngine implements TrailerEngine {
       debugLabel: 'trailer',
       shared: sharedOutput,
     );
+    mk.Player? player;
     try {
+      MediaKitInit.ensureInitialized();
+      player = mk.Player();
       return MediaKitTrailerEngine._(
         lease,
         reportPlaybackErrors,
         highResolution,
+        player,
       );
     } catch (_) {
-      // A throw here would strand the slot forever, and nothing else knows the
-      // handle exists yet.
-      lease.release();
+      // VideoController can throw after mk.Player allocated its native player.
+      // Dispose it before releasing the output lease to prevent the next Reel
+      // from racing a leaked native decoder during failed initialization.
+      try {
+        await player?.dispose();
+      } catch (_) {
+        // Preserve the constructor failure; the lease is still released.
+      } finally {
+        lease.release();
+      }
       rethrow;
     }
   }
@@ -283,11 +308,8 @@ class MediaKitTrailerEngine implements TrailerEngine {
     this._lease,
     this._reportPlaybackErrors,
     bool highResolution,
+    this._player,
   ) {
-    // Idempotent; the main player also initializes it, but guard in case the
-    // trailer is the first media_kit surface in this session.
-    MediaKitInit.ensureInitialized();
-    _player = mk.Player();
     // iOS routes each frame through three OpenGL-backed Flutter pixel buffers.
     // A background trailer needs a 16:9 ambient canvas, not a source-sized
     // 1440p upload every frame. This keeps playback live while scrolling.
@@ -309,11 +331,10 @@ class MediaKitTrailerEngine implements TrailerEngine {
 
   final VideoOutputLeaseHandle _lease;
   final bool _reportPlaybackErrors;
-  late final mk.Player _player;
+  final mk.Player _player;
 
   /// One encoded frame for the glass chrome's brightness sampling.
-  Future<Uint8List?> screenshot() =>
-      _player.screenshot(format: 'image/jpeg');
+  Future<Uint8List?> screenshot() => _player.screenshot(format: 'image/jpeg');
   late final mkv.VideoController _controller;
   bool _disposed = false;
 
@@ -514,10 +535,11 @@ class ExoTrailerEngine implements TrailerEngine {
   int? _textureId;
   bool _disposed = false;
 
-  /// Native release happens once. The Exo path takes no video-output lease —
-  /// it has its own decoder discipline and a different failure mode — so this
-  /// stays a plain guard rather than joining a shared disposal future.
-  bool _released = false;
+  /// A background pause and a post-frame teardown can dispose concurrently.
+  /// Both callers must await the same native release before another decoder is
+  /// opened, including when the platform channel reports an error.
+  Future<void>? _disposal;
+  Future<void>? _opening;
   bool _polling = false;
   Timer? _pollTimer;
 
@@ -542,6 +564,20 @@ class ExoTrailerEngine implements TrailerEngine {
 
   @override
   Future<void> open({
+    required String videoUrl,
+    String? audioUrl,
+    required double volume,
+    required bool loop,
+    Map<String, String>? httpHeaders,
+  }) => _opening = _open(
+    videoUrl: videoUrl,
+    audioUrl: audioUrl,
+    volume: volume,
+    loop: loop,
+    httpHeaders: httpHeaders,
+  );
+
+  Future<void> _open({
     required String videoUrl,
     String? audioUrl,
     required double volume,
@@ -669,21 +705,34 @@ class ExoTrailerEngine implements TrailerEngine {
   }
 
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() {
     _disposed = true;
     _pollTimer?.cancel();
-    if (_released) return;
-    _released = true;
-    final id = _textureId;
-    if (id != null) {
-      _TvTrailerChannel.instance.unregister(id);
-      await _TvTrailerChannel.instance.disposePlayer(id);
+    return _disposal ??= _disposeResources();
+  }
+
+  Future<void> _disposeResources() async {
+    try {
+      // Native create may still be allocating a codec while this widget was
+      // removed. Its stale-result branch disposes the orphan; join that work
+      // before completing teardown and admitting another player.
+      try {
+        await _opening;
+      } catch (_) {
+        // A failed create owns no registered texture to release here.
+      }
+      final id = _textureId;
+      if (id != null) {
+        _TvTrailerChannel.instance.unregister(id);
+        await _TvTrailerChannel.instance.disposePlayer(id);
+      }
+    } finally {
+      await _playingCtl.close();
+      await _positionCtl.close();
+      await _durationCtl.close();
+      await _errorCtl.close();
+      _render.dispose();
     }
-    await _playingCtl.close();
-    await _positionCtl.close();
-    await _durationCtl.close();
-    await _errorCtl.close();
-    _render.dispose();
   }
 
   @override

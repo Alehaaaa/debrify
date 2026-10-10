@@ -24,37 +24,44 @@ class IptvAutoRefreshDialog extends StatelessWidget {
   final int intervalHours;
 
   @override
-  Widget build(BuildContext context) => SimpleDialog(
-    title: const Text('Auto-refresh'),
-    children: [
-      const Padding(
-        padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
-        child: Text(
-          'Applies to all sources in this profile. '
-          '$iptvAutoRefreshExplanation',
-        ),
-      ),
-      for (final hours in const [0, 6, 12, 24, 48])
-        TextButton(
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-          autofocus: hours == intervalHours,
-          onPressed: () => Navigator.of(context).pop(hours),
-          child: Row(
-            children: [
-              Icon(
-                hours == intervalHours
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_unchecked,
-              ),
-              const SizedBox(width: 12),
-              Text(iptvAutoRefreshLabel(hours)),
-            ],
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    return SimpleDialog(
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : null,
+      shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+      title: const Text('Auto-refresh'),
+      children: [
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 0, 24, 16),
+          child: Text(
+            'Applies to all sources in this profile. '
+            '$iptvAutoRefreshExplanation',
           ),
         ),
-    ],
-  );
+        for (final hours in const [0, 6, 12, 24, 48])
+          TextButton(
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+            autofocus: hours == intervalHours,
+            onPressed: () => Navigator.of(context).pop(hours),
+            child: Row(
+              children: [
+                Icon(
+                  hours == intervalHours
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                const SizedBox(width: 12),
+                Text(iptvAutoRefreshLabel(hours)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Two-pane IPTV settings for TV and desktop ("Concept A"): a rail of the
