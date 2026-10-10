@@ -2872,7 +2872,10 @@ Future<void> showLegacyModeInfoDialog(BuildContext context) {
   return showDialog<void>(
     context: context,
     builder: (dialogCtx) => AlertDialog(
-      backgroundColor: app.sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
       title: const Text('Running in legacy mode'),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),

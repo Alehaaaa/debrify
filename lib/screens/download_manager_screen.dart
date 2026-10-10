@@ -9,6 +9,7 @@ import '../utils/app_storage.dart';
 import 'package:flutter/services.dart';
 import '../services/download_service.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/storage_service.dart';
 import '../services/android_native_downloader.dart';
 import '../services/main_page_bridge.dart';
@@ -226,6 +227,12 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
         await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
+            backgroundColor: GlassChrome.enabled(AppThemeScope.of(ctx))
+                ? GlassChrome.fill(AppThemeScope.of(ctx), raised: true)
+                : null,
+            shape: GlassChrome.enabled(AppThemeScope.of(ctx))
+                ? GlassChrome.shape(AppThemeScope.of(ctx))
+                : null,
             title: const Text('Clear all finished?'),
             content: const Text(
               'This removes completed entries from the list.',
@@ -530,10 +537,14 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       isScrollControlled: true,
       useRootNavigator: true,
       barrierColor: Colors.black.withValues(alpha: 0.4),
-      backgroundColor: app.settings.sheetBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.settings.sheetBg,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 24)
+          : const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocal) {

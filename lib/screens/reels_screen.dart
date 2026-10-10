@@ -102,6 +102,8 @@ class ReelsScreen extends StatefulWidget {
   /// [HeroTrailerBackdrop].
   @visibleForTesting
   final Widget Function(ReelPlayback playback)? playerBuilder;
+  @visibleForTesting
+  final bool persistSessionForTesting;
 
   const ReelsScreen({
     super.key,
@@ -111,6 +113,7 @@ class ReelsScreen extends StatefulWidget {
     this.feed,
     this.resolver,
     this.playerBuilder,
+    this.persistSessionForTesting = false,
   });
 
   @override
@@ -218,11 +221,24 @@ class _ReelsScreenState extends State<ReelsScreen> {
   @override
   void initState() {
     super.initState();
-    final saved = widget.feed == null && _session?.scope == _scope
+    final saved =
+        (widget.feed == null || widget.persistSessionForTesting) &&
+            _session?.scope == _scope
         ? _session
         : null;
     _feed = saved?.feed ?? widget.feed ?? ReelsFeed();
     _reels = saved?.reels ?? [];
+    if (saved != null) {
+      // A resolver callback belongs to the disposed screen. It cannot publish
+      // its result into this new State even when the underlying service future
+      // is still useful. Restart the UI ownership while reusing that future.
+      for (final reel in _reels) {
+        if (reel.state == _ClipState.resolving) {
+          reel.revision++;
+          reel.state = _ClipState.idle;
+        }
+      }
+    }
     _index = saved?.index ?? 0;
     _pages = PageController(initialPage: _index, keepPage: false);
     // Returning from the detail page restores the frame without resuming audio
@@ -232,13 +248,20 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _exhausted = true;
       return;
     }
+    if (saved != null) {
+      // A restored feed can already have all six look-ahead titles. _fill then
+      // has no work and won't call _prepare on its own.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_current) _prepare();
+      });
+    }
     unawaited(_fill());
   }
 
   @override
   void dispose() {
     _watchlistBubble?.dismiss();
-    if (widget.feed == null) {
+    if (widget.feed == null || widget.persistSessionForTesting) {
       _session = _ReelsSession(
         scope: _scope,
         feed: _feed,

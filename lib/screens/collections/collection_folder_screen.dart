@@ -24,6 +24,7 @@ import '../../services/main_page_bridge.dart';
 import '../../services/home_collections_store.dart';
 import '../../services/stremio_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../services/collection_native_source_service.dart';
 import '../../widgets/see_all/discover_card_settings_scope.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
@@ -1051,6 +1052,12 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                       ),
                     ),
                     PopupMenuButton<String>(
+                      color: GlassChrome.enabled(AppThemeScope.of(context))
+                          ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                          : null,
+                      shape: GlassChrome.enabled(AppThemeScope.of(context))
+                          ? GlassChrome.shape(AppThemeScope.of(context))
+                          : null,
                       tooltip: 'Sort titles',
                       icon: Icon(
                         Icons.sort,
@@ -1232,6 +1239,12 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
     final shouldRetry = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.shape(AppThemeScope.of(context))
+            : null,
         scrollable: true,
         title: const Text('Collection details'),
         content: Text(detail),

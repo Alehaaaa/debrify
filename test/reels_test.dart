@@ -305,6 +305,7 @@ void main() {
       Future<YoutubeResolvedStreams?> Function(String key)? resolver,
       bool floatingNav = false,
       bool isActive = true,
+      bool persistSessionForTesting = false,
       void Function(ReelPlayback)? onPlayer,
     }) => MaterialApp(
       home: AppThemeScope(
@@ -314,6 +315,7 @@ void main() {
             feed: feed,
             floatingNav: floatingNav,
             isActive: isActive,
+            persistSessionForTesting: persistSessionForTesting,
             resolver:
                 resolver ??
                 (key) async {
@@ -348,6 +350,51 @@ void main() {
       }
       return null;
     }
+
+    testWidgets(
+      'restoring during extraction resumes ownership and ignores late results',
+      (tester) async {
+        final feed = feedFor(FakeTmdb());
+        final oldRequest = Completer<YoutubeResolvedStreams?>();
+        String? pendingKey;
+        var attempts = 0;
+        Future<YoutubeResolvedStreams?> resolve(String key) async {
+          pendingKey ??= key;
+          if (key == pendingKey && ++attempts == 1) return oldRequest.future;
+          return _clip;
+        }
+
+        await tester.pumpWidget(
+          host(feed, resolver: resolve, persistSessionForTesting: true),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        expect(
+          find.byKey(ValueKey('player:$first:true:100.0:false:false')),
+          findsOneWidget,
+        );
+
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump();
+        await tester.pumpWidget(
+          host(feed, resolver: resolve, persistSessionForTesting: true),
+        );
+        await tester.pumpAndSettle();
+        expect(attempts, greaterThanOrEqualTo(2));
+        expect(
+          find.byKey(ValueKey('player:$first:true:100.0:true:true')),
+          findsOneWidget,
+        );
+
+        oldRequest.complete(null);
+        await tester.pumpAndSettle();
+        expect(find.text('Retry clip'), findsNothing);
+        expect(
+          find.byKey(ValueKey('player:$first:true:100.0:true:true')),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets(
       'skips watchlisted and finished titles but keeps unfinished ones',
