@@ -11,6 +11,7 @@ import '../../../theme/app_motion.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/app_surface.dart';
 import '../../../theme/app_theme_scope.dart';
+import '../../../theme/glass_chrome.dart';
 import '../../../theme/widgets/glass_surface.dart';
 import '../../../theme/widgets/parallax_focus.dart';
 import '../../../widgets/shimmer.dart';
@@ -520,12 +521,14 @@ ThemeData _buildSettingsPageTheme(ThemeData base, AppTheme app) {
       ),
     ),
     cardTheme: base.cardTheme.copyWith(
-      color: t.panel,
+      color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: app.shape.br(16),
-        side: BorderSide(color: t.line),
-      ),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app)
+          : RoundedRectangleBorder(
+              borderRadius: app.shape.br(16),
+              side: BorderSide(color: t.line),
+            ),
     ),
     dividerTheme: DividerThemeData(color: t.line, thickness: 1),
     listTileTheme: base.listTileTheme.copyWith(
@@ -534,7 +537,7 @@ ThemeData _buildSettingsPageTheme(ThemeData base, AppTheme app) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: t.panel,
+      fillColor: GlassChrome.enabled(app) ? GlassChrome.field(app) : t.panel,
       hintStyle: TextStyle(color: t.dim2, fontSize: 13.5),
       labelStyle: TextStyle(color: t.dim, fontSize: 13.5),
       prefixIconColor: t.dim,
@@ -662,41 +665,65 @@ ThemeData _buildSettingsPageTheme(ThemeData base, AppTheme app) {
       dividerColor: t.line,
     ),
     dialogTheme: base.dialogTheme.copyWith(
-      backgroundColor: t.panel2,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : t.panel2,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: app.shape.br(20),
-        side: BorderSide(color: t.line),
+        side: BorderSide(
+          color: GlassChrome.enabled(app) ? GlassChrome.edge(app) : t.line,
+        ),
       ),
     ),
     popupMenuTheme: base.popupMenuTheme.copyWith(
-      color: t.panel2,
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : t.panel2,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: app.shape.br(14),
-        side: BorderSide(color: t.line),
+        side: BorderSide(
+          color: GlassChrome.enabled(app) ? GlassChrome.edge(app) : t.line,
+        ),
       ),
     ),
     bottomSheetTheme: base.bottomSheetTheme.copyWith(
-      backgroundColor: t.panel2,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : t.panel2,
       surfaceTintColor: Colors.transparent,
     ),
-    snackBarTheme: base.snackBarTheme.copyWith(backgroundColor: t.panel2),
+    snackBarTheme: base.snackBarTheme.copyWith(
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : t.panel2,
+    ),
     chipTheme: base.chipTheme.copyWith(
-      backgroundColor: app.fade(app.core.tx, 0.06),
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app)
+          : app.fade(app.core.tx, 0.06),
       selectedColor: t.accent.withValues(alpha: 0.25),
       labelStyle: TextStyle(color: text, fontSize: 12.5),
-      side: BorderSide(color: t.line),
+      side: BorderSide(
+        color: GlassChrome.enabled(app) ? GlassChrome.edge(app) : t.line,
+      ),
       shape: RoundedRectangleBorder(borderRadius: app.shape.br(10)),
     ),
     dropdownMenuTheme: base.dropdownMenuTheme.copyWith(
       menuStyle: MenuStyle(
-        backgroundColor: WidgetStatePropertyAll(t.panel2),
+        backgroundColor: WidgetStatePropertyAll(
+          GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : t.panel2,
+        ),
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(
             borderRadius: app.shape.br(14),
-            side: BorderSide(color: t.line),
+            side: BorderSide(
+              color: GlassChrome.enabled(app) ? GlassChrome.edge(app) : t.line,
+            ),
           ),
         ),
       ),
@@ -1785,7 +1812,7 @@ class SettingsSection extends StatelessWidget {
             // Settings often shows several groups at once; a restrained blur
             // gives the glass depth without stacking large 28px filters.
             sigma: 16,
-            border: t.line,
+            border: GlassChrome.edge(app),
             child: rows,
           )
         else
@@ -2121,12 +2148,22 @@ class _SettingsTileState extends State<SettingsTile> {
       radius: radius,
       child: Container(
         decoration: BoxDecoration(
-          color: inverse ? app.core.tx : (lit ? t.panel2 : Colors.transparent),
+          color: inverse
+              ? app.core.tx
+              : lit
+              ? (GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : t.panel2)
+              : Colors.transparent,
           borderRadius: radius,
           border: Border.all(
             color: inverse
                 ? app.core.tx
-                : (_focused ? t.accent : Colors.transparent),
+                : (_focused
+                      ? t.accent
+                      : GlassChrome.enabled(app) && lit
+                      ? GlassChrome.edge(app)
+                      : Colors.transparent),
             width: 1,
           ),
         ),
@@ -2338,12 +2375,22 @@ class _SettingsToggleTileState extends State<SettingsToggleTile> {
       radius: radius,
       child: Container(
         decoration: BoxDecoration(
-          color: inverse ? app.core.tx : (lit ? t.panel2 : Colors.transparent),
+          color: inverse
+              ? app.core.tx
+              : lit
+              ? (GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : t.panel2)
+              : Colors.transparent,
           borderRadius: radius,
           border: Border.all(
             color: inverse
                 ? app.core.tx
-                : (_focused ? t.accent : Colors.transparent),
+                : (_focused
+                      ? t.accent
+                      : GlassChrome.enabled(app) && lit
+                      ? GlassChrome.edge(app)
+                      : Colors.transparent),
             width: 1,
           ),
         ),
@@ -2669,9 +2716,15 @@ class SettingsInfoTile extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: app.fade(app.core.tx, 0.05),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app)
+                  : app.fade(app.core.tx, 0.05),
               borderRadius: app.shape.br(8),
-              border: Border.all(color: t.line),
+              border: Border.all(
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app)
+                    : t.line,
+              ),
             ),
             child: Text(
               value,

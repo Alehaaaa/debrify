@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
 import 'profiles/profile_avatar_view.dart';
 import 'window_drag_area.dart';
@@ -101,7 +102,9 @@ class DesktopSidebarNav extends StatelessWidget {
               ),
               border: Border(
                 right: BorderSide(
-                  color: app.fade(app.core.tx, frosted ? 0.30 : 0.14),
+                  color: frosted
+                      ? GlassChrome.edge(app)
+                      : app.fade(app.core.tx, 0.14),
                 ),
               ),
             ),

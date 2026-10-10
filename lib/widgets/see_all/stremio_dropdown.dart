@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/tv_keys.dart';
 import '../tv_text_field.dart';
 import '../../theme/app_motion.dart' show kPopupMenuAnimation;
@@ -228,16 +229,20 @@ class _StremioDropdownState<T extends Object>
     final hasSections = widget.options.any((o) => o.isHeader);
     final app = AppThemeScope.of(context);
     final result = await showMenu<T>(
-popUpAnimationStyle: kPopupMenuAnimation,
+      popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: pos,
-      color: app.seeAll.panel2,
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.seeAll.panel2,
       elevation: widget.editorial ? 20 : 12,
       shape: RoundedRectangleBorder(
-        borderRadius: widget.editorial
-            ? app.shape.br(20)
-            : app.shape.br(14),
-        side: BorderSide(color: app.seeAll.line),
+        borderRadius: widget.editorial ? app.shape.br(20) : app.shape.br(14),
+        side: BorderSide(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : app.seeAll.line,
+        ),
       ),
       constraints: const BoxConstraints(minWidth: 190, maxWidth: 320),
       // Sectioned menus indent their options so each group reads as belonging
@@ -342,10 +347,16 @@ popUpAnimationStyle: kPopupMenuAnimation,
       decoration: BoxDecoration(
         color: active
             ? const Color(0xFFF3F1EC)
+            : GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
             : app.core.tx.withValues(alpha: 0.075),
         borderRadius: app.shape.br(28),
         border: Border.all(
-          color: app.core.tx.withValues(alpha: active ? 0 : 0.15),
+          color: active
+              ? Colors.transparent
+              : GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : app.core.tx.withValues(alpha: 0.15),
         ),
       ),
       child: Row(
@@ -437,7 +448,9 @@ popUpAnimationStyle: kPopupMenuAnimation,
                       key: _btnKey,
                       padding: const EdgeInsets.fromLTRB(14, 9, 11, 9),
                       decoration: BoxDecoration(
-                        color: app.seeAll.panel,
+                        color: GlassChrome.enabled(app)
+                            ? GlassChrome.fill(app)
+                            : app.seeAll.panel,
                         borderRadius: app.shape.br(11),
                         // Constant width: Container feeds the border's thickness into
                         // its layout padding, so a 1→2px focus ring RESIZES the pill
@@ -449,6 +462,8 @@ popUpAnimationStyle: kPopupMenuAnimation,
                               ? app.seeAll.accent
                               : (active
                                     ? app.seeAll.accentBorder
+                                    : GlassChrome.enabled(app)
+                                    ? GlassChrome.edge(app)
                                     : app.seeAll.line),
                         ),
                       ),
@@ -681,10 +696,16 @@ class _LazyPickerDialogState<T extends Object>
       560.0,
     );
     return Dialog(
-      backgroundColor: app.seeAll.panel,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.seeAll.panel,
       shape: RoundedRectangleBorder(
         borderRadius: app.shape.br(16),
-        side: BorderSide(color: app.seeAll.line),
+        side: BorderSide(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : app.seeAll.line,
+        ),
       ),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 340, maxHeight: maxH),

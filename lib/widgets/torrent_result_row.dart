@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_surface.dart';
+import '../theme/glass_chrome.dart';
 import '../theme/app_theme_scope.dart';
 
 import '../models/torrent.dart';
@@ -212,16 +213,15 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.isSelectionMode && widget.isSelected;
+    final app = AppThemeScope.of(context);
 
     // The `shelfRow` family. The caps let it take all four models precisely
     // because the border-inset split above moved this row's decoration out of
     // the layout path — a look may now drop the fill without reflowing a
     // single pixel of the content.
-    final model = AppThemeScope.of(context).surface.modelFor(
-      SurfaceFamily.shelfRow,
-    );
-    final unfilled = model == SeparationModel.space ||
-        model == SeparationModel.rule;
+    final model = app.surface.modelFor(SurfaceFamily.shelfRow);
+    final unfilled =
+        model == SeparationModel.space || model == SeparationModel.rule;
 
     Color bgColor;
     if (isSelected) {
@@ -238,6 +238,9 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
     if (unfilled && !isSelected && !_isFocused) {
       bgColor = Colors.transparent;
     }
+    if (model == SeparationModel.glass && !isSelected && !_isFocused) {
+      bgColor = GlassChrome.fill(app);
+    }
 
     Color borderColor;
     double borderWidth;
@@ -250,9 +253,11 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
     } else {
       // A `rule` look lives on its hairline, so the resting border is the one
       // thing it must not give up.
-      borderColor =
-          model == SeparationModel.rule ? _textSecondary.withValues(alpha: 0.22)
-              : Colors.transparent;
+      borderColor = model == SeparationModel.rule
+          ? _textSecondary.withValues(alpha: 0.22)
+          : model == SeparationModel.glass
+          ? GlassChrome.edge(app)
+          : Colors.transparent;
       borderWidth = 1;
     }
 
@@ -274,10 +279,7 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
     final containerDecoration = BoxDecoration(
       color: bgColor,
       borderRadius: BorderRadius.circular(12),
-      border: Border.all(
-        color: Colors.transparent,
-        width: borderWidth,
-      ),
+      border: Border.all(color: Colors.transparent, width: borderWidth),
       boxShadow: widget.isTelevision || !_isFocused
           ? null
           : [
@@ -319,7 +321,9 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
               ),
             ),
             Positioned.fill(
-              child: IgnorePointer(child: DecoratedBox(decoration: ringDecoration)),
+              child: IgnorePointer(
+                child: DecoratedBox(decoration: ringDecoration),
+              ),
             ),
           ],
         ),
@@ -371,7 +375,6 @@ class _TorrentResultRowState extends State<TorrentResultRow> {
     return IntrinsicHeight(
       child: Row(
         children: [
-
           // Content
           Expanded(
             child: Padding(

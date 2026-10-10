@@ -6,6 +6,7 @@ import '../../utils/platform_util.dart';
 import '../app_surface.dart';
 import '../app_theme.dart';
 import '../app_theme_scope.dart';
+import '../glass_chrome.dart';
 
 /// The one place a blurred surface is built.
 ///
@@ -186,7 +187,11 @@ class GlassSurface extends StatelessWidget {
     final Color? asked = switch (model) {
       SeparationModel.space => null,
       SeparationModel.rule => border ?? app.core.hair,
-      _ => border ?? app.core.hair,
+      _ =>
+        border ??
+            (model == SeparationModel.glass
+                ? GlassChrome.edge(app)
+                : app.core.hair),
     };
     // A fully transparent border is a border that was SUPPRESSED, and it must
     // not keep insetting content by its own width: the seven filter-only

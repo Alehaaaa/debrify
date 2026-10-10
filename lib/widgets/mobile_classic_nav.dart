@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
 import 'profiles/profile_avatar_view.dart';
 import '../theme/app_motion.dart' show AppMotion, kMenuSheetAnimation;
@@ -106,7 +107,11 @@ class MobileClassicNav extends StatelessWidget {
               )
             : null,
         border: Border(
-          top: BorderSide(color: app.fade(app.core.tx, frosted ? 0.29 : 0.14)),
+          top: BorderSide(
+            color: frosted
+                ? GlassChrome.edge(app)
+                : app.fade(app.core.tx, 0.14),
+          ),
         ),
       ),
       child: SizedBox(

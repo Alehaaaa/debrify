@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
 import 'launch/launch_ident.dart' show identMarkSheen, identPlayPath;
 import 'menu_pill.dart';
@@ -200,6 +201,7 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
 
   Widget _panel(BuildContext context) {
     final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     final width = widget.expanded ? 268.0 : 236.0;
     final children = <Widget>[];
     String? lastSection;
@@ -266,12 +268,19 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          app.shell.railBg.withValues(alpha: 0.62),
-                          app.shell.ink.withValues(alpha: 0.52),
+                          app.shell.railBg.withValues(
+                            alpha: frosted ? 0.53 : 0.62,
+                          ),
+                          (frosted ? GlassChrome.fill(app) : app.shell.ink)
+                              .withValues(alpha: frosted ? 0.64 : 0.52),
                         ],
                       ),
                       border: Border(
-                        left: BorderSide(color: app.fade(app.core.tx, 0.20)),
+                        left: BorderSide(
+                          color: frosted
+                              ? GlassChrome.edge(app)
+                              : app.fade(app.core.tx, 0.20),
+                        ),
                       ),
                     ),
                   ),
@@ -292,7 +301,9 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
                           // The splash file is a wide lockup. This compact
                           // header uses its square companion artwork instead.
                           Image(
-                            image: const ExactAssetImage('assets/app_icon_foreground.png'),
+                            image: const ExactAssetImage(
+                              'assets/app_icon_foreground.png',
+                            ),
                             width: 32,
                             height: 32,
                             fit: BoxFit.contain,

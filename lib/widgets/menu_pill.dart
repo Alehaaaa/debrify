@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_motion.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 
 /// The shared bottom-right navigation control for pointer and touch layouts.
 class MenuPill extends StatelessWidget {
@@ -74,10 +75,9 @@ class MenuPill extends StatelessWidget {
                 ),
                 borderRadius: app.shape.br(22),
                 border: Border.all(
-                  color: app.fade(
-                    app.core.tx,
-                    frosted ? (isOpen ? 0.42 : 0.34) : (isOpen ? 0.34 : 0.28),
-                  ),
+                  color: frosted
+                      ? GlassChrome.edge(app, active: isOpen)
+                      : app.fade(app.core.tx, isOpen ? 0.34 : 0.28),
                 ),
               ),
               child: Row(

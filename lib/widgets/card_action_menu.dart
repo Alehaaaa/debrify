@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/dialog_tap_guard.dart';
 import '../utils/tv_keys.dart';
@@ -126,9 +127,13 @@ class _CardActionMenuState<T> extends State<_CardActionMenu<T>> {
       // Tokenised with the ink, not after it: the rows below now draw their
       // text from `app.core.tx`, so a surface pinned dark would put a light
       // theme's near-black text on a near-black sheet.
-      backgroundColor: app.sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      shape: RoundedRectangleBorder(borderRadius: app.shape.br(20)),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : RoundedRectangleBorder(borderRadius: app.shape.br(20)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: maxWidth,
