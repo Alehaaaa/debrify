@@ -1,8 +1,8 @@
 name: iOS Commit Build
 
 # Builds a sideloadable IPA for every pushed commit. Commits on the default
-# branch each get their own pre-release (also containing Android / Android TV
-# APKs), while the SideStore/AltStore source lives on the `sidestore` branch,
+# branch each get their own pre-release, while the SideStore/AltStore source
+# lives on the `sidestore` branch,
 # reachable at:
 #   https://raw.githubusercontent.com/<owner>/<repo>/sidestore/apps.json
 # A git push swaps the file atomically, so SideStore never sees a half-written
@@ -208,21 +208,9 @@ jobs:
           sleep $((attempt * 3))
         done
 
-        printf 'Commit %s on %s.\n\n**iOS:** %s\n**Android / Android TV:** universal APKs are attached by the Android build job.\n\n**SideStore source:** %s\n' \
+        printf 'Commit %s on %s.\n\n**iOS:** %s\n**Android / Android TV:** automatic builds are paused until a stable release signing key is available.\n\n**SideStore source:** %s\n' \
           "$GITHUB_SHA" "$GITHUB_REF_NAME" "$IPA_NAME" "$SOURCE_URL" > "$RUNNER_TEMP/nextup-release-notes.md"
         gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/nextup-release-notes.md"
 
         echo "### SideStore source" >> "$GITHUB_STEP_SUMMARY"
         echo "\`$SOURCE_URL\`" >> "$GITHUB_STEP_SUMMARY"
-
-  android:
-    name: Build Android and Android TV APKs
-    needs: build
-    # SideStore publishing errors must not prevent Android from shipping once
-    # the iOS IPA is safely present in the release.
-    if: always() && needs.build.outputs.release_tag != ''
-    uses: ./.github/workflows/build.yml
-    with:
-      job: android
-      release_tag: ${{ needs.build.outputs.release_tag }}
-    secrets: inherit

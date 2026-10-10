@@ -39,7 +39,10 @@ permissions:
 
 jobs:
   android:
-    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'android' || (inputs.job == 'android' && inputs.release_tag != '')
+    # No original release keystore is available. Never auto-publish an APK with
+    # a different signature: it cannot update existing installations. Android
+    # remains an explicit manual choice once the signing secrets are restored.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'android'
     runs-on: ubuntu-latest
 
     steps:
