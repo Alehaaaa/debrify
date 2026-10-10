@@ -511,7 +511,7 @@ void main() {
           await tester.sendKeyEvent(LogicalKeyboardKey.space);
           await tester.pumpAndSettle();
         }
-        await tester.tap(find.byTooltip('Share clip'));
+        await tester.tap(find.byTooltip('Share title on IMDb'));
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsOneWidget);
         expect(
@@ -602,6 +602,21 @@ void main() {
       expect(activeId(tester), id);
       expect(playing(id), findsOneWidget);
       expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    });
+
+    testWidgets('the reel feed continues after exhausting unseen titles', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(feedFor(FakeTmdb())));
+      await tester.pumpAndSettle();
+      final visited = <String>{activeId(tester)!};
+      for (var i = 0; i < 10; i++) {
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
+        await tester.pumpAndSettle();
+        visited.add(activeId(tester)!);
+      }
+      expect(visited.length, 8);
+      expect(find.text('Retry feed'), findsNothing);
     });
 
     testWidgets('Space pauses and resumes the active reel', (tester) async {

@@ -9,22 +9,27 @@ import 'package:url_launcher/url_launcher.dart';
 import '../utils/platform_util.dart';
 import 'reels_feed.dart';
 
-/// Only public metadata and the official YouTube clip leave the app. Resolved
-/// playback URLs can expire and must never be used as share links.
+/// Share the media's permanent IMDb page rather than its incidental scene clip.
+/// A rare title without an IMDb id still has its public YouTube clip as backup.
 class ReelShareContent {
   ReelShareContent.fromReel(ReelTitle reel)
     : title = reel.item.name.trim(),
-      clipName = reel.clipName.trim(),
-      url = Uri.https('youtu.be', '/${reel.clipKey}');
+      url =
+          _imdbUrl(reel.item.effectiveImdbId) ??
+          _imdbUrl(reel.item.id) ??
+          Uri.https('youtu.be', '/${reel.clipKey}');
 
   final String title;
-  final String clipName;
   final Uri url;
 
-  String get caption => [
-    if (title.isNotEmpty) title,
-    if (clipName.isNotEmpty && clipName != title) clipName,
-  ].join(' — ');
+  static Uri? _imdbUrl(String? id) {
+    if (id == null || !RegExp(r'^tt\d+$').hasMatch(id)) return null;
+    return Uri.https('www.imdb.com', '/title/$id/');
+  }
+
+  bool get isImdb => url.host == 'www.imdb.com';
+
+  String get caption => title;
 
   String get text => [if (caption.isNotEmpty) caption, '$url'].join('\n');
 }
@@ -65,7 +70,7 @@ class ReelShareService {
     if (copied == true && context.mounted) {
       ScaffoldMessenger.maybeOf(
         context,
-      )?.showSnackBar(const SnackBar(content: Text('Clip link copied')));
+      )?.showSnackBar(const SnackBar(content: Text('Link copied')));
     }
   }
 
@@ -83,7 +88,7 @@ class ReelShareService {
           'android.intent.extra.SUBJECT': content.title,
           'android.intent.extra.TITLE': content.title,
         },
-      ).launchChooser('Share clip');
+      ).launchChooser('Share title');
       return true;
     }
     if (PlatformUtil.isIosMobile || Platform.isMacOS) {
@@ -152,7 +157,7 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = 'Could not open YouTube. Copy the link to share it.';
+          _error = 'Could not open the link. Copy it to share instead.';
         });
       }
     }
@@ -168,7 +173,7 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Share clip',
+            'Share title',
             style: TextStyle(
               color: Colors.white,
               fontSize: 22,
@@ -184,13 +189,6 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
               fontWeight: FontWeight.w600,
             ),
           ),
-          if (content.clipName.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              content.clipName,
-              style: const TextStyle(color: Colors.white70, height: 1.4),
-            ),
-          ],
           const SizedBox(height: 18),
           DecoratedBox(
             decoration: BoxDecoration(
@@ -226,7 +224,7 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
               minimumSize: const Size.fromHeight(48),
             ),
             icon: const Icon(Icons.open_in_new_rounded, size: 18),
-            label: const Text('Open in YouTube'),
+            label: Text(content.isImdb ? 'Open in IMDb' : 'Open clip'),
           ),
           if (_error != null)
             Padding(

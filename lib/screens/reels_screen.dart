@@ -247,6 +247,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Future<void> _fill() async {
     if (_filling || _exhausted) return;
     _filling = true;
+    var rejectedReplays = 0;
     try {
       while (_current && !_exhausted) {
         final need = _index + 1 + _ahead - _reels.length;
@@ -255,9 +256,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
         // look-ahead batch lets one slow lookup hold back already-ready reels.
         final titles = await _feed.take(
           1,
-          // A reopened Reels tab gets the session-wide unseen queue, never a
-          // replay just because the first discovery window ran dry.
-          allowRepeat: false,
+          // Feed replay only begins when its *entire* catalog is exhausted;
+          // scan gaps and failed requests never recycle already seen titles.
+          // This lets Reels continue with alternate scenes when new titles
+          // really have run out.
+          allowRepeat: true,
         );
         if (!_current) return;
         final unseen = await Future.wait([
@@ -268,10 +271,17 @@ class _ReelsScreenState extends State<ReelsScreen> {
         ]);
         if (!_current) return;
         final playable = [for (final title in unseen) ?title];
+        // If every known title has been watched/saved, a replaying feed can
+        // otherwise cycle through the same rejected candidates indefinitely.
+        if (playable.isNotEmpty) rejectedReplays = 0;
+        if (playable.isEmpty && titles.isNotEmpty && _feed.exhausted) {
+          rejectedReplays++;
+        }
         setState(() {
           _reels.addAll(playable.map(_Reel.new));
-          if (titles.isEmpty) {
+          if (titles.isEmpty || rejectedReplays >= 24) {
             _exhausted = _feed.lastRequestFailed || _feed.exhausted;
+            if (rejectedReplays >= 24) _exhausted = true;
           }
         });
         for (final title in playable) {
@@ -1364,7 +1374,7 @@ class _ReelPageState extends State<_ReelPage>
               _ReelAction(
                 key: _shareActionKey,
                 icon: Icons.ios_share_rounded,
-                tooltip: 'Share clip',
+                tooltip: 'Share title on IMDb',
                 label: 'Share',
                 onTap: () {
                   final box =

@@ -12,11 +12,23 @@ const _reel = ReelTitle(
 );
 
 void main() {
-  test('sharing uses the public clip link and title', () {
+  test('sharing links to the title on IMDb instead of the scene clip', () {
     final content = ReelShareContent.fromReel(_reel);
-    expect(content.url.toString(), 'https://youtu.be/official123');
+    expect(content.url.toString(), 'https://www.imdb.com/title/tt1234/');
     expect(content.text, contains('The Movie'));
-    expect(content.text, contains('The opening scene'));
+    expect(content.text, isNot(contains('official123')));
+    expect(content.text, isNot(contains('The opening scene')));
+  });
+
+  test('titles with no valid IMDb id still have a working public link', () {
+    const withoutImdb = ReelTitle(
+      item: StremioMeta(id: 'catalog-1234', type: 'movie', name: 'Unknown'),
+      clipKey: 'backupClip123',
+      clipName: 'A scene',
+    );
+    final content = ReelShareContent.fromReel(withoutImdb);
+    expect(content.url.toString(), 'https://youtu.be/backupClip123');
+    expect(content.isImdb, isFalse);
   });
 
   Widget host(ReelShareService service) => MaterialApp(
@@ -39,7 +51,10 @@ void main() {
         ReelShareService(
           nativeShare: (content, origin) async {
             shares++;
-            expect(content.url.toString(), 'https://youtu.be/official123');
+            expect(
+              content.url.toString(),
+              'https://www.imdb.com/title/tt1234/',
+            );
             return true;
           },
         ),
@@ -52,7 +67,7 @@ void main() {
   });
 
   testWidgets(
-    'unavailable native sharing falls back to copying the public link',
+    'unavailable native sharing falls back to copying the IMDb link',
     (tester) async {
       String? copied;
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -82,9 +97,9 @@ void main() {
       expect(find.text('The Movie'), findsOneWidget);
       await tester.tap(find.text('Copy link'));
       await tester.pumpAndSettle();
-      expect(copied, 'https://youtu.be/official123');
+      expect(copied, 'https://www.imdb.com/title/tt1234/');
       expect(find.byType(BottomSheet), findsNothing);
-      expect(find.text('Clip link copied'), findsOneWidget);
+      expect(find.text('Link copied'), findsOneWidget);
     },
   );
 }
