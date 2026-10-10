@@ -215,7 +215,7 @@ class MediaServerService {
   }) async {
     if (!ProfileCollectionResourceFacade.active) {
       throw const MediaServerException(
-        'Media servers require an active Debrify profile.',
+        'Media servers require an active Nextup profile.',
       );
     }
     final context = await ProfileAuthorizationContext.capture(

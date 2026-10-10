@@ -72,7 +72,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Screen size saved — restart Debrify to apply it.'),
+        content: Text('Screen size saved — restart Nextup to apply it.'),
       ),
     );
   }
@@ -100,7 +100,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
                 const SettingsPageHeader(
                   icon: Icons.fit_screen_rounded,
                   title: 'Screen Size',
-                  subtitle: 'How large Debrify is drawn on this TV',
+                  subtitle: 'How large Nextup is drawn on this TV',
                 ),
                 const SizedBox(height: 24),
                 Focus(
@@ -119,7 +119,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
                 Text(
                   'TVs report a high pixel density, so the app is drawn large '
                   'by default. A smaller size fits more on screen without '
-                  'changing any layout. Takes effect the next time Debrify '
+                  'changing any layout. Takes effect the next time Nextup '
                   'starts.',
                   style: TextStyle(
                     fontSize: 12.5,

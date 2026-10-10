@@ -290,7 +290,7 @@
 //                   ),
 //                   const SizedBox(height: 8),
 //                   Text(
-//                     'Watch something to start Continue Watching, connect Trakt for calendar and progress, save items to Playlist, or favorite Debrify TV channels. Home fills in as you use the app.',
+//                     'Watch something to start Continue Watching, connect Trakt for calendar and progress, save items to Playlist, or favorite Nextup TV channels. Home fills in as you use the app.',
 //                     style: theme.textTheme.bodyMedium?.copyWith(
 //                       color: Colors.white.withValues(alpha: 0.72),
 //                       height: 1.45,

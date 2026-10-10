@@ -817,7 +817,7 @@ class _AddonHubScreenState extends State<AddonHubScreen> {
                     'shared with other profiles. Deleting all addons will '
                     'also remove those addons from every shared profile.'
               : 'This removes all $count installed Stremio '
-                    'addon${count == 1 ? '' : 's'} from Debrify.',
+                    'addon${count == 1 ? '' : 's'} from Nextup.',
           style: TextStyle(color: app.fade(app.core.tx, 0.75)),
         ),
         actions: [
@@ -1836,7 +1836,7 @@ popUpAnimationStyle: kPopupMenuAnimation,
               TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Works with Debrify: ',
+                    text: 'Works with Nextup: ',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: Colors.white.withValues(alpha: 0.9),

@@ -38,7 +38,7 @@ final class WebDavSyncCredentialsUnavailableException
 final class WebDavSyncLegacyRootException extends WebDavSyncSetupException {
   const WebDavSyncLegacyRootException()
     : super(
-        'This folder was set up by an older version of Debrify. Set up sync '
+        'This folder was set up by an older version of Nextup. Set up sync '
         'again from your main device.',
       );
 }

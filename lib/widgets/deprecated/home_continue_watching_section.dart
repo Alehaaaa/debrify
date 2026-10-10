@@ -349,7 +349,7 @@
 //                   _MenuItem(
 //                     icon: Icons.launch_rounded,
 //                     label: 'Launch on Startup',
-//                     subtitle: 'Auto-play this item when Debrify opens',
+//                     subtitle: 'Auto-play this item when Nextup opens',
 //                     color: const Color(0xFFEF4444),
 //                     subtitleColor: const Color(0xFFFCA5A5),
 //                     onTap: () => Navigator.pop(context, 'launch_on_startup'),

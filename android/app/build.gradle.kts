@@ -62,7 +62,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        resValue("string", "app_name", if (isPersonalBuild.get()) "Debrify Personal" else "Debrify")
+        resValue("string", "app_name", if (isPersonalBuild.get()) "Nextup Personal" else "Nextup")
     }
 
     signingConfigs {

@@ -656,7 +656,7 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
                                       vertical: 4,
                                     ),
                                     child: Text(
-                                      'Requires a Torbox API key. Debrify issues a fast cache check after each search; if anything fails, Torbox buttons remain enabled so your search flow continues.',
+                                      'Requires a Torbox API key. Nextup issues a fast cache check after each search; if anything fails, Torbox buttons remain enabled so your search flow continues.',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
@@ -733,12 +733,12 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
                                         SettingsSelectOption(
                                           'playlist',
                                           'Add to playlist',
-                                          'Keep this torrent handy in your Debrify playlist',
+                                          'Keep this torrent handy in your Nextup playlist',
                                         ),
                                         SettingsSelectOption(
                                           'channel',
                                           'Add to channel',
-                                          'Cache this torrent in a Debrify TV channel',
+                                          'Cache this torrent in a Nextup TV channel',
                                         ),
                                       ],
                                     ),

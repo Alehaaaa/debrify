@@ -711,7 +711,7 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
                                         SettingsSelectOption(
                                           'channel',
                                           'Add to channel',
-                                          'Cache this torrent in a Debrify TV channel',
+                                          'Cache this torrent in a Nextup TV channel',
                                         ),
                                       ],
                                     ),

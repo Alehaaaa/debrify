@@ -63,7 +63,7 @@ class MagnetYamlService {
   /// Throws [MagnetYamlException] if the link is invalid or corrupted
   static MagnetYamlDecodeResult decode(String debrifyLink) {
     if (!isMagnetLink(debrifyLink)) {
-      throw MagnetYamlException('Not a valid Debrify link');
+      throw MagnetYamlException('Not a valid Nextup link');
     }
 
     try {

@@ -918,7 +918,7 @@ class TorrentService {
           id: config.engineId,
           displayName: config.displayName,
           description:
-              'Direct ${config.type.label} search engine configured in Debrify.',
+              'Direct ${config.type.label} search engine configured in Nextup.',
           icon: 'hub',
           categories: const ['general', 'movies', 'tv'],
           capabilities: const EngineCapabilities(

@@ -71,7 +71,7 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Debrify connects to WebDAV servers and companion devices on your local network.</string>
+	<string>Nextup connects to WebDAV servers and companion devices on your local network.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

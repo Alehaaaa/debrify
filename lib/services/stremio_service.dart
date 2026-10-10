@@ -3745,7 +3745,7 @@ class StremioService {
     // Must have at least one useful resource
     if (!hasStreams && !hasCatalogs && !hasSubtitles) {
       return 'This addon doesn\'t provide streams, catalogs, or subtitles. '
-          'Debrify requires addons with stream, catalog, or subtitle support.';
+          'Nextup requires addons with stream, catalog, or subtitle support.';
     }
 
     return null; // Valid

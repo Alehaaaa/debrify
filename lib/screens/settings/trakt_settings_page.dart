@@ -370,7 +370,7 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
                   const SettingsInfoBanner(
                     text:
                         'How it works: clicking "Login with Trakt" will show a code on screen. '
-                        'Enter this code at trakt.tv/activate on your phone or computer to authorize Debrify.',
+                        'Enter this code at trakt.tv/activate on your phone or computer to authorize Nextup.',
                   ),
                 ],
               ),

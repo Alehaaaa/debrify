@@ -463,16 +463,16 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
   Set<String> _favoriteChannelIds = {};
   late final FocusNode _channelSearchFocusNode;
   final FocusNode _quickPlayFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVQuickPlay',
+    debugLabel: 'NextupTVQuickPlay',
   );
   final FocusNode _channelSearchButtonFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelSearchButton',
+    debugLabel: 'NextupTVChannelSearchButton',
   );
   final FocusNode _channelSearchClearFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelSearchClear',
+    debugLabel: 'NextupTVChannelSearchClear',
   );
   final FocusNode _channelMenuFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelMenu',
+    debugLabel: 'NextupTVChannelMenu',
   );
   final MenuController _channelMenuController = MenuController();
 
@@ -492,7 +492,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
   @override
   void initState() {
     super.initState();
-    _channelSearchFocusNode = FocusNode(debugLabel: 'DebrifyTVChannelSearch');
+    _channelSearchFocusNode = FocusNode(debugLabel: 'NextupTVChannelSearch');
     _loadSettings();
     _loadChannels(); // also warms the Spotlight rail health, once per reload
     _loadFavoriteChannels();
@@ -1094,7 +1094,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     if (channel != null) {
       _watchChannel(channel);
     } else {
-      debugPrint('DebrifyTVScreen: Channel with ID $channelId not found');
+      debugPrint('NextupTVScreen: Channel with ID $channelId not found');
     }
   }
 
@@ -1113,7 +1113,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
 
     if (_channels.isEmpty) {
-      debugPrint('DebrifyTVScreen: Channels not loaded for auto-play');
+      debugPrint('NextupTVScreen: Channels not loaded for auto-play');
       return;
     }
 
@@ -1154,7 +1154,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         _filterKeywordStats(baseline.keywordStats, normalizedKeywords),
       );
       debugPrint(
-        'DebrifyTV: Starting incremental warm for "${channel.name}" – seeded cache with ${accumulator.length} torrent(s).',
+        'NextupTV: Starting incremental warm for "${channel.name}" – seeded cache with ${accumulator.length} torrent(s).',
       );
     }
 
@@ -1163,11 +1163,11 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         : normalizedKeywords.toSet();
 
     if (keywordsToWarm.isEmpty) {
-      debugPrint('DebrifyTV: No keywords to warm for "${channel.name}".');
+      debugPrint('NextupTV: No keywords to warm for "${channel.name}".');
     }
     if (enabledTvEngines.isEmpty && keywordsToWarm.isNotEmpty) {
       debugPrint(
-        'DebrifyTV: No enabled TV search engines for "${channel.name}".',
+        'NextupTV: No enabled TV search engines for "${channel.name}".',
       );
     }
 
@@ -1200,7 +1200,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         }
         final keyword = result.keyword;
         debugPrint(
-          'DebrifyTV: Warmed keyword "$keyword" – added ${result.addedHashes.length} new torrent(s).',
+          'NextupTV: Warmed keyword "$keyword" – added ${result.addedHashes.length} new torrent(s).',
         );
         anySuccess = anySuccess || result.addedHashes.isNotEmpty;
         stats[keyword] = result.stat;
@@ -1263,7 +1263,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           );
         } catch (e) {
           debugPrint(
-            'DebrifyTV: Cache warm ${engine.displayName} failed for "$keyword": $e',
+            'NextupTV: Cache warm ${engine.displayName} failed for "$keyword": $e',
           );
           return _TvEngineWarmResult(
             engine: engine,
@@ -1308,7 +1308,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
     if (avoidNsfw && totalBefore != totalAfter) {
       debugPrint(
-        'DebrifyTV: Cache NSFW filter for "$keyword": $totalBefore → $totalAfter torrents',
+        'NextupTV: Cache NSFW filter for "$keyword": $totalBefore → $totalAfter torrents',
       );
     }
 
@@ -1319,7 +1319,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     );
     if (totalTorrents < minTorrentsPerKeyword) {
       debugPrint(
-        'DebrifyTV: Skipping keyword "$keyword" – only $totalTorrents torrent(s), minimum is $minTorrentsPerKeyword',
+        'NextupTV: Skipping keyword "$keyword" – only $totalTorrents torrent(s), minimum is $minTorrentsPerKeyword',
       );
       final stat = (stats[keyword] ?? KeywordStat.initial())
           .copyWith(
@@ -1659,7 +1659,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         .toList();
     if (matched.isEmpty) {
       debugPrint(
-        'DebrifyTV: Quality filter matched 0/${all.length} cached torrents — '
+        'NextupTV: Quality filter matched 0/${all.length} cached torrents — '
         'falling back to unfiltered.',
       );
       _notifyQualityFallback();
@@ -1667,7 +1667,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
     if (matched.length != all.length) {
       debugPrint(
-        'DebrifyTV: Quality filter on cached: ${all.length} → ${matched.length} torrents',
+        'NextupTV: Quality filter on cached: ${all.length} → ${matched.length} torrents',
       );
     }
     return matched;
@@ -1862,7 +1862,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         ),
         const SizedBox(height: 2),
         Text(
-          'Applies to channels and quick play. If nothing matches, Debrify TV '
+          'Applies to channels and quick play. If nothing matches, Nextup TV '
           'plays what it can rather than showing an empty channel.',
           style: labelStyle,
         ),
@@ -1941,7 +1941,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       required String unavailableMessage,
     }) {
       return Tooltip(
-        message: available ? 'Use $label for Debrify TV' : unavailableMessage,
+        message: available ? 'Use $label for Nextup TV' : unavailableMessage,
         child: _SpotlightChoiceChip(
           label: label,
           selected: currentProvider == value,
@@ -2026,8 +2026,8 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     FocusNode? channelNameFocus;
     FocusNode? channelKeywordFocus;
     if (_isAndroidTv) {
-      channelNameFocus = FocusNode(debugLabel: 'DebrifyTVChannelName');
-      channelKeywordFocus = FocusNode(debugLabel: 'DebrifyTVChannelKeyword');
+      channelNameFocus = FocusNode(debugLabel: 'NextupTVChannelName');
+      channelKeywordFocus = FocusNode(debugLabel: 'NextupTVChannelKeyword');
     }
     final List<String> keywordList = [];
     final seenKeywords = <String>{};
@@ -2136,7 +2136,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                     : 'Channel editor · ${existing.channelNumber.toString().padLeft(2, '0')}',
                 title: existing == null ? 'Create a channel' : 'Edit channel',
                 subtitle:
-                    'Keywords are search terms. Add one or several and Debrify will pool the results.',
+                    'Keywords are search terms. Add one or several and Nextup will pool the results.',
                 icon: Icons.tv_rounded,
                 maxWidth: 720,
                 child: Column(
@@ -2431,8 +2431,8 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           eyebrow: 'Channel export · Apple TV',
           title: 'Export from another device',
           subtitle:
-              'Apple TV does not expose a location where Debrify can save a '
-              'portable ZIP. Export the channels from Debrify on a phone or '
+              'Apple TV does not expose a location where Nextup can save a '
+              'portable ZIP. Export the channels from Nextup on a phone or '
               'computer, or send them through Remote.',
           icon: Icons.tv_rounded,
           maxWidth: 580,
@@ -2568,7 +2568,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       );
     } catch (error) {
       debugPrint(
-        'DebrifyTV: channel archive export failed (${error.runtimeType})',
+        'NextupTV: channel archive export failed (${error.runtimeType})',
       );
       if (mounted) {
         _showSnack('Failed to export channels.', color: Colors.red);
@@ -3107,7 +3107,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
     // Validate debrify link format
     if (!MagnetYamlService.isMagnetLink(content)) {
-      throw const FormatException('Not a valid Debrify link.');
+      throw const FormatException('Not a valid Nextup link.');
     }
 
     if (showDialog) {
@@ -3252,7 +3252,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                     keyboardInk: app.core.tx,
                     keyboardInkOnAccent: app.inkOn(app.settings.accent),
                     decoration: InputDecoration(
-                      labelText: 'Debrify link or file URL',
+                      labelText: 'Nextup link or file URL',
                       hintText: 'debrify://channel?... or https://...',
                       errorText: errorText,
                     ),
@@ -3593,7 +3593,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       if (nsfwChanged) {
         // NSFW setting changed for this channel - rebuild cache with new filter
         debugPrint(
-          'DebrifyTV: Channel NSFW filter changed. Forcing full cache rebuild...',
+          'NextupTV: Channel NSFW filter changed. Forcing full cache rebuild...',
         );
 
         // Clear existing cache to force full rebuild
@@ -3737,7 +3737,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 'Share channel · ${channel.channelNumber.toString().padLeft(2, '0')}',
             title: channel.name,
             subtitle:
-                'Anyone on Debrify can paste this link to import the channel and its saved pool.',
+                'Anyone on Nextup can paste this link to import the channel and its saved pool.',
             icon: Icons.share_rounded,
             maxWidth: 720,
             child: Column(
@@ -3966,7 +3966,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
 
     debugPrint(
-      'DebrifyTV: ${isEdit ? 'Updating' : 'Creating'} channel "${channel.name}" with ${normalizedKeywords.length} keyword(s): ${normalizedKeywords.join(', ')}',
+      'NextupTV: ${isEdit ? 'Updating' : 'Creating'} channel "${channel.name}" with ${normalizedKeywords.length} keyword(s): ${normalizedKeywords.join(', ')}',
     );
 
     final int estimatedSeconds = _estimatedWarmDurationSeconds(
@@ -3992,7 +3992,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           color: Colors.orange,
         );
         debugPrint(
-          'DebrifyTV: Aborting save for "${channel.name}" – keyword cap exceeded.',
+          'NextupTV: Aborting save for "${channel.name}" – keyword cap exceeded.',
         );
         return;
       }
@@ -4008,7 +4008,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         addedKeywords = currentKeywordSet.difference(previousKeywords);
 
         debugPrint(
-          'DebrifyTV: Detected keyword changes for "${channel.name}" – added: ${addedKeywords.join(', ')}, removed: ${removedKeywords.join(', ')}',
+          'NextupTV: Detected keyword changes for "${channel.name}" – added: ${addedKeywords.join(', ')}, removed: ${removedKeywords.join(', ')}',
         );
 
         if (removedKeywords.isNotEmpty) {
@@ -4035,7 +4035,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           );
 
           debugPrint(
-            'DebrifyTV: Pruned ${baseline.torrents.length - filteredTorrents.length} torrent(s) after removing keywords. Remaining: ${filteredTorrents.length}.',
+            'NextupTV: Pruned ${baseline.torrents.length - filteredTorrents.length} torrent(s) after removing keywords. Remaining: ${filteredTorrents.length}.',
           );
         } else if (baseline.normalizedKeywords.length !=
             normalizedKeywords.length) {
@@ -4052,7 +4052,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             ),
           );
           debugPrint(
-            'DebrifyTV: Warming new keywords for "${channel.name}": ${addedKeywords.join(', ')}',
+            'NextupTV: Warming new keywords for "${channel.name}": ${addedKeywords.join(', ')}',
           );
           workingEntry = await _computeChannelCacheEntry(
             channel,
@@ -4061,13 +4061,13 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             keywordsToSearch: addedKeywords,
           );
           debugPrint(
-            'DebrifyTV: After warming new keywords, cache has ${workingEntry.torrents.length} torrent(s).',
+            'NextupTV: After warming new keywords, cache has ${workingEntry.torrents.length} torrent(s).',
           );
         }
 
         if (addedKeywords.isEmpty && removedKeywords.isEmpty) {
           debugPrint(
-            'DebrifyTV: No keyword changes for "${channel.name}" – reusing existing cache.',
+            'NextupTV: No keyword changes for "${channel.name}" – reusing existing cache.',
           );
           workingEntry = baseline.copyWith(
             normalizedKeywords: normalizedKeywords,
@@ -4075,13 +4075,13 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         }
       } else {
         ensureProgressDialog();
-        debugPrint('DebrifyTV: Running full warm-up for "${channel.name}"');
+        debugPrint('NextupTV: Running full warm-up for "${channel.name}"');
         workingEntry = await _computeChannelCacheEntry(
           channel,
           normalizedKeywords,
         );
         debugPrint(
-          'DebrifyTV: Initial warm-up complete for "${channel.name}" with ${workingEntry.torrents.length} torrent(s).',
+          'NextupTV: Initial warm-up complete for "${channel.name}" with ${workingEntry.torrents.length} torrent(s).',
         );
       }
 
@@ -4106,7 +4106,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   'Unable to find torrents for these keywords. Try again later.');
 
         debugPrint(
-          'DebrifyTV: Cache validation failed for "${channel.name}" – ready=${entry.isReady}, torrents=${entry.torrents.length}.',
+          'NextupTV: Cache validation failed for "${channel.name}" – ready=${entry.isReady}, torrents=${entry.torrents.length}.',
         );
 
         if (isEdit && baseline != null) {
@@ -4167,10 +4167,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           : 'Channel "${updatedChannel.name}" saved';
       _showSnack(successMsg, color: Colors.green);
       debugPrint(
-        'DebrifyTV: $successMsg (torrents cached: ${entry.torrents.length})',
+        'NextupTV: $successMsg (torrents cached: ${entry.torrents.length})',
       );
     } catch (e) {
-      debugPrint('DebrifyTV: Channel creation failed for ${channel.name}: $e');
+      debugPrint('NextupTV: Channel creation failed for ${channel.name}: $e');
       _showSnack(
         'Failed to build channel cache. Please try again.',
         color: Colors.red,
@@ -4361,7 +4361,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     void _log(String m) {
       final copy = List<String>.from(_progress.value)..add(m);
       _progress.value = copy;
-      debugPrint('DebrifyTV: ' + m);
+      debugPrint('NextupTV: ' + m);
     }
 
     await _syncProviderAvailability();
@@ -4373,35 +4373,35 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       if (mounted) {
         setState(() {
           _status =
-              'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Debrify TV.';
+              'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Nextup TV.';
         });
       }
       _showSnack(
-        'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Debrify TV.',
+        'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Nextup TV.',
         color: Colors.orange,
       );
       return;
     }
     final text = _keywordsController.text.trim();
-    debugPrint('DebrifyTV: Watch started. Raw input="$text"');
+    debugPrint('NextupTV: Watch started. Raw input="$text"');
     if (text.isEmpty) {
       setState(() {
         _status = 'Enter one or more keywords, separated by commas';
       });
-      debugPrint('DebrifyTV: Aborting. No keywords provided.');
+      debugPrint('NextupTV: Aborting. No keywords provided.');
       return;
     }
 
     final keywords = _parseKeywords(text);
     debugPrint(
-      'DebrifyTV: Parsed ${keywords.length} keyword(s): ${keywords.join(' | ')}',
+      'NextupTV: Parsed ${keywords.length} keyword(s): ${keywords.join(' | ')}',
     );
     if (keywords.isEmpty) {
       setState(() {
         _status = 'Enter valid keywords';
       });
       debugPrint(
-        'DebrifyTV: Aborting. Parsed keywords became empty after trimming.',
+        'NextupTV: Aborting. Parsed keywords became empty after trimming.',
       );
       return;
     }
@@ -4415,7 +4415,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         color: Colors.orange,
       );
       debugPrint(
-        'DebrifyTV: Aborting. Too many keywords for Quick Play (${keywords.length}).',
+        'NextupTV: Aborting. Too many keywords for Quick Play (${keywords.length}).',
       );
       return;
     }
@@ -4448,7 +4448,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           eyebrow: 'Quick play · $providerLabel',
           title: 'Searching for something to play',
           subtitle:
-              'Debrify is searching your keywords, applying filters, and checking $providerLabel.',
+              'Nextup is searching your keywords, applying filters, and checking $providerLabel.',
           onCancel: () => _cancelActiveWatch(dialogContext: ctx),
         );
       },
@@ -4492,7 +4492,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             ),
           ),
         );
-        debugPrint('DebrifyTV: Missing Real Debrid API key.');
+        debugPrint('NextupTV: Missing Real Debrid API key.');
         return;
       }
       final String apiKeyEarly = apiKeyEarlyRaw;
@@ -4506,14 +4506,14 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         return Uri.decodeComponent(last);
       }
 
-      String firstTitle = 'Debrify TV';
+      String firstTitle = 'Nextup TV';
 
       Future<Map<String, String>?> requestMagicNext() async {
         if (_watchCancelled) {
           return null;
         }
         debugPrint(
-          'DebrifyTV: requestMagicNext() called. queueSize=${_queue.length}',
+          'NextupTV: requestMagicNext() called. queueSize=${_queue.length}',
         );
         while (_queue.isNotEmpty && !_watchCancelled) {
           final item = _queue.removeAt(0);
@@ -4525,7 +4525,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             final String link = item['restrictedLink'] as String? ?? '';
             final String rdTid = item['torrentId'] as String? ?? '';
             debugPrint(
-              'DebrifyTV: Trying RD link from queue: torrentId=$rdTid',
+              'NextupTV: Trying RD link from queue: torrentId=$rdTid',
             );
             if (link.isEmpty) continue;
             try {
@@ -4542,13 +4542,13 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final videoUrl = unrestrict['download'] as String?;
               if (videoUrl != null && videoUrl.isNotEmpty) {
                 debugPrint(
-                  'DebrifyTV: Success (RD link). Unrestricted in ${elapsed}s',
+                  'NextupTV: Success (RD link). Unrestricted in ${elapsed}s',
                 );
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (display ?? 'Debrify TV');
+                    : (display ?? 'Nextup TV');
                 firstTitle = chosenTitle;
                 if (_watchCancelled) {
                   return null;
@@ -4556,7 +4556,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 return {'url': videoUrl, 'title': chosenTitle};
               }
             } catch (e) {
-              debugPrint('DebrifyTV: RD link failed to unrestrict: $e');
+              debugPrint('NextupTV: RD link failed to unrestrict: $e');
               continue;
             }
           }
@@ -4564,7 +4564,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           // Case 2: Torrent entry
           if (item is Torrent) {
             debugPrint(
-              'DebrifyTV: Trying torrent: name="${item.name}", hash=${item.infohash}, size=${item.sizeBytes}, seeders=${item.seeders}',
+              'NextupTV: Trying torrent: name="${item.name}", hash=${item.infohash}, size=${item.sizeBytes}, seeders=${item.seeders}',
             );
             final magnetLink = 'magnet:?xt=urn:btih:${item.infohash}';
             try {
@@ -4616,12 +4616,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 if (videoUrl == null || videoUrl.isEmpty) continue;
 
                 debugPrint(
-                  'DebrifyTV: Success. Got unrestricted URL in ${elapsed}s',
+                  'NextupTV: Success. Got unrestricted URL in ${elapsed}s',
                 );
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                    : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
                 firstTitle = chosenTitle;
 
                 if (!_watchCancelled && newLinks.isNotEmpty) {
@@ -4635,12 +4635,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               }
             } catch (e) {
               debugPrint(
-                'DebrifyTV: Debrid add failed for ${item.infohash}: $e',
+                'NextupTV: Debrid add failed for ${item.infohash}: $e',
               );
             }
           }
         }
-        debugPrint('DebrifyTV: requestMagicNext() queue exhausted.');
+        debugPrint('NextupTV: requestMagicNext() queue exhausted.');
         return null;
       }
 
@@ -4655,7 +4655,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         pendingKeywords = pendingKeywords.skip(batch.length).toList();
 
         final futures = batch.map((kw) {
-          debugPrint('DebrifyTV: Searching engines for "$kw"...');
+          debugPrint('NextupTV: Searching engines for "$kw"...');
           return TorrentService.searchAllEngines(
             kw,
             engineStates: engineStates,
@@ -4680,11 +4680,11 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           }
           if (engineErrors.isNotEmpty) {
             engineErrors.forEach((engine, message) {
-              debugPrint('DebrifyTV: Search engine "$engine" failed: $message');
+              debugPrint('NextupTV: Search engine "$engine" failed: $message');
             });
           }
           debugPrint(
-            'DebrifyTV: Partial results received: total=${torrents.length}, engineCounts=$engineCounts',
+            'NextupTV: Partial results received: total=${torrents.length}, engineCounts=$engineCounts',
           );
 
           // Apply NSFW filter if enabled
@@ -4693,14 +4693,14 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             final beforeCount = torrents.length;
             torrentsToProcess = torrents.where((torrent) {
               if (NsfwFilter.shouldFilter(torrent.category, torrent.name)) {
-                debugPrint('DebrifyTV: Filtered NSFW torrent: ${torrent.name}');
+                debugPrint('NextupTV: Filtered NSFW torrent: ${torrent.name}');
                 return false;
               }
               return true;
             }).toList();
             if (beforeCount != torrentsToProcess.length) {
               debugPrint(
-                'DebrifyTV: NSFW filter: $beforeCount → ${torrentsToProcess.length} torrents',
+                'NextupTV: NSFW filter: $beforeCount → ${torrentsToProcess.length} torrents',
               );
             }
           }
@@ -4763,7 +4763,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   Navigator.of(_progressSheetContext!).pop();
                 }
                 debugPrint(
-                  'DebrifyTV: Launching player early. Remaining queue=${_queue.length}',
+                  'NextupTV: Launching player early. Remaining queue=${_queue.length}',
                 );
 
                 // Start background prefetch only while player is active
@@ -4820,7 +4820,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   if (launchedOnTv) {
                     // Successfully launched on Android TV
                     debugPrint(
-                      'DebrifyTV: Early launch - Real-Debrid playback started on Android TV',
+                      'NextupTV: Early launch - Real-Debrid playback started on Android TV',
                     );
                     // Prefetch will continue in background while TV player is active
                     break; // Exit the search loop
@@ -4887,7 +4887,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             ..clear()
             ..addAll(fallback);
         }
-        debugPrint('DebrifyTV: Queue prepared. size=${_queue.length}');
+        debugPrint('NextupTV: Queue prepared. size=${_queue.length}');
         _lastQueueSize = _queue.length;
         _lastSearchAt = DateTime.now();
       }
@@ -4896,7 +4896,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       setState(() {
         _status = 'Search failed: $e';
       });
-      debugPrint('DebrifyTV: Search failed: $e');
+      debugPrint('NextupTV: Search failed: $e');
       if (e is NativePlayerSettingsUnavailable) {
         _showNativeSettingsFailure(e);
         return;
@@ -4910,7 +4910,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
 
     if (_watchCancelled) {
-      debugPrint('DebrifyTV: Watch was cancelled before completion.');
+      debugPrint('NextupTV: Watch was cancelled before completion.');
       return;
     }
 
@@ -4920,7 +4920,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       setState(() {
         _status = 'No results found';
       });
-      debugPrint('DebrifyTV: No results found after combining.');
+      debugPrint('NextupTV: No results found after combining.');
       _log('❌ No results found - trying different search strategies');
 
       // Close popup and show user-friendly message
@@ -4981,7 +4981,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       return;
     }
 
-    String firstTitle = 'Debrify TV';
+    String firstTitle = 'Nextup TV';
 
     Future<Map<String, String>?> requestMagicNext() async {
       debugPrint(
@@ -5010,7 +5010,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (display ?? 'Debrify TV');
+                  : (display ?? 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
@@ -5071,7 +5071,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                  : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
@@ -5545,7 +5545,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -5574,7 +5574,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           videoPlayerRoute(
             builder: (_) => VideoPlayerScreen(
               videoUrl: first['url'] ?? '',
-              title: first['title'] ?? 'Debrify TV',
+              title: first['title'] ?? 'Nextup TV',
               startFromRandom: _startRandom,
               randomStartMaxPercent: _randomStartPercent,
               hideSeekbar: _hideSeekbar,
@@ -5758,7 +5758,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           log('Trying torrent: ${item.name}');
           final prepared = await _preparePikPakTorrent(
             candidate: item,
-            log: (msg) => debugPrint('DebrifyTV/PikPak: $msg'),
+            log: (msg) => debugPrint('NextupTV/PikPak: $msg'),
           );
 
           if (_watchCancelled) {
@@ -5826,7 +5826,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -5856,7 +5856,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           videoPlayerRoute(
             builder: (_) => VideoPlayerScreen(
               videoUrl: first['url'] ?? '',
-              title: first['title'] ?? 'Debrify TV',
+              title: first['title'] ?? 'Nextup TV',
               startFromRandom: _quickStartRandom,
               randomStartMaxPercent: _quickRandomStartPercent,
               hideSeekbar: _quickHideSeekbar,
@@ -5946,7 +5946,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       torrentsToUse = cachedTorrents.where((torrent) {
         if (NsfwFilter.shouldFilter(torrent.category, torrent.name)) {
           debugPrint(
-            'DebrifyTV: Filtered cached NSFW torrent: ${torrent.name}',
+            'NextupTV: Filtered cached NSFW torrent: ${torrent.name}',
           );
           return false;
         }
@@ -5954,7 +5954,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       }).toList();
       if (beforeCount != torrentsToUse.length) {
         debugPrint(
-          'DebrifyTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
+          'NextupTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
         );
       }
     }
@@ -5967,7 +5967,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           .toList();
       if (beforeCount != torrentsToUse.length) {
         debugPrint(
-          'DebrifyTV: RD-blocked filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
+          'NextupTV: RD-blocked filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
         );
       }
     }
@@ -5986,18 +5986,18 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       return Uri.decodeComponent(last);
     }
 
-    String firstTitle = 'Debrify TV';
+    String firstTitle = 'Nextup TV';
 
     Future<Map<String, String>?> requestMagicNext() async {
       debugPrint(
-        'DebrifyTV: Cached requestMagicNext() queueSize=${_queue.length}',
+        'NextupTV: Cached requestMagicNext() queueSize=${_queue.length}',
       );
       while (_queue.isNotEmpty) {
         final item = _queue.removeAt(0);
         if (item is Map && item['type'] == 'rd_restricted') {
           final String link = item['restrictedLink'] as String? ?? '';
           final String rdTid = item['torrentId'] as String? ?? '';
-          debugPrint('DebrifyTV: Cached path trying RD link: torrentId=$rdTid');
+          debugPrint('NextupTV: Cached path trying RD link: torrentId=$rdTid');
           if (link.isEmpty) continue;
           try {
             final started = DateTime.now();
@@ -6006,24 +6006,24 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             final elapsed = DateTime.now().difference(started).inSeconds;
             final videoUrl = unrestrict['download'] as String?;
             if (videoUrl != null && videoUrl.isNotEmpty) {
-              debugPrint('DebrifyTV: Cached success (RD link) in ${elapsed}s');
+              debugPrint('NextupTV: Cached success (RD link) in ${elapsed}s');
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (display ?? 'Debrify TV');
+                  : (display ?? 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV: Cached RD link failed: $e');
+            debugPrint('NextupTV: Cached RD link failed: $e');
             continue;
           }
         }
 
         if (item is Torrent) {
           debugPrint(
-            'DebrifyTV: Cached trying torrent name="${item.name}" hash=${item.infohash}',
+            'NextupTV: Cached trying torrent name="${item.name}" hash=${item.infohash}',
           );
           final magnetLink = 'magnet:?xt=urn:btih:${item.infohash}';
           try {
@@ -6070,12 +6070,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               if (videoUrl == null || videoUrl.isEmpty) continue;
 
               debugPrint(
-                'DebrifyTV: Cached success: unrestricted in ${elapsed}s',
+                'NextupTV: Cached success: unrestricted in ${elapsed}s',
               );
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                  : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
               firstTitle = chosenTitle;
 
               if (newLinks.isNotEmpty) {
@@ -6085,11 +6085,11 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV: Cached Debrid add failed: $e');
+            debugPrint('NextupTV: Cached Debrid add failed: $e');
           }
         }
       }
-      debugPrint('DebrifyTV: Cached queue exhausted.');
+      debugPrint('NextupTV: Cached queue exhausted.');
       return null;
     }
 
@@ -6144,7 +6144,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       if (launchedOnTv) {
         // Successfully launched on Android TV
         debugPrint(
-          'DebrifyTV: Cached flow - Real-Debrid playback started on Android TV',
+          'NextupTV: Cached flow - Real-Debrid playback started on Android TV',
         );
         // Prefetch will continue in background while TV player is active
         return;
@@ -6193,7 +6193,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         _isBusy = false;
         _status = '';
       });
-      debugPrint('DebrifyTV: Cached watch flow finished.');
+      debugPrint('NextupTV: Cached watch flow finished.');
     }
   }
 
@@ -6250,7 +6250,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       torrentsToUse = cachedTorrents.where((torrent) {
         if (NsfwFilter.shouldFilter(torrent.category, torrent.name)) {
           debugPrint(
-            'DebrifyTV: Filtered cached NSFW torrent: ${torrent.name}',
+            'NextupTV: Filtered cached NSFW torrent: ${torrent.name}',
           );
           return false;
         }
@@ -6258,7 +6258,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       }).toList();
       if (beforeCount != torrentsToUse.length) {
         debugPrint(
-          'DebrifyTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
+          'NextupTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
         );
       }
     }
@@ -6277,10 +6277,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       return Uri.decodeComponent(last);
     }
 
-    String firstTitle = 'Debrify TV';
+    String firstTitle = 'Nextup TV';
 
     Future<Map<String, String>?> requestMagicNext() async {
-      debugPrint('DebrifyTV/AD: requestMagicNext() queueSize=${_queue.length}');
+      debugPrint('NextupTV/AD: requestMagicNext() queueSize=${_queue.length}');
       while (_queue.isNotEmpty) {
         final item = _queue.removeAt(0);
         if (item is Map && item['type'] == 'ad_locked') {
@@ -6293,19 +6293,19 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (display ?? 'Debrify TV');
+                  : (display ?? 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV/AD: Cached unlock failed: $e');
+            debugPrint('NextupTV/AD: Cached unlock failed: $e');
             continue;
           }
         }
 
         if (item is Torrent) {
           debugPrint(
-            'DebrifyTV/AD: Cached trying torrent name="${item.name}" hash=${item.infohash}',
+            'NextupTV/AD: Cached trying torrent name="${item.name}" hash=${item.infohash}',
           );
           final prepared = await _resolveAllDebridLinks(item, apiKey);
           if (prepared == null || prepared.lockedLinks.isEmpty) {
@@ -6332,17 +6332,17 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                  : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV/AD: Cached add/unlock failed: $e');
+            debugPrint('NextupTV/AD: Cached add/unlock failed: $e');
             continue;
           }
         }
       }
-      debugPrint('DebrifyTV/AD: Cached queue exhausted.');
+      debugPrint('NextupTV/AD: Cached queue exhausted.');
       return null;
     }
 
@@ -6397,7 +6397,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (launchedOnTv) {
         debugPrint(
-          'DebrifyTV: Cached flow - AllDebrid playback started on Android TV',
+          'NextupTV: Cached flow - AllDebrid playback started on Android TV',
         );
         return;
       }
@@ -6446,7 +6446,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         _isBusy = false;
         _status = '';
       });
-      debugPrint('DebrifyTV: AllDebrid cached watch flow finished.');
+      debugPrint('NextupTV: AllDebrid cached watch flow finished.');
     }
   }
 
@@ -6484,7 +6484,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       final launched = await AndroidTvPlayerBridge.launchTorboxPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         magnets: magnets,
         requestNext: requestNext,
         requestChannelSwitch: _channels.length > 1 ? _requestNextChannel : null,
@@ -6520,7 +6520,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         return true;
       }
     } catch (e) {
-      debugPrint('DebrifyTV: Android TV bridge failed: $e');
+      debugPrint('NextupTV: Android TV bridge failed: $e');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
@@ -6530,10 +6530,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
   /// Handle channel switching on Android TV - cycles to next channel with looping
   Future<Map<String, dynamic>?> _requestNextChannel() async {
-    debugPrint('DebrifyTV: _requestNextChannel() called');
+    debugPrint('NextupTV: _requestNextChannel() called');
 
     if (_channels.isEmpty) {
-      debugPrint('DebrifyTV: No channels available');
+      debugPrint('NextupTV: No channels available');
       return null;
     }
 
@@ -6548,7 +6548,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     final DebrifyTvChannel targetChannel = _channels[nextIndex];
 
     debugPrint(
-      'DebrifyTV: Switching from channel ${currentIndex + 1} to ${nextIndex + 1} (${targetChannel.name})',
+      'NextupTV: Switching from channel ${currentIndex + 1} to ${nextIndex + 1} (${targetChannel.name})',
     );
 
     return _switchToChannel(
@@ -6559,10 +6559,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
   }
 
   Future<Map<String, dynamic>?> _requestChannelById(String channelId) async {
-    debugPrint('DebrifyTV: _requestChannelById($channelId) called');
+    debugPrint('NextupTV: _requestChannelById($channelId) called');
 
     if (_channels.isEmpty) {
-      debugPrint('DebrifyTV: No channels available for direct selection');
+      debugPrint('NextupTV: No channels available for direct selection');
       return null;
     }
 
@@ -6578,17 +6578,17 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
 
     if (targetChannel == null) {
-      debugPrint('DebrifyTV: Channel id $channelId not found');
+      debugPrint('NextupTV: Channel id $channelId not found');
       return null;
     }
 
     if (_currentWatchingChannelId == targetChannel.id) {
       debugPrint(
-        'DebrifyTV: Selected channel is already active; refreshing playback',
+        'NextupTV: Selected channel is already active; refreshing playback',
       );
     } else {
       debugPrint(
-        'DebrifyTV: Switching directly to channel ${targetChannel.name}',
+        'NextupTV: Switching directly to channel ${targetChannel.name}',
       );
     }
 
@@ -6605,7 +6605,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     String reason = 'direct',
   }) async {
     debugPrint(
-      'DebrifyTV: _switchToChannel(${targetChannel.name}) reason=$reason',
+      'NextupTV: _switchToChannel(${targetChannel.name}) reason=$reason',
     );
 
     final int computedIndex =
@@ -6618,32 +6618,32 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     final cacheEntry = await _ensureCacheEntry(targetChannel.id);
     if (cacheEntry == null) {
       debugPrint(
-        'DebrifyTV: Channel "${targetChannel.name}" has no cache entry',
+        'NextupTV: Channel "${targetChannel.name}" has no cache entry',
       );
       return null;
     }
     if (!cacheEntry.isReady) {
       debugPrint(
-        'DebrifyTV: Channel "${targetChannel.name}" cache not ready. Error: ${cacheEntry.errorMessage}',
+        'NextupTV: Channel "${targetChannel.name}" cache not ready. Error: ${cacheEntry.errorMessage}',
       );
       return null;
     }
     if (cacheEntry.torrents.isEmpty) {
-      debugPrint('DebrifyTV: Channel "${targetChannel.name}" has no torrents');
+      debugPrint('NextupTV: Channel "${targetChannel.name}" has no torrents');
       return null;
     }
 
-    debugPrint('DebrifyTV: Stopping old channel prefetcher...');
+    debugPrint('NextupTV: Stopping old channel prefetcher...');
     await _stopPrefetch();
-    debugPrint('DebrifyTV: Prefetcher stopped. Waiting for RD cooldown...');
+    debugPrint('NextupTV: Prefetcher stopped. Waiting for RD cooldown...');
     await Future.delayed(const Duration(seconds: 5));
-    debugPrint('DebrifyTV: Cooldown complete. Proceeding with channel switch.');
+    debugPrint('NextupTV: Cooldown complete. Proceeding with channel switch.');
 
     final previousChannelId = _currentWatchingChannelId;
     if (previousChannelId != null) {
       _channelCache.remove(previousChannelId);
       debugPrint(
-        'DebrifyTV: Evicted cache entry for previous channel $previousChannelId',
+        'NextupTV: Evicted cache entry for previous channel $previousChannelId',
       );
     }
 
@@ -6654,11 +6654,11 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     _qualityFallbackNotified = false;
     _rdSizeRejections = 0;
     _sizeFilterRelaxed = false;
-    debugPrint('DebrifyTV: Cleared prefetch state');
+    debugPrint('NextupTV: Cleared prefetch state');
 
     final keywords = await _getChannelKeywords(targetChannel.id);
     if (keywords.isEmpty) {
-      debugPrint('DebrifyTV: Channel "${targetChannel.name}" has no keywords');
+      debugPrint('NextupTV: Channel "${targetChannel.name}" has no keywords');
       if (_provider == _providerRealDebrid || _provider == _providerAllDebrid) {
         unawaited(_startPrefetch());
       }
@@ -6672,7 +6672,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     );
 
     if (playbackSelection.isEmpty) {
-      debugPrint('DebrifyTV: No torrents matched in selected channel');
+      debugPrint('NextupTV: No torrents matched in selected channel');
       if (_provider == _providerRealDebrid || _provider == _providerAllDebrid) {
         unawaited(_startPrefetch());
       }
@@ -6683,7 +6683,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         .map((cached) => cached.toTorrent())
         .toList();
     if (allTorrents.isEmpty) {
-      debugPrint('DebrifyTV: No playable torrents resolved for channel');
+      debugPrint('NextupTV: No playable torrents resolved for channel');
       if (_provider == _providerRealDebrid || _provider == _providerAllDebrid) {
         unawaited(_startPrefetch());
       }
@@ -6694,7 +6694,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     if (_provider == _providerTorbox) {
       final apiKey = await StorageService.getTorboxApiKey();
       if (apiKey == null || apiKey.isEmpty) {
-        debugPrint('DebrifyTV: ❌ No Torbox API key configured');
+        debugPrint('NextupTV: ❌ No Torbox API key configured');
         return null;
       }
 
@@ -6724,14 +6724,14 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         }
       } catch (e) {
         debugPrint(
-          'DebrifyTV: Torbox cache check failed during channel switch: $e',
+          'NextupTV: Torbox cache check failed during channel switch: $e',
         );
         return null;
       }
 
       if (cachedCandidates.isEmpty) {
         debugPrint(
-          'DebrifyTV: Torbox channel has no cached torrents available',
+          'NextupTV: Torbox channel has no cached torrents available',
         );
         return null;
       }
@@ -6741,10 +6741,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
     try {
       if (_provider == _providerRealDebrid) {
-        debugPrint('DebrifyTV: Selected channel uses Real-Debrid provider');
+        debugPrint('NextupTV: Selected channel uses Real-Debrid provider');
         final apiKey = await StorageService.getApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No Real-Debrid API key configured');
+          debugPrint('NextupTV: ❌ No Real-Debrid API key configured');
           return null;
         }
 
@@ -6766,7 +6766,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             );
           } catch (error) {
             debugPrint(
-              'DebrifyTV: Real-Debrid rejected candidate ${candidate.infohash}: $error',
+              'NextupTV: Real-Debrid rejected candidate ${candidate.infohash}: $error',
             );
             continue;
           }
@@ -6778,7 +6778,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
           if (rdLinks.isEmpty) {
             debugPrint(
-              'DebrifyTV: Real-Debrid returned no usable links for candidate ${candidate.infohash}',
+              'NextupTV: Real-Debrid returned no usable links for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -6810,7 +6810,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               );
             } catch (error) {
               debugPrint(
-                'DebrifyTV: Real-Debrid unrestrict failed for candidate ${candidate.infohash}: $error',
+                'NextupTV: Real-Debrid unrestrict failed for candidate ${candidate.infohash}: $error',
               );
               continue;
             }
@@ -6820,7 +6820,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             final String? resolved = unrestrict['download'] as String?;
             if (resolved == null || resolved.isEmpty) {
               debugPrint(
-                'DebrifyTV: Real-Debrid unrestrict returned empty URL for candidate ${candidate.infohash}',
+                'NextupTV: Real-Debrid unrestrict returned empty URL for candidate ${candidate.infohash}',
               );
               continue;
             }
@@ -6854,9 +6854,9 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           _activeProvider = _providerRealDebrid;
           unawaited(_startPrefetch());
           debugPrint(
-            'DebrifyTV: Started Real-Debrid prefetcher for new channel',
+            'NextupTV: Started Real-Debrid prefetcher for new channel',
           );
-          debugPrint('DebrifyTV: Successfully got stream from channel: $title');
+          debugPrint('NextupTV: Successfully got stream from channel: $title');
 
           return {
             'channelId': targetChannel.id,
@@ -6867,15 +6867,15 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           };
         }
 
-        debugPrint('DebrifyTV: All Real-Debrid candidates failed for channel');
+        debugPrint('NextupTV: All Real-Debrid candidates failed for channel');
         return null;
       }
 
       if (_provider == _providerAllDebrid) {
-        debugPrint('DebrifyTV: Selected channel uses AllDebrid provider');
+        debugPrint('NextupTV: Selected channel uses AllDebrid provider');
         final apiKey = await StorageService.getAllDebridApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No AllDebrid API key configured');
+          debugPrint('NextupTV: ❌ No AllDebrid API key configured');
           return null;
         }
 
@@ -6896,7 +6896,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             videoUrl = await AllDebridService.unlockLink(apiKey, headLink);
           } catch (error) {
             debugPrint(
-              'DebrifyTV: AllDebrid unlock failed for candidate ${candidate.infohash}: $error',
+              'NextupTV: AllDebrid unlock failed for candidate ${candidate.infohash}: $error',
             );
             continue;
           }
@@ -6939,8 +6939,8 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           _activeApiKey = apiKey;
           _activeProvider = _providerAllDebrid;
           unawaited(_startPrefetch());
-          debugPrint('DebrifyTV: Started AllDebrid prefetcher for new channel');
-          debugPrint('DebrifyTV: Successfully got stream from channel: $title');
+          debugPrint('NextupTV: Started AllDebrid prefetcher for new channel');
+          debugPrint('NextupTV: Successfully got stream from channel: $title');
 
           return {
             'channelId': targetChannel.id,
@@ -6951,14 +6951,14 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           };
         }
 
-        debugPrint('DebrifyTV: All AllDebrid candidates failed for channel');
+        debugPrint('NextupTV: All AllDebrid candidates failed for channel');
         return null;
       }
 
       if (_provider == _providerTorbox) {
         final apiKey = await StorageService.getTorboxApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No Torbox API key configured');
+          debugPrint('NextupTV: ❌ No Torbox API key configured');
           return null;
         }
 
@@ -6973,7 +6973,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
           if (prepared == null || prepared.streamUrl.isEmpty) {
             debugPrint(
-              'DebrifyTV: Torbox preparation failed for candidate ${candidate.infohash}',
+              'NextupTV: Torbox preparation failed for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -6993,7 +6993,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           }
 
           debugPrint(
-            'DebrifyTV: Torbox channel switch ready with stream ${prepared.title}',
+            'NextupTV: Torbox channel switch ready with stream ${prepared.title}',
           );
           return {
             'channelId': targetChannel.id,
@@ -7004,14 +7004,14 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           };
         }
 
-        debugPrint('DebrifyTV: All Torbox candidates failed for channel');
+        debugPrint('NextupTV: All Torbox candidates failed for channel');
         return null;
       }
 
       if (_provider == _providerPikPak) {
         final pikpakAvailable = await PikPakTvService.instance.isAvailable();
         if (!pikpakAvailable) {
-          debugPrint('DebrifyTV: PikPak not authenticated');
+          debugPrint('NextupTV: PikPak not authenticated');
           return null;
         }
 
@@ -7020,12 +7020,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
           final prepared = await _preparePikPakTorrent(
             candidate: candidate,
-            log: (message) => debugPrint('DebrifyTV/PikPak: $message'),
+            log: (message) => debugPrint('NextupTV/PikPak: $message'),
           );
 
           if (prepared == null) {
             debugPrint(
-              'DebrifyTV: PikPak preparation failed for candidate ${candidate.infohash}',
+              'NextupTV: PikPak preparation failed for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -7046,7 +7046,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           }
 
           debugPrint(
-            'DebrifyTV: PikPak channel switch ready with stream ${prepared.title}',
+            'NextupTV: PikPak channel switch ready with stream ${prepared.title}',
           );
           return {
             'channelId': targetChannel.id,
@@ -7057,22 +7057,22 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           };
         }
 
-        debugPrint('DebrifyTV: All PikPak candidates failed for channel');
+        debugPrint('NextupTV: All PikPak candidates failed for channel');
         return null;
       }
 
       debugPrint(
-        'DebrifyTV: Unsupported provider for channel switching: $_provider',
+        'NextupTV: Unsupported provider for channel switching: $_provider',
       );
       return null;
     } catch (e) {
-      debugPrint('DebrifyTV: Error getting stream from channel: $e');
+      debugPrint('NextupTV: Error getting stream from channel: $e');
     }
 
-    debugPrint('DebrifyTV: Channel switch failed');
+    debugPrint('NextupTV: Channel switch failed');
     if (_provider == _providerRealDebrid || _provider == _providerAllDebrid) {
       unawaited(_startPrefetch());
-      debugPrint('DebrifyTV: Restarted prefetcher for current channel');
+      debugPrint('NextupTV: Restarted prefetcher for current channel');
     }
     return null;
   }
@@ -7122,28 +7122,28 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     int? channelNumber,
     List<Map<String, dynamic>>? channelDirectory,
   }) async {
-    debugPrint('DebrifyTV: _launchRealDebridOnAndroidTv() called');
-    debugPrint('DebrifyTV: _isAndroidTv=$_isAndroidTv');
+    debugPrint('NextupTV: _launchRealDebridOnAndroidTv() called');
+    debugPrint('NextupTV: _isAndroidTv=$_isAndroidTv');
 
     if (!_isAndroidTv) {
-      debugPrint('DebrifyTV: Not Android TV, skipping native launch');
+      debugPrint('NextupTV: Not Android TV, skipping native launch');
       return false;
     }
 
     final initialUrl = firstStream['url'] ?? '';
     debugPrint(
-      'DebrifyTV: initialUrl=${initialUrl.substring(0, initialUrl.length > 50 ? 50 : initialUrl.length)}...',
+      'NextupTV: initialUrl=${initialUrl.substring(0, initialUrl.length > 50 ? 50 : initialUrl.length)}...',
     );
 
     if (initialUrl.isEmpty) {
-      debugPrint('DebrifyTV: Initial URL is empty, cannot launch');
+      debugPrint('NextupTV: Initial URL is empty, cannot launch');
       return false;
     }
 
     final title = (firstStream['title'] ?? '').trim();
-    debugPrint('DebrifyTV: title="$title"');
+    debugPrint('NextupTV: title="$title"');
     debugPrint(
-      'DebrifyTV: Calling AndroidTvPlayerBridge.launchRealDebridPlayback()...',
+      'NextupTV: Calling AndroidTvPlayerBridge.launchRealDebridPlayback()...',
     );
 
     try {
@@ -7157,17 +7157,17 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       final launched = await AndroidTvPlayerBridge.launchRealDebridPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         channelName: channelName,
         requestNext: requestNext,
         requestChannelSwitch: canSwitchChannels ? _requestNextChannel : null,
         requestChannelById: canSwitchChannels ? _requestChannelById : null,
         onFinished: () async {
-          debugPrint('DebrifyTV: Android TV playback finished callback');
+          debugPrint('NextupTV: Android TV playback finished callback');
 
           // Stop prefetcher when exiting player
           await _stopPrefetch();
-          debugPrint('DebrifyTV: Stopped prefetcher on player exit');
+          debugPrint('NextupTV: Stopped prefetcher on player exit');
 
           AndroidTvPlayerBridge.clearStreamProvider();
           _currentWatchingChannelId = null; // Clear channel tracking
@@ -7190,7 +7190,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       );
 
       debugPrint(
-        'DebrifyTV: AndroidTvPlayerBridge.launchRealDebridPlayback() returned: $launched',
+        'NextupTV: AndroidTvPlayerBridge.launchRealDebridPlayback() returned: $launched',
       );
 
       if (launched) {
@@ -7200,22 +7200,22 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           });
         }
         debugPrint(
-          'DebrifyTV: ✅ Successfully launched Real-Debrid on Android TV',
+          'NextupTV: ✅ Successfully launched Real-Debrid on Android TV',
         );
         return true;
       } else {
         debugPrint(
-          'DebrifyTV: ❌ AndroidTvPlayerBridge returned false - launch failed',
+          'NextupTV: ❌ AndroidTvPlayerBridge returned false - launch failed',
         );
       }
     } catch (e, stackTrace) {
-      debugPrint('DebrifyTV: ❌ Exception during Android TV launch: $e');
-      debugPrint('DebrifyTV: Stack trace: $stackTrace');
+      debugPrint('NextupTV: ❌ Exception during Android TV launch: $e');
+      debugPrint('NextupTV: Stack trace: $stackTrace');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
     AndroidTvPlayerBridge.clearStreamProvider();
-    debugPrint('DebrifyTV: Falling back to Flutter player');
+    debugPrint('NextupTV: Falling back to Flutter player');
     return false;
   }
 
@@ -7241,7 +7241,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         : null;
 
     void log(String message) {
-      debugPrint('DebrifyTV: $message');
+      debugPrint('NextupTV: $message');
     }
 
     final integrationEnabled =
@@ -7428,7 +7428,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -7452,7 +7452,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         videoPlayerRoute(
           builder: (_) => VideoPlayerScreen(
             videoUrl: first['url'] ?? '',
-            title: first['title'] ?? 'Debrify TV',
+            title: first['title'] ?? 'Nextup TV',
             startFromRandom: _startRandom,
             randomStartMaxPercent: _randomStartPercent,
             hideSeekbar: _hideSeekbar,
@@ -7517,7 +7517,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         : null;
 
     void log(String message) {
-      debugPrint('DebrifyTV/PikPak: $message');
+      debugPrint('NextupTV/PikPak: $message');
     }
 
     final pikpakAvailable = await PikPakTvService.instance.isAvailable();
@@ -7598,7 +7598,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -7623,7 +7623,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         videoPlayerRoute(
           builder: (_) => VideoPlayerScreen(
             videoUrl: first['url'] ?? '',
-            title: first['title'] ?? 'Debrify TV',
+            title: first['title'] ?? 'Nextup TV',
             startFromRandom: _startRandom,
             randomStartMaxPercent: _randomStartPercent,
             hideSeekbar: _hideSeekbar,
@@ -7691,7 +7691,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       // Reuse Torbox bridge method - it works for any stream URL
       final launched = await AndroidTvPlayerBridge.launchTorboxPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         magnets: const [],
         requestNext: requestNext,
         requestChannelSwitch: _channels.length > 1 ? _requestNextChannel : null,
@@ -7727,7 +7727,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         return true;
       }
     } catch (e) {
-      debugPrint('DebrifyTV: Android TV bridge failed for PikPak: $e');
+      debugPrint('NextupTV: Android TV bridge failed for PikPak: $e');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
@@ -9064,7 +9064,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               DebrifyTvDialogOptionCard(
                 icon: Icons.share_rounded,
                 title: 'Share channel',
-                subtitle: 'Create a portable Debrify link for this pool.',
+                subtitle: 'Create a portable Nextup link for this pool.',
                 tag: 'Link',
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
@@ -9259,7 +9259,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             const SizedBox(height: 16),
             SwitchRow(
               title: 'Start from random timestamp',
-              subtitle: 'Each Debrify TV video starts at a random point',
+              subtitle: 'Each Nextup TV video starts at a random point',
               value: startRandom,
               onChanged: (v) => setStartRandom(v),
             ),
@@ -9523,7 +9523,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return DebrifyTvSpotlightDialog(
-              eyebrow: 'Debrify TV · applies to every channel',
+              eyebrow: 'Nextup TV · applies to every channel',
               title: 'Channel playback',
               subtitle:
                   'Choose the provider, filters, and starting behavior used when a channel tunes.',
@@ -9952,7 +9952,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     entries.shuffle(Random());
     if (entries.isEmpty && applySizeFilter && _tvFilters.hasSize) {
       debugPrint(
-        'DebrifyTV/Premiumize: no file matched the size filter in '
+        'NextupTV/Premiumize: no file matched the size filter in '
         '"$fallbackTitle" — using it unfiltered.',
       );
       return _buildPremiumizePlayableEntries(
@@ -9991,7 +9991,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           )
         : null;
 
-    void log(String message) => debugPrint('DebrifyTV/PM: $message');
+    void log(String message) => debugPrint('NextupTV/PM: $message');
 
     final integrationEnabled =
         await StorageService.getPremiumizeIntegrationEnabled();
@@ -10136,7 +10136,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -10157,7 +10157,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         videoPlayerRoute(
           builder: (_) => VideoPlayerScreen(
             videoUrl: first['url'] ?? '',
-            title: first['title'] ?? 'Debrify TV',
+            title: first['title'] ?? 'Nextup TV',
             startFromRandom: _startRandom,
             randomStartMaxPercent: _randomStartPercent,
             hideSeekbar: _hideSeekbar,
@@ -10429,7 +10429,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
 
       if (await _handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -10452,7 +10452,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           videoPlayerRoute(
             builder: (_) => VideoPlayerScreen(
               videoUrl: first['url'] ?? '',
-              title: first['title'] ?? 'Debrify TV',
+              title: first['title'] ?? 'Nextup TV',
               startFromRandom: _startRandom,
               randomStartMaxPercent: _randomStartPercent,
               hideSeekbar: _hideSeekbar,
@@ -10608,7 +10608,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         return Uri.decodeComponent(last);
       }
 
-      String firstTitle = 'Debrify TV';
+      String firstTitle = 'Nextup TV';
 
       Future<Map<String, String>?> requestMagicNext() async {
         if (_watchCancelled) return null;
@@ -10626,7 +10626,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (display ?? 'Debrify TV');
+                    : (display ?? 'Nextup TV');
                 firstTitle = chosenTitle;
                 return {'url': videoUrl, 'title': chosenTitle};
               }
@@ -10662,7 +10662,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                    : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
                 firstTitle = chosenTitle;
                 return {'url': videoUrl, 'title': chosenTitle};
               }
@@ -10816,7 +10816,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     // plays instead of walking the whole queue and playing nothing.
     if (entries.isEmpty && applySizeFilter && _tvFilters.hasSize) {
       debugPrint(
-        'DebrifyTV/Torbox: no file matched the size filter in '
+        'NextupTV/Torbox: no file matched the size filter in '
         '"$fallbackTitle" — using it unfiltered.',
       );
       return _buildTorboxPlayableEntries(
@@ -10942,7 +10942,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     final launched = await VideoPlayerLauncher.launchExternalIfConfigured(
       context,
       videoUrl: url,
-      title: title.trim().isEmpty ? 'Debrify TV' : title.trim(),
+      title: title.trim().isEmpty ? 'Nextup TV' : title.trim(),
     );
     if (launched) {
       _launchedPlayer = true;
@@ -11177,7 +11177,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       // Nothing matched in this torrent — take it unfiltered rather than
       // discarding the torrent (see the Torbox builder).
       debugPrint(
-        'DebrifyTV/AD: no file matched the size filter in "${result.name}" — '
+        'NextupTV/AD: no file matched the size filter in "${result.name}" — '
         'using it unfiltered.',
       );
       freshLinks = collectLinks(applySizeFilter: false);

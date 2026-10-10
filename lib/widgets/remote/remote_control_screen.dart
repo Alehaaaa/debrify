@@ -379,7 +379,7 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Make sure Debrify is running on your TV',
+            'Make sure Nextup is running on your TV',
             style: TextStyle(
               color: AppThemeScope.of(context).core.tx.withValues(alpha: 0.5),
               fontSize: 12,

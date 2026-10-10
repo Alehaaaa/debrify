@@ -5,16 +5,16 @@
 
 [Setup]
 AppId={{9B23C6A1-6A05-4B0C-9D6C-5DB02E2AA8F7}}
-AppName=Debrify
+AppName=Nextup
 AppVersion={#AppVersion}
-AppPublisher=Debrify
-AppPublisherURL=https://github.com/varunsalian/debrify
+AppPublisher=Nextup
+AppPublisherURL=https://github.com/Alehaaaa/debrify
 DefaultDirName={autopf}\\Debrify
 DisableDirPage=yes
-DefaultGroupName=Debrify
+DefaultGroupName=Nextup
 DisableProgramGroupPage=yes
 OutputDir=..\\build\\windows\\installer
-OutputBaseFilename=debrify-{#AppVersion}-setup
+OutputBaseFilename=nextup-{#AppVersion}-setup
 Compression=lzma
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -32,8 +32,8 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 Source: "..\\build\\windows\\x64\\runner\\Release\\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\\Debrify"; Filename: "{app}\\debrify.exe"
-Name: "{autodesktop}\\Debrify"; Filename: "{app}\\debrify.exe"; Tasks: desktopicon
+Name: "{group}\\Nextup"; Filename: "{app}\\debrify.exe"
+Name: "{autodesktop}\\Nextup"; Filename: "{app}\\debrify.exe"; Tasks: desktopicon
 
 [Registry]
 ; Register stremio:// URL protocol
@@ -52,4 +52,4 @@ Root: HKCU; Subkey: "Software\\Classes\\debrify"; ValueType: string; ValueName: 
 Root: HKCU; Subkey: "Software\\Classes\\debrify\\shell\\open\\command"; ValueType: string; ValueData: """{app}\\debrify.exe"" ""%1"""
 
 [Run]
-Filename: "{app}\\debrify.exe"; Description: "Launch Debrify"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\\debrify.exe"; Description: "Launch Nextup"; Flags: nowait postinstall skipifsilent

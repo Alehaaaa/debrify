@@ -62,7 +62,7 @@ class ModeStep extends StatelessWidget {
           icon: Icons.sync_alt_rounded,
           title: 'Bring it from another device',
           subtitle:
-              'Copy services, addons, channels, and preferences from Debrify on another device.',
+              'Copy services, addons, channels, and preferences from Nextup on another device.',
           footnote: 'Both devices need to be on the same Wi-Fi.',
           onPressed: onImport,
         ),
@@ -74,7 +74,7 @@ class ModeStep extends StatelessWidget {
             icon: Icons.restore_rounded,
             title: 'Restore from a backup',
             subtitle:
-                'Choose a Debrify backup file to restore profiles, services, addons, channels, and preferences.',
+                'Choose a Nextup backup file to restore profiles, services, addons, channels, and preferences.',
             onPressed: onRestore!,
           ),
         ],

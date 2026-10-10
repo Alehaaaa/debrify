@@ -627,7 +627,7 @@ class _SpotlightTvArmState extends State<_SpotlightTvArm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SpotlightKick('Debrify TV', color: tv.accent),
+                SpotlightKick('Nextup TV', color: tv.accent),
                 const SizedBox(height: 7),
                 Text(
                   'Channels',

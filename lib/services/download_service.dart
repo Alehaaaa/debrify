@@ -3048,7 +3048,7 @@ class DownloadService {
 
   Future<String> _appDownloadsSubdir({bool create = true}) async {
     // User-chosen download folder (Windows/Linux). Mirrors the Android SAF
-    // semantics: the custom root is used as-is (no forced 'Debrify' segment —
+    // semantics: the custom root is used as-is (no forced 'Nextup' segment —
     // the user picked the exact folder) and per-item subfolders nest inside
     // it. Unlike the Android grant-lost path, an invalid folder does NOT
     // clear the pref: on desktop unavailability is routinely transient (USB
@@ -3369,7 +3369,7 @@ class DownloadService {
   /// shape the scheduler's start path computes.
   String _subDirForRecord(Map<String, dynamic>? rec) {
     final torrentName = (rec?['torrentName'] as String?)?.trim() ?? '';
-    if (torrentName.isEmpty) return 'Debrify';
+    if (torrentName.isEmpty) return 'Nextup';
     final rel = (rec?['relativeSubDir'] as String?)?.trim() ?? '';
     final sanitizedRel = rel.isNotEmpty ? _sanitizeRelativePath(rel) : '';
     final parts = sanitizedRel.isNotEmpty
@@ -4065,16 +4065,16 @@ class DownloadService {
               p.torrentName != null && p.torrentName!.trim().isNotEmpty
               ? (sanitizedRelativeDir.isNotEmpty
                         ? path.join(
-                            'Debrify',
+                            'Nextup',
                             _sanitizeName(p.torrentName!.trim()),
                             sanitizedRelativeDir,
                           )
                         : path.join(
-                            'Debrify',
+                            'Nextup',
                             _sanitizeName(p.torrentName!.trim()),
                           ))
                     .replaceAll(r'\', '/')
-              : 'Debrify';
+              : 'Nextup';
 
           final startRes = await AndroidNativeDownloader.start(
             // Same id as the durable record: the service adopts persisted

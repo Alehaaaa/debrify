@@ -808,7 +808,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
               'Existing profiles and connections on this device will be '
               'replaced. Create a manual backup first if you want to keep '
               'a copy of your current data. IPTV channel and '
-              'guide caches rebuild; Debrify TV channels are not included.',
+              'guide caches rebuild; Nextup TV channels are not included.',
             ),
             actions: [
               TextButton(
@@ -979,7 +979,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
           report.localChangeFollowUp ||
                   !report.localPublicationConfirmed ||
                   report.localProfilesSuppressed
-              ? 'Sync still has pending changes. Keep Debrify open and retry.'
+              ? 'Sync still has pending changes. Keep Nextup open and retry.'
               : snapshotSaved
               ? 'WebDAV Sync is up to date. Snapshot saved.'
               : report.statusHint ?? 'WebDAV Sync is up to date.',
@@ -1058,23 +1058,23 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       if (!mounted) return;
       final message = switch (report.disposition) {
         WebDavSyncTvManualDisposition.completed =>
-          'Debrify TV sync is up to date.',
+          'Nextup TV sync is up to date.',
         WebDavSyncTvManualDisposition.cancelled =>
-          'Debrify TV sync stopped safely.',
+          'Nextup TV sync stopped safely.',
         WebDavSyncTvManualDisposition.inactive =>
-          'Enable WebDAV Sync before syncing Debrify TV.',
+          'Enable WebDAV Sync before syncing Nextup TV.',
         WebDavSyncTvManualDisposition.firstJoinPending =>
-          'Finish the first sync before syncing Debrify TV.',
+          'Finish the first sync before syncing Nextup TV.',
         WebDavSyncTvManualDisposition.cycleRunning =>
-          'Another sync is running. Try Debrify TV again when it finishes.',
+          'Another sync is running. Try Nextup TV again when it finishes.',
         WebDavSyncTvManualDisposition.televisionPlayback =>
-          'Stop TV playback, then run Debrify TV sync again.',
+          'Stop TV playback, then run Nextup TV sync again.',
         WebDavSyncTvManualDisposition.tvOsLowMemory =>
           'Apple TV is low on memory. Wait a few minutes, then try again.',
         WebDavSyncTvManualDisposition.clockPaused =>
-          'Debrify TV sync is paused because the device or server clock needs attention.',
+          'Nextup TV sync is paused because the device or server clock needs attention.',
         WebDavSyncTvManualDisposition.conflict =>
-          'Debrify TV changed during sync. Run it again to finish.',
+          'Nextup TV changed during sync. Run it again to finish.',
       };
       ScaffoldMessenger.of(
         context,
@@ -1384,7 +1384,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
       WebDavSyncTvManualAvailability.inactive =>
         'Enable WebDAV Sync to use manual TV sync',
       WebDavSyncTvManualAvailability.firstJoinPending =>
-        'Finish the first sync before syncing Debrify TV',
+        'Finish the first sync before syncing Nextup TV',
       WebDavSyncTvManualAvailability.cycleRunning =>
         'Wait for the current sync to finish',
       WebDavSyncTvManualAvailability.televisionPlayback =>
@@ -1554,7 +1554,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
         ],
         const SizedBox(height: 16),
         SettingsSection(
-          title: 'Debrify TV channels',
+          title: 'Nextup TV channels',
           blurb:
               'Channels and saved torrent pools transfer only when you sync them here. Run this on both devices after changing channels.',
           children: [
@@ -1739,7 +1739,7 @@ final class _DebrifyTvSyncProgressDialogState
     return PopScope(
       canPop: false,
       child: AlertDialog(
-        title: const Text('Syncing Debrify TV'),
+        title: const Text('Syncing Nextup TV'),
         content: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

@@ -24,7 +24,7 @@ class AutoLaunchOverlay extends StatefulWidget {
 
   const AutoLaunchOverlay({
     super.key,
-    this.launchTitle = 'Launching Debrify TV',
+    this.launchTitle = 'Launching Nextup TV',
     required this.channelName,
     this.channelNumber,
     this.onTimeout,

@@ -154,7 +154,7 @@ class _MprisObject extends DBusObject {
     'CanQuit': const DBusBoolean(false),
     'CanRaise': const DBusBoolean(false),
     'HasTrackList': const DBusBoolean(false),
-    'Identity': const DBusString('Debrify'),
+    'Identity': const DBusString('Nextup'),
     'DesktopEntry': const DBusString('debrify'),
     'SupportedUriSchemes': DBusArray.string(const []),
     'SupportedMimeTypes': DBusArray.string(const []),

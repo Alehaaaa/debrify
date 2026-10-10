@@ -58,7 +58,7 @@ class _RemoteRolePickerScreenState extends State<RemoteRolePickerScreen> {
       if (isTv) {
         var name = await StorageService.getRemoteTvDeviceName();
         name ??= await PlatformUtil.getDeviceName();
-        name ??= 'Debrify TV';
+        name ??= 'Nextup TV';
         await state.switchToReceiverMode(name);
       } else {
         await state.switchToSenderMode();

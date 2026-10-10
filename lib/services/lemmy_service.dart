@@ -102,7 +102,7 @@ class LemmyListingResult {
 /// read operations. Queries a single instance (default lemmy.world), which
 /// federates content from across the network when [_listingType] is "All".
 class LemmyService {
-  static const String _userAgent = 'Debrify/1.0 (Flutter; Video Player)';
+  static const String _userAgent = 'Nextup/1.0 (Flutter; Video Player)';
   static const String defaultInstance = 'https://lemmy.world';
 
   /// Federated listing — returns posts from the whole network the instance

@@ -129,7 +129,7 @@ class IptvService {
     final client = http.Client();
     try {
       final request = http.Request('GET', Uri.parse(url));
-      request.headers['User-Agent'] = 'Debrify/1.0';
+      request.headers['User-Agent'] = 'Nextup/1.0';
       request.headers['Accept'] = '*/*';
       final streamed = await client
           .send(request)

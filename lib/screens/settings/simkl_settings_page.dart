@@ -383,7 +383,7 @@ class _SimklSettingsPageState extends State<SimklSettingsPage> {
                   const SettingsInfoBanner(
                     text:
                         'How it works: clicking "Login with Simkl" will show a code on screen. '
-                        'Enter this code at simkl.com/pin on your phone or computer to authorize Debrify.',
+                        'Enter this code at simkl.com/pin on your phone or computer to authorize Nextup.',
                   ),
                 ],
               ),

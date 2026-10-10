@@ -95,7 +95,7 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
   SidebarDestination(
     id: 'debrify_tv',
     tabIndex: MainTab.debrifyTv,
-    defaultLabel: 'Debrify TV',
+    defaultLabel: 'Nextup TV',
     section: 'TV',
     icon: Icons.tv_rounded,
   ),

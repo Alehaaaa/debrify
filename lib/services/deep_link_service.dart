@@ -326,7 +326,7 @@ class DeepLinkService {
         episode == null ||
         season < 0 ||
         episode < 1) {
-      debugPrint('Ignoring malformed Debrify episode link');
+      debugPrint('Ignoring malformed Nextup episode link');
       return;
     }
     onEpisodeLinkReceived?.call(<String, dynamic>{

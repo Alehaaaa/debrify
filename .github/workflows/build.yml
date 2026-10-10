@@ -43,7 +43,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -116,7 +116,7 @@ jobs:
     - name: Build APK
       env:
         ORG_GRADLE_PROJECT_debrifyLocalDiagnostics: "false"
-      run: flutter build apk --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: flutter build apk --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Reject debuggable release APK
       shell: bash
@@ -137,16 +137,16 @@ jobs:
         set -euo pipefail
         SUFFIX="${{ github.event.release.tag_name || 'dev' }}"
         cd build/app/outputs/flutter-apk
-        cp app-release.apk "debrify-${SUFFIX}-android.apk"
-        cp app-release.apk "debrify-${SUFFIX}-androidtv.apk"
+        cp app-release.apk "nextup-${SUFFIX}-android.apk"
+        cp app-release.apk "nextup-${SUFFIX}-androidtv.apk"
 
     - name: Attach APKs to GitHub Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}-android.apk
-          build/app/outputs/flutter-apk/debrify-${{ github.event.release.tag_name }}-androidtv.apk
+          build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}-android.apk
+          build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}-androidtv.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -154,15 +154,15 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-android
-        path: build/app/outputs/flutter-apk/debrify-dev-android.apk
+        name: nextup-android
+        path: build/app/outputs/flutter-apk/nextup-dev-android.apk
 
     - name: Upload Android TV APK as artifact (manual)
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-androidtv
-        path: build/app/outputs/flutter-apk/debrify-dev-androidtv.apk
+        name: nextup-androidtv
+        path: build/app/outputs/flutter-apk/nextup-dev-androidtv.apk
 
   macos:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
@@ -184,7 +184,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -213,7 +213,7 @@ jobs:
       run: dev/scripts/build_macos_media_kit_frameworks.sh packages/media_kit_libs_macos_video_patched/macos/Frameworks
 
     - name: Build macOS app
-      run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Verify packaged subtitle decoders
       run: dev/scripts/verify_macos_subtitle_decoders.sh build/macos/Build/Products/Release/debrify.app/Contents/Frameworks
@@ -226,20 +226,20 @@ jobs:
         cd build/macos/Build/Products/Release
         rm -rf dmg-root
         mkdir -p dmg-root
-        cp -R debrify.app dmg-root/Debrify.app
+        cp -R debrify.app dmg-root/Nextup.app
 
     - name: Create DMG (release)
       if: github.event_name == 'release'
       run: |
         cd build/macos/Build/Products/Release
         create-dmg \
-          --volname "Debrify" \
+          --volname "Nextup" \
           --window-pos 200 120 \
           --window-size 520 360 \
           --icon-size 120 \
-          --icon "Debrify.app" 120 180 \
+          --icon "Nextup.app" 120 180 \
           --app-drop-link 400 180 \
-          debrify-${{ github.event.release.tag_name }}.dmg \
+          nextup-${{ github.event.release.tag_name }}.dmg \
           dmg-root
 
     - name: Create DMG (manual)
@@ -247,11 +247,11 @@ jobs:
       run: |
         cd build/macos/Build/Products/Release
         create-dmg \
-          --volname "Debrify" \
+          --volname "Nextup" \
           --window-pos 200 120 \
           --window-size 520 360 \
           --icon-size 120 \
-          --icon "Debrify.app" 120 180 \
+          --icon "Nextup.app" 120 180 \
           --app-drop-link 400 180 \
           debrify.dmg \
           dmg-root
@@ -260,7 +260,7 @@ jobs:
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/macos/Build/Products/Release/debrify-${{ github.event.release.tag_name }}.dmg
+        files: build/macos/Build/Products/Release/nextup-${{ github.event.release.tag_name }}.dmg
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -268,7 +268,7 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-macos
+        name: nextup-macos
         path: build/macos/Build/Products/Release/debrify.dmg
 
   windows:
@@ -289,7 +289,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -306,7 +306,7 @@ jobs:
       run: flutter pub get
 
     - name: Build Windows app
-      run: flutter build windows --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: flutter build windows --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Install Inno Setup
       run: choco install innosetup --no-progress --yes
@@ -321,7 +321,7 @@ jobs:
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/windows/installer/debrify-${{ github.event.release.tag_name }}-setup.exe
+        files: build/windows/installer/nextup-${{ github.event.release.tag_name }}-setup.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -329,8 +329,8 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-windows
-        path: build/windows/installer/debrify-dev-setup.exe
+        name: nextup-windows
+        path: build/windows/installer/nextup-dev-setup.exe
 
   ios:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'ios'
@@ -350,7 +350,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -364,7 +364,7 @@ jobs:
       run: flutter pub get
 
     - name: Build iOS (unsigned)
-      run: flutter build ios --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --no-codesign --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: flutter build ios --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --no-codesign --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     # --no-codesign emits Mach-Os with no LC_CODE_SIGNATURE, so __LINKEDIT has no
     # room reserved for a signature. Sideloaders (AltStore/ldid, Sideloadly) abort
@@ -407,7 +407,7 @@ jobs:
         cd build/ios/iphoneos
         mkdir -p Payload
         cp -R Runner.app Payload/
-        zip -r debrify-${{ github.event.release.tag_name }}-unsigned.ipa Payload
+        zip -r nextup-${{ github.event.release.tag_name }}-unsigned.ipa Payload
         rm -rf Payload
 
     - name: Create unsigned IPA (manual)
@@ -416,14 +416,14 @@ jobs:
         cd build/ios/iphoneos
         mkdir -p Payload
         cp -R Runner.app Payload/
-        zip -r debrify-unsigned.ipa Payload
+        zip -r nextup-unsigned.ipa Payload
         rm -rf Payload
 
     - name: Upload IPA to Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/ios/iphoneos/debrify-${{ github.event.release.tag_name }}-unsigned.ipa
+        files: build/ios/iphoneos/nextup-${{ github.event.release.tag_name }}-unsigned.ipa
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -431,8 +431,8 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-ios
-        path: build/ios/iphoneos/debrify-unsigned.ipa
+        name: nextup-ios
+        path: build/ios/iphoneos/nextup-unsigned.ipa
 
   tvos:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'tvos'
@@ -456,7 +456,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -509,7 +509,7 @@ jobs:
         CODE_SIGNING_ALLOWED = NO
         EOF
         export XCODE_XCCONFIG_FILE="$RUNNER_TEMP/unsigned.xcconfig"
-        flutter-tvos build tvos --release --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+        flutter-tvos build tvos --release --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Verify tvOS display-matching framework linkage
       run: |
@@ -582,7 +582,7 @@ jobs:
         cd build/tvos/Release-appletvos
         mkdir -p Payload
         cp -R Runner.app Payload/
-        zip -qr debrify-${{ github.event.release.tag_name }}-tvos-unsigned.ipa Payload
+        zip -qr nextup-${{ github.event.release.tag_name }}-tvos-unsigned.ipa Payload
         rm -rf Payload
 
     - name: Create unsigned IPA (manual)
@@ -591,14 +591,14 @@ jobs:
         cd build/tvos/Release-appletvos
         mkdir -p Payload
         cp -R Runner.app Payload/
-        zip -qr debrify-tvos-unsigned.ipa Payload
+        zip -qr nextup-tvos-unsigned.ipa Payload
         rm -rf Payload
 
     - name: Upload IPA to Release
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v1
       with:
-        files: build/tvos/Release-appletvos/debrify-${{ github.event.release.tag_name }}-tvos-unsigned.ipa
+        files: build/tvos/Release-appletvos/nextup-${{ github.event.release.tag_name }}-tvos-unsigned.ipa
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -606,8 +606,8 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-tvos
-        path: build/tvos/Release-appletvos/debrify-tvos-unsigned.ipa
+        name: nextup-tvos
+        path: build/tvos/Release-appletvos/nextup-tvos-unsigned.ipa
 
   linux:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux'
@@ -630,7 +630,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -678,7 +678,7 @@ jobs:
       # media_kit_video uses pkg-config at CMake time. Point it at the same
       # private mpv SDK that will be installed into the AppImage so the plugin
       # records DT_NEEDED=libmpv.so.2 instead of Ubuntu 22.04's libmpv.so.1.
-      run: PKG_CONFIG_PATH="$PWD/build/private-libmpv/pkgconfig" flutter build linux --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: PKG_CONFIG_PATH="$PWD/build/private-libmpv/pkgconfig" flutter build linux --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     # media_kit ships no Linux libmpv. Install our statically consolidated mpv
     # in a plugin-private directory; never expose it through LD_LIBRARY_PATH.
@@ -712,13 +712,13 @@ jobs:
         # Create desktop file
         cat > AppDir/debrify.desktop << EOF
         [Desktop Entry]
-        Name=Debrify
+        Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
         Exec=debrify
         Icon=debrify
         Type=Application
         Categories=Utility;Network;
-        X-AppImage-Name=Debrify
+        X-AppImage-Name=Nextup
         X-AppImage-Version=${VERSION}
         X-AppImage-Arch=x86_64
         EOF
@@ -731,7 +731,7 @@ jobs:
         chmod +x AppDir/AppRun
 
         # Build AppImage
-        APPIMAGE="debrify-${RELEASE_TAG:-dev}-x86_64.AppImage"
+        APPIMAGE="nextup-${RELEASE_TAG:-dev}-x86_64.AppImage"
         if [ -n "$RELEASE_TAG" ]; then
           UPDATE_CHANNEL=latest
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
@@ -739,7 +739,7 @@ jobs:
           fi
           REPOSITORY_OWNER="${GITHUB_REPOSITORY%%/*}"
           REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
-          UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|debrify-*-x86_64.AppImage.zsync"
+          UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|nextup-*-x86_64.AppImage.zsync"
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run -u "$UPDATE_INFORMATION" AppDir "$APPIMAGE"
         else
           ARCH=x86_64 ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "$APPIMAGE"
@@ -749,7 +749,7 @@ jobs:
       if: github.event_name == 'release'
       run: |
         set -euo pipefail
-        APPIMAGE="debrify-${{ github.event.release.tag_name }}-x86_64.AppImage"
+        APPIMAGE="nextup-${{ github.event.release.tag_name }}-x86_64.AppImage"
         SIDECAR="${APPIMAGE}.zsync"
         test -s "$APPIMAGE"
         test -s "$SIDECAR"
@@ -760,7 +760,7 @@ jobs:
         fi
         REPOSITORY_OWNER="${GITHUB_REPOSITORY%%/*}"
         REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
-        EXPECTED_UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|debrify-*-x86_64.AppImage.zsync"
+        EXPECTED_UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|nextup-*-x86_64.AppImage.zsync"
         ACTUAL_UPDATE_INFORMATION=$("./${APPIMAGE}" --appimage-updateinformation)
         test "$ACTUAL_UPDATE_INFORMATION" = "$EXPECTED_UPDATE_INFORMATION"
 
@@ -769,7 +769,7 @@ jobs:
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
         for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
-          grep -Fx 'X-AppImage-Name=Debrify' "$DESKTOP_FILE"
+          grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
         done
@@ -778,10 +778,10 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       run: |
         set -euo pipefail
-        APPIMAGE=debrify-dev-x86_64.AppImage
+        APPIMAGE=nextup-dev-x86_64.AppImage
         test -s "$APPIMAGE"
         test -z "$("./${APPIMAGE}" --appimage-updateinformation)"
-        if compgen -G 'debrify-dev-x86_64.AppImage.zsync' >/dev/null; then
+        if compgen -G 'nextup-dev-x86_64.AppImage.zsync' >/dev/null; then
           echo 'Unexpected zsync sidecar for manual build' >&2
           exit 1
         fi
@@ -789,7 +789,7 @@ jobs:
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
         for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
-          grep -Fx 'X-AppImage-Name=Debrify' "$DESKTOP_FILE"
+          grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
         done
@@ -799,8 +799,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          debrify-${{ github.event.release.tag_name }}-x86_64.AppImage
-          debrify-${{ github.event.release.tag_name }}-x86_64.AppImage.zsync
+          nextup-${{ github.event.release.tag_name }}-x86_64.AppImage
+          nextup-${{ github.event.release.tag_name }}-x86_64.AppImage.zsync
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -808,8 +808,8 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-linux
-        path: debrify-dev-x86_64.AppImage
+        name: nextup-linux
+        path: nextup-dev-x86_64.AppImage
 
   linux-arm64:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux-arm64'
@@ -829,7 +829,7 @@ jobs:
         token = os.environ.get("TMDB_READ_ACCESS_TOKEN", "").strip()
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
-        config = Path(os.environ["RUNNER_TEMP"]) / "debrify-build-config.json"
+        config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
         omdb = os.environ.get("OMDB_API_KEY", "").strip()
         config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
@@ -883,7 +883,7 @@ jobs:
       run: flutter pub get
 
     - name: Build Linux app
-      run: PKG_CONFIG_PATH="$PWD/build/private-libmpv/pkgconfig" flutter build linux --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/debrify-build-config.json"
+      run: PKG_CONFIG_PATH="$PWD/build/private-libmpv/pkgconfig" flutter build linux --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     # See the x64 job — same reason, same script, arm64 bundle path.
     - name: Install private libmpv into the app bundle
@@ -916,13 +916,13 @@ jobs:
         # Create desktop file
         cat > AppDir/debrify.desktop << EOF
         [Desktop Entry]
-        Name=Debrify
+        Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
         Exec=debrify
         Icon=debrify
         Type=Application
         Categories=Utility;Network;
-        X-AppImage-Name=Debrify
+        X-AppImage-Name=Nextup
         X-AppImage-Version=${VERSION}
         X-AppImage-Arch=aarch64
         EOF
@@ -938,7 +938,7 @@ jobs:
         # Note: appimagetool expects "arm_aarch64" not "aarch64"
         # See: https://github.com/AppImage/AppImageKit/issues/1163
         export ARCH=arm_aarch64
-        APPIMAGE="debrify-${RELEASE_TAG:-dev}-arm64.AppImage"
+        APPIMAGE="nextup-${RELEASE_TAG:-dev}-arm64.AppImage"
         if [ -n "$RELEASE_TAG" ]; then
           UPDATE_CHANNEL=latest
           if [ "${{ github.event.release.prerelease }}" = "true" ]; then
@@ -946,7 +946,7 @@ jobs:
           fi
           REPOSITORY_OWNER="${GITHUB_REPOSITORY%%/*}"
           REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
-          UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|debrify-*-arm64.AppImage.zsync"
+          UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|nextup-*-arm64.AppImage.zsync"
           ./appimagetool-aarch64.AppImage --appimage-extract-and-run -u "$UPDATE_INFORMATION" AppDir "$APPIMAGE"
         else
           ./appimagetool-aarch64.AppImage --appimage-extract-and-run AppDir "$APPIMAGE"
@@ -956,7 +956,7 @@ jobs:
       if: github.event_name == 'release'
       run: |
         set -euo pipefail
-        APPIMAGE="debrify-${{ github.event.release.tag_name }}-arm64.AppImage"
+        APPIMAGE="nextup-${{ github.event.release.tag_name }}-arm64.AppImage"
         SIDECAR="${APPIMAGE}.zsync"
         test -s "$APPIMAGE"
         test -s "$SIDECAR"
@@ -967,7 +967,7 @@ jobs:
         fi
         REPOSITORY_OWNER="${GITHUB_REPOSITORY%%/*}"
         REPOSITORY_NAME="${GITHUB_REPOSITORY#*/}"
-        EXPECTED_UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|debrify-*-arm64.AppImage.zsync"
+        EXPECTED_UPDATE_INFORMATION="gh-releases-zsync|${REPOSITORY_OWNER}|${REPOSITORY_NAME}|${UPDATE_CHANNEL}|nextup-*-arm64.AppImage.zsync"
         ACTUAL_UPDATE_INFORMATION=$("./${APPIMAGE}" --appimage-updateinformation)
         test "$ACTUAL_UPDATE_INFORMATION" = "$EXPECTED_UPDATE_INFORMATION"
 
@@ -976,7 +976,7 @@ jobs:
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
         for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
-          grep -Fx 'X-AppImage-Name=Debrify' "$DESKTOP_FILE"
+          grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"
         done
@@ -985,10 +985,10 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       run: |
         set -euo pipefail
-        APPIMAGE=debrify-dev-arm64.AppImage
+        APPIMAGE=nextup-dev-arm64.AppImage
         test -s "$APPIMAGE"
         test -z "$("./${APPIMAGE}" --appimage-updateinformation)"
-        if compgen -G 'debrify-dev-arm64.AppImage.zsync' >/dev/null; then
+        if compgen -G 'nextup-dev-arm64.AppImage.zsync' >/dev/null; then
           echo 'Unexpected zsync sidecar for manual build' >&2
           exit 1
         fi
@@ -996,7 +996,7 @@ jobs:
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
         for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
-          grep -Fx 'X-AppImage-Name=Debrify' "$DESKTOP_FILE"
+          grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"
         done
@@ -1006,8 +1006,8 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          debrify-${{ github.event.release.tag_name }}-arm64.AppImage
-          debrify-${{ github.event.release.tag_name }}-arm64.AppImage.zsync
+          nextup-${{ github.event.release.tag_name }}-arm64.AppImage
+          nextup-${{ github.event.release.tag_name }}-arm64.AppImage.zsync
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -1015,5 +1015,5 @@ jobs:
       if: github.event_name == 'workflow_dispatch'
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-linux-arm64
-        path: debrify-dev-arm64.AppImage
+        name: nextup-linux-arm64
+        path: nextup-dev-arm64.AppImage

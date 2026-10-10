@@ -3691,7 +3691,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
       ),
       CloudRowAction(
         icon: Icons.live_tv_rounded,
-        label: 'Add to Debrify TV',
+        label: 'Add to Nextup TV',
         onSelected: () => _handleAddTorrentToDebrifyTv(torrent),
       ),
       CloudRowAction(
@@ -3865,7 +3865,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
       _showError(e.message);
     } catch (e) {
       if (!mounted) return;
-      _showError('Failed to add torrent to Debrify TV: $e');
+      _showError('Failed to add torrent to Nextup TV: $e');
     }
   }
 

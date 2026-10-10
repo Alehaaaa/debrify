@@ -1544,7 +1544,7 @@ class IptvSettingsTwoPaneState extends State<IptvSettingsTwoPane> {
                 subtitle: widget.batteryExempt == true
                     ? 'Excluded — long recordings can run to the end'
                     : 'Optimized — the phone may kill long recordings; '
-                          'tap to exclude Debrify',
+                          'tap to exclude Nextup',
                 trailing: _chevron,
                 onTap: () => widget.onRequestBatteryExemption?.call(),
                 onLeft: _returnToRail,

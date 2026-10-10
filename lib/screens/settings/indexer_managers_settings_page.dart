@@ -336,7 +336,7 @@ class _IndexerManagersSettingsPageState
             ),
             const SizedBox(height: 8),
             Text(
-              'Add a reachable Jackett or Prowlarr server to search its indexers directly from Debrify.',
+              'Add a reachable Jackett or Prowlarr server to search its indexers directly from Nextup.',
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,

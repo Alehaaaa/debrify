@@ -9325,7 +9325,7 @@
 //             _buildBulkOptionTile(
 //               icon: Icons.live_tv_rounded,
 //               color: const Color(0xFF14B8A6),
-//               title: 'Debrify TV Channel',
+//               title: 'Nextup TV Channel',
 //               subtitle: 'Save as a local channel',
 //               onTap: () => Navigator.of(context).pop('create_channel'),
 //             ),
@@ -11429,7 +11429,7 @@
 //                             color: const Color(0xFF10B981),
 //                             title: 'Add to channel',
 //                             subtitle:
-//                                 'Cache this torrent in a Debrify TV channel.',
+//                                 'Cache this torrent in a Nextup TV channel.',
 //                             enabled: true,
 //                             onTap: () {
 //                               Navigator.of(ctx).pop();
@@ -12436,7 +12436,7 @@
 //               const SizedBox(height: 8),
 //               Text(
 //                 debrifyLink != null
-//                     ? 'A shareable Debrify link was copied to your clipboard.'
+//                     ? 'A shareable Nextup link was copied to your clipboard.'
 //                     : 'Failed to generate shareable link${encodeError != null ? ': $encodeError' : ''}.',
 //                 style: TextStyle(
 //                   color: Colors.white.withValues(alpha: 0.7),
@@ -14071,7 +14071,7 @@
 //                             color: const Color(0xFF818CF8),
 //                             title: 'Add to playlist',
 //                             subtitle: hasVideo
-//                                 ? 'Save to your Debrify playlist.'
+//                                 ? 'Save to your Nextup playlist.'
 //                                 : 'Available for torrents with video files.',
 //                             enabled: hasVideo,
 //                             onTap: () {
@@ -14102,7 +14102,7 @@
 //                             color: const Color(0xFF10B981),
 //                             title: 'Add to channel',
 //                             subtitle:
-//                                 'Cache this torrent in a Debrify TV channel.',
+//                                 'Cache this torrent in a Nextup TV channel.',
 //                             enabled: true,
 //                             onTap: () {
 //                               Navigator.of(ctx).pop();
@@ -15035,7 +15035,7 @@
 //                             color: const Color(0xFF10B981),
 //                             title: 'Add to channel',
 //                             subtitle:
-//                                 'Cache this torrent in a Debrify TV channel.',
+//                                 'Cache this torrent in a Nextup TV channel.',
 //                             enabled: true,
 //                             onTap: () {
 //                               Navigator.of(ctx).pop();
@@ -16308,7 +16308,7 @@
 //                             color: const Color(0xFFA855F7),
 //                             title: 'Add to playlist',
 //                             subtitle: hasVideo
-//                                 ? 'Keep this torrent handy in your Debrify playlist.'
+//                                 ? 'Keep this torrent handy in your Nextup playlist.'
 //                                 : 'Available for video torrents only.',
 //                             enabled: hasVideo,
 //                             onTap: () {
@@ -16322,7 +16322,7 @@
 //                             color: const Color(0xFF10B981),
 //                             title: 'Add to channel',
 //                             subtitle:
-//                                 'Cache this torrent in a Debrify TV channel.',
+//                                 'Cache this torrent in a Nextup TV channel.',
 //                             enabled: true,
 //                             onTap: () {
 //                               Navigator.of(ctx).pop();
@@ -17960,7 +17960,7 @@
 //                         icon: Icons.live_tv_rounded,
 //                         color: const Color(0xFFF472B6),
 //                         title: 'Add to channel',
-//                         subtitle: 'Cache in a Debrify TV channel',
+//                         subtitle: 'Cache in a Nextup TV channel',
 //                         enabled: true,
 //                         onTap: () {
 //                           Navigator.of(ctx).pop();
@@ -23162,9 +23162,9 @@
 //                     },
 //                   ),
 //                   HomeEmptyAction(
-//                     title: 'Set Up Debrify TV',
+//                     title: 'Set Up Nextup TV',
 //                     subtitle:
-//                         'Create channels and favorite them to pin your Debrify TV picks on Home.',
+//                         'Create channels and favorite them to pin your Nextup TV picks on Home.',
 //                     icon: Icons.live_tv_rounded,
 //                     accentColor: const Color(0xFF8B5CF6),
 //                     onActivate: () async {

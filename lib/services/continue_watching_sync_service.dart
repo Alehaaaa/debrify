@@ -496,7 +496,7 @@ class ContinueWatchingMatchResult {
     final parts = [
       if (historyChanged > 0) '$historyChanged watch history updates',
       if (historyFailed > 0) '$historyFailed history transfers need retry',
-      if (addedToDebrify > 0) '$addedToDebrify in Debrify',
+      if (addedToDebrify > 0) '$addedToDebrify in Nextup',
       if (addedToTrakt > 0) '$addedToTrakt on Trakt',
       if (addedToSimkl > 0) '$addedToSimkl on Simkl',
     ];

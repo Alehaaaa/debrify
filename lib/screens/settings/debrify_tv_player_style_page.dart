@@ -120,13 +120,13 @@ class _DebrifyTvPlayerStylePageState extends State<DebrifyTvPlayerStylePage> {
     final t = AppThemeScope.of(context).settings;
     if (_loading) {
       return const SettingsPageScaffold(
-        title: 'Debrify TV Player',
+        title: 'Nextup TV Player',
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return SettingsPageScaffold(
-      title: 'Debrify TV Player',
+      title: 'Nextup TV Player',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -137,7 +137,7 @@ class _DebrifyTvPlayerStylePageState extends State<DebrifyTvPlayerStylePage> {
               children: [
                 const SettingsPageHeader(
                   icon: Icons.live_tv_rounded,
-                  title: 'Debrify TV Player',
+                  title: 'Nextup TV Player',
                   subtitle:
                       'How the playback screen looks while a channel airs',
                 ),

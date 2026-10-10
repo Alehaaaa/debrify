@@ -1122,15 +1122,15 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Continue without Debrify TV?'),
+            title: const Text('Continue without Nextup TV?'),
             content: Text(
               'This profile transfer had to be compacted to fit on the TV. '
-              'Debrify TV will not be included: ${omission.contentsLabel} '
+              'Nextup TV will not be included: ${omission.contentsLabel} '
               'will be left out. No empty channels will be created.\n\n'
-              'You can cancel and open Debrify TV → Export first to save a '
+              'You can cancel and open Nextup TV → Export first to save a '
               'ZIP containing the channels and their playable pools. After '
               'the profile transfer, import that ZIP from storage or use '
-              'Remote → Debrify TV Channels.'
+              'Remote → Nextup TV Channels.'
               '${omission.profilesAffected > 1 ? ' Repeat the channel transfer for each affected profile.' : ''}',
             ),
             actions: <Widget>[
@@ -1140,7 +1140,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Continue without Debrify TV'),
+                child: const Text('Continue without Nextup TV'),
               ),
             ],
           ),

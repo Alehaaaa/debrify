@@ -179,7 +179,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
             padding: const EdgeInsets.all(24),
             children: [
               const Text(
-                'Connect a media server to show its movies and episodes in Sources. Files play directly in Debrify; watch progress is saved in Debrify.',
+                'Connect a media server to show its movies and episodes in Sources. Files play directly in Nextup; watch progress is saved in Nextup.',
               ),
               const SizedBox(height: 12),
               const Text(
@@ -190,7 +190,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
                   icon: Icons.sync,
                   title: 'Sync server watch progress',
                   subtitle:
-                      'For this Debrify profile: resume from the selected server and report playback/watched status back. Shared connections update the same server user. Applies to new playback sessions; no background library sync.',
+                      'For this Nextup profile: resume from the selected server and report playback/watched status back. Shared connections update the same server user. Applies to new playback sessions; no background library sync.',
                   subtitleMaxLines: 5,
                   value: _watchSync,
                   onChanged: _setWatchSync,
@@ -202,7 +202,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
               ],
               if (!ProfileCollectionResourceFacade.active)
                 const Text(
-                  'An active Debrify profile is required to store server credentials securely.',
+                  'An active Nextup profile is required to store server credentials securely.',
                 ),
               for (final resource in _connections)
                 Card(

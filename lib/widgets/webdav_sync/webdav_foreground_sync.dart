@@ -129,7 +129,7 @@ class _ForegroundSyncDialogState extends State<_ForegroundSyncDialog>
           _takingLonger
               ? 'Completion has not been confirmed. You can hide this progress; '
                     'the current attempt will continue. Retry after it finishes if needed.'
-              : 'Keep Debrify open until this finishes. '
+              : 'Keep Nextup open until this finishes. '
                     'The screen stays awake while this progress is shown.',
         ),
         if (_returned) ...[

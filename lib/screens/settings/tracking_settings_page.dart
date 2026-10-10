@@ -173,13 +173,13 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
   Widget _scrobbleSection() => SettingsSection(
     title: 'Scrobble',
     blurb:
-        'Which services record what you watch. Debrify always keeps its own progress.',
+        'Which services record what you watch. Nextup always keeps its own progress.',
     children: [
       SettingsToggleTile(
         icon: Icons.sync_rounded,
         title: 'Sync everywhere',
         subtitle: _syncAllContinueWatching
-            ? 'Keeps watched items, Continue Watching, and watchlists matched in Debrify and every connected tracker'
+            ? 'Keeps watched items, Continue Watching, and watchlists matched in Nextup and every connected tracker'
             : 'Keep watch history, progress, and watchlists separate',
         value: _syncAllContinueWatching,
         onChanged: _setSyncAllContinueWatching,
@@ -193,7 +193,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
           title: Text(_label(source)),
           subtitle: Text(
             source == TrackingSource.local
-                ? 'Always on — Debrify keeps its own watch history (resume '
+                ? 'Always on — Nextup keeps its own watch history (resume '
                       'positions, episode progress, watched marks). On Home, '
                       'a title\'s Continue Watching card lives under the one '
                       'service that tracks it, so it isn\'t listed twice.'
@@ -240,7 +240,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
             'Everything combined — this device and your connected trackers. '
                 'The most recent activity wins.',
           WatchProgressSource.local =>
-            'Only what you watch in Debrify counts: resume, episode lists '
+            'Only what you watch in Nextup counts: resume, episode lists '
                 'and Continue Watching use this device and your watched-at '
                 'setting.',
           _ =>
@@ -279,7 +279,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
             !_available(source)
                 ? 'Tracker is not connected'
                 : source == TrackingSource.local
-                ? '✓ for titles finished in Debrify'
+                ? '✓ for titles finished in Nextup'
                 : '✓ for titles watched on your ${_label(source)} account',
           ),
           secondary: const Icon(Icons.check_circle_outline),

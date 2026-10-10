@@ -1139,7 +1139,7 @@ class TvSidebarNavState extends State<TvSidebarNav>
             const SizedBox(width: 9),
             const Expanded(
               child: Text(
-                'Debrify',
+                'Nextup',
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.clip,
@@ -1183,7 +1183,7 @@ class TvSidebarNavState extends State<TvSidebarNav>
                 child: FadeTransition(
                   opacity: _expand,
                   child: const Text(
-                    'Debrify',
+                    'Nextup',
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.clip,

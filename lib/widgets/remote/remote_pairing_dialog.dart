@@ -379,12 +379,12 @@ Future<void> showLegacyBlockedDialog(BuildContext context, String tvName) {
   return showDialog<void>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Update Debrify on the TV'),
+      title: const Text('Update Nextup on the TV'),
       content: Text(
         '"$tvName" is running a version older than $kFirstV2ReceiverVersion, '
         'which cannot receive your accounts and settings securely — so '
         'nothing was sent.\n\n'
-        'Update Debrify on the TV to $kFirstV2ReceiverVersion or newer, then '
+        'Update Nextup on the TV to $kFirstV2ReceiverVersion or newer, then '
         'run this transfer again.\n\n'
         'The D-pad remote still works in the meantime; only setup and '
         'credentials need the newer version.',
@@ -414,7 +414,7 @@ Future<bool?> showTvIdentityMismatchDialog(
       title: const Text('TV identity changed'),
       content: Text(
         '"$tvName" does not match the secure identity it had when you last '
-        'paired. This happens after reinstalling Debrify on the TV, or if a '
+        'paired. This happens after reinstalling Nextup on the TV, or if a '
         'second TV shares the same name — but it can also mean something on '
         'the network is impersonating it.\n\n'
         'If you continue, the TV must show a fresh pairing code and you must '
@@ -444,7 +444,7 @@ Future<void> showTvIdentityChangedDialog(BuildContext context, String tvName) {
       title: const Text('TV identity changed'),
       content: Text(
         '"$tvName" no longer matches the secure identity it had before. '
-        'This can happen after reinstalling Debrify on the TV — or if '
+        'This can happen after reinstalling Nextup on the TV — or if '
         'something on the network is impersonating it.\n\n'
         'Nothing was sent. If you reinstalled the TV app, remove and '
         're-discover the device, then pair again.',
@@ -587,7 +587,7 @@ Future<RemoteSession?> ensureAuthorizedSession(
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text(
-          'Could not connect to the receiving device. Keep Debrify open in '
+          'Could not connect to the receiving device. Keep Nextup open in '
           'Receive mode, check the address and network, then retry.',
         ),
       ),

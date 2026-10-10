@@ -450,7 +450,7 @@ class StremioIptvService {
         return "${addonName ?? 'The addon'} has no stream for "
             '$channelName right now';
       case StremioResolveFailure.noDirectStreams:
-        return "$channelName's streams aren't in a format Debrify can play";
+        return "$channelName's streams aren't in a format Nextup can play";
       case null:
         return '$channelName is not playable right now';
     }

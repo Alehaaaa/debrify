@@ -208,7 +208,7 @@ class TorrentBulkAddService {
               _optionTile(
                 icon: Icons.live_tv_rounded,
                 color: const Color(0xFF14B8A6),
-                title: 'Debrify TV Channel',
+                title: 'Nextup TV Channel',
                 subtitle: 'Save as a local channel',
                 autofocus: autoFocused == 'create_channel',
                 onTap: () => Navigator.of(context).pop('create_channel'),

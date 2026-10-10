@@ -729,12 +729,12 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                                   SettingsSelectOption(
                                     'playlist',
                                     'Add to playlist',
-                                    'Keep this torrent handy in your Debrify playlist',
+                                    'Keep this torrent handy in your Nextup playlist',
                                   ),
                                   SettingsSelectOption(
                                     'channel',
                                     'Add to channel',
-                                    'Cache this torrent in a Debrify TV channel',
+                                    'Cache this torrent in a Nextup TV channel',
                                   ),
                                 ],
                               ),

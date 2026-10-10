@@ -55,7 +55,7 @@ class DebrifyTvDatabase {
     if (override != null) return override;
     final requested = _requestedScope();
     if (_deactivatedScopeKeys.contains(requested.key)) {
-      throw StateError('Debrify TV database scope is deactivated');
+      throw StateError('Nextup TV database scope is deactivated');
     }
     final opened = _db;
     if (opened != null && _dbScopeKey == requested.key) {
@@ -69,7 +69,7 @@ class DebrifyTvDatabase {
 
   Future<Database> _databaseLocked(_DatabaseScope requested) async {
     if (_deactivatedScopeKeys.contains(requested.key)) {
-      throw StateError('Debrify TV database scope changed while opening');
+      throw StateError('Nextup TV database scope changed while opening');
     }
 
     final existing = _db;
@@ -110,7 +110,7 @@ class DebrifyTvDatabase {
     // scopes are valid, but a deactivated session can never publish late.
     if (_deactivatedScopeKeys.contains(requested.key)) {
       await opened.close();
-      throw StateError('Debrify TV database scope changed while opening');
+      throw StateError('Nextup TV database scope changed while opening');
     }
 
     _db = opened;
@@ -237,7 +237,7 @@ class DebrifyTvDatabase {
       values[webDavTvLastSyncedMsMetaKey] ?? '',
     );
     if (pendingRevision == null || pendingRevision < 0) {
-      throw StateError('Debrify TV pending revision is invalid');
+      throw StateError('Nextup TV pending revision is invalid');
     }
     return WebDavSyncTvSyncMetadata(
       changesPending: values[webDavTvChangesPendingMetaKey] == '1',
@@ -264,7 +264,7 @@ class DebrifyTvDatabase {
           ? int.tryParse(rows.single['value']! as String)
           : null;
       if (current == null || current < 0) {
-        throw StateError('Debrify TV pending revision is invalid');
+        throw StateError('Nextup TV pending revision is invalid');
       }
       if (current == expectedPendingRevision) {
         await txn.update(
@@ -292,7 +292,7 @@ class DebrifyTvDatabase {
     final requested = _scopeOf(scope);
     await _scopeLock.synchronized(() {
       if (_deactivatedScopeKeys.contains(requested.key)) {
-        throw StateError('Debrify TV database scope is deactivated');
+        throw StateError('Nextup TV database scope is deactivated');
       }
       _activeOperations += 1;
     });
@@ -559,7 +559,7 @@ class DebrifyTvDatabase {
         whereArgs: const <Object>['mutation_revision'],
       );
       if (meta.length != 1) {
-        throw StateError('Debrify TV sync revision is unavailable');
+        throw StateError('Nextup TV sync revision is unavailable');
       }
       var tvPendingRevision = 0;
       if (includeTvFamilies) {
@@ -570,12 +570,12 @@ class DebrifyTvDatabase {
           whereArgs: const <Object>[webDavTvPendingRevisionMetaKey],
         );
         if (pendingRevisionRows.length != 1) {
-          throw StateError('Debrify TV pending revision is unavailable');
+          throw StateError('Nextup TV pending revision is unavailable');
         }
         tvPendingRevision =
             int.tryParse(pendingRevisionRows.single['value']! as String) ?? -1;
         if (tvPendingRevision < 0) {
-          throw StateError('Debrify TV pending revision is invalid');
+          throw StateError('Nextup TV pending revision is invalid');
         }
       }
       return WebDavSyncDatabaseStateSnapshot(

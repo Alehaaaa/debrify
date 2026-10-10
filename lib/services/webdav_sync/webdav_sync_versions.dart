@@ -40,7 +40,7 @@ final class WebDavSyncVersion {
 final class WebDavSyncVersions {
   WebDavSyncVersions(
     this.client, {
-    this.folderPath = 'Debrify',
+    this.folderPath = 'Nextup',
     this.beforeSend,
   });
   final WebDavProtocolClient client;

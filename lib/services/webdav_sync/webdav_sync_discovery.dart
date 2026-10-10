@@ -34,7 +34,7 @@ final class WebDavSyncBootstrapUpgradeRequiredException implements Exception {
   const WebDavSyncBootstrapUpgradeRequiredException();
 
   @override
-  String toString() => 'Update Debrify before connecting to this sync folder';
+  String toString() => 'Update Nextup before connecting to this sync folder';
 }
 
 final class WebDavSyncDiscoveredGraph {

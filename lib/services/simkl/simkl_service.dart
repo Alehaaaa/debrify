@@ -589,7 +589,7 @@ class SimklService {
     );
     return _getOrNull(
       uri,
-      headers: {'User-Agent': 'Debrify'},
+      headers: {'User-Agent': 'Nextup'},
       label: 'public fetch $url',
     );
   }

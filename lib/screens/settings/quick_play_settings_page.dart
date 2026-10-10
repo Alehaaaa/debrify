@@ -315,7 +315,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                   icon: Icons.bolt_rounded,
                   title: 'Quick Play',
                   subtitle:
-                      'Choose what Debrify plays automatically. Movies and series have separate rules.',
+                      'Choose what Nextup plays automatically. Movies and series have separate rules.',
                 ),
                 const SizedBox(height: 22),
                 _heading(
@@ -364,7 +364,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                 const SizedBox(height: 24),
                 _heading(
                   'Streams to try',
-                  'When a stream fails to start, Debrify moves down the list '
+                  'When a stream fails to start, Nextup moves down the list '
                       'and tries the next one. This is the count the player '
                       'shows while it works ("Checking stream 1 of '
                       '$_effectiveAttempts…").',
@@ -428,7 +428,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
         SettingsSelectOption(
           'quick',
           'Quick Play',
-          'Debrify picks the source and starts playing.',
+          'Nextup picks the source and starts playing.',
         ),
         SettingsSelectOption(
           'smart',
@@ -541,7 +541,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                     'exception: if a season pack was ranked first, the best '
                     'single episode still gets a try.)',
               5 =>
-                'Debrify’s default — a good balance between starting fast '
+                'Nextup’s default — a good balance between starting fast '
                     'and finding a working stream.',
               _ when n < 5 =>
                 'Gives up sooner. Fails fast when nothing is working.',

@@ -295,7 +295,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       ]),
       _Group('Favorites', [
         _Item('fav:playlist', 'Playlist', on('fav:playlist')),
-        _Item('fav:debrify', 'Debrify TV', on('fav:debrify')),
+        _Item('fav:debrify', 'Nextup TV', on('fav:debrify')),
         _Item('fav:stremio', 'Stremio TV', on('fav:stremio')),
         _Item('fav:iptv', 'IPTV', on('fav:iptv')),
       ]),

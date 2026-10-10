@@ -301,7 +301,7 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
                           ),
                           const SizedBox(width: 9),
                           Text(
-                            'Debrify',
+                            'Nextup',
                             style: TextStyle(
                               color: app.fade(app.core.tx, 0.82),
                               fontSize: 14,

@@ -140,7 +140,7 @@
 //             .addPostFrameCallback((_) => _updateScrollIndicators());
 //       }
 //     } catch (e) {
-//       debugPrint('Error loading Debrify TV favorites: $e');
+//       debugPrint('Error loading Nextup TV favorites: $e');
 //       if (mounted) {
 //         setState(() {
 //           _favoriteChannels = [];
@@ -303,7 +303,7 @@
 // 
 //   Widget _buildSectionHeader() {
 //     return HomeSectionHeader(
-//       title: 'Debrify TV',
+//       title: 'Nextup TV',
 //       count: _favoriteChannels.length,
 //       isTelevision: widget.isTelevision,
 //     );

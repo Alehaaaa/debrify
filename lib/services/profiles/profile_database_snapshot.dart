@@ -179,7 +179,7 @@ class ProfileDatabaseSnapshot {
   }) async {
     if (fileSink != null && compact) {
       throw ArgumentError(
-        'File-backed exports never omit Debrify TV; use '
+        'File-backed exports never omit Nextup TV; use '
         'pruneRebuildableCaches instead of compact',
       );
     }

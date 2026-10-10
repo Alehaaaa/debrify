@@ -207,7 +207,7 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
   Widget _header() => const SettingsPageHeader(
     icon: Icons.rocket_launch_rounded,
     title: 'Launch Animation',
-    subtitle: 'The ident Debrify plays while it starts',
+    subtitle: 'The ident Nextup plays while it starts',
   );
 
   /// Whether the ident wears its own colours or the app theme's.
@@ -226,7 +226,7 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
           title: 'Match the app theme',
           subtitle: app.isLegacy
               // Honest about doing nothing: legacy IS the ident's own world.
-              ? 'Pick an App Theme first — Debrify Classic leaves every ident '
+              ? 'Pick an App Theme first — Nextup Classic leaves every ident '
                     'in its own colours'
               : 'The ident\'s room takes ${app.label}\'s colours. Its '
                     'motion, mark and composition are unchanged, and an ident '

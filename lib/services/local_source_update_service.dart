@@ -54,7 +54,7 @@ cd $quotedSource
 /usr/bin/git fetch upstream +main:refs/remotes/upstream/main
 if ! /usr/bin/git merge --no-edit --autostash upstream/main; then
   /usr/bin/git merge --abort || true
-  /usr/bin/osascript -e 'display notification "Upstream conflicts with your fork. Merge it by hand." with title "Debrify update"' || true
+  /usr/bin/osascript -e 'display notification "Upstream conflicts with your fork. Merge it by hand." with title "Nextup update"' || true
   /bin/rm -f "\$0"
   exit 1
 fi
@@ -78,7 +78,7 @@ app=build/macos/Build/Products/Release/debrify.app
   static void _requireLocalToolchain() {
     if (!sourceDirectory.existsSync() || !File(flutter).existsSync()) {
       throw const LocalSourceUpdateException(
-        'Local Debrify source or Flutter SDK is missing.',
+        'Local Nextup source or Flutter SDK is missing.',
       );
     }
   }

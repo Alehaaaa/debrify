@@ -306,7 +306,7 @@ class UdpDiscoveryService {
     // and spk fields are invisible to old phones (they read only deviceName).
     final response = jsonEncode({
       'type': RemoteMessageType.discoveryResponse,
-      'deviceName': _tvDeviceName ?? 'Debrify TV',
+      'deviceName': _tvDeviceName ?? 'Nextup TV',
       'ip': _getLocalIp() ?? senderAddress.address,
       'proto': kProtoVersion,
       if (advertisedStaticKey != null) 'spk': advertisedStaticKey,

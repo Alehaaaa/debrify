@@ -33,7 +33,7 @@
 
 ---
 
-## What is Debrify?
+## What is Nextup?
 
 Debrify is an open-source, cross-platform **media hub** by Varun Salian and contributors. It brings the services you already use — cloud storage accounts, personal WebDAV servers, IPTV playlists, Stremio addon catalogs, YouTube — into one place, with a built-in player tuned for movies and TV, a download manager, Trakt/Simkl/MDBList tracking, and a UI that works on a phone, a desktop, or a TV with a remote.
 
@@ -92,8 +92,8 @@ All builds are on the [**Releases**](https://github.com/Alehaaaa/debrify/release
 
 | Platform | File | Notes |
 |:---------|:-----|:------|
-| **Android** | `debrify-<version>-android.apk` | Phones and tablets |
-| **Android TV** | `debrify-<version>-androidtv.apk` | Full D-pad and remote support |
+| **Android** | `nextup-<version>-android.apk` | Phones and tablets |
+| **Android TV** | `nextup-<version>-androidtv.apk` | Full D-pad and remote support |
 | **Windows** | Installer | Windows 10/11 |
 | **macOS** | DMG | Intel and Apple Silicon |
 | **Linux** | AppImage | x86_64 and ARM64; needs dependencies ([see below](#linux)) |
@@ -127,8 +127,8 @@ sudo dnf install mpv-libs sqlite-devel fuse-libs
 # Arch
 sudo pacman -S mpv sqlite fuse2
 
-chmod +x debrify-*.AppImage
-./debrify-*.AppImage
+chmod +x nextup-*.AppImage
+./nextup-*.AppImage
 ```
 
 ### iOS / Apple TV

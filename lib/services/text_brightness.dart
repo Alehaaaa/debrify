@@ -17,7 +17,7 @@ import 'storage_service.dart';
 /// the user happens to navigate. A new `ThemeData` is an inherited-widget
 /// change, which rebuilds dependents even through `const`.
 enum TextBrightness {
-  bright('bright', 'Bright', 'Pure white — how Debrify has always looked'),
+  bright('bright', 'Bright', 'Pure white — how Nextup has always looked'),
   soft('soft', 'Soft', 'Gently toned down — easier on OLED panels'),
   dim('dim', 'Dim', 'Grey text — for dark rooms and bright screens');
 

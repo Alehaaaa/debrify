@@ -1734,7 +1734,7 @@ class RemoteCommandRouter {
         remoteContext,
         requestId: requestId,
         ok: false,
-        message: 'Open the Debrify screen on the TV, then resend',
+        message: 'Open the Nextup screen on the TV, then resend',
       );
       return;
     }
@@ -1774,9 +1774,9 @@ class RemoteCommandRouter {
                         'excluded when this transfer was compacted '
                         '(${debrifyTvOmission!.contentsLabel}). No empty '
                         'channels will be created. After importing, restore '
-                        'a channel ZIP from Debrify TV → Import → From '
+                        'a channel ZIP from Nextup TV → Import → From '
                         'storage, or send them separately with Remote → '
-                        'Debrify TV Channels.' : ''}'
+                        'Nextup TV Channels.' : ''}'
               '${rebuildableCachesOmitted ? '\n\nRebuildable catalog and EPG '
                         'caches were compacted for transport. Playlists, '
                         'favorites, history, numbering, and settings are '
@@ -4315,7 +4315,7 @@ class RemoteCommandRouter {
       return;
     }
     try {
-      debugPrint('RemoteCommandRouter: Importing Debrify TV channel...');
+      debugPrint('RemoteCommandRouter: Importing Nextup TV channel...');
 
       final channelArchive = context.channelArchive;
       if (channelArchive != null) {

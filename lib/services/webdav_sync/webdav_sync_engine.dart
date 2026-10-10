@@ -505,7 +505,7 @@ final class WebDavSyncEngine
         ? _localAdapter as WebDavSyncTvLibraryLocalAdapter
         : null;
     if (tvAdapter == null) {
-      throw StateError('WebDAV sync Debrify TV adapter is unavailable');
+      throw StateError('WebDAV sync Nextup TV adapter is unavailable');
     }
     final namespaceId = context.namespaceId!;
     final deviceId = context.deviceId!;
@@ -663,7 +663,7 @@ final class WebDavSyncEngine
       );
       if (outcome.result == WebDavSyncLibraryApplyResult.conflict) {
         _diagnostic(
-          'Deferred manual Debrify TV sync after a concurrent local change',
+          'Deferred manual Nextup TV sync after a concurrent local change',
           null,
         );
         return WebDavSyncTvManualReport(
@@ -749,7 +749,7 @@ final class WebDavSyncEngine
     try {
       callback?.call(stage);
     } catch (error) {
-      _diagnostic('Ignored a failed Debrify TV progress callback', error);
+      _diagnostic('Ignored a failed Nextup TV progress callback', error);
     }
   }
 
@@ -2340,7 +2340,7 @@ final class WebDavSyncEngine
         return const _TvLibraryRead();
       }
       if (reference.size > WebDavSyncLibraryDocument.maxEncodedBytes) {
-        _diagnostic('Ignored an oversized Debrify TV library section', null);
+        _diagnostic('Ignored an oversized Nextup TV library section', null);
         return const _TvLibraryRead();
       }
       if (!own &&
@@ -2369,7 +2369,7 @@ final class WebDavSyncEngine
               (key) => !WebDavSyncLibraryKinds.isTvWireKey(key),
             )) {
           _diagnostic(
-            'Ignored non-TV records in a Debrify TV library section',
+            'Ignored non-TV records in a Nextup TV library section',
             null,
           );
         }
@@ -2383,9 +2383,9 @@ final class WebDavSyncEngine
         );
       } on WebDavException catch (error) {
         if (error.kind != WebDavErrorKind.notFound) rethrow;
-        _diagnostic('Ignored a removed Debrify TV library section', error);
+        _diagnostic('Ignored a removed Nextup TV library section', error);
       } on Exception catch (error) {
-        _diagnostic('Ignored an invalid Debrify TV library section', error);
+        _diagnostic('Ignored an invalid Nextup TV library section', error);
       }
       return const _TvLibraryRead();
     }
@@ -4187,7 +4187,7 @@ final class WebDavSyncEngine
           document.records.keys.any(WebDavSyncLibraryKinds.isTvWireKey),
     )) {
       _diagnostic(
-        'Ignored Debrify TV records in an ambient library section',
+        'Ignored Nextup TV records in an ambient library section',
         null,
       );
     }

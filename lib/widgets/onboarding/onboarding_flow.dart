@@ -591,7 +591,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
       builder: (context) => AlertDialog(
         title: const Text('Restrict PikPak to one folder?'),
         content: const Text(
-          'For extra privacy, Debrify can access one chosen folder instead of your whole PikPak drive. You can skip this now.',
+          'For extra privacy, Nextup can access one chosen folder instead of your whole PikPak drive. You can skip this now.',
         ),
         actions: [
           TextButton(
@@ -838,7 +838,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     try {
       var name = await StorageService.getRemoteTvDeviceName();
       name ??= await PlatformUtil.getDeviceName();
-      name ??= _isTelevision ? 'Debrify TV' : 'This device';
+      name ??= _isTelevision ? 'Nextup TV' : 'This device';
       if (!mounted ||
           attempt != _importAttempt ||
           _step != OnboardStep.importing) {
@@ -1025,7 +1025,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     switch (_step) {
       case OnboardStep.mode:
         eyebrow = 'Welcome';
-        title = "Let's set\nDebrify up.";
+        title = "Let's set\nNextup up.";
         subtitle =
             'About two minutes. Every step can be skipped, and everything lives in Settings afterwards.';
         content = _connectingWebDav
@@ -1054,7 +1054,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
         eyebrow = 'Step 1 of 4';
         title = 'Which services\ndo you have?';
         subtitle =
-            'Pick any you already pay for. Debrify uses them to turn a link into a stream.';
+            'Pick any you already pay for. Nextup uses them to turn a link into a stream.';
         final step = ServicesStep(
           layout: layout,
           focusController: _focus,
@@ -1106,7 +1106,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
         eyebrow = 'Step 2 of 4';
         title = 'Where should\nwe search?';
         subtitle =
-            'These are the sources Debrify searches. They all start on; turn off any you do not want.';
+            'These are the sources Nextup searches. They all start on; turn off any you do not want.';
         final step = EnginesStep(
           layout: layout,
           focusController: _focus,

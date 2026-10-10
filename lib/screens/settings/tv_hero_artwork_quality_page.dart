@@ -119,7 +119,7 @@ class _TvHeroArtworkQualityPageState extends State<TvHeroArtworkQualityPage> {
                 const SizedBox(height: 14),
                 Text(
                   'The source image is unchanged. This controls the maximum '
-                  'size Debrify decodes into memory for Home hero and stage '
+                  'size Nextup decodes into memory for Home hero and stage '
                   'artwork. Portrait poster fallbacks are also height-bounded '
                   'to avoid oversized textures. Changes apply immediately.',
                   style: TextStyle(fontSize: 12.5, height: 1.45, color: t.dim),

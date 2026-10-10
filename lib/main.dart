@@ -465,7 +465,7 @@ class _StartupFailureApp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Debrify could not start safely. Close the app and try again. '
+                  'Nextup could not start safely. Close the app and try again. '
                   'If this continues, restart the device before changing any data.',
                   textAlign: TextAlign.center,
                 ),
@@ -548,7 +548,7 @@ class _MigrationUpdateScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Debrify is upgrading your library for this new version. '
+                    'Nextup is upgrading your library for this new version. '
                     'This launch can take up to 5 minutes on large setups — '
                     'please don’t close the app or turn off the device. '
                     'This only happens once.',
@@ -1115,7 +1115,7 @@ class _DebrifyAppState extends State<DebrifyApp> {
       navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _scaffoldMessengerKey,
       navigatorObservers: [appRouteObserver, AppSurfaceRouteObserver()],
-      title: 'Debrify',
+      title: 'Nextup',
       debugShowCheckedModeBanner: false,
       // Performance optimizations for TV with TV-aware text scaling
       builder: (context, child) {
@@ -1506,7 +1506,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     'Home (deprecated)', // 0: old board, hidden from nav (index kept as a slot)
     'Playlist',
     'Downloads',
-    'Debrify TV',
+    'Nextup TV',
     'Real Debrid',
     'Torbox',
     'PikPak',
@@ -2021,7 +2021,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       // Priority: 1. User-set custom name, 2. Actual device name, 3. Fallback
       var deviceName = await StorageService.getRemoteTvDeviceName();
       deviceName ??= await PlatformUtil.getDeviceName();
-      deviceName ??= 'Debrify TV';
+      deviceName ??= 'Nextup TV';
       await RemoteControlState().startTvListener(deviceName);
     } else {
       // Non-TV: Start scanning for TVs
@@ -2377,9 +2377,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Debrify update available'),
+          title: const Text('Nextup update available'),
           content: const Text(
-            'The original Debrify repo has new changes. Debrify will merge them '
+            'The original Debrify repo has new changes. Nextup will merge them '
             'into your local fork (keeping your changes), build it, replace this '
             'app and relaunch when the build succeeds.',
           ),
@@ -2579,7 +2579,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         url: asset.downloadUrl.toString(),
         fileName: asset.name.isNotEmpty
             ? asset.name
-            : 'Debrify-${release.versionLabel}.apk',
+            : 'Nextup-${release.versionLabel}.apk',
         subDir: 'Debrify/Updates',
         mimeType: mime,
       );
@@ -2650,7 +2650,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (result.isGranted) return true;
     if (result.isPermanentlyDenied || result.isRestricted) {
       _showAutoUpdateSnack(
-        'Allow Debrify to install apps from system settings.',
+        'Allow Nextup to install apps from system settings.',
       );
       unawaited(openAppSettings());
     } else {

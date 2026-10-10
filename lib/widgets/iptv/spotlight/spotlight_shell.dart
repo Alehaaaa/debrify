@@ -373,7 +373,7 @@ class SpotlightShell extends StatelessWidget {
           Icon(Icons.play_circle_fill_rounded, color: t.accent, size: 18),
           const SizedBox(width: 7),
           Text(
-            'Debrify',
+            'Nextup',
             style: TextStyle(
               color: t.fg,
               fontSize: 14,

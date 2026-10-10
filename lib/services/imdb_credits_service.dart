@@ -183,7 +183,7 @@ class ImdbCreditsService {
 
   static const _wikiHeaders = <String, String>{
     // Wikimedia requires an identifying User-Agent.
-    'User-Agent': 'Debrify/1.0 (https://github.com/Alehaaaa/debrify)',
+    'User-Agent': 'Nextup/1.0 (https://github.com/Alehaaaa/debrify)',
   };
 
   Future<Map<String, dynamic>> _wikiGet(String host, Map<String, String> query) async {

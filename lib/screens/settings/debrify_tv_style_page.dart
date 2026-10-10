@@ -105,13 +105,13 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
     final t = AppThemeScope.of(context).settings;
     if (_loading) {
       return const SettingsPageScaffold(
-        title: 'Debrify TV',
+        title: 'Nextup TV',
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return SettingsPageScaffold(
-      title: 'Debrify TV',
+      title: 'Nextup TV',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -122,7 +122,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
               children: [
                 const SettingsPageHeader(
                   icon: Icons.live_tv_rounded,
-                  title: 'Debrify TV',
+                  title: 'Nextup TV',
                   subtitle: 'How the channels screen looks, on every device',
                 ),
                 const SizedBox(height: 24),
@@ -140,7 +140,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Applies the next time Debrify TV opens. Playback is '
+                  'Applies the next time Nextup TV opens. Playback is '
                   'identical either way — this changes what the page draws, '
                   'never what it plays.',
                   style: TextStyle(

@@ -5126,7 +5126,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   void _releasePlayerDiagnostic(String fields) {
-    final message = 'DEBRIFY_PLAYER_DECODER $fields';
+    final message = 'NEXTUP_PLAYER_DECODER $fields';
     if (Platform.isAndroid) {
       // A dedicated native tag lets release captures select only this
       // privacy-safe line. Capturing Flutter's general stdout exposed unrelated
@@ -6352,7 +6352,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               provider.toLowerCase() == 'pikpak' || pikpakFileId.isNotEmpty;
           if (isPikPak) {
             debugPrint(
-              'Player: Detected PikPak video from Debrify TV, using retry logic',
+              'Player: Detected PikPak video from Nextup TV, using retry logic',
             );
             // _playPikPakVideoWithRetry will increment _pikPakRetryId to cancel previous retries
             await _playPikPakVideoWithRetry(
@@ -11412,7 +11412,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Debrify TV queue');
+              print('PikPak: Auto-advancing to next video in Nextup TV queue');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -11515,7 +11515,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Debrify TV queue');
+              print('PikPak: Auto-advancing to next video in Nextup TV queue');
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(

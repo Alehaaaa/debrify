@@ -10,7 +10,7 @@ import '../../../theme/app_theme_scope.dart';
 /// The mock (`dev/design/mockups/debrify_tv_spotlight_mockup/`) is the spec; it
 /// is drawn at 1920×1080 and every number here is logical (÷2).
 
-/// The mono-flavoured uppercase eyebrow ("DEBRIFY TV", group labels).
+/// The mono-flavoured uppercase eyebrow ("NEXTUP TV", group labels).
 class SpotlightKick extends StatelessWidget {
   final String text;
   final Color color;

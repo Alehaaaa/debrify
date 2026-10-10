@@ -7441,7 +7441,7 @@ class TorrentPlaybackService {
           icon: Icons.connected_tv,
           color: const Color(0xFF14B8A6),
           title: 'Add to channel',
-          subtitle: 'Cache this torrent in a Debrify TV channel.',
+          subtitle: 'Cache this torrent in a Nextup TV channel.',
           onTap: () => unawaited(
             DebrifyTvChannelAddService.addTorrentsToChannel(
               context,

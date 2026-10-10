@@ -62,9 +62,9 @@ class DiagnosticLog {
 
   static final DiagnosticLog instance = DiagnosticLog(
     retention: const Duration(
-      hours: bool.fromEnvironment('DEBRIFY_LOCAL_VALIDATION') ? 12 : 2,
+      hours: bool.fromEnvironment('NEXTUP_LOCAL_VALIDATION') ? 12 : 2,
     ),
-    maxSegmentBytes: const bool.fromEnvironment('DEBRIFY_LOCAL_VALIDATION')
+    maxSegmentBytes: const bool.fromEnvironment('NEXTUP_LOCAL_VALIDATION')
         ? 1024 * 1024
         : 256 * 1024,
   );

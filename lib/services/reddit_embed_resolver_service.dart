@@ -32,7 +32,7 @@ class ResolvedEmbed {
 /// Service for resolving embedded video URLs from Reddit posts
 class RedditEmbedResolverService {
   static const String _baseUrl = 'https://api.redgifs.com/v2';
-  static const String _userAgent = 'Debrify/1.0 (Flutter; Video Player)';
+  static const String _userAgent = 'Nextup/1.0 (Flutter; Video Player)';
 
   // Cached token and expiry
   static String? _cachedToken;

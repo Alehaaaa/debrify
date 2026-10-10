@@ -153,7 +153,7 @@ abstract final class LookKeys {
 
   static final debrifyTvStyle = LookKey(
     id: 'debrify_tv_style',
-    label: 'Debrify TV',
+    label: 'Nextup TV',
     read: () => StorageService.debrifyTvStyleCached,
     write: StorageService.setDebrifyTvStyle,
     // No notify, like iptv_style: tabs are keyed by index and rebuilt on
@@ -277,7 +277,7 @@ abstract final class AppLooks {
   static const List<AppLook> all = [
     AppLook(
       id: 'classic',
-      label: 'Debrify Classic',
+      label: 'Nextup Classic',
       blurb: 'The app exactly as it has always looked.',
       values: {
         'app_structure': 'legacy',
@@ -519,13 +519,13 @@ abstract final class LookParts {
   static List<LookPalette> palettes(
     List<({String id, String label})> shippedThemes,
   ) => [
-    const LookPalette(themeId: 'legacy', label: 'Debrify Classic'),
+    const LookPalette(themeId: 'legacy', label: 'Nextup Classic'),
     for (final t in shippedThemes) LookPalette(themeId: t.id, label: t.label),
   ];
 
   static String paletteLabel(String themeId) =>
       themeId == AppThemes.legacyId
-          ? 'Debrify Classic'
+          ? 'Nextup Classic'
           : DetailThemes.byId(themeId).label;
 
   /// "Spotlight form · Signal" — for the Settings rows.

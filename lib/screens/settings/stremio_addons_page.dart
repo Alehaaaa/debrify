@@ -302,7 +302,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     'shared with other profiles. Deleting all addons will '
                     'also remove those addons from every shared profile.'
               : 'This will remove all $count installed Stremio '
-                    'addon${count == 1 ? '' : 's'} from Debrify.',
+                    'addon${count == 1 ? '' : 's'} from Nextup.',
         ),
         actions: [
           TextButton(

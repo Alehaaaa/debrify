@@ -174,7 +174,7 @@ abstract final class SettingsRows {
   );
   static const debrifyTv = SettingsRowContent(
     icon: Icons.live_tv_rounded,
-    title: 'Debrify TV',
+    title: 'Nextup TV',
     subtitle: 'Limits, channels, and playback configuration',
   );
   static const recordings = SettingsRowContent(
@@ -189,7 +189,7 @@ abstract final class SettingsRows {
   );
   static const tvKeyboard = SettingsRowContent(
     icon: Icons.keyboard_rounded,
-    title: 'Debrify Keyboard',
+    title: 'Nextup Keyboard',
     subtitle: 'Remote-friendly on-screen keyboard for text fields',
   );
   // Subtitle is dynamic (the chosen size) — passed per call site.
@@ -259,7 +259,7 @@ abstract final class SettingsRows {
   // Subtitle is dynamic (the chosen style) — passed per call site.
   static const debrifyTvAppearance = SettingsRowContent(
     icon: Icons.connected_tv_rounded,
-    title: 'Debrify TV',
+    title: 'Nextup TV',
     subtitle: '',
   );
   // Subtitle is dynamic (style + palette) — passed per call site.
@@ -279,7 +279,7 @@ abstract final class SettingsRows {
   // TV only: the Debrify TV playback screen (native TorboxTvPlayerActivity).
   static const debrifyTvPlayer = SettingsRowContent(
     icon: Icons.live_tv_rounded,
-    title: 'Debrify TV Player',
+    title: 'Nextup TV Player',
     subtitle: '',
   );
   // Subtitle is dynamic (the chosen look) — passed per call site.
@@ -397,7 +397,7 @@ abstract final class SettingsRows {
   );
   static const resetDebrify = SettingsRowContent(
     icon: Icons.warning_rounded,
-    title: 'Reset Debrify',
+    title: 'Reset Nextup',
     subtitle: 'Remove connections, preferences, and caches',
   );
   static const autoUpdate = SettingsRowContent(
@@ -2461,7 +2461,7 @@ const List<TvRenderQualityChoice> kTvRenderQualityChoices = [
   TvRenderQualityChoice(
     TvRenderQuality.auto,
     'Automatic',
-    "Default — Debrify picks based on this TV's graphics",
+    "Default — Nextup picks based on this TV's graphics",
   ),
   TvRenderQualityChoice(
     TvRenderQuality.sharp,

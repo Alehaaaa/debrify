@@ -171,7 +171,7 @@ class _ProfileWallScreenState extends State<ProfileWallScreen> {
                 children: [
                   const Spacer(flex: 2),
                   Text(
-                    'DEBRIFY',
+                    'NEXTUP',
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       letterSpacing: 4,
                       color: Colors.white.withValues(alpha: .4),

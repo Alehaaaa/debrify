@@ -72,7 +72,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return SettingsPageScaffold(
-      title: 'Debrify TV',
+      title: 'Nextup TV',
       body: FocusScope(
         node: _bodyScope,
         child: FocusTraversalGroup(
@@ -119,7 +119,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   Widget _buildHeader(BuildContext context) {
     return const SettingsPageHeader(
       icon: Icons.tv_rounded,
-      title: 'Debrify TV Configuration',
+      title: 'Nextup TV Configuration',
       subtitle: 'Configure search engines and result limits',
     );
   }
@@ -216,7 +216,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Reset Settings'),
         content: const Text(
-          'Are you sure you want to reset all Debrify TV settings to their default values?',
+          'Are you sure you want to reset all Nextup TV settings to their default values?',
         ),
         actions: [
           TextButton(

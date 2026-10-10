@@ -63,7 +63,7 @@ class _ExternalPlayerNoticeDialogState
           eyebrow: 'External playback',
           title: 'Opening another player',
           subtitle:
-              'Debrify TV will hand this title to your default external app and stop here.',
+              'Nextup TV will hand this title to your default external app and stop here.',
           icon: Icons.open_in_new_rounded,
           maxWidth: 620,
           actions: [

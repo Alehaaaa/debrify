@@ -456,7 +456,7 @@ class _AppInitializerState extends State<AppInitializer>
 
       var deviceName = await StorageService.getRemoteTvDeviceName();
       deviceName ??= await PlatformUtil.getDeviceName();
-      deviceName ??= 'Debrify TV';
+      deviceName ??= 'Nextup TV';
 
       debugPrint('AppInitializer: Starting TV listener early as "$deviceName"');
 

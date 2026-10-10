@@ -14,7 +14,7 @@ import 'widgets/settings_widgets.dart' show SettingsSectionLabel;
 
 /// Row caption for the Appearance list.
 String appThemeLabel(String id) =>
-    id == AppThemes.legacyId ? 'Debrify Classic' : DetailThemes.byId(id).label;
+    id == AppThemes.legacyId ? 'Nextup Classic' : DetailThemes.byId(id).label;
 
 /// App-wide theme picker (`app_theme`) — and the Foundation's vertical proof.
 ///
@@ -163,9 +163,9 @@ class _AppThemePageState extends State<AppThemePage> {
                           _optionRow(
                             app: app,
                             id: AppThemes.legacyId,
-                            label: 'Debrify Classic',
+                            label: 'Nextup Classic',
                             subtitle:
-                                'Today\'s Debrify, untouched. Details pages '
+                                'Today\'s Nextup, untouched. Details pages '
                                 'keep their own theme choice.',
                             selected: selected == AppThemes.legacyId,
                             swatches: null,
@@ -194,7 +194,7 @@ class _AppThemePageState extends State<AppThemePage> {
                     child: Text(
                       'Picking a theme here also sets the Details Theme to '
                       'match, so movie and series pages agree with the app. '
-                      'Switching back to Debrify Classic keeps that details '
+                      'Switching back to Nextup Classic keeps that details '
                       'choice.',
                       style: TextStyle(
                         fontSize: 12.5,

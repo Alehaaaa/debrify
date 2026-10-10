@@ -34,7 +34,7 @@ class ConfigLoader {
     'version': '1.0',
     'request': {
       'timeout_seconds': 30,
-      'user_agent': 'Debrify/1.0',
+      'user_agent': 'Nextup/1.0',
       'retry_attempts': 3,
       'retry_delay_ms': 1000,
     },

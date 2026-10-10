@@ -5182,7 +5182,7 @@ class IptvResultsViewState extends State<IptvResultsView>
           capture == null
               ? "Couldn't start recording"
               : 'Recording ${channel.name} — stop from this Record button; '
-                    'runs while Debrify is open',
+                    'runs while Nextup is open',
         ),
       ),
     );
@@ -5299,7 +5299,7 @@ class IptvResultsViewState extends State<IptvResultsView>
           );
     unawaited(_refreshScheduledCount());
     if (result.errorCode == 'exact_alarms_required') {
-      return 'Allow "Alarms & reminders" for Debrify to schedule recordings';
+      return 'Allow "Alarms & reminders" for Nextup to schedule recordings';
     }
     return result.ok
         ? (airsNow

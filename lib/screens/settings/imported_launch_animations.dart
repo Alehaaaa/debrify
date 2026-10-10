@@ -94,7 +94,7 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
       // even with FileType.any. TV firmware often ships without one.
       if (PlatformUtil.isTelevision && error.code == 'invalid_format_type') {
         throw const LaunchImportException(
-          'No file picker is available on this TV. Send the animation from a paired Debrify phone or computer using Send to TV.',
+          'No file picker is available on this TV. Send the animation from a paired Nextup phone or computer using Send to TV.',
         );
       }
       rethrow;
@@ -174,7 +174,7 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
         const Padding(
           padding: EdgeInsets.all(16),
           child: Text(
-            'You can also send an animation from a paired Debrify phone or computer. Open its imported animation and choose Send to TV.',
+            'You can also send an animation from a paired Nextup phone or computer. Open its imported animation and choose Send to TV.',
           ),
         ),
       if (_error != null)

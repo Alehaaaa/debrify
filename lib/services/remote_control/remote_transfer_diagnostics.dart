@@ -32,7 +32,7 @@ abstract final class RemoteTransferDiagnostics {
     String event, {
     Map<String, Object?> fields = const <String, Object?>{},
   }) {
-    final parts = <String>['DEBRIFY_TRANSFER', 'event=$event'];
+    final parts = <String>['NEXTUP_TRANSFER', 'event=$event'];
     final diagnosticFields = <String, Object?>{};
     for (final entry in fields.entries) {
       if (!_fieldKey.hasMatch(entry.key) || entry.value == null) continue;

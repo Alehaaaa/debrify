@@ -550,7 +550,7 @@ class _PhoneHeader extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: SpotlightKick('Debrify TV', color: tv.accent),
+                    child: SpotlightKick('Nextup TV', color: tv.accent),
                   ),
                   const SizedBox(width: 12),
                   _PhoneSettingsButton(onTap: onSettings),
@@ -565,7 +565,7 @@ class _PhoneHeader extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SpotlightKick('Debrify TV', color: tv.accent),
+            SpotlightKick('Nextup TV', color: tv.accent),
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

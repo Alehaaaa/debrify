@@ -86,7 +86,7 @@ class _FormPageState extends State<FormPage> with _FirstRowFocus {
                     padding: EdgeInsets.only(bottom: 12),
                     child: SettingsInfoBanner(
                       icon: Icons.info_outline_rounded,
-                      text: 'The Debrify Classic palette is hand-built and '
+                      text: 'The Nextup Classic palette is hand-built and '
                           'only comes in the Classic form. Pick any other '
                           'palette to use a different form.',
                     ),

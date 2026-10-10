@@ -824,7 +824,7 @@ final class ProfileWebDavSyncLocalAdapter
         final value = entry.value.value;
         final decoded = value == null ? null : _tvChannelValue(value);
         if (channelId == null || value != null && decoded == null) {
-          _diagnostic('Ignored an invalid Debrify TV channel library leaf');
+          _diagnostic('Ignored an invalid Nextup TV channel library leaf');
           continue;
         }
         channelTargets.add(
@@ -849,7 +849,7 @@ final class ProfileWebDavSyncLocalAdapter
         if (channelId == null ||
             generationId is! String ||
             !_validGenerationId.hasMatch(generationId)) {
-          _diagnostic('Ignored an invalid Debrify TV generation library leaf');
+          _diagnostic('Ignored an invalid Nextup TV generation library leaf');
           continue;
         }
         generationTargets.add(
@@ -870,7 +870,7 @@ final class ProfileWebDavSyncLocalAdapter
             !_validInfohash.hasMatch(infohash) ||
             infohash != infohash.toLowerCase() ||
             decoded == null) {
-          _diagnostic('Ignored an invalid Debrify TV pool library leaf');
+          _diagnostic('Ignored an invalid Nextup TV pool library leaf');
           continue;
         }
         poolTargets.add(
@@ -1081,7 +1081,7 @@ final class ProfileWebDavSyncLocalAdapter
         )
         .toList(growable: false);
     if (ignoredTvInAmbientLibrary) {
-      _diagnostic('Ignored Debrify TV records in an ambient library section');
+      _diagnostic('Ignored Nextup TV records in an ambient library section');
     }
     await beforeWrite?.call();
     _validateSession(session);

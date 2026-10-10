@@ -1211,7 +1211,7 @@ class _SearchScreenState extends State<SearchScreen>
         DateTime.now().difference(at) < const Duration(seconds: 3);
   }
 
-  // Debrify TV favourites — a leading "Debrify TV" row of the user's starred
+  // Debrify TV favourites — a leading "Nextup TV" row of the user's starred
   // keyword channels, shown between Continue Watching and the catalog rows.
   // Channels have no artwork, so they render as Stremio-shaped cards with a
   // gradient + glyph placeholder (see [_ArtPoster]).
@@ -8386,7 +8386,7 @@ class _SearchScreenState extends State<SearchScreen>
               _CanvasFavFocus(
                 art: null,
                 title: channel.name,
-                subtitle: 'DEBRIFY TV · CHANNEL $number',
+                subtitle: 'NEXTUP TV · CHANNEL $number',
               ),
             ),
           ),
@@ -9008,7 +9008,7 @@ class _SearchScreenState extends State<SearchScreen>
       case _FavKind.debrify:
         return SpotlightShelf(
           id: id,
-          title: 'Debrify TV',
+          title: 'Nextup TV',
           nodes: nodes,
           items: [
             for (final ch in _tvFavChannels)
@@ -9506,7 +9506,7 @@ class _SearchScreenState extends State<SearchScreen>
       case _FavKind.iptv:
         return 'IPTV Favorites';
       case _FavKind.debrify:
-        return 'Debrify TV';
+        return 'Nextup TV';
       case _FavKind.stremio:
         return 'Stremio TV';
       case _FavKind.playlist:
@@ -22356,12 +22356,12 @@ class _SearchScreenState extends State<SearchScreen>
     );
   }
 
-  /// The "Debrify TV" row of favourited keyword channels, styled to match the
+  /// The "Nextup TV" row of favourited keyword channels, styled to match the
   /// catalog rows (same poster-shaped cards + title below).
   Widget _buildTvFavRow(String homeRowId) {
     final tv = widget.isTelevision;
     return _buildFavRowShell(
-      title: 'Debrify TV',
+      title: 'Nextup TV',
       tags: const [
         _CategoryTag('Channels'),
         // Make it explicit this row is the user's STARRED channels, not every

@@ -447,10 +447,10 @@ class ProfileBackupFlows {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Creates a Debrify backup file (.debrify). It is not '
+              'Creates a Nextup backup file (.debrify). It is not '
               'encrypted and contains your account credentials and '
               'connection passwords, so keep it private.\n\n'
-              'Included: all profiles and shared connections, settings, Debrify TV channels with '
+              'Included: all profiles and shared connections, settings, Nextup TV channels with '
               'their saved hashes, IPTV playlists, favorites, lists, '
               'history, and ordering. Provider channel lists and TV guides '
               'are rebuilt after restore, which may need network access. '
@@ -458,7 +458,7 @@ class ProfileBackupFlows {
               'pairings are not included.\n\n'
               'Includes the WebDAV sync login and its on/off state. '
               'Enabled sync resumes automatically after restore.\n\n'
-              'Older Debrify versions cannot read this file.',
+              'Older Nextup versions cannot read this file.',
             ),
             const SizedBox(height: 12),
           ],
@@ -641,7 +641,7 @@ class ProfileBackupFlows {
       builder: (dialogContext) => AlertDialog(
         title: Text('$titleLabel saved'),
         content: Text(
-          'The $artifactLabel was saved by Debrify’s download service:\n\n'
+          'The $artifactLabel was saved by Nextup’s download service:\n\n'
           '${saved.displayLocation}\n\nYou can move or copy it with a file '
           'manager, USB, or over the network.',
         ),
@@ -756,7 +756,7 @@ class ProfileBackupFlows {
 
     if (source == _ProfileBackupSource.localFile) {
       final pick = await FilePick.pickFiles(
-        dialogTitle: 'Choose a Debrify backup',
+        dialogTitle: 'Choose a Nextup backup',
         type: FileType.any,
         withData: false,
       );
@@ -1113,11 +1113,11 @@ class ProfileBackupFlows {
         'Warning: this older backup omitted one or more library databases; '
             'those playlists/history rows cannot be recovered from it.',
       if (debrifyTvOmission?.isEmpty == false)
-        'Debrify TV was excluded when this backup was compacted '
-            '(${debrifyTvOmission!.contentsLabel}). No empty Debrify TV '
+        'Nextup TV was excluded when this backup was compacted '
+            '(${debrifyTvOmission!.contentsLabel}). No empty Nextup TV '
             'channels will be created. Import a previously exported channel '
-            'ZIP from Debrify TV → Import → From storage, or transfer them '
-            'from the source using Remote → Debrify TV Channels.',
+            'ZIP from Nextup TV → Import → From storage, or transfer them '
+            'from the source using Remote → Nextup TV Channels.',
       if (omissions.containsKey('rebuildableDatabaseCachesOmitted'))
         'Rebuildable IPTV catalog and EPG caches were compacted; playlists, '
             'favorites, history, numbering, and settings are included.',
@@ -1132,7 +1132,7 @@ class ProfileBackupFlows {
     }
     final graphAuthorityNotice =
         completingOnboarding && actor.id == ProfileBootstrap.freshAdminId
-        ? 'Debrify then switches to a usable imported Admin and removes the '
+        ? 'Nextup then switches to a usable imported Admin and removes the '
               'temporary setup Admin if it is untouched. If no imported '
               'Admin can take over, the setup Admin remains for recovery.'
         : 'Your current Admin remains the recovery profile.';

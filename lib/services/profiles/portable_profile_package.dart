@@ -532,7 +532,7 @@ class PortableProfilePackage {
               Map<String, dynamic>.from(omissions),
             ) ==
             null) {
-      throw const FormatException('Invalid Debrify TV backup omission');
+      throw const FormatException('Invalid Nextup TV backup omission');
     }
     final profiles = body['profiles'];
     final resources = body['resources'];

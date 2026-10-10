@@ -30,11 +30,11 @@ class ProfileBootstrap {
   ProfileBootstrap._();
 
   static const bool profilesEnabled = bool.fromEnvironment(
-    'DEBRIFY_PROFILES',
+    'NEXTUP_PROFILES',
     defaultValue: true,
   );
   static const bool migrationRolloutReady = bool.fromEnvironment(
-    'DEBRIFY_PROFILES_MIGRATION_READY',
+    'NEXTUP_PROFILES_MIGRATION_READY',
     defaultValue: true,
   );
 

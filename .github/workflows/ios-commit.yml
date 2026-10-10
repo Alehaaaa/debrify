@@ -130,7 +130,7 @@ jobs:
       id: ipa
       run: |
         set -euo pipefail
-        NAME="debrify-ios-${{ github.run_number }}-${GITHUB_SHA::7}.ipa"
+        NAME="nextup-ios-${{ github.run_number }}-${GITHUB_SHA::7}.ipa"
         cd build/ios/iphoneos
         rm -rf Payload && mkdir Payload
         cp -R Runner.app Payload/
@@ -141,7 +141,7 @@ jobs:
     - name: Upload IPA artifact
       uses: actions/upload-artifact@v4
       with:
-        name: debrify-ios-${{ github.run_number }}
+        name: nextup-ios-${{ github.run_number }}
         path: build/ios/iphoneos/${{ steps.ipa.outputs.name }}
 
     - name: Publish to SideStore source

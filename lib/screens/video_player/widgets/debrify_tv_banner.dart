@@ -90,7 +90,7 @@ class DebrifyTvBanner extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'DEBRIFY TV',
+                  'NEXTUP TV',
                   style: TextStyle(
                     color: _ink.withValues(alpha: 0.42),
                     fontSize: s(9.5),

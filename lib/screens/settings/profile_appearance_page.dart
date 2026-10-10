@@ -123,7 +123,7 @@ class _ProfileAppearancePageState extends State<ProfileAppearancePage> {
                         icon: Icons.switch_account_rounded,
                         title: 'Profile picker',
                         subtitle:
-                            'How Debrify welcomes everyone on this device',
+                            'How Nextup welcomes everyone on this device',
                       ),
                       const SizedBox(height: 24),
                       Focus(

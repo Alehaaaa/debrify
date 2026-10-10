@@ -158,7 +158,7 @@ class _BrandHeader extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       Text(
-        'DEBRIFY',
+        'NEXTUP',
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w800,
@@ -662,7 +662,7 @@ class _CinematicHeader extends StatelessWidget {
         : CrossAxisAlignment.center,
     children: [
       Text(
-        'DEBRIFY',
+        'NEXTUP',
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w800,
@@ -1016,7 +1016,7 @@ class _ProfileTheaterGateScreenState extends State<ProfileTheaterGateScreen> {
                   children: [
                     const Spacer(flex: 2),
                     Text(
-                      'DEBRIFY',
+                      'NEXTUP',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -1611,7 +1611,7 @@ class _StageHeader extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     children: [
       Text(
-        'DEBRIFY',
+        'NEXTUP',
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w800,

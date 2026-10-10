@@ -85,7 +85,7 @@ class RedditListingResult {
 
 /// Service for interacting with Reddit to browse and play videos
 class RedditService {
-  static const String _userAgent = 'Debrify/1.0 (Flutter; Video Player)';
+  static const String _userAgent = 'Nextup/1.0 (Flutter; Video Player)';
   static const String _baseUrl = 'https://www.reddit.com';
   static const String _oauthBaseUrl = 'https://oauth.reddit.com';
 
