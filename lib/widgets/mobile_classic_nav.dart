@@ -84,47 +84,61 @@ class MobileClassicNav extends StatelessWidget {
     final slots = _barSlots;
     final sheet = _sheetIndices;
     final activeInSheet = sheet.contains(currentIndex);
+    final frosted = app.formId == 'glass';
 
-    // Same flat frosted surface as the desktop sidebar rail
-    // (DesktopSidebarNav): one even railBg tint over the blur and a hairline
-    // edge toward the content — no sheen or gradient banding. The Scaffold
-    // still owns the bar's geometry; this changes only its surface.
+    // Keep the original flat rail for other looks. Glass uses the desktop
+    // rail's directional tint and a brighter top rim over the same blur.
+    // Scaffold still owns the bar geometry and safe-area inset.
     final bar = Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
-        color: app.shell.railBg.withValues(alpha: translucent ? 0.72 : 0.80),
-        border: Border(top: BorderSide(color: app.fade(app.core.tx, 0.14))),
+        color: frosted
+            ? null
+            : app.shell.railBg.withValues(alpha: translucent ? 0.72 : 0.80),
+        gradient: frosted
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  app.shell.railBg.withValues(alpha: 0.58),
+                  app.core.pane.withValues(alpha: 0.43),
+                ],
+              )
+            : null,
+        border: Border(
+          top: BorderSide(color: app.fade(app.core.tx, frosted ? 0.29 : 0.14)),
+        ),
       ),
       child: SizedBox(
         height: barHeight,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
           child: Row(
-          children: [
-            for (final index in slots)
-              _NavSlot(
-                icon: icons[index],
-                label: titles[index],
-                active: currentIndex == index,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onTap(index);
-                },
-              ),
-            if (sheet.isNotEmpty || (profile != null && onProfileTap != null))
-              _NavSlot(
-                icon: activeInSheet
-                    ? icons[currentIndex]
-                    : Icons.grid_view_rounded,
-                label: activeInSheet ? titles[currentIndex] : 'More',
-                active: activeInSheet,
-                showCaret: activeInSheet,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  _openMoreSheet(context);
-                },
-              ),
-          ],
+            children: [
+              for (final index in slots)
+                _NavSlot(
+                  icon: icons[index],
+                  label: titles[index],
+                  active: currentIndex == index,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onTap(index);
+                  },
+                ),
+              if (sheet.isNotEmpty || (profile != null && onProfileTap != null))
+                _NavSlot(
+                  icon: activeInSheet
+                      ? icons[currentIndex]
+                      : Icons.grid_view_rounded,
+                  label: activeInSheet ? titles[currentIndex] : 'More',
+                  active: activeInSheet,
+                  showCaret: activeInSheet,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _openMoreSheet(context);
+                  },
+                ),
+            ],
           ),
         ),
       ),

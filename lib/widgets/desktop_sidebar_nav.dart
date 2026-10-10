@@ -60,6 +60,7 @@ class DesktopSidebarNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
+    final frosted = app.formId == 'glass';
     final children = <Widget>[];
     String? lastSection;
     for (var i = 0; i < entries.length; i++) {
@@ -92,19 +93,26 @@ class DesktopSidebarNav extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  app.shell.railBg.withValues(alpha: 0.84),
-                  app.shell.railBg.withValues(alpha: 0.70),
+                  app.shell.railBg.withValues(alpha: frosted ? 0.59 : 0.84),
+                  (frosted ? app.core.pane : app.shell.railBg).withValues(
+                    alpha: frosted ? 0.43 : 0.70,
+                  ),
                 ],
               ),
               border: Border(
-                right: BorderSide(color: app.fade(app.core.tx, 0.14)),
+                right: BorderSide(
+                  color: app.fade(app.core.tx, frosted ? 0.30 : 0.14),
+                ),
               ),
             ),
             foregroundDecoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [app.fade(app.core.tx, 0.07), Colors.transparent],
+                colors: [
+                  app.fade(app.core.tx, frosted ? 0.12 : 0.07),
+                  Colors.transparent,
+                ],
                 stops: const [0, 0.13],
               ),
             ),

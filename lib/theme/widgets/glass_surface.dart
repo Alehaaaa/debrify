@@ -103,8 +103,10 @@ class GlassSurface extends StatelessWidget {
     final model = app.surface.modelFor(family);
     final radius = borderRadius ?? app.shape.br(20);
 
-    final blur = _sigma(app, model, tv);
-    final decorated = _fill(app, model, tv, radius, blurred: blur > 0);
+    // Accessibility and TV both use the denser unfiltered material.
+    final solid = tv || (MediaQuery.maybeHighContrastOf(context) ?? false);
+    final blur = _sigma(app, model, solid);
+    final decorated = _fill(app, model, radius, blurred: blur > 0);
     if (blur <= 0) {
       // Nothing to filter. The ClipRRect still runs so corners match the glass
       // path exactly.
@@ -113,7 +115,33 @@ class GlassSurface extends StatelessWidget {
     return ClipRRect(
       borderRadius: radius,
       child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        // Saturating the blurred backdrop preserves the colours of the artwork
+        // underneath instead of washing every pane into a grey rectangle.
+        filter: ui.ImageFilter.compose(
+          outer: const ui.ColorFilter.matrix([
+            1.0744,
+            -0.0630,
+            -0.0114,
+            0,
+            0,
+            -0.0256,
+            1.0360,
+            -0.0104,
+            0,
+            0,
+            -0.0256,
+            -0.0630,
+            1.0886,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+          ]),
+          inner: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        ),
         child: decorated,
       ),
     );
@@ -139,14 +167,16 @@ class GlassSurface extends StatelessWidget {
   Widget _fill(
     AppTheme app,
     SeparationModel model,
-    bool tv,
     BorderRadius radius, {
     required bool blurred,
   }) {
     final base = (blurred ? (blurTint ?? tint) : tint) ?? app.core.pane;
     final Color fill = switch (model) {
-      SeparationModel.glass =>
-        base.withValues(alpha: app.surface.glassFillFor(tv)),
+      SeparationModel.glass => base.withValues(
+        alpha: blurred
+            ? app.surface.glassFillFor(false)
+            : app.surface.glassFillFor(true),
+      ),
       SeparationModel.fill => base,
       // A sheet or dialog can never resolve to these (the caps forbid it), so
       // reaching here means a card/hero adopted the widget — where "no fill"
@@ -192,13 +222,27 @@ class GlassSurface extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: radius,
                   gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                    begin: model == SeparationModel.glass
+                        ? Alignment.topLeft
+                        : Alignment.topCenter,
+                    end: model == SeparationModel.glass
+                        ? Alignment.bottomRight
+                        : Alignment.bottomCenter,
                     colors: [
-                      app.core.tx.withValues(alpha: app.surface.sheen * 0.16),
+                      app.core.tx.withValues(
+                        alpha:
+                            app.surface.sheen *
+                            (model == SeparationModel.glass ? 0.55 : 0.16),
+                      ),
+                      if (model == SeparationModel.glass)
+                        app.core.accent.withValues(
+                          alpha: app.surface.sheen * 0.12,
+                        ),
                       Colors.transparent,
                     ],
-                    stops: const [0.0, 0.16],
+                    stops: model == SeparationModel.glass
+                        ? const [0.0, 0.35, 0.8]
+                        : const [0.0, 0.16],
                   ),
                 ),
               ),
@@ -217,7 +261,57 @@ class GlassSurface extends StatelessWidget {
             ? null
             : Border.all(color: edge, width: borderWidth),
       ),
-      child: body,
+      child: model == SeparationModel.glass && app.surface.sheen > 0
+          ? CustomPaint(
+              foregroundPainter: _SpecularRim(
+                radius: radius,
+                color: app.core.tx,
+                strength: app.surface.sheen,
+              ),
+              child: body,
+            )
+          : body,
     );
   }
+}
+
+/// A directional reflection around the pane. Painted on the existing layer;
+/// it adds no second backdrop filter and never intercepts gestures.
+class _SpecularRim extends CustomPainter {
+  final BorderRadius radius;
+  final Color color;
+  final double strength;
+
+  const _SpecularRim({
+    required this.radius,
+    required this.color,
+    required this.strength,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final rect = Offset.zero & size;
+    final path = radius.toRRect(rect.deflate(0.5));
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..shader = ui.Gradient.linear(
+        Offset.zero,
+        Offset(size.width, size.height),
+        [
+          color.withValues(alpha: (strength * 2.8).clamp(0.0, 1.0)),
+          color.withValues(alpha: strength * 0.65),
+          color.withValues(alpha: strength * 1.1),
+        ],
+        [0, 0.5, 1],
+      );
+    canvas.drawRRect(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_SpecularRim oldDelegate) =>
+      radius != oldDelegate.radius ||
+      color != oldDelegate.color ||
+      strength != oldDelegate.strength;
 }

@@ -54,8 +54,11 @@ void main() {
     test('focus is an in-bounds ring at Signal\'s width', () {
       expect(l.focus.expression, FocusExpression.ring);
       expect(l.focus.width, 2.5);
-      expect(l.focus.offset, 0,
-          reason: 'Signal draws in bounds and every site assumes it');
+      expect(
+        l.focus.offset,
+        0,
+        reason: 'Signal draws in bounds and every site assumes it',
+      );
       expect(l.focus.scale, 1);
       expect(l.focus.lift, 0);
     });
@@ -96,27 +99,38 @@ void main() {
       floatingShadow: const [],
     );
 
-    test('settings may never take glass or space', () {
-      // SettingsSection is one filled container whose rows have ZERO
-      // inter-row gap and an in-place Border.all — dropping it shifts every
-      // row 1px and dissolves the grouping.
-      expect(want(SeparationModel.glass).modelFor(SurfaceFamily.settingsGroup),
-          SeparationModel.fill);
-      expect(want(SeparationModel.space).modelFor(SurfaceFamily.settingsGroup),
-          SeparationModel.rule,
-          reason: 'a look that asked for "no boxes" is better served by '
-              'hairlines than by the boxes it was removing');
+    test('settings groups can frost as one pane but cannot lose grouping', () {
+      expect(
+        want(SeparationModel.glass).modelFor(SurfaceFamily.settingsGroup),
+        SeparationModel.glass,
+      );
+      expect(
+        want(SeparationModel.space).modelFor(SurfaceFamily.settingsGroup),
+        SeparationModel.rule,
+        reason:
+            'a look that asked for "no boxes" is better served by '
+            'hairlines than by the boxes it was removing',
+      );
     });
 
     test('sheets and dialogs may never take space or rule', () {
       // The fill IS the modal; remove it and the page shows through.
       for (final f in [SurfaceFamily.sheet, SurfaceFamily.dialog]) {
-        expect(want(SeparationModel.space).modelFor(f), SeparationModel.fill,
-            reason: f.name);
-        expect(want(SeparationModel.rule).modelFor(f), SeparationModel.fill,
-            reason: f.name);
-        expect(want(SeparationModel.glass).modelFor(f), SeparationModel.glass,
-            reason: '${f.name} may take glass');
+        expect(
+          want(SeparationModel.space).modelFor(f),
+          SeparationModel.fill,
+          reason: f.name,
+        );
+        expect(
+          want(SeparationModel.rule).modelFor(f),
+          SeparationModel.fill,
+          reason: f.name,
+        );
+        expect(
+          want(SeparationModel.glass).modelFor(f),
+          SeparationModel.glass,
+          reason: '${f.name} may take glass',
+        );
       }
     });
 
@@ -144,7 +158,7 @@ void main() {
         raisedShadow: const [],
         floatingShadow: const [],
       );
-      expect(t.modelFor(SurfaceFamily.settingsGroup), SeparationModel.fill);
+      expect(t.modelFor(SurfaceFamily.settingsGroup), SeparationModel.glass);
     });
   });
 
@@ -153,10 +167,13 @@ void main() {
       for (final s in PremiumLooks.all) {
         final t = s.build();
         expect(t.surface.glassSigmaFor(true), 0, reason: s.id);
-        expect(t.surface.glassFillFor(true),
-            greaterThan(t.surface.glassFillFor(false)),
-            reason: '${s.id}: an unblurred pane at the blurred opacity is a '
-                'smear, not a surface');
+        expect(
+          t.surface.glassFillFor(true),
+          greaterThan(t.surface.glassFillFor(false)),
+          reason:
+              '${s.id}: an unblurred pane at the blurred opacity is a '
+              'smear, not a surface',
+        );
       }
     });
 
@@ -178,8 +195,11 @@ void main() {
 
     test('the focus ring keeps its 2.5px floor', () {
       for (final s in PremiumLooks.all) {
-        expect(s.build().focus.widthFor(true), greaterThanOrEqualTo(2.5),
-            reason: s.id);
+        expect(
+          s.build().focus.widthFor(true),
+          greaterThanOrEqualTo(2.5),
+          reason: s.id,
+        );
       }
     });
 
@@ -188,7 +208,9 @@ void main() {
         expect(s.build().shape.grainFor(true), 0, reason: s.id);
       }
       expect(PremiumLooks.reel.build().shape.grainFor(false), greaterThan(0));
-      final asking = PremiumLooks.all.where((s) => s.grain > 0).map((s) => s.id);
+      final asking = PremiumLooks.all
+          .where((s) => s.grain > 0)
+          .map((s) => s.id);
       expect(asking, ['reel']);
     });
 
@@ -208,8 +230,10 @@ void main() {
       // stop being a no-op. The one permitted legacy exception is reduced
       // motion, not a TV optimisation.
       expect(
-        const WaitTokens(skeleton: SkeletonStyle.pulse, period: Duration.zero)
-            .styleFor(true),
+        const WaitTokens(
+          skeleton: SkeletonStyle.pulse,
+          period: Duration.zero,
+        ).styleFor(true),
         SkeletonStyle.static_,
       );
       expect(WaitTokens.legacy.styleFor(true), SkeletonStyle.shimmer);
@@ -250,16 +274,23 @@ void main() {
       // A stored old id must never resolve to a new look.
       final old = DetailThemes.all.map((t) => t.id).toSet();
       for (final s in PremiumLooks.all) {
-        expect(old.contains(s.id), isFalse,
-            reason: '${s.id} collides with an existing theme id');
+        expect(
+          old.contains(s.id),
+          isFalse,
+          reason: '${s.id} collides with an existing theme id',
+        );
       }
     });
 
     test('ids and labels are unique', () {
-      expect(PremiumLooks.all.map((s) => s.id).toSet().length,
-          PremiumLooks.all.length);
-      expect(PremiumLooks.all.map((s) => s.label).toSet().length,
-          PremiumLooks.all.length);
+      expect(
+        PremiumLooks.all.map((s) => s.id).toSet().length,
+        PremiumLooks.all.length,
+      );
+      expect(
+        PremiumLooks.all.map((s) => s.label).toSet().length,
+        PremiumLooks.all.length,
+      );
     });
 
     test('every look builds, and none is legacy', () {
@@ -271,12 +302,14 @@ void main() {
       }
     });
 
-    test('all five are dark — D1, which is what deletes the light-ink debt',
-        () {
-      for (final s in PremiumLooks.all) {
-        expect(s.build().isLight, isFalse, reason: s.id);
-      }
-    });
+    test(
+      'all five are dark — D1, which is what deletes the light-ink debt',
+      () {
+        for (final s in PremiumLooks.all) {
+          expect(s.build().isLight, isFalse, reason: s.id);
+        }
+      },
+    );
 
     test('text reads on every look\'s ground', () {
       for (final s in PremiumLooks.all) {
@@ -288,38 +321,49 @@ void main() {
       }
     });
 
-    test('an unstated meaning role falls back to the accent, never to grey',
-        () {
-      // The rule from §4: state/callout/focus carry semantics, so they are
-      // given or derived — never defaulted into nothing. `isNotNull` cannot
-      // express that (the fields are non-nullable); what it means in practice
-      // is that a spec which names no `state` gets the ACCENT, so the colour
-      // still says something.
-      for (final s in PremiumLooks.all) {
-        final c = s.build().core;
-        expect(c.state, s.state ?? s.accent, reason: '${s.id} state');
-        expect(c.callout, s.callout ?? s.accent, reason: '${s.id} callout');
-        expect(c.focus, s.focusColor ?? s.accent, reason: '${s.id} focus');
-      }
-    });
-
-    test('the primary button is the decision the spec made, and is readable',
-        () {
-      // Three of the five mockups fill the primary button with the accent;
-      // two use near-white ink. Deriving it would have contradicted whichever
-      // three it guessed against, so it is stated — and this pins that the
-      // stated value is what arrives.
-      for (final s in PremiumLooks.all) {
-        final c = s.build().core;
-        if (s.accentButton) {
-          expect(c.btnFill, s.accent, reason: '${s.id} wants an accent button');
-        } else {
-          expect(c.btnFill, isNot(s.accent), reason: '${s.id} wants ink');
+    test(
+      'an unstated meaning role falls back to the accent, never to grey',
+      () {
+        // The rule from §4: state/callout/focus carry semantics, so they are
+        // given or derived — never defaulted into nothing. `isNotNull` cannot
+        // express that (the fields are non-nullable); what it means in practice
+        // is that a spec which names no `state` gets the ACCENT, so the colour
+        // still says something.
+        for (final s in PremiumLooks.all) {
+          final c = s.build().core;
+          expect(c.state, s.state ?? s.accent, reason: '${s.id} state');
+          expect(c.callout, s.callout ?? s.accent, reason: '${s.id} callout');
+          expect(c.focus, s.focusColor ?? s.accent, reason: '${s.id} focus');
         }
-        expect(_ratio(c.btnText, c.btnFill), greaterThan(4.5),
-            reason: '${s.id}: label on its own button');
-      }
-    });
+      },
+    );
+
+    test(
+      'the primary button is the decision the spec made, and is readable',
+      () {
+        // Three of the five mockups fill the primary button with the accent;
+        // two use near-white ink. Deriving it would have contradicted whichever
+        // three it guessed against, so it is stated — and this pins that the
+        // stated value is what arrives.
+        for (final s in PremiumLooks.all) {
+          final c = s.build().core;
+          if (s.accentButton) {
+            expect(
+              c.btnFill,
+              s.accent,
+              reason: '${s.id} wants an accent button',
+            );
+          } else {
+            expect(c.btnFill, isNot(s.accent), reason: '${s.id} wants ink');
+          }
+          expect(
+            _ratio(c.btnText, c.btnFill),
+            greaterThan(4.5),
+            reason: '${s.id}: label on its own button',
+          );
+        }
+      },
+    );
 
     test('a fill-less separation model reaches the colours the detail page '
         'actually paints', () {
@@ -335,8 +379,11 @@ void main() {
             expect(c.ghostBorder.a, 0, reason: '${s.id} ghostBorder');
           case SeparationModel.rule:
             expect(c.ghostFill.a, 0, reason: '${s.id} ghostFill');
-            expect(c.hair.a, greaterThan(0.14),
-                reason: '${s.id}: a rule look lives on its hairline');
+            expect(
+              c.hair.a,
+              greaterThan(0.14),
+              reason: '${s.id}: a rule look lives on its hairline',
+            );
           case SeparationModel.fill || SeparationModel.glass:
             expect(c.panel.a, greaterThan(0), reason: '${s.id} panel');
         }
@@ -358,8 +405,9 @@ void main() {
       // An explicit spec decision, not a threshold on `reactiveRoom`: a small
       // numeric nudge to the room's magnitude must not flip whether posters
       // may replace semantic colours across the whole detail UI.
-      final reactive =
-          PremiumLooks.all.where((s) => s.build().core.useArtworkAccent);
+      final reactive = PremiumLooks.all.where(
+        (s) => s.build().core.useArtworkAccent,
+      );
       expect(reactive.map((s) => s.id), ['field']);
       for (final s in PremiumLooks.all) {
         expect(s.build().core.useArtworkAccent, s.artworkAccent, reason: s.id);
@@ -367,8 +415,11 @@ void main() {
     });
 
     test('shape follows the spec\'s corner character', () {
-      expect(PremiumLooks.console.build().shape.scale, 0,
-          reason: 'Console squares everything');
+      expect(
+        PremiumLooks.console.build().shape.scale,
+        0,
+        reason: 'Console squares everything',
+      );
       expect(PremiumLooks.console.build().shape.brPill, BorderRadius.zero);
       expect(PremiumLooks.glass.build().shape.scale, greaterThan(1));
     });
@@ -398,10 +449,14 @@ void main() {
         expect(live.base, t.base, reason: '${s.id} base');
         expect(live.slow, t.slow, reason: '${s.id} slow');
       }
-      expect(AppMotion(PremiumLooks.console.build().motion, reduced: false).base,
-          const Duration(milliseconds: 90));
-      expect(AppMotion(PremiumLooks.glass.build().motion, reduced: false).slow,
-          const Duration(milliseconds: 520));
+      expect(
+        AppMotion(PremiumLooks.console.build().motion, reduced: false).base,
+        const Duration(milliseconds: 90),
+      );
+      expect(
+        AppMotion(PremiumLooks.glass.build().motion, reduced: false).slow,
+        const Duration(milliseconds: 520),
+      );
     });
 
     test('reduced motion collapses every look, legacy included', () {
@@ -431,10 +486,16 @@ void main() {
         ).drawsRing;
         expect(draws, e == FocusExpression.ring, reason: e.name);
       }
-      expect(PremiumLooks.field.build().focus.drawsRing, isFalse,
-          reason: 'scale + a ring reads as two cursors');
-      expect(PremiumLooks.console.build().focus.drawsRing, isFalse,
-          reason: 'invert replaces the surface');
+      expect(
+        PremiumLooks.field.build().focus.drawsRing,
+        isFalse,
+        reason: 'scale + a ring reads as two cursors',
+      );
+      expect(
+        PremiumLooks.console.build().focus.drawsRing,
+        isFalse,
+        reason: 'invert replaces the surface',
+      );
       expect(PremiumLooks.glass.build().focus.drawsRing, isTrue);
     });
 
@@ -499,10 +560,16 @@ void main() {
   group('the five looks can be selected, stored and resolved', () {
     test('every id is an accepted stored value', () {
       for (final s in PremiumLooks.all) {
-        expect(StorageService.kDetailThemes, contains(s.id),
-            reason: '${s.id} would normalize to legacy on select');
-        expect(kDetailThemesShipped, contains(s.id),
-            reason: '${s.id} would be withheld from every picker');
+        expect(
+          StorageService.kDetailThemes,
+          contains(s.id),
+          reason: '${s.id} would normalize to legacy on select',
+        );
+        expect(
+          kDetailThemesShipped,
+          contains(s.id),
+          reason: '${s.id} would be withheld from every picker',
+        );
       }
     });
 
@@ -513,16 +580,21 @@ void main() {
         expect(t.isLegacy, isFalse);
         // The half that `fromDetail(core)` alone could not have supplied: if
         // this is legacy's model, the look resolved through the wrong path.
-        expect(t.surface.modelFor(SurfaceFamily.card), s.separation,
-            reason: '${s.id} lost its phase-four groups');
+        expect(
+          t.surface.modelFor(SurfaceFamily.card),
+          s.separation,
+          reason: '${s.id} lost its phase-four groups',
+        );
         expect(t.focus.expression, s.focusExpression);
         expect(t.motion.character, s.motion);
       }
     });
 
     test('byId is memoized — one build per look, not one per lookup', () {
-      expect(identical(AppThemes.byId('glass'), AppThemes.byId('glass')),
-          isTrue);
+      expect(
+        identical(AppThemes.byId('glass'), AppThemes.byId('glass')),
+        isTrue,
+      );
     });
 
     test('an unknown id still falls back to legacy, never to a look', () {
@@ -542,7 +614,10 @@ void main() {
 
     test('the pickers show them first, and show all twenty-five', () {
       final ids = DetailThemes.catalogue.map((t) => t.id).toList();
-      expect(ids.take(PremiumLooks.all.length), PremiumLooks.all.map((s) => s.id));
+      expect(
+        ids.take(PremiumLooks.all.length),
+        PremiumLooks.all.map((s) => s.id),
+      );
       expect(ids.length, DetailThemes.all.length + PremiumLooks.all.length);
       expect(ids.toSet().length, ids.length, reason: 'id collision');
     });
@@ -552,7 +627,7 @@ void main() {
     // The rule the review caught twice: a token with no consumer is
     // decorative. These pin that the families a look addresses are the
     // families a widget actually asks about.
-    test('settingsGroup is capped to fill-or-rule, and both are reachable', () {
+    test('settings groups preserve grouping across fill, rule and glass', () {
       expect(
         SurfaceTokens.legacy.modelFor(SurfaceFamily.settingsGroup),
         SeparationModel.fill,
@@ -561,15 +636,22 @@ void main() {
       // (zero inter-row gap, in-place border), so it is clamped — to `rule`,
       // not to `fill`, because losing the fill is the part it CAN do.
       expect(
-        PremiumLooks.field.build().surface.modelFor(SurfaceFamily.settingsGroup),
+        PremiumLooks.field.build().surface.modelFor(
+          SurfaceFamily.settingsGroup,
+        ),
         SeparationModel.rule,
       );
       expect(
-        PremiumLooks.console
-            .build()
-            .surface
-            .modelFor(SurfaceFamily.settingsGroup),
+        PremiumLooks.console.build().surface.modelFor(
+          SurfaceFamily.settingsGroup,
+        ),
         SeparationModel.rule,
+      );
+      expect(
+        PremiumLooks.glass.build().surface.modelFor(
+          SurfaceFamily.settingsGroup,
+        ),
+        SeparationModel.glass,
       );
     });
 
@@ -625,20 +707,54 @@ void main() {
     // reviewed diffs while the looks are provisional; they freeze at device
     // signoff.
     const expected = {
-      'glass': (SeparationModel.glass, ScrimStyle.blurBand, ArtFrame.contained,
-          ArtGrade.none, FocusExpression.ring, MotionCharacter.glide),
-      'field': (SeparationModel.space, ScrimStyle.bottomGradient,
-          ArtFrame.bleed, ArtGrade.none, FocusExpression.scale,
-          MotionCharacter.settle),
-      'hearth': (SeparationModel.fill, ScrimStyle.plate, ArtFrame.faded,
-          ArtGrade.warm, FocusExpression.lift, MotionCharacter.glide),
-      'console': (SeparationModel.rule, ScrimStyle.plate, ArtFrame.contained,
-          ArtGrade.none, FocusExpression.invert, MotionCharacter.snap),
-      'reel': (SeparationModel.fill, ScrimStyle.plate, ArtFrame.matted,
-          ArtGrade.sepia, FocusExpression.lift, MotionCharacter.settle),
-      'spotlight': (SeparationModel.fill, ScrimStyle.bottomGradient,
-          ArtFrame.bleed, ArtGrade.none, FocusExpression.parallax,
-          MotionCharacter.settle),
+      'glass': (
+        SeparationModel.glass,
+        ScrimStyle.blurBand,
+        ArtFrame.contained,
+        ArtGrade.none,
+        FocusExpression.ring,
+        MotionCharacter.glide,
+      ),
+      'field': (
+        SeparationModel.space,
+        ScrimStyle.bottomGradient,
+        ArtFrame.bleed,
+        ArtGrade.none,
+        FocusExpression.scale,
+        MotionCharacter.settle,
+      ),
+      'hearth': (
+        SeparationModel.fill,
+        ScrimStyle.plate,
+        ArtFrame.faded,
+        ArtGrade.warm,
+        FocusExpression.lift,
+        MotionCharacter.glide,
+      ),
+      'console': (
+        SeparationModel.rule,
+        ScrimStyle.plate,
+        ArtFrame.contained,
+        ArtGrade.none,
+        FocusExpression.invert,
+        MotionCharacter.snap,
+      ),
+      'reel': (
+        SeparationModel.fill,
+        ScrimStyle.plate,
+        ArtFrame.matted,
+        ArtGrade.sepia,
+        FocusExpression.lift,
+        MotionCharacter.settle,
+      ),
+      'spotlight': (
+        SeparationModel.fill,
+        ScrimStyle.bottomGradient,
+        ArtFrame.bleed,
+        ArtGrade.none,
+        FocusExpression.parallax,
+        MotionCharacter.settle,
+      ),
     };
 
     // Everything the enums do NOT cover, pinned as the numbers a consumer
@@ -647,10 +763,34 @@ void main() {
     // could not have failed; these can.
     const derived = {
       //        ground      ink         accent      btnFill     radius sm  img
-      'glass': (0xFF05070A, 0xFFF2F5F8, 0xFF7FD4FF, 0xFFE4E7EA, 14.0, 10.0, 14.0),
+      'glass': (
+        0xFF05070A,
+        0xFFF2F5F8,
+        0xFF7FD4FF,
+        0xFFE4E7EA,
+        14.0,
+        10.0,
+        14.0,
+      ),
       'field': (0xFF000000, 0xFFFFFFFF, 0xFFE8503A, 0xFFF0F0F0, 3.0, 2.0, 3.0),
-      'hearth': (0xFF141110, 0xFFF6EFE6, 0xFFE8A13C, 0xFFE8A13C, 12.0, 8.0, 12.0),
-      'console': (0xFF080B09, 0xFFD8E0D8, 0xFF8CE0A8, 0xFF8CE0A8, 0.0, 0.0, 0.0),
+      'hearth': (
+        0xFF141110,
+        0xFFF6EFE6,
+        0xFFE8A13C,
+        0xFFE8A13C,
+        12.0,
+        8.0,
+        12.0,
+      ),
+      'console': (
+        0xFF080B09,
+        0xFFD8E0D8,
+        0xFF8CE0A8,
+        0xFF8CE0A8,
+        0.0,
+        0.0,
+        0.0,
+      ),
       'reel': (0xFF0A0908, 0xFFEDE4D8, 0xFFD9A441, 0xFFD9A441, 4.0, 3.0, 4.0),
       // Was `0xFF1B1C1C` with a white accent and a white button fill — the
       // reference carries no accent colour at all, state being the lift and a
@@ -671,7 +811,7 @@ void main() {
         0xFFF0F1F2,
         7.0,
         5.0,
-        7.0
+        7.0,
       ),
     };
 
@@ -712,15 +852,15 @@ void main() {
 
         // Shadows are a fill's way of lifting; a rule/space look must not
         // have acquired one on the way through the derivation.
-        final lifts = s.separation == SeparationModel.fill ||
+        final lifts =
+            s.separation == SeparationModel.fill ||
             s.separation == SeparationModel.glass;
         expect(t.surface.raisedShadow.isNotEmpty, lifts, reason: 'raised');
       });
     }
 
     test('the snapshot table covers every shipped look', () {
-      expect(expected.keys.toSet(),
-          PremiumLooks.all.map((s) => s.id).toSet());
+      expect(expected.keys.toSet(), PremiumLooks.all.map((s) => s.id).toSet());
     });
   });
 }

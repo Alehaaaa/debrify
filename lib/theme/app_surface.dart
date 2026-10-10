@@ -133,10 +133,9 @@ class SurfaceTokens {
   /// The caps are not style guidance — they are geometry facts, established by
   /// the §12 inventory:
   ///
-  /// * **`settingsGroup`** is one filled container whose rows have ZERO
-  ///   inter-row gap and an in-place `Border.all`. Dropping fill and border
-  ///   both shifts every row by 1px and dissolves the grouping into an
-  ///   undifferentiated stack. So: `fill` or `rule` only.
+  /// * **`settingsGroup`** is one grouped container whose rows have ZERO
+  ///   inter-row gap. Glass is applied to the whole group, never to each row.
+  ///   Removing the group with `space` would dissolve that structure.
   /// * **`sheet` / `dialog`** — the fill IS the modal. Remove it and the page
   ///   shows through. So: `fill` or `glass` only.
   /// * **`card` / `shelfRow` / `hero`** carry their decoration outside the
@@ -151,26 +150,23 @@ class SurfaceTokens {
     return _legal(family).contains(want) ? want : _fallbackFor(family, want);
   }
 
-  static Set<SeparationModel> _legal(SurfaceFamily family) =>
-      switch (family) {
-        SurfaceFamily.settingsGroup => const {
-          SeparationModel.fill,
-          SeparationModel.rule,
-        },
-        SurfaceFamily.sheet ||
-        SurfaceFamily.dialog => const {
-          SeparationModel.fill,
-          SeparationModel.glass,
-        },
-        SurfaceFamily.card ||
-        SurfaceFamily.shelfRow ||
-        SurfaceFamily.hero => const {
-          SeparationModel.fill,
-          SeparationModel.glass,
-          SeparationModel.space,
-          SeparationModel.rule,
-        },
-      };
+  static Set<SeparationModel> _legal(SurfaceFamily family) => switch (family) {
+    SurfaceFamily.settingsGroup => const {
+      SeparationModel.fill,
+      SeparationModel.rule,
+      SeparationModel.glass,
+    },
+    SurfaceFamily.sheet ||
+    SurfaceFamily.dialog => const {SeparationModel.fill, SeparationModel.glass},
+    SurfaceFamily.card ||
+    SurfaceFamily.shelfRow ||
+    SurfaceFamily.hero => const {
+      SeparationModel.fill,
+      SeparationModel.glass,
+      SeparationModel.space,
+      SeparationModel.rule,
+    },
+  };
 
   /// Where an illegal ask lands.
   ///

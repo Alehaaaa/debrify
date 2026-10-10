@@ -24,6 +24,7 @@ class MenuPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
+    final frosted = app.formId == 'glass';
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -59,13 +60,24 @@ class MenuPill extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    app.shell.railBg.withValues(alpha: isOpen ? 0.84 : 0.78),
-                    app.shell.ink.withValues(alpha: isOpen ? 0.74 : 0.68),
+                    app.shell.railBg.withValues(
+                      alpha: frosted
+                          ? (isOpen ? 0.65 : 0.56)
+                          : (isOpen ? 0.84 : 0.78),
+                    ),
+                    (frosted ? app.core.pane : app.shell.ink).withValues(
+                      alpha: frosted
+                          ? (isOpen ? 0.58 : 0.48)
+                          : (isOpen ? 0.74 : 0.68),
+                    ),
                   ],
                 ),
                 borderRadius: app.shape.br(22),
                 border: Border.all(
-                  color: app.fade(app.core.tx, isOpen ? 0.34 : 0.28),
+                  color: app.fade(
+                    app.core.tx,
+                    frosted ? (isOpen ? 0.42 : 0.34) : (isOpen ? 0.34 : 0.28),
+                  ),
                 ),
               ),
               child: Row(

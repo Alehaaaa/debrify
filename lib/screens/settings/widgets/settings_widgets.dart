@@ -11,6 +11,7 @@ import '../../../theme/app_motion.dart';
 import '../../../theme/app_theme.dart';
 import '../../../theme/app_surface.dart';
 import '../../../theme/app_theme_scope.dart';
+import '../../../theme/widgets/glass_surface.dart';
 import '../../../theme/widgets/parallax_focus.dart';
 import '../../../widgets/shimmer.dart';
 
@@ -1155,7 +1156,9 @@ class _ConnectionsSummaryState extends State<ConnectionsSummary> {
   late final FocusNode _allDebridFocusNode;
   late final FocusNode _pikpakFocusNode;
   late final FocusNode _webDavFocusNode;
-  final FocusNode _mediaServersFocusNode = FocusNode(debugLabel: 'settings-media-servers');
+  final FocusNode _mediaServersFocusNode = FocusNode(
+    debugLabel: 'settings-media-servers',
+  );
   late final FocusNode _indexerManagersFocusNode;
   late final FocusNode _iptvFocusNode;
   late final FocusNode _trackingFocusNode;
@@ -1328,7 +1331,9 @@ class _ConnectionsSummaryState extends State<ConnectionsSummary> {
                         rightNeighbor: wide ? _iptvFocusNode : null,
                         upNeighbor: wide ? _pikpakFocusNode : _webDavFocusNode,
                         downNeighbor: wide
-                            ? (widget.mediaServers != null ? _mediaServersFocusNode : _trackingFocusNode)
+                            ? (widget.mediaServers != null
+                                  ? _mediaServersFocusNode
+                                  : _trackingFocusNode)
                             : _iptvFocusNode,
                       ),
                     ),
@@ -1342,16 +1347,22 @@ class _ConnectionsSummaryState extends State<ConnectionsSummary> {
                         upNeighbor: wide
                             ? _webDavFocusNode
                             : _indexerManagersFocusNode,
-                        downNeighbor: widget.mediaServers != null ? _mediaServersFocusNode : _trackingFocusNode,
+                        downNeighbor: widget.mediaServers != null
+                            ? _mediaServersFocusNode
+                            : _trackingFocusNode,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 22),
                 if (widget.mediaServers != null) ...[
-                  ConnectionCard(info: widget.mediaServers!,
-                    focusNode: _mediaServersFocusNode, isLeftColumn: true,
-                    upNeighbor: _iptvFocusNode, downNeighbor: _trackingFocusNode),
+                  ConnectionCard(
+                    info: widget.mediaServers!,
+                    focusNode: _mediaServersFocusNode,
+                    isLeftColumn: true,
+                    upNeighbor: _iptvFocusNode,
+                    downNeighbor: _trackingFocusNode,
+                  ),
                   const SizedBox(height: 22),
                 ],
                 const SettingsSectionLabel('Tracking'),
@@ -1361,7 +1372,9 @@ class _ConnectionsSummaryState extends State<ConnectionsSummary> {
                     info: widget.tracking,
                     focusNode: _trackingFocusNode,
                     isLeftColumn: true,
-                    upNeighbor: widget.mediaServers != null ? _mediaServersFocusNode : wide
+                    upNeighbor: widget.mediaServers != null
+                        ? _mediaServersFocusNode
+                        : wide
                         ? _indexerManagersFocusNode
                         : _iptvFocusNode,
                     downNeighbor: _traktFocusNode,
@@ -1737,16 +1750,22 @@ class SettingsSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    // The `settingsGroup` family, and the reason it is capped to fill-or-rule:
-    // this is ONE filled container whose rows have zero inter-row gap and an
-    // in-place `Border.all`. Dropping both would shift every row by a pixel
-    // and dissolve the grouping into an undifferentiated stack — so `space`
-    // and `glass` are not on offer, and a look that asks for either is
-    // clamped to `rule` by `modelFor` before it reaches here.
-    final rule =
-        app.surface.modelFor(SurfaceFamily.settingsGroup) ==
-        SeparationModel.rule;
+    final model = app.surface.modelFor(SurfaceFamily.settingsGroup);
+    final rule = model == SeparationModel.rule;
+    final glass = model == SeparationModel.glass;
     final spotlight = app.formId == 'spotlight';
+    final radius = spotlight ? app.shape.br(13) : BorderRadius.circular(16);
+    final rows = Material(
+      color: Colors.transparent,
+      child: Column(
+        children: [
+          for (int i = 0; i < children.length; i++) ...[
+            if (i != 0) Divider(height: 1, thickness: 1, color: t.line),
+            children[i],
+          ],
+        ],
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1759,34 +1778,33 @@ class SettingsSection extends StatelessWidget {
               style: TextStyle(fontSize: 12, height: 1.4, color: t.dim),
             ),
           ),
-        Container(
-          decoration: BoxDecoration(
-            // A rule look keeps the border — that IS its separation — and
-            // loses only the fill. The border width is unchanged either way,
-            // which is what keeps the row geometry identical.
-            color: rule
-                ? Colors.transparent
-                : spotlight
-                ? app.fade(app.core.tx, app.isLight ? 0.035 : 0.047)
-                : t.panel,
-            borderRadius: spotlight
-                ? app.shape.br(13)
-                : BorderRadius.circular(16),
-            border: Border.all(color: t.line, width: 1),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Material(
-            color: Colors.transparent,
-            child: Column(
-              children: [
-                for (int i = 0; i < children.length; i++) ...[
-                  if (i != 0) Divider(height: 1, thickness: 1, color: t.line),
-                  children[i],
-                ],
-              ],
+        if (glass)
+          GlassSurface(
+            family: SurfaceFamily.settingsGroup,
+            borderRadius: radius,
+            // Settings often shows several groups at once; a restrained blur
+            // gives the glass depth without stacking large 28px filters.
+            sigma: 16,
+            border: t.line,
+            child: rows,
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              // A rule look keeps the border — that IS its separation — and
+              // loses only the fill. The border width is unchanged either way,
+              // which is what keeps the row geometry identical.
+              color: rule
+                  ? Colors.transparent
+                  : spotlight
+                  ? app.fade(app.core.tx, app.isLight ? 0.035 : 0.047)
+                  : t.panel,
+              borderRadius: radius,
+              border: Border.all(color: t.line, width: 1),
             ),
+            clipBehavior: Clip.antiAlias,
+            child: rows,
           ),
-        ),
       ],
     );
   }
