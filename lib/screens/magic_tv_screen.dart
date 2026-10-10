@@ -7753,7 +7753,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         barrierColor: Colors.black.withValues(alpha: 0.6),
         barrierDismissible: false,
         transitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (ctx, _, __) {
+        pageBuilder: (ctx, _, _) {
           return capturedThemes.wrap(
             ChannelCreationDialog(
               channelName: channelName,
@@ -7807,7 +7807,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         barrierColor: Colors.black.withValues(alpha: 0.6),
         barrierDismissible: false,
         transitionDuration: const Duration(milliseconds: 260),
-        pageBuilder: (ctx, _, __) {
+        pageBuilder: (ctx, _, _) {
           // Use pageBuilder context directly - simpler and avoids race conditions
           _progressSheetContext = ctx;
           return capturedThemes.wrap(

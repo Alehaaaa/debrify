@@ -1676,7 +1676,7 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
       hero: const [],
       heroNode: _spotlightHeroNode,
       heroAddon: null,
-      onHeroOpen: (_, __) {},
+      onHeroOpen: (_, _) {},
       shelvesOnly: true,
       paintBackground: false,
       animationsEnabled: _animationsEnabled,

@@ -213,4 +213,4 @@ void _noop() {}
 
 void _noopChannel(DebrifyTvChannel _) {}
 
-void _noopTorrent(DebrifyTvChannel _, CachedTorrent __) {}
+void _noopTorrent(DebrifyTvChannel _, CachedTorrent _) {}

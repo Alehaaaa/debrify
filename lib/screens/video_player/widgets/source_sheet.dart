@@ -1103,7 +1103,7 @@ class _SourceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: StreamBadgesService.instance.matcher,
-    builder: (_, matcher, __) => _buildRow(!matcher.isEmpty),
+    builder: (_, matcher, _) => _buildRow(!matcher.isEmpty),
   );
 
   Widget _buildRow(bool customBadgesConfigured) {

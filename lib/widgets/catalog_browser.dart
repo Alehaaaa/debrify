@@ -1905,7 +1905,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             settings: const RouteSettings(name: kEpisodesRouteName),
             transitionDuration: Duration.zero,
             reverseTransitionDuration: Duration.zero,
-            pageBuilder: (_, __, ___) => screen,
+            pageBuilder: (_, _, _) => screen,
           )
         : MaterialPageRoute(
             settings: const RouteSettings(name: kEpisodesRouteName),
@@ -2115,7 +2115,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             settings: const RouteSettings(name: kCatalogDetailRouteName),
             transitionDuration: Duration.zero,
             reverseTransitionDuration: Duration.zero,
-            pageBuilder: (_, __, ___) => screen,
+            pageBuilder: (_, _, _) => screen,
           )
         : MaterialPageRoute(
             settings: const RouteSettings(name: kCatalogDetailRouteName),

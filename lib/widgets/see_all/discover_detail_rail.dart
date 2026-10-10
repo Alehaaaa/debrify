@@ -1001,8 +1001,8 @@ class _RailTitleArtState extends State<_RailTitleArt> {
             // saveLayer per logo landing — which happens on every DPAD step.
             fadeInDuration: Duration.zero,
             fadeOutDuration: Duration.zero,
-            placeholder: (_, __) => const SizedBox.shrink(),
-            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+            placeholder: (_, _) => const SizedBox.shrink(),
+            errorWidget: (_, _, _) => const SizedBox.shrink(),
             errorListener: (_) {
               _deadLogoUrls.add(logo);
               if (mounted) setState(() {});

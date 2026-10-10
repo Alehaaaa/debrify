@@ -656,7 +656,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: visibleCandidates.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      separatorBuilder: (_, _) => const SizedBox(height: 6),
                       itemBuilder: (context, index) {
                         final candidate = visibleCandidates[index];
                         return ListTile(
@@ -741,7 +741,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                     child: ListView.separated(
                       shrinkWrap: true,
                       itemCount: visibleCandidates.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      separatorBuilder: (_, _) => const SizedBox(height: 6),
                       itemBuilder: (context, index) {
                         final candidate = visibleCandidates[index];
                         return ListTile(

@@ -16665,7 +16665,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                     : Image.network(
                         posterUrl,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Icon(
+                        errorBuilder: (_, _, _) => Icon(
                           Icons.movie_creation_outlined,
                           color: Colors.white.withValues(alpha: 0.45),
                         ),
@@ -16811,7 +16811,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               ),
             );
           },
-          pageBuilder: (sheetContext, _, __) {
+          pageBuilder: (sheetContext, _, _) {
             var initialSearchStarted = false;
             return StatefulBuilder(
               builder: (sheetContext, setSheetState) {
@@ -16952,7 +16952,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                               return ListView.separated(
                                 padding: const EdgeInsets.only(bottom: 20),
                                 itemCount: results.length,
-                                separatorBuilder: (_, __) => Divider(
+                                separatorBuilder: (_, _) => Divider(
                                   height: 1,
                                   color: Colors.white.withValues(alpha: 0.06),
                                 ),

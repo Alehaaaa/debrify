@@ -53,7 +53,7 @@ void main() {
           manualCalls++;
           return [low];
         },
-        searchForRecovery: (_, __, ___) async => [low, high],
+        searchForRecovery: (_, _, _) async => [low, high],
       );
       final raw = (await fetcher.fetch('movie', automaticRecovery: true))!;
       final automatic = await TorrentPlaybackService.prepareRecoverySources(
@@ -212,7 +212,7 @@ void main() {
       expect(calls, ['rd:rd-key:torrent', 'ad:ad-key:magnet']);
       await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
         TorrentNotCachedException('torrent', 'key'),
-        deleteRealDebrid: (_, __) async => throw StateError('cleanup failed'),
+        deleteRealDebrid: (_, _) async => throw StateError('cleanup failed'),
       );
       await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
         StateError('network'),

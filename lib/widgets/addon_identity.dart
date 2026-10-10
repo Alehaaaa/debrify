@@ -28,7 +28,7 @@ class AddonIdentity extends StatelessWidget {
             border: Border.all(color: ink.withValues(alpha: .10))),
           child: ClipRRect(borderRadius: BorderRadius.circular(6), child: valid
             ? Image.network(logo!, fit: BoxFit.contain, cacheWidth: (size * 2).round(),
-                errorBuilder: (_, __, ___) => fallback)
+                errorBuilder: (_, _, _) => fallback)
             : fallback)),
         const SizedBox(height: 5),
         Text(name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis,

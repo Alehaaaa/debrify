@@ -2240,7 +2240,7 @@ void main() {
               final scheduler = WebDavSyncScheduler(
                 runner: runner,
                 gate: _Gate(),
-                localChangeDeferredObserver: (_, __, delay) =>
+                localChangeDeferredObserver: (_, _, delay) =>
                     delays.add(delay),
               );
               scheduler.arm(() async => context());

@@ -3633,8 +3633,8 @@ class _DiscoverStageBackdropState extends State<_DiscoverStageBackdrop> {
             memCacheWidth: HomeTheme.heroBackdropCacheWidthTv,
             fadeInDuration: Duration.zero,
             fadeOutDuration: Duration.zero,
-            placeholder: (_, __) => const SizedBox.shrink(),
-            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+            placeholder: (_, _) => const SizedBox.shrink(),
+            errorWidget: (_, _, _) => const SizedBox.shrink(),
           );
     if (!widget.crossfade) return art;
     // Android TV keeps the two-pane's SNAP even on the stage: the switcher's
@@ -3726,9 +3726,9 @@ class _DiscoverStageVeils extends StatelessWidget {
     return IgnorePointer(
       child: ValueListenableBuilder<bool>(
         valueListenable: showing,
-        builder: (_, on, __) => ValueListenableBuilder<bool>(
+        builder: (_, on, _) => ValueListenableBuilder<bool>(
           valueListenable: theater,
-          builder: (_, deep, __) => TweenAnimationBuilder<double>(
+          builder: (_, deep, _) => TweenAnimationBuilder<double>(
             tween: Tween(end: deep ? 2.0 : (on ? 1.0 : 0.0)),
             duration: deep
                 ? const Duration(milliseconds: 1200)
@@ -3744,7 +3744,7 @@ class _DiscoverStageVeils extends StatelessWidget {
                 ? Duration.zero
                 : const Duration(milliseconds: 250),
             curve: Curves.easeInOutCubic,
-            builder: (_, t, __) => stage
+            builder: (_, t, _) => stage
                 ? Stack(
                     fit: StackFit.expand,
                     children: [
@@ -3901,9 +3901,9 @@ class _DiscoverGridDim extends StatelessWidget {
         child: IgnorePointer(
           child: ValueListenableBuilder<bool>(
             valueListenable: showing,
-            builder: (_, on, __) => ValueListenableBuilder<bool>(
+            builder: (_, on, _) => ValueListenableBuilder<bool>(
               valueListenable: theater,
-              builder: (_, deep, __) => TweenAnimationBuilder<double>(
+              builder: (_, deep, _) => TweenAnimationBuilder<double>(
                 tween: Tween(end: deep ? 2.0 : (on ? 1.0 : 0.0)),
                 duration: deep
                     ? const Duration(milliseconds: 1200)
@@ -3911,7 +3911,7 @@ class _DiscoverGridDim extends StatelessWidget {
                     ? const Duration(milliseconds: 900)
                     : const Duration(milliseconds: 250),
                 curve: Curves.easeInOutCubic,
-                builder: (_, t, __) {
+                builder: (_, t, _) {
                   // 0→1: 0 → .52 (playback); 1→2: .52 → 0 (theater unveils).
                   final a = t <= 1.0 ? 0.52 * t : 0.52 * (2.0 - t);
                   if (a <= 0.001) return const SizedBox.shrink();

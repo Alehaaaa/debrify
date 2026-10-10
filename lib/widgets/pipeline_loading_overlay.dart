@@ -94,7 +94,7 @@ class PipelineLoadingOverlay {
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 280),
-      pageBuilder: (_, __, ___) => capturedThemes.wrap(PopScope(
+      pageBuilder: (_, _, _) => capturedThemes.wrap(PopScope(
         canPop: false,
         // Back cancels a cancelable play: dismiss immediately, THEN run the
         // caller's cancel — matching the Cancel button, so the overlay never
@@ -389,7 +389,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
     }
     return AnimatedBuilder(
       animation: _kb,
-      builder: (_, __) {
+      builder: (_, _) {
         final t = _reduceMotion ? 0.5 : _kb.value;
         return Transform.scale(
           scale: 1.04 + 0.12 * t,
@@ -400,7 +400,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
               child: Image.network(
                 widget.posterUrl!,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ),
@@ -508,7 +508,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
       // A backdrop derived from an IMDb id is a guess — plenty of titles have
       // no wide art on metahub. When it 404s, drop to the poster (blurred, the
       // classic plate) before giving up on the gradient.
-      errorBuilder: (_, __, ___) => _marqueePosterPlate() ?? _marqueeGround(),
+      errorBuilder: (_, _, _) => _marqueePosterPlate() ?? _marqueeGround(),
     );
     if (blur) {
       image = ImageFiltered(
@@ -546,7 +546,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
       child: Image.network(
         poster,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _marqueeGround(),
+        errorBuilder: (_, _, _) => _marqueeGround(),
       ),
     );
   }
@@ -717,7 +717,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
           fit: BoxFit.contain,
           alignment: Alignment.centerLeft,
           semanticLabel: widget.title,
-          errorBuilder: (_, __, ___) => title,
+          errorBuilder: (_, _, _) => title,
         ),
       ),
     );
@@ -821,7 +821,7 @@ class _PlContentState extends State<_PlContent> with TickerProviderStateMixin {
           ? Image.network(
               widget.posterUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _posterFallback(),
+              errorBuilder: (_, _, _) => _posterFallback(),
             )
           : _posterFallback(),
     );
@@ -1246,7 +1246,7 @@ class _StageRail extends StatelessWidget {
             : i == active
                 ? AnimatedBuilder(
                     animation: crawl,
-                    builder: (_, __) => _fill(0.22 + 0.6 * crawl.value),
+                    builder: (_, _) => _fill(0.22 + 0.6 * crawl.value),
                   )
                 : const SizedBox.shrink(),
       ),

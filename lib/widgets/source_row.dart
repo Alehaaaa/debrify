@@ -475,7 +475,7 @@ class _SourceRowState extends State<SourceRow> {
         )
       : ValueListenableBuilder(
           valueListenable: StreamBadgesService.instance.matcher,
-          builder: (_, matcher, __) => _buildBadgeBody(!matcher.isEmpty),
+          builder: (_, matcher, _) => _buildBadgeBody(!matcher.isEmpty),
         );
 
   Widget _buildBadgeBody(bool customBadgesConfigured) {

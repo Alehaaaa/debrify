@@ -1686,7 +1686,7 @@ class _TorrentGroupListState extends State<_TorrentGroupList> {
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: widget.groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final group = widget.groups[index];
         final bool isBusy = widget.busyGroupIds.contains(group.id);
@@ -2746,7 +2746,7 @@ class _TorrentDownloadDetailScreenState extends State<TorrentDownloadDetailScree
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: items.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           if (index == 0) {
             final isIOS = Platform.isIOS;

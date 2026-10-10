@@ -33,7 +33,7 @@ void main() {
                 TvTextField(key: fieldKey, controller: text),
                 ValueListenableBuilder<TvKeyboardController?>(
                   valueListenable: session.panel,
-                  builder: (_, controller, __) => controller == null
+                  builder: (_, controller, _) => controller == null
                       ? const SizedBox.shrink()
                       : TvKeyboardPanel(controller: controller),
                 ),
@@ -139,7 +139,7 @@ void main() {
                     if (showField) TvTextField(controller: text),
                     ValueListenableBuilder<TvKeyboardController?>(
                       valueListenable: session.panel,
-                      builder: (_, controller, __) => controller == null
+                      builder: (_, controller, _) => controller == null
                           ? const SizedBox.shrink()
                           : TvKeyboardPanel(controller: controller),
                     ),

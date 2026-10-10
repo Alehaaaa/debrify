@@ -58,7 +58,7 @@ class _OceanSurfaceState extends State<_OceanSurface> {
     super.initState();
     _listener = ImageStreamListener(
       _onImage,
-      onError: (Object _, StackTrace? __) {
+      onError: (Object _, StackTrace? _) {
         // A failed resize keeps the previous image; initial failure stays dark.
       },
     );

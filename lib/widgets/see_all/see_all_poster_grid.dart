@@ -477,7 +477,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                   // rather than implying a count nobody knows.
                   ValueListenableBuilder<int>(
                     valueListenable: _focusIndex,
-                    builder: (_, i, __) {
+                    builder: (_, i, _) {
                       if (i < 0 || items.isEmpty) {
                         return const SizedBox.shrink();
                       }

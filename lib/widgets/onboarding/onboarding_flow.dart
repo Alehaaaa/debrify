@@ -106,9 +106,9 @@ class InitialSetupFlow extends StatefulWidget {
               reverseTransitionDuration: isTelevision
                   ? Duration.zero
                   : const Duration(milliseconds: 180),
-              pageBuilder: (_, __, ___) =>
+              pageBuilder: (_, _, _) =>
                   OnboardingTheme.scope(const InitialSetupFlow()),
-              transitionsBuilder: (_, animation, __, child) => isTelevision
+              transitionsBuilder: (_, animation, _, child) => isTelevision
                   ? child
                   : FadeTransition(opacity: animation, child: child),
             ),

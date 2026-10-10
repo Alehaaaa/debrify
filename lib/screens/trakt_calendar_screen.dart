@@ -1305,7 +1305,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       ),
       padding: EdgeInsets.zero,
       itemCount: days.length,
-      separatorBuilder: (_, __) => SizedBox(height: _isTelevision ? 8 : 22),
+      separatorBuilder: (_, _) => SizedBox(height: _isTelevision ? 8 : 22),
       itemBuilder: (context, index) {
         final airingDay = days[index];
         return _AiringDayCard(
@@ -2161,7 +2161,7 @@ class _PosterThumb extends StatelessWidget {
               width: width,
               height: height,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => placeholder,
+              errorBuilder: (_, _, _) => placeholder,
             ),
     );
   }

@@ -57,7 +57,7 @@ class TraktCalendarDaySheet extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 itemCount: sorted.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
                 itemBuilder: (ctx, i) => _EpisodeRow(
                   // Captured from this build — never read inside the builder.
                   app: app,
@@ -153,7 +153,7 @@ class _EpisodeRow extends StatelessWidget {
                     width: 40,
                     height: 60,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox(
+                    errorBuilder: (_, _, _) => const SizedBox(
                       width: 40,
                       height: 60,
                       child: Icon(Icons.tv),

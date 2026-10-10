@@ -1603,7 +1603,7 @@ popUpAnimationStyle: kPopupMenuAnimation,
                   // past the viewport so focus never hits an unbuilt-row wall.
                   scrollCacheExtent: const ScrollCacheExtent.pixels(2000),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  separatorBuilder: (_, _) => const SizedBox(height: 14),
                   itemBuilder: (_, i) => _InstalledRow(
                     addon: items[i],
                     focusNode: i == 0 ? _firstRowFocus : null,
@@ -1905,7 +1905,7 @@ popUpAnimationStyle: kPopupMenuAnimation,
       // See installed list — keep DPAD off the unbuilt wall.
       scrollCacheExtent: const ScrollCacheExtent.pixels(2000),
       itemCount: items.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      separatorBuilder: (_, _) => const SizedBox(height: 14),
       itemBuilder: (_, i) {
         final m = items[i];
         final navIndex = navIndexOf[i];
@@ -2849,7 +2849,7 @@ Widget _addonLogo(String? url, {double size = 64}) => SizedBox(
             imageUrl: url,
             fit: BoxFit.contain,
             memCacheWidth: 192,
-            errorWidget: (_, __, ___) => Icon(
+            errorWidget: (_, _, _) => Icon(
               Icons.extension_rounded,
               color: Colors.white38,
               size: size * 0.72,

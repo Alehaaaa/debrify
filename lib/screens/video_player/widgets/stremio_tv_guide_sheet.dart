@@ -1257,8 +1257,8 @@ class _ChannelTile extends StatelessWidget {
                     imageUrl: channel.nowPlayingPoster!,
                     memCacheWidth: 120,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => _buildLetterAvatar(),
-                    errorWidget: (_, __, ___) => _buildLetterAvatar(),
+                    placeholder: (_, _) => _buildLetterAvatar(),
+                    errorWidget: (_, _, _) => _buildLetterAvatar(),
                   )
                 : _buildLetterAvatar(),
           ),

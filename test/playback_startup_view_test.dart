@@ -44,7 +44,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Focus(
-          onKeyEvent: (_, __) => KeyEventResult.handled,
+          onKeyEvent: (_, _) => KeyEventResult.handled,
           child: PlaybackStartupView(
             title: 'Arrival',
             details: 'Attempt 1',

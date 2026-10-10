@@ -7123,7 +7123,7 @@ class IptvResultsViewState extends State<IptvResultsView>
                         memCacheHeight: 96,
                         fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
-                        errorWidget: (_, __, ___) => Icon(
+                        errorWidget: (_, _, _) => Icon(
                           Icons.live_tv_rounded,
                           size: 16,
                           color: t?.fgDim ?? brand.withValues(alpha: 0.85),
@@ -8485,7 +8485,7 @@ class _IptvStageFloorState extends State<_IptvStageFloor>
               memCacheHeight: 240,
               fadeInDuration: Duration.zero,
               fadeOutDuration: Duration.zero,
-              errorWidget: (_, __, ___) => Icon(
+              errorWidget: (_, _, _) => Icon(
                 Icons.live_tv_rounded,
                 size: 42,
                 color: brand.withValues(alpha: 0.75),
@@ -8822,7 +8822,7 @@ class _IptvFocusStageInfo extends StatelessWidget {
                                 memCacheHeight: 96,
                                 fadeInDuration: Duration.zero,
                                 fadeOutDuration: Duration.zero,
-                                errorWidget: (_, __, ___) => Icon(
+                                errorWidget: (_, _, _) => Icon(
                                   Icons.live_tv_rounded,
                                   size: dense ? 16 : 20,
                                   color: brand.withValues(alpha: 0.85),
@@ -8964,7 +8964,7 @@ class _IptvRailInfo extends StatelessWidget {
                         fit: BoxFit.contain,
                         // Cap the decode — see the row logo chip's rationale.
                         memCacheHeight: 96,
-                        errorWidget: (_, __, ___) => Icon(
+                        errorWidget: (_, _, _) => Icon(
                           Icons.live_tv_rounded,
                           size: 20,
                           color: brand.withValues(alpha: 0.85),

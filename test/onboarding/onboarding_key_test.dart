@@ -148,7 +148,7 @@ void main() {
           InitialSetupFlow(
             isTelevisionOverride: false,
             engineManager: FakeRemoteEngineManager(const <RemoteEngineInfo>[]),
-            validationOverride: (_, __, ___) async => true,
+            validationOverride: (_, _, _) async => true,
           ),
         ),
       ),
@@ -180,7 +180,7 @@ void main() {
           InitialSetupFlow(
             isTelevisionOverride: false,
             engineManager: FakeRemoteEngineManager(const <RemoteEngineInfo>[]),
-            validationOverride: (_, __, ___) async => true,
+            validationOverride: (_, _, _) async => true,
           ),
         ),
       ),
@@ -214,7 +214,7 @@ void main() {
           InitialSetupFlow(
             isTelevisionOverride: false,
             engineManager: FakeRemoteEngineManager(const <RemoteEngineInfo>[]),
-            validationOverride: (_, __, ___) => validation.future,
+            validationOverride: (_, _, _) => validation.future,
           ),
         ),
       ),

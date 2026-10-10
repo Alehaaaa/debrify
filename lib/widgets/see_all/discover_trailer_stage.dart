@@ -351,7 +351,7 @@ class _DiscoverTrailerStageState extends State<DiscoverTrailerStage>
                       padding: const EdgeInsets.all(10),
                       child: ValueListenableBuilder<bool>(
                         valueListenable: widget.loading,
-                        builder: (_, loading, __) =>
+                        builder: (_, loading, _) =>
                             _TrailerLoadingPill(visible: loading),
                       ),
                     ),
@@ -463,7 +463,7 @@ class _TakeoverInfo extends StatelessWidget {
 
     return AnimatedBuilder(
       animation: promote,
-      builder: (context, __) {
+      builder: (context, _) {
         final t = Curves.easeInOutCubic.transform(promote.value);
         if (t <= 0.001) return const SizedBox.shrink();
         double seg(double a, double b) => ((t - a) / (b - a)).clamp(0.0, 1.0);

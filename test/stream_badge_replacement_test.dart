@@ -111,7 +111,7 @@ void main() {
                   ],
                   currentSourceIndex: 0,
                   resolveSource: (_) async => 'https://example.invalid/video',
-                  onSourceSelected: (_, __) => taps++,
+                  onSourceSelected: (_, _) => taps++,
                   onClose: () {},
                 )
               : Scaffold(

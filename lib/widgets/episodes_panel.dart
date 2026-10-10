@@ -3002,9 +3002,9 @@ class _CompactEpisodeRowState extends State<_CompactEpisodeRow> {
                             ),
                             // Solid fill while loading — without it the tile
                             // is a transparent hole until the bytes land.
-                            placeholder: (_, __) =>
+                            placeholder: (_, _) =>
                                 Container(color: const Color(0xFF1A1622)),
-                            errorWidget: (_, __, ___) =>
+                            errorWidget: (_, _, _) =>
                                 Container(color: const Color(0xFF1A1622)),
                           )
                         else

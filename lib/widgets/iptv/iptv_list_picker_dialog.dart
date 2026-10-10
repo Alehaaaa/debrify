@@ -269,7 +269,7 @@ class _IptvListPickerDialogState extends State<_IptvListPickerDialog> {
               width: 34,
               height: 34,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const SizedBox(width: 34),
+              errorBuilder: (_, _, _) => const SizedBox(width: 34),
             ),
           ),
           const SizedBox(width: 10),

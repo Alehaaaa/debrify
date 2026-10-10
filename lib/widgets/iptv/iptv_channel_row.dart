@@ -797,7 +797,7 @@ class _IptvChannelRowState extends State<IptvChannelRow>
           padding: const EdgeInsets.only(left: 8),
           child: AnimatedBuilder(
             animation: _holdController,
-            builder: (_, __) => _FavHint(
+            builder: (_, _) => _FavHint(
               favorited: widget.isFavorited,
               progress: _holdController.value,
               picksList: picksList,
@@ -1504,8 +1504,8 @@ class _LogoChip extends StatelessWidget {
                     // uncapped decodes janked scrolling and thrashed the TV's
                     // small image cache (re-decoding on every scroll-back).
                     memCacheHeight: poster ? 200 : 96,
-                    placeholder: (_, __) => _fallback(),
-                    errorWidget: (_, __, ___) => _fallback(),
+                    placeholder: (_, _) => _fallback(),
+                    errorWidget: (_, _, _) => _fallback(),
                   )
                 : _fallback(),
           ),

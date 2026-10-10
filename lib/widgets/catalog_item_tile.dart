@@ -236,8 +236,8 @@ class _CatalogItemTileState extends State<CatalogItemTile>
               : (widget.isTelevision
                     ? Duration.zero
                     : const Duration(milliseconds: 100)),
-          placeholder: (_, __) => _placeholder(item.name),
-          errorWidget: (_, __, ___) => _placeholder(item.name),
+          placeholder: (_, _) => _placeholder(item.name),
+          errorWidget: (_, _, _) => _placeholder(item.name),
         )
       else
         _placeholder(item.name),

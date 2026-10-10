@@ -186,8 +186,8 @@ class _CardActionMenuState<T> extends State<_CardActionMenu<T>> {
                     colorBlendMode: blend?.$2,
                     memCacheWidth: 132,
                     fadeInDuration: Duration.zero,
-                    placeholder: (_, __) => const _PosterFallback(),
-                    errorWidget: (_, __, ___) => const _PosterFallback(),
+                    placeholder: (_, _) => const _PosterFallback(),
+                    errorWidget: (_, _, _) => const _PosterFallback(),
                   )
                 : const _PosterFallback(),
           ),

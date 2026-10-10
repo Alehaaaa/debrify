@@ -11598,7 +11598,7 @@ class _SearchScreenState extends State<SearchScreen>
                       memCacheWidth: 480,
                       fadeInDuration: Duration.zero,
                       fadeOutDuration: Duration.zero,
-                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                 ),
@@ -19928,7 +19928,7 @@ class _SearchScreenState extends State<SearchScreen>
                 child: RepaintBoundary(
                   child: ValueListenableBuilder<StremioMeta?>(
                     valueListenable: _discFocused,
-                    builder: (_, item, __) => DiscoverDetailRail(
+                    builder: (_, item, _) => DiscoverDetailRail(
                       item: item,
                       trailerStreams: _discTrailerStreams,
                       trailerLoading: _discTrailerLoading,
@@ -20033,7 +20033,7 @@ class _SearchScreenState extends State<SearchScreen>
             // disabled, kept wired for its revival.
             ValueListenableBuilder<double>(
               valueListenable: _discTakeover,
-              builder: (_, t, __) => t <= 0.001
+              builder: (_, t, _) => t <= 0.001
                   ? const SizedBox.shrink()
                   : IgnorePointer(
                       child: DecoratedBox(
@@ -20053,9 +20053,9 @@ class _SearchScreenState extends State<SearchScreen>
               left: 24,
               child: ValueListenableBuilder<bool>(
                 valueListenable: _discTrailerShowing,
-                builder: (_, showing, __) => ValueListenableBuilder<bool>(
+                builder: (_, showing, _) => ValueListenableBuilder<bool>(
                   valueListenable: _discTrailerLoading,
-                  builder: (_, loading, __) =>
+                  builder: (_, loading, _) =>
                       TrailerStatusChip(loading: loading, playing: showing),
                 ),
               ),
@@ -20144,7 +20144,7 @@ class _SearchScreenState extends State<SearchScreen>
               child: RepaintBoundary(
                 child: ValueListenableBuilder<StremioMeta?>(
                   valueListenable: _discFocused,
-                  builder: (_, item, __) => DiscoverDetailRail(
+                  builder: (_, item, _) => DiscoverDetailRail(
                     item: item,
                     layout: DiscoverDetailLayout.stage,
                     trailerShowing: _discTrailerShowing,
@@ -20233,7 +20233,7 @@ class _SearchScreenState extends State<SearchScreen>
         // stays disabled, kept wired for its revival (as in the two-pane).
         ValueListenableBuilder<double>(
           valueListenable: _discTakeover,
-          builder: (_, t, __) => t <= 0.001
+          builder: (_, t, _) => t <= 0.001
               ? const SizedBox.shrink()
               : IgnorePointer(
                   child: DecoratedBox(
@@ -20250,9 +20250,9 @@ class _SearchScreenState extends State<SearchScreen>
           right: 22,
           child: ValueListenableBuilder<bool>(
             valueListenable: _discTrailerShowing,
-            builder: (_, showing, __) => ValueListenableBuilder<bool>(
+            builder: (_, showing, _) => ValueListenableBuilder<bool>(
               valueListenable: _discTrailerLoading,
-              builder: (_, loading, __) =>
+              builder: (_, loading, _) =>
                   TrailerStatusChip(loading: loading, playing: showing),
             ),
           ),
@@ -20829,7 +20829,7 @@ class _SearchScreenState extends State<SearchScreen>
                         if (item == null) return const SizedBox.shrink();
                         return ValueListenableBuilder<StremioMeta?>(
                           valueListenable: _heroEnriched,
-                          builder: (context, enriched, __) {
+                          builder: (context, enriched, _) {
                             return _HeroSpotlight(
                               item: item,
                               background: item.background?.isNotEmpty == true
@@ -21155,11 +21155,11 @@ class _SearchScreenState extends State<SearchScreen>
     const accentLight = Color(0xFFC4B5FD);
     return ValueListenableBuilder<StremioMeta?>(
       valueListenable: _heroItem,
-      builder: (context, item, __) {
+      builder: (context, item, _) {
         if (item == null) return const SizedBox.shrink();
         return ValueListenableBuilder<StremioMeta?>(
           valueListenable: _heroEnriched,
-          builder: (context, enriched, ___) {
+          builder: (context, enriched, _) {
             final rating = item.imdbRating ?? enriched?.imdbRating;
             final runtime = item.runtimeDisplay ?? enriched?.runtimeDisplay;
             final genres = item.genres?.isNotEmpty == true
@@ -21243,7 +21243,7 @@ class _SearchScreenState extends State<SearchScreen>
 
             return ValueListenableBuilder<double>(
               valueListenable: _heroTrailerTakeover,
-              builder: (context, takeover, ____) {
+              builder: (context, takeover, _) {
                 if (takeover <= 0.001) return const SizedBox.shrink();
                 double seg(double a, double b) =>
                     ((takeover - a) / (b - a)).clamp(0.0, 1.0);

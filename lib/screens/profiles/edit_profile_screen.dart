@@ -2335,7 +2335,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         fit: BoxFit.cover,
                         cacheWidth: 168,
                         cacheHeight: 168,
-                        errorBuilder: (_, __, ___) => const ColoredBox(
+                        errorBuilder: (_, _, _) => const ColoredBox(
                           color: Color(0xFF31435F),
                           child: Icon(Icons.broken_image_outlined),
                         ),

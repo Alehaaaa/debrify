@@ -665,7 +665,7 @@ class ShowcaseStickyLogo extends StatelessWidget {
                       // Decode cap follows the k-scaled display size, or the
                       // one scaled element of the header renders soft.
                       memCacheWidth: (420 * m.k).round(),
-                      errorWidget: (_, __, ___) =>
+                      errorWidget: (_, _, _) =>
                           Text(name, style: _t(17 * m.k, w: FontWeight.w700)),
                     ),
             ),
@@ -1163,8 +1163,8 @@ class _LogoOrTitle extends StatelessWidget {
                         maxHeight: slotHeight,
                         area: OpticalLogo.defaultArea * m.k * m.k,
                       ),
-                      placeholder: (_, __) => const SizedBox.expand(),
-                      errorWidget: (_, __, ___) => FittedBox(
+                      placeholder: (_, _) => const SizedBox.expand(),
+                      errorWidget: (_, _, _) => FittedBox(
                         fit: BoxFit.scaleDown,
                         alignment: alignment,
                         child: text,
@@ -1947,7 +1947,7 @@ class ShowcaseSeasons extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: view.seasons.length,
-        separatorBuilder: (_, __) => SizedBox(width: 7 * m.k),
+        separatorBuilder: (_, _) => SizedBox(width: 7 * m.k),
         itemBuilder: (context, i) {
           final s = view.seasons[i];
           final active = s.number == view.selectedSeasonNumber;
@@ -2217,8 +2217,8 @@ class ShowcaseEpisodeCell extends StatelessWidget {
                         fit: BoxFit.cover,
                         cacheManager: DebrifyImageCache.manager,
                         memCacheWidth: 500,
-                        placeholder: (_, __) => ColoredBox(color: slot),
-                        errorWidget: (_, __, ___) => ColoredBox(color: slot),
+                        placeholder: (_, _) => ColoredBox(color: slot),
+                        errorWidget: (_, _, _) => ColoredBox(color: slot),
                       )
                     else
                       ColoredBox(color: slot),
@@ -2392,8 +2392,8 @@ class ShowcaseEpisodeCardCompact extends StatelessWidget {
                         fit: BoxFit.cover,
                         cacheManager: DebrifyImageCache.manager,
                         memCacheWidth: 500,
-                        placeholder: (_, __) => ColoredBox(color: slot),
-                        errorWidget: (_, __, ___) => ColoredBox(color: slot),
+                        placeholder: (_, _) => ColoredBox(color: slot),
+                        errorWidget: (_, _, _) => ColoredBox(color: slot),
                       ),
                     if (watched)
                       ColoredBox(color: Colors.black.withValues(alpha: 0.45)),
@@ -2596,7 +2596,7 @@ class ShowcaseCast extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: cast.length,
-        separatorBuilder: (_, __) => SizedBox(width: m.castGap),
+        separatorBuilder: (_, _) => SizedBox(width: m.castGap),
         itemBuilder: (context, i) => _CastTile(
           member: cast[i],
           node: nodes[i],
@@ -2674,9 +2674,9 @@ class _CastTileState extends State<_CastTile> {
                                 fit: BoxFit.cover,
                                 cacheManager: DebrifyImageCache.manager,
                                 memCacheWidth: 260,
-                                placeholder: (_, __) =>
+                                placeholder: (_, _) =>
                                     const ColoredBox(color: Color(0xFF4A4A55)),
-                                errorWidget: (_, __, ___) =>
+                                errorWidget: (_, _, _) =>
                                     const ColoredBox(color: Color(0xFF4A4A55)),
                               )
                             : const ColoredBox(color: Color(0xFF4A4A55)),
@@ -2751,7 +2751,7 @@ class ShowcaseSources extends StatelessWidget {
         horizontal: ShowcaseMetrics.of(context).gutter,
       ),
       itemCount: 2 + (onBrowseAll != null ? 1 : 0),
-      separatorBuilder: (_, __) =>
+      separatorBuilder: (_, _) =>
           SizedBox(width: ShowcaseMetrics.of(context).srcGap),
       itemBuilder: (context, i) {
         if (i == 1) {
@@ -2916,7 +2916,7 @@ class ShowcaseRecs extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: items.length,
-        separatorBuilder: (_, __) => SizedBox(width: m.posterGap),
+        separatorBuilder: (_, _) => SizedBox(width: m.posterGap),
         itemBuilder: (context, i) => _Poster(
           item: items[i],
           node: nodes[i],
@@ -3017,8 +3017,8 @@ class _PosterState extends State<_Poster> {
                             fit: BoxFit.cover,
                             cacheManager: DebrifyImageCache.manager,
                             memCacheWidth: 300,
-                            placeholder: (_, __) => ColoredBox(color: slot),
-                            errorWidget: (_, __, ___) =>
+                            placeholder: (_, _) => ColoredBox(color: slot),
+                            errorWidget: (_, _, _) =>
                                 ColoredBox(color: slot),
                           )
                         : ColoredBox(color: slot),
@@ -3187,7 +3187,7 @@ class _ShowcaseGuideState extends State<ShowcaseGuide> {
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: m.gutter),
             itemCount: _cats.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, i) => _GuideCard(
               category: _cats[i],
               node: widget.nodes[i],
@@ -3529,7 +3529,7 @@ class ShowcaseUniverse extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: items.length,
-        separatorBuilder: (_, __) => SizedBox(width: m.posterGap),
+        separatorBuilder: (_, _) => SizedBox(width: m.posterGap),
         itemBuilder: (context, i) => _UniverseCard(
           item: items[i],
           node: nodes[i],
@@ -3603,8 +3603,8 @@ class _UniverseCardState extends State<_UniverseCard> {
                                 fit: BoxFit.cover,
                                 cacheManager: DebrifyImageCache.manager,
                                 memCacheWidth: 300,
-                                placeholder: (_, __) => ColoredBox(color: slot),
-                                errorWidget: (_, __, ___) =>
+                                placeholder: (_, _) => ColoredBox(color: slot),
+                                errorWidget: (_, _, _) =>
                                     ColoredBox(color: slot),
                               )
                             : ColoredBox(color: slot),
@@ -3684,7 +3684,7 @@ class ShowcaseDidYouKnow extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         padding: EdgeInsets.symmetric(horizontal: m.gutter),
         itemCount: entries.length + (hasMore ? 1 : 0),
-        separatorBuilder: (_, __) => SizedBox(width: m.compact ? 13 : 12),
+        separatorBuilder: (_, _) => SizedBox(width: m.compact ? 13 : 12),
         itemBuilder: (context, i) => i < entries.length
             ? _DykCard(entry: entries[i], node: nodes[i])
             : _DykMoreCard(

@@ -419,7 +419,7 @@ class _StremioTvScreenState extends State<StremioTvScreen> {
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => StremioTvFilterPage(
+        pageBuilder: (_, _, _) => StremioTvFilterPage(
           filterTree: filterTree,
           disabledFilters: Set.of(disabledBefore),
           isTelevision: widget.isTelevision,
@@ -2419,7 +2419,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
       PageRouteBuilder(
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
-        pageBuilder: (_, __, ___) => screen,
+        pageBuilder: (_, _, _) => screen,
       ),
     );
   }
@@ -3180,7 +3180,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                       }
                       return ValueListenableBuilder<int>(
                         valueListenable: _contentRevision,
-                        builder: (context, _, __) {
+                        builder: (context, _, _) {
                           // Computed inside the builder so a revision bump
                           // hands the tuner a fresh snapshot consistent with
                           // the live _channels/_rowFocusNodes it also gets.

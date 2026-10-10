@@ -267,13 +267,13 @@ class _GuideEntry extends StatelessWidget {
                           imageUrl: item.poster!,
                           memCacheWidth: 120,
                           fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(
+                          placeholder: (_, _) => Container(
                             color: theme.colorScheme.surfaceContainerHighest,
                             child: const Center(
                               child: Icon(Icons.movie_rounded, size: 18),
                             ),
                           ),
-                          errorWidget: (_, __, ___) => Container(
+                          errorWidget: (_, _, _) => Container(
                             color: theme.colorScheme.surfaceContainerHighest,
                             child: const Center(
                               child: Icon(Icons.broken_image_rounded, size: 18),

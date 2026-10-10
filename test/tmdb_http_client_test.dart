@@ -159,7 +159,7 @@ void main() {
         request.response.close();
       }, onError: (_) {});
       final routes = TmdbConnections(
-        startConnect: (_, __) => TmdbConnections.startSocket(
+        startConnect: (_, _) => TmdbConnections.startSocket(
           InternetAddress.loopbackIPv4,
           server.port,
         ),
@@ -206,7 +206,7 @@ void main() {
       final cache = TmdbDnsCache();
       final first = TmdbConnections(
         dnsCache: cache,
-        startConnect: (_, __) async => success(),
+        startConnect: (_, _) async => success(),
       );
       await (await first.connect(uri, null, null)).socket;
       // TCP succeeded, but the request transport subsequently reported failure.
@@ -360,7 +360,7 @@ void main() {
       });
       final c = TmdbConnections(
         tlsBudget: const Duration(milliseconds: 150),
-        startConnect: (_, __) => TmdbConnections.startSocket(
+        startConnect: (_, _) => TmdbConnections.startSocket(
           InternetAddress.loopbackIPv4,
           server.port,
         ),
@@ -546,7 +546,7 @@ void main() {
         lookups++;
         return http.Response('bad', 503);
       }),
-      startConnect: (_, __) async => throw const SocketException('failed'),
+      startConnect: (_, _) async => throw const SocketException('failed'),
     );
     addTearDown(c.close);
     for (var i = 0; i < 2; i++) {
@@ -589,7 +589,7 @@ void main() {
       var connects = 0;
       final c = TmdbConnections(
         dnsClientFactory: () => MockClient((_) => dns.future),
-        startConnect: (_, __) async {
+        startConnect: (_, _) async {
           connects++;
           throw const SocketException('failed');
         },

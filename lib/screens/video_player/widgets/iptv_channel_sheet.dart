@@ -2905,7 +2905,7 @@ class _GuideLogo extends StatelessWidget {
               imageUrl: channel.logoUrl!,
               memCacheWidth: 120,
               fit: BoxFit.contain,
-              errorWidget: (_, __, ___) => _letter(),
+              errorWidget: (_, _, _) => _letter(),
             )
           : _letter(),
     );
@@ -3371,8 +3371,8 @@ class _ChannelTile extends StatelessWidget {
               imageUrl: channel.logoUrl!,
               memCacheWidth: 120,
               fit: BoxFit.contain,
-              placeholder: (_, __) => _buildLetterAvatar(),
-              errorWidget: (_, __, ___) => _buildLetterAvatar(),
+              placeholder: (_, _) => _buildLetterAvatar(),
+              errorWidget: (_, _, _) => _buildLetterAvatar(),
             )
           : _buildLetterAvatar(),
     );

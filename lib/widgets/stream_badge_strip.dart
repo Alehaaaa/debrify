@@ -298,9 +298,9 @@ class StreamBadgeChip extends StatelessWidget {
                       fit: BoxFit.contain,
                     );
                   },
-                  placeholder: (_, __) => _imageLabel(appearance),
+                  placeholder: (_, _) => _imageLabel(appearance),
                   // The backing already frames the fallback; no second chip.
-                  errorWidget: (_, __, ___) => isBadgeBitmapUrl(image)
+                  errorWidget: (_, _, _) => isBadgeBitmapUrl(image)
                       ? _failedImage(appearance)
                       : _svgImage(image, inner, appearance),
                 ),
@@ -327,7 +327,7 @@ class StreamBadgeChip extends StatelessWidget {
       onImageReady?.call();
       return child;
     },
-    errorBuilder: (_, __, ___) => _failedImage(appearance),
+    errorBuilder: (_, _, _) => _failedImage(appearance),
   );
 
   Widget _failedImage(StreamBadgeAppearance appearance) {

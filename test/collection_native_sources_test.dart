@@ -414,7 +414,7 @@ void main() {
         installedAddons: [addon],
         native: native,
         hides: (_) => false,
-        fetch: (_, __, {skip = 0, genre, onRawCount}) async {
+        fetch: (_, _, {skip = 0, genre, onRawCount}) async {
           skips.add(skip);
           onRawCount?.call(skip == 0 ? 1 : 0);
           return skip == 0

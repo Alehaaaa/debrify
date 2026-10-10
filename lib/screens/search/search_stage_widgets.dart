@@ -602,9 +602,9 @@ class _TonightCardCaption extends StatelessWidget {
                                 memCacheWidth: 400,
                                 fadeInDuration: Duration.zero,
                                 fadeOutDuration: Duration.zero,
-                                placeholder: (_, __) =>
+                                placeholder: (_, _) =>
                                     const SizedBox(height: 46),
-                                errorWidget: (_, __, ___) =>
+                                errorWidget: (_, _, _) =>
                                     _fallbackTitle(fields.name),
                               ),
                             )
@@ -883,7 +883,7 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
                           memCacheWidth: 420,
                           fadeInDuration: HomeTheme.imageFadeIn(true),
                           fadeOutDuration: HomeTheme.imageFadeOut(true),
-                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                          errorWidget: (_, _, _) => const SizedBox.shrink(),
                         ),
                       if (widget.hasBoundSource)
                         Positioned(
@@ -1083,7 +1083,7 @@ class _CanvasArtLayer extends StatelessWidget {
                       memCacheWidth: 480,
                       fadeInDuration: Duration.zero,
                       fadeOutDuration: Duration.zero,
-                      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      errorWidget: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                 );
@@ -1098,7 +1098,7 @@ class _CanvasArtLayer extends StatelessWidget {
                   memCacheWidth: cacheWidth,
                   fadeInDuration: Duration.zero,
                   fadeOutDuration: Duration.zero,
-                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
                 );
               }
             } else if (bg.isEmpty) {
@@ -1120,7 +1120,7 @@ class _CanvasArtLayer extends StatelessWidget {
                 memCacheHeight: wide == null ? cacheHeight : null,
                 fadeInDuration: Duration.zero,
                 fadeOutDuration: Duration.zero,
-                errorWidget: (_, __, ___) {
+                errorWidget: (_, _, _) {
                   if (derived) _rememberDeadBackdrop(bg);
                   if (posterUrl == null || bg == posterUrl) {
                     return const SizedBox.shrink();
@@ -1132,7 +1132,7 @@ class _CanvasArtLayer extends StatelessWidget {
                     memCacheHeight: cacheHeight,
                     fadeInDuration: Duration.zero,
                     fadeOutDuration: Duration.zero,
-                    errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
                   );
                 },
               );
@@ -1501,8 +1501,8 @@ class _CanvasIdentity extends StatelessWidget {
                       memCacheWidth: 480,
                       fadeInDuration: Duration.zero,
                       fadeOutDuration: Duration.zero,
-                      placeholder: (_, __) => SizedBox(height: logoMaxH),
-                      errorWidget: (_, __, ___) => capped(titleText),
+                      placeholder: (_, _) => SizedBox(height: logoMaxH),
+                      errorWidget: (_, _, _) => capped(titleText),
                     ),
                   )
                 else

@@ -324,8 +324,8 @@ class _DetailConsoleState extends State<DetailConsole> {
           fit: BoxFit.cover,
           cacheManager: DebrifyImageCache.manager,
           memCacheWidth: 640,
-          placeholder: (_, __) => ColoredBox(color: _t.placeholder),
-          errorWidget: (_, __, ___) => ColoredBox(color: _t.placeholder),
+          placeholder: (_, _) => ColoredBox(color: _t.placeholder),
+          errorWidget: (_, _, _) => ColoredBox(color: _t.placeholder),
         ),
       ),
     );
@@ -885,8 +885,8 @@ class _CastPortrait extends StatelessWidget {
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 110,
-                    placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, __, ___) =>
+                    placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                    errorWidget: (_, _, _) =>
                         ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),
@@ -1007,8 +1007,8 @@ class _ConsolePosterState extends State<_ConsolePoster> {
                   fit: BoxFit.cover,
                   cacheManager: DebrifyImageCache.manager,
                   memCacheWidth: 300,
-                  placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                  errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+                  placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                  errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
                 )
               : ColoredBox(color: t.placeholder),
         ),

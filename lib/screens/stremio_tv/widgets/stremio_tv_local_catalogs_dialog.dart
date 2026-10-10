@@ -690,7 +690,7 @@ class _StremioTvLocalCatalogEditorDialogState
             ? Image.network(
                 posterUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _buildPosterFallback(compact),
+                errorBuilder: (_, _, _) => _buildPosterFallback(compact),
               )
             : _buildPosterFallback(compact),
       ),
@@ -998,7 +998,7 @@ class _StremioTvLocalCatalogEditorDialogState
                               child: ListView.separated(
                                 controller: _scrollController,
                                 itemCount: items.length,
-                                separatorBuilder: (_, __) =>
+                                separatorBuilder: (_, _) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) => _buildItemCard(
                                   context,

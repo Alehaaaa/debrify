@@ -1036,7 +1036,7 @@ class _DetailPremiumState extends State<DetailPremium> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: view.episodes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final episode = view.episodes[index];
                 return DetailEdgeTrap(
@@ -1085,7 +1085,7 @@ class _DetailPremiumState extends State<DetailPremium> {
           child: ListView.separated(
             controller: _list,
             itemCount: view.episodes.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: _t.hair),
+            separatorBuilder: (_, _) => Divider(height: 1, color: _t.hair),
             itemBuilder: (context, index) {
               final episode = view.episodes[index];
               final many = view.seasons.length > 1;
@@ -1230,7 +1230,7 @@ class _DetailPremiumState extends State<DetailPremium> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: recs.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) => DetailEdgeTrap(
                 trapLeft: index == 0,
                 trapRight: index == recs.length - 1,
@@ -1266,7 +1266,7 @@ class _DetailPremiumState extends State<DetailPremium> {
     return ListView.separated(
       controller: _list,
       itemCount: recs.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: _t.hair),
+      separatorBuilder: (_, _) => Divider(height: 1, color: _t.hair),
       itemBuilder: (context, index) => DetailEdgeTrap(
         trapLeft: true,
         trapUp: index == 0,
@@ -1720,8 +1720,8 @@ class _Poster extends StatelessWidget {
       fit: BoxFit.cover,
       cacheManager: DebrifyImageCache.manager,
       memCacheWidth: cacheWidth,
-      placeholder: (_, __) => ColoredBox(color: t.placeholder),
-      errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+      placeholder: (_, _) => ColoredBox(color: t.placeholder),
+      errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
     );
   }
 }

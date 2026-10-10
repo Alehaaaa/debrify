@@ -1422,18 +1422,18 @@ class SpotlightBoardState extends State<SpotlightBoard>
       memCacheWidth: _heroDecodeWidth,
       fadeInDuration: _heroImageFadeIn,
       fadeOutDuration: _heroImageFadeOut,
-      placeholder: (_, __) => ColoredBox(color: ground),
+      placeholder: (_, _) => ColoredBox(color: ground),
       // The derived metahub URL is a GUESS — when it 404s (no still for that
       // title), fall back to the poster: a soft hero beats a blank one.
-      errorWidget: (_, __, ___) =>
+      errorWidget: (_, _, _) =>
           (posterUrl != null && posterUrl.isNotEmpty && posterUrl != url)
           ? CachedNetworkImage(
               imageUrl: posterUrl,
               fit: BoxFit.cover,
               cacheManager: DebrifyImageCache.manager,
               memCacheWidth: posterCacheWidth,
-              placeholder: (_, __) => ColoredBox(color: ground),
-              errorWidget: (_, __, ___) => ColoredBox(color: ground),
+              placeholder: (_, _) => ColoredBox(color: ground),
+              errorWidget: (_, _, _) => ColoredBox(color: ground),
             )
           : ColoredBox(color: ground),
     );
@@ -3707,7 +3707,7 @@ class _LogoOrTitle extends StatelessWidget {
         maxHeight: slotHeight,
         area: _logoArea * scale * scale,
       ),
-      placeholder: (_, __) => const SizedBox.shrink(),
+      placeholder: (_, _) => const SizedBox.shrink(),
       // The title has to earn its way into the same slot rather than
       // resizing it — scaleDown only shrinks, so short titles keep their
       // intended weight.
@@ -3715,7 +3715,7 @@ class _LogoOrTitle extends StatelessWidget {
       // The inner width is what makes that bearable: FittedBox offers its
       // child unbounded width, so without it `maxLines: 2` never wraps and a
       // long title is scaled down as one very long line.
-      errorWidget: (_, __, ___) => Align(
+      errorWidget: (_, _, _) => Align(
         alignment: corner,
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -4466,8 +4466,8 @@ class _CardState extends State<_Card>
                     fadeOutDuration: PlatformUtil.isAndroidTvCached
                         ? const Duration(milliseconds: 180)
                         : const Duration(milliseconds: 100),
-                    placeholder: (_, __) => artPlaceholder(),
-                    errorWidget: (_, __, ___) =>
+                    placeholder: (_, _) => artPlaceholder(),
+                    errorWidget: (_, _, _) =>
                         fallbackUrl != null &&
                             fallbackUrl.isNotEmpty &&
                             fallbackUrl != url
@@ -4477,8 +4477,8 @@ class _CardState extends State<_Card>
                             cacheManager: DebrifyImageCache.manager,
                             memCacheWidth: decodeW,
                             fadeInDuration: const Duration(milliseconds: 220),
-                            placeholder: (_, __) => artPlaceholder(),
-                            errorWidget: (_, __, ___) => artPlaceholder(),
+                            placeholder: (_, _) => artPlaceholder(),
+                            errorWidget: (_, _, _) => artPlaceholder(),
                           )
                         : artPlaceholder(),
                   ),

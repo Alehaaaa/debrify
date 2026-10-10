@@ -353,7 +353,7 @@ class _DetailStageState extends State<DetailStage> {
             controller: _episodeScroll,
             padding: EdgeInsets.fromLTRB(size.gutter, 8, size.gutter, 20),
             itemCount: episodes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, i) {
               final e = episodes[i];
               return DetailEdgeTrap(
@@ -664,8 +664,8 @@ class _CastLine extends StatelessWidget {
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 140,
-                    placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, __, ___) =>
+                    placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                    errorWidget: (_, _, _) =>
                         ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),
@@ -734,8 +734,8 @@ class _StagePosterState extends State<_StagePoster> {
                   fit: BoxFit.cover,
                   cacheManager: DebrifyImageCache.manager,
                   memCacheWidth: 300,
-                  placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                  errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+                  placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                  errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
                 )
               : ColoredBox(color: t.placeholder),
         ),

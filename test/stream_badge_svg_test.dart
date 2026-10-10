@@ -409,7 +409,7 @@ void main() {
       final body = StreamController<List<int>>();
       final service = BadgeSvgFileService(
         clientFactory: () => MockClient.streaming(
-          (_, __) async => http.StreamedResponse(body.stream, 200),
+          (_, _) async => http.StreamedResponse(body.stream, 200),
         ),
         timeout: const Duration(milliseconds: 20),
       );

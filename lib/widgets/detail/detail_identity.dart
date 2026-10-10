@@ -739,8 +739,8 @@ class DetailLogo extends StatelessWidget {
         // Logo art is often a huge transparent PNG; never decode it at full
         // resolution for a 70px lockup on a 2 GB box.
         memCacheHeight: (height * 3).round(),
-        placeholder: (_, __) => const SizedBox.shrink(),
-        errorWidget: (_, __, ___) => Text(
+        placeholder: (_, _) => const SizedBox.shrink(),
+        errorWidget: (_, _, _) => Text(
           t.displayCase(model.name),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,

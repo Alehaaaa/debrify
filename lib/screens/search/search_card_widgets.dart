@@ -139,10 +139,10 @@ class _StremioCardState extends State<_StremioCard>
           // level; memory-cached loads still land settled with no fade.
           fadeInDuration: HomeTheme.imageFadeIn(widget.isTelevision),
           fadeOutDuration: HomeTheme.imageFadeOut(widget.isTelevision),
-          placeholder: (_, __) => _placeholder(item.name),
+          placeholder: (_, _) => _placeholder(item.name),
           // A derived wide still (MetaHub) can 404 where the poster exists —
           // cover-crop the poster into the wide cell before giving up on art.
-          errorWidget: (_, __, ___) =>
+          errorWidget: (_, _, _) =>
               poster != fallbackPoster &&
                   fallbackPoster != null && fallbackPoster.isNotEmpty
               ? RecoverableNetworkImage(
@@ -151,8 +151,8 @@ class _StremioCardState extends State<_StremioCard>
                   memCacheWidth: widget.isTelevision ? 320 : 480,
                   fadeInDuration: HomeTheme.imageFadeIn(widget.isTelevision),
                   fadeOutDuration: HomeTheme.imageFadeOut(widget.isTelevision),
-                  placeholder: (_, __) => _placeholder(item.name),
-                  errorWidget: (_, __, ___) => _placeholder(item.name),
+                  placeholder: (_, _) => _placeholder(item.name),
+                  errorWidget: (_, _, _) => _placeholder(item.name),
                 )
               : _placeholder(item.name),
         )
@@ -749,8 +749,8 @@ class _ArtPosterState extends State<_ArtPoster> {
               // land settled with no fade.
               fadeInDuration: HomeTheme.imageFadeIn(widget.isTelevision),
               fadeOutDuration: HomeTheme.imageFadeOut(widget.isTelevision),
-              placeholder: (_, __) => _glyph(),
-              errorWidget: (_, __, ___) => _glyph(),
+              placeholder: (_, _) => _glyph(),
+              errorWidget: (_, _, _) => _glyph(),
             ),
           )
         else

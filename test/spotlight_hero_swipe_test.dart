@@ -91,7 +91,7 @@ void main() {
               sections: [shelf],
               heroNode: hero,
               heroAddon: _addon,
-              onHeroOpen: (_, __) {},
+              onHeroOpen: (_, _) {},
               dpad: false,
               trailer: trailer,
               trailersEnabled: trailersEnabled,

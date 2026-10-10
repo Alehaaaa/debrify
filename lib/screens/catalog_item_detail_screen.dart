@@ -2068,7 +2068,7 @@ class _BackdropState extends State<_Backdrop>
         url,
         fit: BoxFit.cover,
         alignment: Alignment.topCenter,
-        errorBuilder: (_, __, ___) => Container(color: Colors.black),
+        errorBuilder: (_, _, _) => Container(color: Colors.black),
       );
     }
 
@@ -2095,7 +2095,7 @@ class _BackdropState extends State<_Backdrop>
             child: child,
           );
         },
-        errorBuilder: (_, __, ___) => Container(color: Colors.black),
+        errorBuilder: (_, _, _) => Container(color: Colors.black),
       ),
     );
   }
@@ -2310,8 +2310,8 @@ class _CastAvatar extends StatelessWidget {
                 ? CachedNetworkImage(
                     imageUrl: member.imageUrl!,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => _initials(),
-                    errorWidget: (_, __, ___) => _initials(),
+                    placeholder: (_, _) => _initials(),
+                    errorWidget: (_, _, _) => _initials(),
                   )
                 : _initials(),
           ),
@@ -2444,8 +2444,8 @@ class _RecCardState extends State<_RecCard> {
                             CachedNetworkImage(
                               imageUrl: poster,
                               fit: BoxFit.cover,
-                              placeholder: (_, __) => _posterFallback(),
-                              errorWidget: (_, __, ___) => _posterFallback(),
+                              placeholder: (_, _) => _posterFallback(),
+                              errorWidget: (_, _, _) => _posterFallback(),
                             )
                           else
                             _posterFallback(),

@@ -24,7 +24,7 @@ Future<T?> showSpotlightDialog<T>(
     barrierLabel: 'dismiss',
     barrierColor: Colors.black.withValues(alpha: 0.55),
     transitionDuration: const Duration(milliseconds: 190),
-    pageBuilder: (dialogContext, _, __) => builder(dialogContext),
+    pageBuilder: (dialogContext, _, _) => builder(dialogContext),
     transitionBuilder: (context, anim, _, child) {
       final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
       return FadeTransition(

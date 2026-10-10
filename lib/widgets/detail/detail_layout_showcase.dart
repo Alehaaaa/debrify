@@ -1612,7 +1612,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: m.gutter),
           itemCount: view.episodes.length,
-          separatorBuilder: (_, __) => SizedBox(width: m.epGap),
+          separatorBuilder: (_, _) => SizedBox(width: m.epGap),
           itemBuilder: (context, i) {
             final ep = view.episodes[i];
             final node = _cells.of(view.generation, ep.season, ep.number);

@@ -424,7 +424,7 @@ class _StremioTvTunerState extends State<StremioTvTuner> {
           CachedNetworkImageProvider(bg),
         ),
         context,
-        onError: (_, __) {}, // best-effort warm-up; the Stage has its own error path
+        onError: (_, _) {}, // best-effort warm-up; the Stage has its own error path
       ));
     }
   }
@@ -754,7 +754,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                           imageUrl: poster,
                           fit: BoxFit.cover,
                           memCacheWidth: 120,
-                          errorWidget: (_, __, ___) =>
+                          errorWidget: (_, _, _) =>
                               _listThumbFallback(ident, channel),
                         )
                       : _listThumbFallback(ident, channel),
@@ -1234,7 +1234,7 @@ class _StageState extends State<_Stage> with TickerProviderStateMixin {
                   fadeOutDuration: widget.isTelevision
                       ? Duration.zero
                       : const Duration(milliseconds: 1000),
-                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                  errorWidget: (_, _, _) => const SizedBox.shrink(),
                 );
                 if (blurArt && !widget.isTelevision) {
                   art = ImageFiltered(
@@ -2180,8 +2180,8 @@ class _DialCardState extends State<_DialCard> {
                           HomeTheme.imageFadeIn(widget.isTelevision),
                       fadeOutDuration:
                           HomeTheme.imageFadeOut(widget.isTelevision),
-                      placeholder: (_, __) => _placeholder(ident),
-                      errorWidget: (_, __, ___) => _placeholder(ident),
+                      placeholder: (_, _) => _placeholder(ident),
+                      errorWidget: (_, _, _) => _placeholder(ident),
                     )
                   // Hidden mode, TV: a 16px decode upscaled by cover-fit is
                   // the obscuring "blur" — no gaussian pass, so the card
@@ -2197,7 +2197,7 @@ class _DialCardState extends State<_DialCard> {
                           HomeTheme.imageFadeIn(widget.isTelevision),
                       fadeOutDuration:
                           HomeTheme.imageFadeOut(widget.isTelevision),
-                      errorWidget: (_, __, ___) => _placeholder(ident),
+                      errorWidget: (_, _, _) => _placeholder(ident),
                     )
                   else if (poster != null && widget.hideNowPlaying)
                     ImageFiltered(
@@ -2207,7 +2207,7 @@ class _DialCardState extends State<_DialCard> {
                         imageUrl: poster,
                         fit: BoxFit.cover,
                         memCacheWidth: 200,
-                        errorWidget: (_, __, ___) => _placeholder(ident),
+                        errorWidget: (_, _, _) => _placeholder(ident),
                       ),
                     )
                   else

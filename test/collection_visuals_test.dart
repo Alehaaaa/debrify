@@ -67,7 +67,7 @@ void main() {
                 hero: const [],
                 heroNode: hero,
                 heroAddon: null,
-                onHeroOpen: (_, __) {},
+                onHeroOpen: (_, _) {},
                 trailersEnabled: false,
                 sections: [
                   SpotlightShelf(

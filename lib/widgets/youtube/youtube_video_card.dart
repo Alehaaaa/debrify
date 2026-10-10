@@ -184,7 +184,7 @@ class _YoutubeVideoCardState extends State<YoutubeVideoCard> {
                                 ? Image.network(
                                     video.thumbnailUrl!,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
+                                    errorBuilder: (_, _, _) =>
                                         _thumbFallback(colorScheme),
                                   )
                                 : _thumbFallback(colorScheme),

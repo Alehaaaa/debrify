@@ -2266,7 +2266,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                                         : 0.16,
                                   ),
                                 ),
-                                builder: (_, color, __) => DecoratedBox(
+                                builder: (_, color, _) => DecoratedBox(
                                   decoration: BoxDecoration(
                                     gradient: RadialGradient(
                                       center: const Alignment(-0.7, -0.85),
@@ -4320,9 +4320,9 @@ class _CastTileState extends State<_CastTile> {
                           // 56 logical px avatar (up to dpr 3 on phones) —
                           // never decode a full-res headshot.
                           memCacheWidth: 180,
-                          placeholder: (_, __) =>
+                          placeholder: (_, _) =>
                               Container(color: widget.fallback),
-                          errorWidget: (_, __, ___) =>
+                          errorWidget: (_, _, _) =>
                               Container(color: widget.fallback),
                         )
                       : Container(
@@ -4397,8 +4397,8 @@ class _RecCardState extends State<_RecCard> {
                       // 100 logical px card (up to dpr 3 on phones) — decode
                       // small so ten posters at once don't lean on a 2GB box.
                       memCacheWidth: 300,
-                      placeholder: (_, __) => Container(color: widget.fallback),
-                      errorWidget: (_, __, ___) =>
+                      placeholder: (_, _) => Container(color: widget.fallback),
+                      errorWidget: (_, _, _) =>
                           Container(color: widget.fallback),
                     )
                   else
@@ -6137,8 +6137,8 @@ class _AmbientStill extends StatelessWidget {
       memCacheWidth: 1280,
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
-      placeholder: (_, __) => const SizedBox.shrink(),
-      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+      placeholder: (_, _) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => const SizedBox.shrink(),
     );
     if (isTelevision) return image;
     return AnimatedSwitcher(

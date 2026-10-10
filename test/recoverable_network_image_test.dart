@@ -57,8 +57,8 @@ void main() {
     home: RecoverableNetworkImage(
       imageUrl: url,
       cacheManager: images,
-      placeholder: (_, __) => const Text('loading'),
-      errorWidget: (_, __, ___) => const Text('failed'),
+      placeholder: (_, _) => const Text('loading'),
+      errorWidget: (_, _, _) => const Text('failed'),
     ),
   );
   testWidgets('TV image reveal uses one short fade and honors reduced motion', (
@@ -77,8 +77,8 @@ void main() {
                 cacheManager: Images(png, alwaysFail: true),
                 fadeInDuration: const Duration(milliseconds: 420),
                 fadeOutDuration: const Duration(milliseconds: 180),
-                placeholder: (_, __) => const SizedBox(),
-                errorWidget: (_, __, ___) => const SizedBox(),
+                placeholder: (_, _) => const SizedBox(),
+                errorWidget: (_, _, _) => const SizedBox(),
               ),
             ),
           ),

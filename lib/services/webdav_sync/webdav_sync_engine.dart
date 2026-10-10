@@ -4259,9 +4259,9 @@ final class WebDavSyncEngine
     }
   }
 
-  static void _ignoreDiagnostic(String _, Object? __) {}
+  static void _ignoreDiagnostic(String _, Object? _) {}
 
-  static void _ignoreAppliedKeys(String _, Set<String> __) {}
+  static void _ignoreAppliedKeys(String _, Set<String> _) {}
 
   static WebDavSyncPendingActiveProfileReason? _activeProfileDeferralReason(
     WebDavSyncProfileValue? value,

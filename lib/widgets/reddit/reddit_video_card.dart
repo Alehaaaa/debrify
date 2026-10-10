@@ -129,7 +129,7 @@ class _RedditVideoCardState extends State<RedditVideoCard> {
                           ? Image.network(
                               post.thumbnailUrl!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Center(
+                              errorBuilder: (_, _, _) => Center(
                                 child: Icon(
                                   Icons.play_circle_outline,
                                   size: 40,

@@ -3633,9 +3633,9 @@ class TorrentPlaybackService {
             ),
       ],
       listEngines: _sourceEngineListing,
-      fetchEngine: (engineId, _, __) =>
+      fetchEngine: (engineId, _, _) =>
           _fetchOneEngine(engineId, imdbId: imdbId, isMovie: true),
-      fetchAddonEpisodes: (addonId, _, __) async {
+      fetchAddonEpisodes: (addonId, _, _) async {
         try {
           if (addonId.startsWith('mediaserver:')) {
             return _fetchMediaServerSources(addonId, imdbId, true, null, null);
@@ -4177,7 +4177,7 @@ class TorrentPlaybackService {
             rules: rules,
             ladder: earlyLadder,
           ),
-          onError: (Object _, StackTrace __) => <Torrent>[],
+          onError: (Object _, StackTrace _) => <Torrent>[],
         );
         final fetcher = seriesFetcherFor(
           meta: meta,

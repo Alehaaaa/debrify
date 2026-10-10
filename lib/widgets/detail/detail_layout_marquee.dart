@@ -268,7 +268,7 @@ class _DetailMarqueeState extends State<DetailMarquee> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: episodes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 11),
+              separatorBuilder: (_, _) => const SizedBox(width: 11),
               itemBuilder: (context, i) {
                 final e = episodes[i];
                 return DetailEdgeTrap(
@@ -371,7 +371,7 @@ class _DetailMarqueeState extends State<DetailMarquee> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: recs.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, i) => DetailEdgeTrap(
                 trapLeft: i == 0,
                 trapRight: i == recs.length - 1,
@@ -449,9 +449,9 @@ class _RecCardState extends State<_RecCard> {
                           fit: BoxFit.cover,
                           cacheManager: DebrifyImageCache.manager,
                           memCacheWidth: 300,
-                          placeholder: (_, __) =>
+                          placeholder: (_, _) =>
                               ColoredBox(color: t.placeholder),
-                          errorWidget: (_, __, ___) =>
+                          errorWidget: (_, _, _) =>
                               ColoredBox(color: t.placeholder),
                         )
                       : ColoredBox(color: t.placeholder),

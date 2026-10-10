@@ -56,7 +56,7 @@ class FolderHeroBand extends StatelessWidget {
               fit: BoxFit.cover,
               alignment: Alignment.topCenter,
               memCacheWidth: 1280,
-              errorWidget: (_, __, ___) => const SizedBox.shrink(),
+              errorWidget: (_, _, _) => const SizedBox.shrink(),
             ),
           if (video != null) CollectionFocusArt(videoUrl: video),
           // Fade the still into the page ground so the filter line below
@@ -89,7 +89,7 @@ class FolderHeroBand extends StatelessWidget {
                       height: logoHeight,
                       fit: BoxFit.contain,
                       alignment: Alignment.bottomLeft,
-                      errorWidget: (_, __, ___) => _title(app),
+                      errorWidget: (_, _, _) => _title(app),
                     )
                   : _title(app),
             ),

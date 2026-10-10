@@ -242,7 +242,7 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
         assetPath,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _buildFallback(),
+        errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
     return _StillFrame.asset(
@@ -258,7 +258,7 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
         file,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _buildFallback(),
+        errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
     if ((widget.focused || widget.animateWhenIdle) && widget.allowAnimation) {
@@ -266,7 +266,7 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
         file,
         fit: BoxFit.cover,
         gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _buildFallback(),
+        errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
     return _StillFrame.file(

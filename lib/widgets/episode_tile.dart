@@ -303,8 +303,8 @@ class _EpisodeTileState extends State<EpisodeTile> {
       fit: BoxFit.cover,
       color: blend?.$1,
       colorBlendMode: blend?.$2,
-      placeholder: (_, __) => _imgFallback(e),
-      errorWidget: (_, __, ___) => _imgFallback(e),
+      placeholder: (_, _) => _imgFallback(e),
+      errorWidget: (_, _, _) => _imgFallback(e),
     );
   }
 

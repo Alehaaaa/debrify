@@ -355,7 +355,7 @@ class HomeTraktNowPlayingCardState extends State<HomeTraktNowPlayingCard>
                 imageUrl: data.backdropUrl,
                 fit: BoxFit.cover,
                 memCacheWidth: 300,
-                errorWidget: (_, __, ___) =>
+                errorWidget: (_, _, _) =>
                     const ColoredBox(color: Color(0xFF0D1117)),
               ),
 
@@ -466,7 +466,7 @@ class HomeTraktNowPlayingCardState extends State<HomeTraktNowPlayingCard>
                   ),
                   ValueListenableBuilder<double>(
                     valueListenable: _progress,
-                    builder: (_, p, __) => FractionallySizedBox(
+                    builder: (_, p, _) => FractionallySizedBox(
                       widthFactor: (p / 100).clamp(0.0, 1.0),
                       child: Container(
                         height: 3,

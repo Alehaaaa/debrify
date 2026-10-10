@@ -992,7 +992,7 @@ class _LogoTile extends StatelessWidget {
               key: ValueKey(logoUrl),
               fit: BoxFit.contain,
               gaplessPlayback: false,
-              errorBuilder: (_, __, ___) => _letterTile(letter),
+              errorBuilder: (_, _, _) => _letterTile(letter),
               frameBuilder: (_, child, frame, wasSync) {
                 if (frame == null && !wasSync) return _letterTile(letter);
                 return child;
@@ -1050,7 +1050,7 @@ class _StyledLogoTile extends StatelessWidget {
               key: ValueKey(logoUrl),
               fit: BoxFit.contain,
               gaplessPlayback: false,
-              errorBuilder: (_, __, ___) => _letterTile(letter),
+              errorBuilder: (_, _, _) => _letterTile(letter),
               frameBuilder: (_, child, frame, wasSync) {
                 if (frame == null && !wasSync) return _letterTile(letter);
                 return child;

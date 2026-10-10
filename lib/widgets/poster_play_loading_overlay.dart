@@ -31,7 +31,7 @@ class PosterPlayLoadingOverlay {
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.55),
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => PopScope(
+      pageBuilder: (_, _, _) => PopScope(
         // Back is a no-op during the resolve window; the caller's explicit
         // dismiss() drives the single pop, matching the loading-overlay pairing.
         canPop: false,
@@ -100,7 +100,7 @@ class _PosterLoadingContentState extends State<_PosterLoadingContent> {
             Image.network(
               widget.posterUrl!,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           if (hasPoster)
             BackdropFilter(
@@ -144,7 +144,7 @@ class _PosterLoadingContentState extends State<_PosterLoadingContent> {
                       child: Image.network(
                         widget.posterUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           color: Colors.white.withValues(alpha: 0.06),
                           child: Icon(widget.icon,
                               color: widget.accentColor, size: 40),

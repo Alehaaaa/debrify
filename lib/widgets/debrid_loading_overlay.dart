@@ -31,7 +31,7 @@ class DebridLoadingOverlay {
       transitionDuration: suppressVisual
           ? Duration.zero
           : const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => suppressVisual
+      pageBuilder: (_, _, _) => suppressVisual
           // Invisible, but Back must NOT pop this route: the caller's
           // explicit Navigator.pop() pairing depends on it still being on
           // top. Back is a safe no-op during the short resolve window.
@@ -81,7 +81,7 @@ class DebridLoadingOverlay {
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.7),
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => _PikPakLoadingContent(
+      pageBuilder: (_, _, _) => _PikPakLoadingContent(
         torrentName: torrentName,
         progress: progress,
         showTimeoutOptions: showTimeoutOptions,

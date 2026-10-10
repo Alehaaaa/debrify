@@ -40,7 +40,7 @@ void main() {
             InitialSetupFlow(
               isTelevisionOverride: true,
               engineManager: engines,
-              validationOverride: (_, __, ___) async => true,
+              validationOverride: (_, _, _) async => true,
             ),
           ),
         ),
@@ -103,7 +103,7 @@ void main() {
               engineManager: FakeRemoteEngineManager(
                 const <RemoteEngineInfo>[],
               ),
-              validationOverride: (_, __, ___) async => true,
+              validationOverride: (_, _, _) async => true,
             ),
           ),
         ),

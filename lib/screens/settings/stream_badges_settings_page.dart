@@ -478,9 +478,9 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
                 const SizedBox(height: 24),
                 ValueListenableBuilder<StreamBadgeMatcher>(
                   valueListenable: _service.matcher,
-                  builder: (_, matcher, __) => ValueListenableBuilder<bool>(
+                  builder: (_, matcher, _) => ValueListenableBuilder<bool>(
                     valueListenable: matcher.failure,
-                    builder: (_, failed, __) => failed
+                    builder: (_, failed, _) => failed
                         ? Padding(
                             padding: const EdgeInsets.only(bottom: 16),
                             child: Text(matcher.failureMessage),

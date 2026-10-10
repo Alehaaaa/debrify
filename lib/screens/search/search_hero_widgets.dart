@@ -321,14 +321,14 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
         child: ValueListenableBuilder<Color?>(
           valueListenable:
               widget.tint ?? const AlwaysStoppedAnimation<Color?>(null),
-          builder: (context, tint, __) {
+          builder: (context, tint, _) {
             // Retargets from the CURRENT colour when the settle lands a new
             // one, so back-to-back settles blend instead of restarting.
             return TweenAnimationBuilder<Color?>(
               tween: ColorTween(end: tint ?? scheme.surface),
               duration: const Duration(milliseconds: 400),
               curve: Curves.easeOutCubic,
-              builder: (context, animTint, __) {
+              builder: (context, animTint, _) {
                 final t = animTint ?? scheme.surface;
                 return DecoratedBox(
                   decoration: BoxDecoration(
@@ -513,7 +513,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
                                 fadeOutDuration: HomeTheme.imageFadeOut(
                                   isTelevision,
                                 ),
-                                errorWidget: (_, __, ___) =>
+                                errorWidget: (_, _, _) =>
                                     const SizedBox.shrink(),
                               ),
                             ),
@@ -593,7 +593,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
                             memCacheHeight: hasBackgroundArtwork
                                 ? null
                                 : widget.artworkCacheHeight,
-                            errorWidget: (_, __, ___) =>
+                            errorWidget: (_, _, _) =>
                                 const SizedBox.shrink(),
                           ),
                         ),
@@ -641,7 +641,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
                       tween: ColorTween(end: tintColor ?? scheme.surface),
                       duration: const Duration(milliseconds: 450),
                       curve: Curves.easeOut,
-                      builder: (context, eased, __) {
+                      builder: (context, eased, _) {
                         // Blend gently — mood, not a paint job. Falls back to the
                         // neutral surface while no tint is known.
                         final base = Color.lerp(
@@ -825,7 +825,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
                   right: 22,
                   child: ValueListenableBuilder<bool>(
                     valueListenable: widget.trailerLoading!,
-                    builder: (context, loading, __) =>
+                    builder: (context, loading, _) =>
                         TrailerStatusChip(loading: loading, playing: false),
                   ),
                 ),
@@ -868,7 +868,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
       child: ValueListenableBuilder<Color?>(
         valueListenable:
             widget.tint ?? const AlwaysStoppedAnimation<Color?>(null),
-        builder: (context, tint, __) {
+        builder: (context, tint, _) {
           final melt = tint == null ? base : Color.lerp(base, tint, 0.34)!;
           return Stack(
             fit: StackFit.expand,
@@ -1826,7 +1826,7 @@ class _HeroLiveFloor extends StatelessWidget {
                 child: CachedNetworkImage(
                   imageUrl: logo,
                   fit: BoxFit.contain,
-                  errorWidget: (_, __, ___) => const _HeroLiveGlyph(),
+                  errorWidget: (_, _, _) => const _HeroLiveGlyph(),
                 ),
               )
             : const _HeroLiveGlyph(),
@@ -1979,8 +1979,8 @@ class _HeroTitleArtState extends State<_HeroTitleArt> {
             // for the instant before errorListener rebuilds us onto the
             // full-size text path below (a slot-cramped one-line fallback
             // here would flash before that swap).
-            placeholder: (_, __) => const SizedBox.shrink(),
-            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+            placeholder: (_, _) => const SizedBox.shrink(),
+            errorWidget: (_, _, _) => const SizedBox.shrink(),
             errorListener: (_) {
               _deadLogoUrls.add(logo);
               if (mounted) setState(() {});

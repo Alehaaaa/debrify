@@ -415,8 +415,8 @@ class DetailEpisodeThumb extends StatelessWidget {
               fadeOutDuration: HomeTheme.imageFadeOut(
                 PlatformUtil.isAndroidTvCached,
               ),
-              placeholder: (_, __) => ColoredBox(color: t.placeholder),
-              errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+              placeholder: (_, _) => ColoredBox(color: t.placeholder),
+              errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
             )
           else
             ColoredBox(color: t.placeholder),

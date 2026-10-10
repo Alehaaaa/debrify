@@ -53,7 +53,7 @@ class TrackersStep extends StatelessWidget {
       return ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: cards.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (_, index) => SizedBox(height: 210, child: cards[index]),
       );
     }
