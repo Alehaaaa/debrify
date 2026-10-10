@@ -338,7 +338,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 ),
               ),
               context,
-              onError: (_, _) {},
+              // A transient offline/cache failure must be retried on the next
+              // visit; otherwise this URL stays marked warm for the session.
+              onError: (_, _) => _postersPrepared.remove(still),
             ),
           );
         }
@@ -377,6 +379,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     foreground: index == _index,
                   ))
               .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      // A timed-out request may still be waiting for a resolution slot. Drop
+      // it so an obsolete prefetch cannot delay the visible player's retry.
+      if (widget.resolver == null &&
+          _current &&
+          _reels.contains(reel) &&
+          reel.revision == revision) {
+        YoutubeService.invalidateStreams(reel.title.clipKey);
+      }
+      streams = null;
     } catch (_) {
       streams = null;
     }
@@ -422,6 +434,18 @@ class _ReelsScreenState extends State<ReelsScreen> {
     try {
       final titles = await _feed.take(1, allowRepeat: false);
       if (!_current || titles.isEmpty) return;
+      if (_reels.isNotEmpty) {
+        final old = _reels.first;
+        if (old.state == _ClipState.resolving &&
+            widget.resolver == null &&
+            !_reels
+                .skip(1)
+                .any((other) => other.title.clipKey == old.title.clipKey)) {
+          // Pull-to-refresh replaces this Reel. Its pending extraction can no
+          // longer supply a visible page, even if it finishes successfully.
+          YoutubeService.invalidateStreams(old.title.clipKey);
+        }
+      }
       setState(() {
         final reel = _Reel(titles.first);
         if (_reels.isEmpty) {

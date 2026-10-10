@@ -548,14 +548,17 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   }
 
   Widget _section({required List<Widget> children}) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(16))
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: t.line),
+            ),
       child: Column(children: children),
     );
   }

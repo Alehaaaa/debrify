@@ -7,6 +7,7 @@ import '../../../services/engine/settings_manager.dart';
 import '../../../services/engine/engine_registry.dart';
 import '../../../services/profiles/profile_preferences.dart';
 import '../../../theme/app_theme_scope.dart';
+import '../../../theme/app_theme.dart';
 import '../../../theme/glass_chrome.dart';
 
 /// Discrete choices replacing a former slider's min..max range. Small ranges
@@ -34,6 +35,20 @@ List<int> _sliderStepOptions(int min, int max, int current) {
   steps.add(current);
   return steps.toList()..sort();
 }
+
+/// Nested dynamic settings cards share a translucent chrome rather than each
+/// introducing a backdrop filter. The containing Settings page owns the blur.
+BoxDecoration _dynamicPanel(
+  AppTheme app, {
+  double radius = 8,
+  bool raised = true,
+}) => GlassChrome.enabled(app)
+    ? GlassChrome.decoration(app, radius: app.shape.br(radius), raised: raised)
+    : BoxDecoration(
+        color: app.settings.panel2,
+        borderRadius: app.shape.br(radius),
+        border: Border.all(color: app.settings.line),
+      );
 
 /// Shared numeric dropdown for the dynamic settings cards. Uses the themed
 /// InputDecoration so DPAD focus paints the accent focusedBorder — the old
@@ -210,14 +225,11 @@ class _DynamicSettingsBuilderState extends State<DynamicSettingsBuilder> {
   }
 
   Widget _buildNoEnginesMessage() {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app, radius: 12),
       child: Row(
         children: [
           Icon(Icons.info_outline_rounded, color: t.dim, size: 24),
@@ -249,7 +261,8 @@ class _DynamicSettingsBuilderState extends State<DynamicSettingsBuilder> {
   }
 
   Widget _buildEngineCard(EngineConfig config) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     final engineId = config.metadata.id;
     final displayName = config.metadata.displayName;
     final description = config.metadata.description;
@@ -258,12 +271,14 @@ class _DynamicSettingsBuilderState extends State<DynamicSettingsBuilder> {
 
     return Card(
       elevation: 0,
-      color: t.panel,
+      color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: t.line),
-      ),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app)
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: t.line),
+            ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -461,11 +476,7 @@ class _DynamicSettingsBuilderState extends State<DynamicSettingsBuilder> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: app.shape.br(8),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -546,11 +557,7 @@ class _DynamicSettingsBuilderState extends State<DynamicSettingsBuilder> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: app.shape.br(8),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -821,14 +828,17 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
   }
 
   Widget _buildGlobalTvSettings() {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Card(
       elevation: 0,
-      color: t.panel,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: t.line),
-      ),
+      color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app)
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: t.line),
+            ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -999,11 +1009,7 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: app.shape.br(8),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1127,12 +1133,14 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
 
     return Card(
       elevation: 0,
-      color: t.panel,
+      color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
       margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: app.shape.br(16),
-        side: BorderSide(color: t.line),
-      ),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app)
+          : RoundedRectangleBorder(
+              borderRadius: app.shape.br(16),
+              side: BorderSide(color: t.line),
+            ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1282,7 +1290,8 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
     required int defaultValue,
     required Function(int) onChanged,
   }) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     // The stored value is inserted if missing so nothing silently changes.
     var options = [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500];
     if (!options.contains(currentValue)) {
@@ -1291,11 +1300,7 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
 
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1338,14 +1343,11 @@ class DynamicTvSettingsBuilderState extends State<DynamicTvSettingsBuilder> {
   }
 
   Widget _buildNoTvEnginesMessage() {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: t.panel2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.line),
-      ),
+      decoration: _dynamicPanel(app, radius: 12),
       child: Row(
         children: [
           Icon(Icons.info_outline_rounded, color: t.dim, size: 24),

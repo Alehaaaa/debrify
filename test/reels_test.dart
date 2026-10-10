@@ -881,6 +881,36 @@ void main() {
       },
     );
 
+    testWidgets(
+      'a stalled visible extraction times out and a late result cannot replace its retry',
+      (tester) async {
+        final stalled = Completer<YoutubeResolvedStreams?>();
+        var calls = 0;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) {
+              calls++;
+              return calls == 1 ? stalled.future : Future.value(_clip);
+            },
+          ),
+        );
+        await tester.pump();
+        final first = activeId(tester)!;
+        await tester.pump(const Duration(seconds: 31));
+        await tester.pump();
+        expect(find.text('Retry clip'), findsOneWidget);
+        expect(activeId(tester), first);
+        await tester.tap(find.text('Retry clip'));
+        await tester.pumpAndSettle();
+        expect(playing(first), findsOneWidget);
+        stalled.complete(null);
+        await tester.pumpAndSettle();
+        expect(playing(first), findsOneWidget);
+        expect(find.text('Retry clip'), findsNothing);
+      },
+    );
+
     testWidgets('mute and My Watchlist toggle from the rail', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb())));
       await tester.pumpAndSettle();
