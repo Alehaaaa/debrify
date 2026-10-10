@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Nextup for iPhone and iPad, built from every commit.",
   "description": "Nextup is an independent, unofficial fork of Debrify with a Reels feed, Continue Watching synced across Trakt, Simkl and MDBList, offline-first downloads and a reworked glass interface.\n\nEvery commit to nextup in Alehaaaa/debrify is built automatically and published here with a changelog of what changed since the previous build, so updates show up right in SideStore or AltStore. The source keeps the last few builds, so you can always roll back.\n\nNot affiliated with or endorsed by the official Debrify project.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/83be28a58d3320692b56edd1a887b98dd3d4ec6b/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/53efc5d50104cee1cb786d1780711f4c369ddc21/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,11 +16,20 @@
       "developerName": "Alehaaaa",
       "subtitle": "Your movies and shows, one swipe away.",
       "localizedDescription": "Nextup brings your cloud accounts, WebDAV servers, Stremio catalogs, IPTV and YouTube into one library, with a player built for movies and TV.\n\n• Reels: swipe through official scenes and trailers, then jump straight into the title\n• Continue Watching that follows you across Trakt, Simkl and MDBList\n• Up Next links: open any episode straight from Up Next for Trakt\n• Downloads that work fully offline, with auto-download filters\n• A glass interface with your own looks and colour palettes\n• Lock-screen controls, touch lock, pinch to fill, double-tap to pause\n• WebDAV sync with snapshots, and backups that restore cleanly\n\nNextup doesn't host or provide any content; you connect the services you already use.\n\nThese are untested builds of every commit, made by GitHub Actions. SideStore or AltStore re-signs them with your own certificate on install. Nextup is an independent fork of Debrify and isn't affiliated with the official project.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/83be28a58d3320692b56edd1a887b98dd3d4ec6b/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/53efc5d50104cee1cb786d1780711f4c369ddc21/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": {},
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610102147",
+          "date": "2026-10-10T21:52:16Z",
+          "localizedDescription": "What's new:\n• Pause automatic Android builds until release signing is configured (53efc5d5)\n\nBuild 202610102147 from nextup@53efc5d\nhttps://github.com/Alehaaaa/debrify/compare/83be28a...53efc5d",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-64-53efc5d/nextup-ios-64-53efc5d.ipa",
+          "size": 40319712,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610102135",
@@ -100,15 +109,6 @@
           "localizedDescription": "What's new:\n• Refine swipe shell, reels, and watchlist UI (92be21ec)\n• Add continuous swipe tab navigation (33a7d599)\n• Improve reels feed and offline states (11fea62c)\n\nBuild 202610070647 from nextup@92be21e\nhttps://github.com/Alehaaaa/debrify/compare/41af3b9...92be21e",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-55-92be21e/debrify-ios-55-92be21e.ipa",
           "size": 39923074,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610061923",
-          "date": "2026-10-06T19:29:51Z",
-          "localizedDescription": "What's new:\n• Improve reel playback and media matching (41af3b94)\n• Improve profile storage and section navigation (982ea7d0)\n\nBuild 202610061923 from nextup@41af3b9\nhttps://github.com/Alehaaaa/debrify/compare/7f89ac8...41af3b9",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-54-41af3b9/debrify-ios-54-41af3b9.ipa",
-          "size": 39917027,
           "minOSVersion": "14.0"
         }
       ],
