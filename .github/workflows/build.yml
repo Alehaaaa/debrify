@@ -3,6 +3,16 @@ name: Build Release Artifacts
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      job:
+        description: Platform to build from another workflow
+        required: true
+        type: string
+      release_tag:
+        description: Existing per-commit release to attach the build to
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       job:
@@ -19,18 +29,29 @@ on:
           - tvos
           - linux
           - linux-arm64
+      release_tag:
+        description: 'Existing release tag for Android / Android TV publication (optional)'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   android:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'android'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'android' || (inputs.job == 'android' && inputs.release_tag != '')
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    - name: Verify target release exists
+      if: inputs.release_tag != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_RELEASE_TAG: ${{ inputs.release_tag }}
+      run: gh release view "$TARGET_RELEASE_TAG" --json tagName -q .tagName
 
     - name: Configure TMDB build token
       shell: python
@@ -102,21 +123,48 @@ jobs:
         java-version: '21'
 
     - name: Decode keystore
-      run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        if [ -z "$KEYSTORE_BASE64" ]; then
+          echo "::error::KEYSTORE_BASE64 is missing. A stable release signing key is required for Android updates."
+          exit 1
+        fi
+        printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
     - name: Create key.properties
+      env:
+        STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
+        if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+          echo "::error::Android signing secrets KEYSTORE_PASSWORD, KEY_PASSWORD and KEY_ALIAS are required."
+          exit 1
+        fi
         cat > android/key.properties << EOF
-        storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-        keyPassword=${{ secrets.KEY_PASSWORD }}
-        keyAlias=${{ secrets.KEY_ALIAS }}
+        storePassword=$STORE_PASSWORD
+        keyPassword=$KEY_PASSWORD
+        keyAlias=$KEY_ALIAS
         storeFile=release.keystore
         EOF
 
     - name: Build APK
+      shell: bash
       env:
         ORG_GRADLE_PROJECT_debrifyLocalDiagnostics: "false"
-      run: flutter build apk --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
+        TARGET_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+      run: |
+        set -euo pipefail
+        build_number=()
+        # Android's versionCode must increase between automatic commit builds.
+        # The tag's run number is stable across retries and manual backfills.
+        if [[ "$TARGET_RELEASE_TAG" =~ ^build-([0-9]+)-[0-9a-f]{7}$ ]]; then
+          build_number=(--build-number="${BASH_REMATCH[1]}")
+        fi
+        flutter build apk --release "${build_number[@]}" \
+          --dart-define=DEBRIFY_LOCAL_VALIDATION=false \
+          --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Reject debuggable release APK
       shell: bash
@@ -132,40 +180,45 @@ jobs:
     # people pick the obvious download; the two files are byte-identical, so
     # the in-app updater (which takes any .apk asset) is unaffected.
     - name: Name APKs for Android and Android TV
+      id: apk
       shell: bash
       run: |
         set -euo pipefail
-        SUFFIX="${{ github.event.release.tag_name || 'dev' }}"
+        SUFFIX="${{ inputs.release_tag || github.event.release.tag_name || 'dev' }}"
         cd build/app/outputs/flutter-apk
         cp app-release.apk "nextup-${SUFFIX}-android.apk"
         cp app-release.apk "nextup-${SUFFIX}-androidtv.apk"
+        echo "phone=build/app/outputs/flutter-apk/nextup-${SUFFIX}-android.apk" >> "$GITHUB_OUTPUT"
+        echo "tv=build/app/outputs/flutter-apk/nextup-${SUFFIX}-androidtv.apk" >> "$GITHUB_OUTPUT"
 
     - name: Attach APKs to GitHub Release
-      if: github.event_name == 'release'
+      if: github.event_name == 'release' || inputs.release_tag != ''
       uses: softprops/action-gh-release@v1
       with:
+        tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}
+        fail_on_unmatched_files: true
         files: |
-          build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}-android.apk
-          build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}-androidtv.apk
+          ${{ steps.apk.outputs.phone }}
+          ${{ steps.apk.outputs.tv }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload Android APK as artifact (manual)
-      if: github.event_name == 'workflow_dispatch'
+      if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
       uses: actions/upload-artifact@v4
       with:
         name: nextup-android
         path: build/app/outputs/flutter-apk/nextup-dev-android.apk
 
     - name: Upload Android TV APK as artifact (manual)
-      if: github.event_name == 'workflow_dispatch'
+      if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
       uses: actions/upload-artifact@v4
       with:
         name: nextup-androidtv
         path: build/app/outputs/flutter-apk/nextup-dev-androidtv.apk
 
   macos:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
     # The pinned native dependency set predates Xcode 26; HarfBuzz 8.1.1
     # references sincosf, which is no longer publicly declared by that SDK.
     runs-on: macos-15
@@ -272,7 +325,7 @@ jobs:
         path: build/macos/Build/Products/Release/debrify.dmg
 
   windows:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'
     runs-on: windows-2022
     steps:
     - name: Checkout code
@@ -333,7 +386,7 @@ jobs:
         path: build/windows/installer/nextup-dev-setup.exe
 
   ios:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'ios'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'ios'
     runs-on: macos-latest
     steps:
     - name: Checkout code
@@ -435,7 +488,7 @@ jobs:
         path: build/ios/iphoneos/nextup-unsigned.ipa
 
   tvos:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'tvos'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'tvos'
     runs-on: macos-latest
     env:
       # The fork publishes no tags and `dev` moves, so pin the SHA. Bumping this
@@ -610,7 +663,7 @@ jobs:
         path: build/tvos/Release-appletvos/nextup-tvos-unsigned.ipa
 
   linux:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux'
     # Pinned: both the Flutter runner and private libmpv inherit this image's
     # glibc floor. Ubuntu 22.04 (glibc 2.35) covers Mint 21+, Mint 22 and current
     # SteamOS without importing either distro's multimedia stack.
@@ -812,7 +865,7 @@ jobs:
         path: nextup-dev-x86_64.AppImage
 
   linux-arm64:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux-arm64'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux-arm64'
     runs-on: ubuntu-24.04-arm
     steps:
     - name: Checkout code
