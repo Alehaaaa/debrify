@@ -2234,7 +2234,15 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                 PopupMenuButton<int>(
                   initialValue: _selectedSeason ?? 0,
                   tooltip: 'Season',
-                  color: const Color(0xFF1E1B2C),
+                  color: GlassChrome.enabled(AppThemeScope.of(context))
+                      ? GlassChrome.fill(
+                          AppThemeScope.of(context),
+                          raised: true,
+                        )
+                      : const Color(0xFF1E1B2C),
+                  shape: GlassChrome.enabled(AppThemeScope.of(context))
+                      ? GlassChrome.shape(AppThemeScope.of(context))
+                      : null,
                   onSelected: (v) {
                     final next = v == 0 ? null : v;
                     if (next == _selectedSeason) return;
@@ -2275,7 +2283,12 @@ class _SourcesScreenState extends State<_SourcesScreen> {
               PopupMenuButton<String>(
                 initialValue: _sortBy,
                 tooltip: 'Sort',
-                color: const Color(0xFF1E1B2C),
+                color: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                    : const Color(0xFF1E1B2C),
+                shape: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.shape(AppThemeScope.of(context))
+                    : null,
                 onSelected: (v) {
                   _sortBy = v;
                   _rebuildVisible();

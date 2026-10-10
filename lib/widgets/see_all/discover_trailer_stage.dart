@@ -9,6 +9,7 @@ import '../../models/stremio_addon.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../hero_trailer_backdrop.dart';
 
 /// The full-screen ambient-trailer layer for the TV Discover two-pane. It sits
@@ -77,7 +78,6 @@ class DiscoverTrailerStage extends StatefulWidget {
 
 class _DiscoverTrailerStageState extends State<DiscoverTrailerStage>
     with SingleTickerProviderStateMixin {
-
   /// Graceful settle back to the window — quicker than the promote-in.
   static const Duration _collapseDuration = Duration(milliseconds: 900);
 
@@ -289,8 +289,9 @@ class _DiscoverTrailerStageState extends State<DiscoverTrailerStage>
                   final rect = widget.fullStage
                       ? fullRect
                       : Rect.lerp(widget.railRect, fullRect, t)!;
-                  final radius =
-                      widget.fullStage ? 0.0 : lerpDouble(14.0, 0.0, t)!;
+                  final radius = widget.fullStage
+                      ? 0.0
+                      : lerpDouble(14.0, 0.0, t)!;
                   // Windowed render: the fixed full-size surface scaled by the
                   // FittedBox into the (rail-box) rect — the video never re-fits,
                   // only its paint transform changes. (Fullscreen takeover is
@@ -407,14 +408,16 @@ class _TakeoverInfo extends StatelessWidget {
     }
     if (rating != null) {
       sep();
-      meta.add(Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.star_rounded, size: 17, color: app.home.focus),
-          const SizedBox(width: 4),
-          _metaText(app, rating.toStringAsFixed(1)),
-        ],
-      ));
+      meta.add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.star_rounded, size: 17, color: app.home.focus),
+            const SizedBox(width: 4),
+            _metaText(app, rating.toStringAsFixed(1)),
+          ],
+        ),
+      );
     }
 
     final kicker = Text(
@@ -431,7 +434,8 @@ class _TakeoverInfo extends StatelessWidget {
       item.name.toUpperCase(),
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontFamily: 'Poppins', 
+      style: TextStyle(
+        fontFamily: 'Poppins',
         fontSize: 46,
         fontWeight: FontWeight.w800,
         height: 0.98,
@@ -457,8 +461,9 @@ class _TakeoverInfo extends StatelessWidget {
             ),
           );
 
-    final metaRow =
-        meta.isEmpty ? null : Row(mainAxisSize: MainAxisSize.min, children: meta);
+    final metaRow = meta.isEmpty
+        ? null
+        : Row(mainAxisSize: MainAxisSize.min, children: meta);
     final hasGenres = genres != null && genres.isNotEmpty;
 
     return AnimatedBuilder(
@@ -550,26 +555,26 @@ class _TakeoverInfo extends StatelessWidget {
   }
 
   Widget _metaText(AppTheme app, String s) => Text(
-        s,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: app.fade(app.core.tx, 0.9),
-          shadows: const [Shadow(color: Colors.black87, blurRadius: 8)],
-        ),
-      );
+    s,
+    style: TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: app.fade(app.core.tx, 0.9),
+      shadows: const [Shadow(color: Colors.black87, blurRadius: 8)],
+    ),
+  );
 
   Widget _metaDot(AppTheme app) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        child: Container(
-          width: 4,
-          height: 4,
-          decoration: BoxDecoration(
-            color: app.fade(app.core.tx, 0.45),
-            shape: BoxShape.circle,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: Container(
+      width: 4,
+      height: 4,
+      decoration: BoxDecoration(
+        color: app.fade(app.core.tx, 0.45),
+        shape: BoxShape.circle,
+      ),
+    ),
+  );
 }
 
 /// The Home hero's "Trailer" pill, themed to the rail's purple. Slides + fades
@@ -595,10 +600,16 @@ class _TrailerLoadingPill extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(9, 5, 11, 5),
             decoration: BoxDecoration(
-              // Glassy page ink — fade 0.8 pins the legacy 0xCC alpha.
-              color: app.fade(app.seeAll.bg, 0.8),
+              // Keep a single translucent material on top of the player.
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : app.fade(app.seeAll.bg, 0.8),
               borderRadius: app.shape.brPill,
-              border: Border.all(color: app.seeAll.accentBorder),
+              border: Border.all(
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app)
+                    : app.seeAll.accentBorder,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.4),
@@ -620,8 +631,9 @@ class _TrailerLoadingPill extends StatelessWidget {
                   height: 10,
                   child: CircularProgressIndicator(
                     strokeWidth: 1.8,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(app.seeAll.accent2),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      app.seeAll.accent2,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 7),

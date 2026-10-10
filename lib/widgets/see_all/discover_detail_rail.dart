@@ -16,6 +16,7 @@ import '../../services/stremio_service.dart';
 import '../../services/imdb_trailer_service.dart';
 import '../../services/youtube_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// How the reactive detail block is drawn.
 enum DiscoverDetailLayout {
@@ -121,7 +122,10 @@ class DiscoverDetailRail extends StatefulWidget {
 }
 
 class _DiscoverDetailRailState extends State<DiscoverDetailRail>
-    with RouteAware, WidgetsBindingObserver, MetadataPresentationMixin<DiscoverDetailRail> {
+    with
+        RouteAware,
+        WidgetsBindingObserver,
+        MetadataPresentationMixin<DiscoverDetailRail> {
   @override
   StremioMeta? get originalMetadata => _shown;
   @override
@@ -129,6 +133,7 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
     _publishShown();
     if (_streams != null) widget.trailerMeta.value = presentedMetadata;
   }
+
   @override
   void onMetadataPolicyChanged() {
     if (!mounted) return;
@@ -137,6 +142,7 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
     _scheduleEnrich(widget.item);
     _evaluateTrailer();
   }
+
   final StremioService _stremio = StremioService.instance;
 
   /// What's actually rendered — the focused item merged with any enrichment.
@@ -164,7 +170,8 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
   bool _trailerEnabled = false;
   Timer? _trailerDwell;
   Timer? _pillDwell; // surfaces the "Trailer" pill on rest, before the resolve
-  Timer? _loadingWatchdog; // bounds the pill if a stream resolves but never plays
+  Timer?
+  _loadingWatchdog; // bounds the pill if a stream resolves but never plays
   String? _trailerImdb; // imdbId the current trailer / pending dwell is for
 
   /// Mirror of [widget.trailerStreams.value] — the streams currently published.
@@ -221,7 +228,9 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
     ]).then((v) {
       if (!mounted || !(v[0] as bool)) return;
       _trailerEnabled = true;
-      widget.trailerVolume.value = (v[1] as bool) ? (v[2] as int).toDouble() : 0;
+      widget.trailerVolume.value = (v[1] as bool)
+          ? (v[2] as int).toDouble()
+          : 0;
       _evaluateTrailer(); // a card may already be rested by the time this lands
     });
   }
@@ -408,14 +417,20 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
   /// the title changes, then — if the setting is on and the title is playable —
   /// debounces a resolve→play. Cheap and idempotent, so it's safe to call from
   /// every path that moves [_shown] (focus change, enrichment, settings load).
-  String? _trailerIdentity(StremioMeta? item) => item?.effectiveImdbId ??
-      (item?.id.startsWith('tmdb:') == true ? '${item!.type}:${item.id}' : null);
+  String? _trailerIdentity(StremioMeta? item) =>
+      item?.effectiveImdbId ??
+      (item?.id.startsWith('tmdb:') == true
+          ? '${item!.type}:${item.id}'
+          : null);
 
   void _evaluateTrailer() {
     final m = _shown;
     // Settings/enrichment can finish while the visible title is settling.
     // They must not re-arm the trailer for the card we have already left.
-    if (_trailerIdentity(widget.item) != _trailerIdentity(m) || (_settle?.isActive ?? false)) return;
+    if (_trailerIdentity(widget.item) != _trailerIdentity(m) ||
+        (_settle?.isActive ?? false)) {
+      return;
+    }
     final imdb = _trailerIdentity(m);
     // Focus moved to a different title (or away): drop the old trailer + dwell.
     // A genuine browse action also means we're no longer sitting behind a player,
@@ -483,61 +498,73 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
     // title being left, so an in-flight resolve would otherwise sail past
     // this guard and mount a decoder for a card the user has walked away
     // from — a spurious lights-down mid-settle.
-    bool stale() => revision != MetadataPreferencesService.revision.value ||
+    bool stale() =>
+        revision != MetadataPreferencesService.revision.value ||
         !mounted ||
         _suppressed ||
         _trailerImdb != imdb ||
         _trailerIdentity(_shown) != imdb;
     void fail() {
-      if (mounted && _trailerIdentity(_shown) == imdb) widget.trailerLoading.value = false;
+      if (mounted && _trailerIdentity(_shown) == imdb) {
+        widget.trailerLoading.value = false;
+      }
     }
 
     // Trailer id: from the item when the catalog carries it, else the /meta
     // details (the same cached fetch the rail's enrichment uses).
     try {
-    final metadataPrefs = await MetadataPreferencesService.load();
-    final trailerItem = _shown;
-    if (trailerItem == null || stale()) return;
-    final candidates = await MetadataProviderService.instance.trailers(trailerItem, () async {
-    String? ytId = _shown?.trailerYtId;
-    if (ytId == null || ytId.isEmpty) {
-      try {
-        final full = await _stremio.fetchMetaDetails(
-          imdbId: imdb,
-          type: _shown?.type ?? 'movie',
-        );
-        ytId = full?.trailerYtId;
-      } catch (_) {
-        // Meta fetch failed — the IMDb backup below may still carry it.
-      }
-    }
-      return ytId;
-    }, preferences: metadataPrefs);
-    final ytId = candidates.firstOrNull?.key;
-    final allowBackup = metadataPrefs.provider(MetadataCategory.trailers) == MetadataPreferences.current || metadataPrefs.fallback;
-    if (stale()) return; // moved on — the new title owns the pill now
-    // Ambient rail backdrop: resolve at a low cap (small box, weak TV).
-    var streams = (ytId != null && ytId.isNotEmpty)
-        ? await YoutubeService.resolvePreviewStreams(
-            ytId,
-            maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
-            preferVp9: true,
-          )
-        : null;
-    // Backup source: IMDb's own trailer MP4s — a YouTube block (or a title
-    // with no YouTube id) still lights the stage.
-    if (allowBackup && imdb.startsWith('tt') && (streams == null || !streams.hasPlayable)) {
-      if (stale()) return;
-      streams = await ImdbTrailerService.resolveTrailer(
-        imdb,
-        maxHeight: YoutubeService.ambientTrailerMaxHeight,
+      final metadataPrefs = await MetadataPreferencesService.load();
+      final trailerItem = _shown;
+      if (trailerItem == null || stale()) return;
+      final candidates = await MetadataProviderService.instance.trailers(
+        trailerItem,
+        () async {
+          String? ytId = _shown?.trailerYtId;
+          if (ytId == null || ytId.isEmpty) {
+            try {
+              final full = await _stremio.fetchMetaDetails(
+                imdbId: imdb,
+                type: _shown?.type ?? 'movie',
+              );
+              ytId = full?.trailerYtId;
+            } catch (_) {
+              // Meta fetch failed — the IMDb backup below may still carry it.
+            }
+          }
+          return ytId;
+        },
+        preferences: metadataPrefs,
       );
-    }
-    if (stale()) return;
-    if (streams == null || !streams.hasPlayable) return fail();
-    // Publish — the stage mounts the player; the pill stays up until the stage
-    // reports its first frames (which drops loading).
-    _streams = streams;
+      final ytId = candidates.firstOrNull?.key;
+      final allowBackup =
+          metadataPrefs.provider(MetadataCategory.trailers) ==
+              MetadataPreferences.current ||
+          metadataPrefs.fallback;
+      if (stale()) return; // moved on — the new title owns the pill now
+      // Ambient rail backdrop: resolve at a low cap (small box, weak TV).
+      var streams = (ytId != null && ytId.isNotEmpty)
+          ? await YoutubeService.resolvePreviewStreams(
+              ytId,
+              maxHeightOverride: YoutubeService.ambientTrailerMaxHeight,
+              preferVp9: true,
+            )
+          : null;
+      // Backup source: IMDb's own trailer MP4s — a YouTube block (or a title
+      // with no YouTube id) still lights the stage.
+      if (allowBackup &&
+          imdb.startsWith('tt') &&
+          (streams == null || !streams.hasPlayable)) {
+        if (stale()) return;
+        streams = await ImdbTrailerService.resolveTrailer(
+          imdb,
+          maxHeight: YoutubeService.ambientTrailerMaxHeight,
+        );
+      }
+      if (stale()) return;
+      if (streams == null || !streams.hasPlayable) return fail();
+      // Publish — the stage mounts the player; the pill stays up until the stage
+      // reports its first frames (which drops loading).
+      _streams = streams;
     } catch (_) {
       if (!stale()) fail();
     }
@@ -560,23 +587,23 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
   /// Keep the list item's own fields when present (its poster/name are the ones
   /// the grid is showing); backfill everything else from the enriched meta.
   StremioMeta _merge(StremioMeta base, StremioMeta enr) => StremioMeta(
-        id: base.id,
-        imdbId: base.imdbId ?? enr.imdbId,
-        type: base.type,
-        name: base.name.isNotEmpty ? base.name : enr.name,
-        poster: base.poster ?? enr.poster,
-        background: base.background ?? enr.background,
-        description: (base.description?.isNotEmpty ?? false)
-            ? base.description
-            : enr.description,
-        year: base.year ?? enr.year,
-        imdbRating: base.imdbRating ?? enr.imdbRating,
-        genres: (base.genres?.isNotEmpty ?? false) ? base.genres : enr.genres,
-        runtime: base.runtime ?? enr.runtime,
-        sourceAddon: base.sourceAddon ?? enr.sourceAddon,
-        trailerYtId: base.trailerYtId ?? enr.trailerYtId,
-        logo: base.logo ?? enr.logo,
-      );
+    id: base.id,
+    imdbId: base.imdbId ?? enr.imdbId,
+    type: base.type,
+    name: base.name.isNotEmpty ? base.name : enr.name,
+    poster: base.poster ?? enr.poster,
+    background: base.background ?? enr.background,
+    description: (base.description?.isNotEmpty ?? false)
+        ? base.description
+        : enr.description,
+    year: base.year ?? enr.year,
+    imdbRating: base.imdbRating ?? enr.imdbRating,
+    genres: (base.genres?.isNotEmpty ?? false) ? base.genres : enr.genres,
+    runtime: base.runtime ?? enr.runtime,
+    sourceAddon: base.sourceAddon ?? enr.sourceAddon,
+    trailerYtId: base.trailerYtId ?? enr.trailerYtId,
+    logo: base.logo ?? enr.logo,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -686,8 +713,9 @@ class _RailContent extends StatelessWidget {
                   // never pushes the text past its budget. Guard infinity too —
                   // floor() on it throws.
                   const lineHeight = 21.5;
-                  final avail =
-                      cons.maxHeight.isFinite ? cons.maxHeight : 400.0;
+                  final avail = cons.maxHeight.isFinite
+                      ? cons.maxHeight
+                      : 400.0;
                   final descLines = ((avail - reserve) / lineHeight)
                       .floor()
                       .clamp(1, 6);
@@ -727,8 +755,9 @@ class _RailContent extends StatelessWidget {
                         const SizedBox(height: genreGap),
                         ClipRect(
                           child: ConstrainedBox(
-                            constraints:
-                                const BoxConstraints(maxHeight: genreMaxHeight),
+                            constraints: const BoxConstraints(
+                              maxHeight: genreMaxHeight,
+                            ),
                             child: Wrap(
                               spacing: 7,
                               runSpacing: 7,
@@ -819,36 +848,36 @@ class _StageContent extends StatelessWidget {
           ],
         ),
         if (showPlot) ...[
-        const SizedBox(height: 12),
-        // Fixed 3-line slot: enrichment usually lands ~300ms after the settle,
-        // and this block grows upward — reserving the lines keeps the title
-        // art still when the text arrives.
-        SizedBox(
-          height: 60,
-          width: maxWidth,
-          child: item.description != null && item.description!.isNotEmpty
-              ? Text(
-                  item.description!,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: app.fade(app.core.tx, 0.75),
-                    fontSize: 13,
-                    height: 1.5,
-                    fontWeight: FontWeight.w500,
-                    // Crisp, tight shadow — legibility over the trailer
-                    // without smearing (big radii read as muddy text on TV).
-                    shadows: const [
-                      Shadow(
-                        color: Color(0xBF000000),
-                        blurRadius: 3,
-                        offset: Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
+          const SizedBox(height: 12),
+          // Fixed 3-line slot: enrichment usually lands ~300ms after the settle,
+          // and this block grows upward — reserving the lines keeps the title
+          // art still when the text arrives.
+          SizedBox(
+            height: 60,
+            width: maxWidth,
+            child: item.description != null && item.description!.isNotEmpty
+                ? Text(
+                    item.description!,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: app.fade(app.core.tx, 0.75),
+                      fontSize: 13,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                      // Crisp, tight shadow — legibility over the trailer
+                      // without smearing (big radii read as muddy text on TV).
+                      shadows: const [
+                        Shadow(
+                          color: Color(0xBF000000),
+                          blurRadius: 3,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ],
     );
@@ -944,8 +973,7 @@ class _RailTitleArtState extends State<_RailTitleArt> {
   String? get _logoUrl {
     final item = widget.item;
     if (item.logo?.isNotEmpty == true) return item.logo;
-    final imdb =
-        item.imdbId ?? (item.id.startsWith('tt') ? item.id : null);
+    final imdb = item.imdbId ?? (item.id.startsWith('tt') ? item.id : null);
     if (imdb == null) return null;
     return 'https://images.metahub.space/logo/medium/$imdb/img';
   }
@@ -1024,10 +1052,12 @@ class _TypeBadge extends StatelessWidget {
     final app = AppThemeScope.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        borderRadius: app.shape.br(6),
-        border: Border.all(color: app.fade(app.core.tx, 0.32)),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.br(6))
+          : BoxDecoration(
+              borderRadius: app.shape.br(6),
+              border: Border.all(color: app.fade(app.core.tx, 0.32)),
+            ),
       child: Text(
         label,
         style: TextStyle(
@@ -1048,35 +1078,35 @@ class _ImdbChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF5C518),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: const Text(
-              'IMDb',
-              style: TextStyle(
-                color: Color(0xFF161616),
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-            ),
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5C518),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: const Text(
+          'IMDb',
+          style: TextStyle(
+            color: Color(0xFF161616),
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
           ),
-          const SizedBox(width: 5),
-          Text(
-            rating.toStringAsFixed(1),
-            style: TextStyle(
-              color: AppThemeScope.of(context).core.tx,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      );
+        ),
+      ),
+      const SizedBox(width: 5),
+      Text(
+        rating.toStringAsFixed(1),
+        style: TextStyle(
+          color: AppThemeScope.of(context).core.tx,
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    ],
+  );
 }
 
 class _MetaText extends StatelessWidget {
@@ -1108,11 +1138,13 @@ class _GenreChip extends StatelessWidget {
     final app = AppThemeScope.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: app.fade(app.seeAll.accent, 0.14),
-        borderRadius: app.shape.brPill,
-        border: Border.all(color: app.seeAll.accentBorder, width: 1),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.brPill)
+          : BoxDecoration(
+              color: app.fade(app.seeAll.accent, 0.14),
+              borderRadius: app.shape.brPill,
+              border: Border.all(color: app.seeAll.accentBorder, width: 1),
+            ),
       child: Text(
         label,
         style: TextStyle(
@@ -1137,8 +1169,11 @@ class _RailEmpty extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.travel_explore_rounded,
-                size: 40, color: app.fade(app.home.focus, 0.55)),
+            Icon(
+              Icons.travel_explore_rounded,
+              size: 40,
+              color: app.fade(app.home.focus, 0.55),
+            ),
             const SizedBox(height: 14),
             Text(
               'Browse to preview',

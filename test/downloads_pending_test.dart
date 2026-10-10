@@ -2,6 +2,8 @@ import 'package:debrify/screens/downloads_screen.dart';
 import 'package:debrify/services/downloads/pending_title_downloads.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/widgets/catalog_item_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,39 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   setUp(PendingTitleDownloads.resetForTesting);
   tearDown(PendingTitleDownloads.resetForTesting);
+
+  testWidgets('download header buttons follow the selected appearance', (
+    tester,
+  ) async {
+    Widget host(AppTheme app) => MaterialApp(
+      home: AppThemeScope(
+        theme: app,
+        child: Scaffold(
+          body: DownloadsScreen(loadDownloads: () async => const []),
+        ),
+      ),
+    );
+    Color? refreshFill() => tester
+        .widget<Material>(
+          find
+              .ancestor(
+                of: find.byIcon(Icons.refresh_rounded),
+                matching: find.byType(Material),
+              )
+              .first,
+        )
+        .color;
+
+    final frosted = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(frosted));
+    await tester.pump();
+    expect(refreshFill(), GlassChrome.fill(frosted, raised: true));
+
+    await tester.pumpWidget(host(AppThemes.legacy));
+    await tester.pump();
+    expect(refreshFill(), Colors.white.withValues(alpha: 0.08));
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'an automatic download still finding its source shows as its poster '

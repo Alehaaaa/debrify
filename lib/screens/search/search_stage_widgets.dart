@@ -577,7 +577,9 @@ class _TonightCardCaption extends StatelessWidget {
                     final fields = HeroMetadataFields(it0, enr);
                     final logo =
                         fields.logo ??
-                        (fields.allowArtworkFallback ? _metahubLogoUrl(it0) : null);
+                        (fields.allowArtworkFallback
+                            ? _metahubLogoUrl(it0)
+                            : null);
                     final runtime = fields.runtime;
                     final left = _timeLeft(runtime, nfo?.progress);
                     final parts = <String>[
@@ -668,10 +670,12 @@ class _TonightCardCaption extends StatelessWidget {
             if (hold != null) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                decoration: BoxDecoration(
-                  border: Border.all(color: app.fade(app.core.tx, 0.30)),
-                  borderRadius: app.shape.br(20),
-                ),
+                decoration: GlassChrome.enabled(app)
+                    ? GlassChrome.decoration(app, radius: app.shape.br(20))
+                    : BoxDecoration(
+                        border: Border.all(color: app.fade(app.core.tx, 0.30)),
+                        borderRadius: app.shape.br(20),
+                      ),
                 child: Text(
                   'HOLD  $hold',
                   style: TextStyle(
@@ -686,14 +690,23 @@ class _TonightCardCaption extends StatelessWidget {
             ],
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: app.core.tx.withValues(alpha: 0.92),
-                borderRadius: app.shape.br(20),
-              ),
+              decoration: GlassChrome.enabled(app)
+                  ? GlassChrome.decoration(
+                      app,
+                      radius: app.shape.br(20),
+                      raised: true,
+                      active: true,
+                    )
+                  : BoxDecoration(
+                      color: app.core.tx.withValues(alpha: 0.92),
+                      borderRadius: app.shape.br(20),
+                    ),
               child: Text(
                 'OK  $action',
-                style: const TextStyle(
-                  color: Color(0xFF12101F),
+                style: TextStyle(
+                  color: GlassChrome.enabled(app)
+                      ? app.core.tx
+                      : const Color(0xFF12101F),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.4,
@@ -854,116 +867,121 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
           controller: _hold.ring,
           borderRadius: BorderRadius.circular(10),
           child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOutCubic,
-          height: h,
-          decoration: BoxDecoration(
-            color: app.fade(app.core.tx, _focused ? 0.10 : 0.045),
-            borderRadius: app.shape.br(10),
-            border: Border.all(
-              color: _focused ? app.core.tx : app.fade(app.core.tx, 0.06),
-              width: _focused ? 2.5 : 1,
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOutCubic,
+            height: h,
+            decoration: BoxDecoration(
+              color: app.fade(app.core.tx, _focused ? 0.10 : 0.045),
+              borderRadius: app.shape.br(10),
+              border: Border.all(
+                color: _focused ? app.core.tx : app.fade(app.core.tx, 0.06),
+                width: _focused ? 2.5 : 1,
+              ),
             ),
-          ),
-          child: ClipRRect(
-            borderRadius: app.shape.br(9),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: thumbW,
-                  height: h,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      const ColoredBox(color: Color(0xFF171426)),
-                      if (art != null && art.isNotEmpty)
-                        CachedNetworkImage(
-                          imageUrl: art,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 420,
-                          fadeInDuration: HomeTheme.imageFadeIn(true),
-                          fadeOutDuration: HomeTheme.imageFadeOut(true),
-                          errorWidget: (_, _, _) => const SizedBox.shrink(),
-                        ),
-                      if (widget.hasBoundSource)
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: Icon(
-                            Icons.bookmark_rounded,
-                            size: 15,
-                            color: app.core.tx,
-                            shadows: const [
-                              Shadow(color: Colors.black, blurRadius: 6),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            child: ClipRRect(
+              borderRadius: app.shape.br(9),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: thumbW,
+                    height: h,
+                    child: Stack(
+                      fit: StackFit.expand,
                       children: [
-                        Text(
-                          widget.item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: app.core.tx,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.1,
+                        const ColoredBox(color: Color(0xFF171426)),
+                        if (art != null && art.isNotEmpty)
+                          CachedNetworkImage(
+                            imageUrl: art,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 420,
+                            fadeInDuration: HomeTheme.imageFadeIn(true),
+                            fadeOutDuration: HomeTheme.imageFadeOut(true),
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
                           ),
-                        ),
-                        if (widget.episode != null) ...[
-                          const SizedBox(height: 5),
-                          Text(
-                            widget.episode!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: app.fade(app.core.tx, 0.56),
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
+                        if (widget.hasBoundSource)
+                          Positioned(
+                            top: 6,
+                            right: 6,
+                            child: Icon(
+                              Icons.bookmark_rounded,
+                              size: 15,
+                              color: app.core.tx,
+                              shadows: const [
+                                Shadow(color: Colors.black, blurRadius: 6),
+                              ],
                             ),
                           ),
-                        ],
-                        if (widget.progress != null) ...[
-                          const SizedBox(height: 9),
-                          ClipRRect(
-                            borderRadius: app.shape.br(2),
-                            child: SizedBox(
-                              height: 4,
-                              child: ColoredBox(
-                                // 0.18 vanished against the row's own panel,
-                                // so the fill read as a dash floating in
-                                // space rather than a bar with a track.
-                                color: app.core.tx.withValues(alpha: 0.28),
-                                child: FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: widget.progress!.clamp(0.0, 1.0),
-                                  heightFactor: 1,
-                                  child: const ColoredBox(color: Colors.white),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: app.core.tx,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                          if (widget.episode != null) ...[
+                            const SizedBox(height: 5),
+                            Text(
+                              widget.episode!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: app.fade(app.core.tx, 0.56),
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                          if (widget.progress != null) ...[
+                            const SizedBox(height: 9),
+                            ClipRRect(
+                              borderRadius: app.shape.br(2),
+                              child: SizedBox(
+                                height: 4,
+                                child: ColoredBox(
+                                  // 0.18 vanished against the row's own panel,
+                                  // so the fill read as a dash floating in
+                                  // space rather than a bar with a track.
+                                  color: app.core.tx.withValues(alpha: 0.28),
+                                  child: FractionallySizedBox(
+                                    alignment: Alignment.centerLeft,
+                                    widthFactor: widget.progress!.clamp(
+                                      0.0,
+                                      1.0,
+                                    ),
+                                    heightFactor: 1,
+                                    child: const ColoredBox(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -1059,9 +1077,10 @@ class _CanvasArtLayer extends StatelessWidget {
             final wide = it == null
                 ? null
                 : fields!.background ??
-                      (!fields.allowArtworkFallback || _deadBackdropUrls.contains(
-                            _metahubBackgroundUrl(it) ?? '',
-                          )
+                      (!fields.allowArtworkFallback ||
+                              _deadBackdropUrls.contains(
+                                _metahubBackgroundUrl(it) ?? '',
+                              )
                           ? null
                           : _metahubBackgroundUrl(it));
             final posterUrl = fields?.posterFallback;
@@ -1154,10 +1173,7 @@ class _CanvasArtLayer extends StatelessWidget {
                   // the incoming and outgoing child so "cover" means the box.
                   layoutBuilder: (currentChild, previousChildren) => Stack(
                     fit: StackFit.expand,
-                    children: [
-                      ...previousChildren,
-                      ?currentChild,
-                    ],
+                    children: [...previousChildren, ?currentChild],
                   ),
                   child: art,
                 ),
@@ -1476,10 +1492,7 @@ class _CanvasIdentity extends StatelessWidget {
               alignment: centered
                   ? Alignment.bottomCenter
                   : Alignment.bottomLeft,
-              children: [
-                ...previousChildren,
-                ?currentChild,
-              ],
+              children: [...previousChildren, ?currentChild],
             ),
             child: Column(
               key: ValueKey('canvas-id-${it0.id}'),

@@ -16,6 +16,7 @@ import '../services/watched_action_coordinator.dart';
 import '../services/watched_status_service.dart';
 import '../theme/app_theme_controller.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/downloads/pending_title_downloads.dart';
 import '../theme/shipped_themes.dart' show effectiveDetailTheme;
 import '../theme/theme_core_resolver.dart';
@@ -153,9 +154,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         });
         // The folder poll lands here every few seconds; only re-read watch
         // progress when the set of finished files actually changed.
-        final signature = (items.where((e) => e.isReady).map(
-          (e) => '${e.groupKey}|${e.location}',
-        ).toList()..sort()).join(',');
+        final signature =
+            (items
+                    .where((e) => e.isReady)
+                    .map((e) => '${e.groupKey}|${e.location}')
+                    .toList()
+                  ..sort())
+                .join(',');
         if (signature != _watchedSignature) {
           _watchedSignature = signature;
           unawaited(_loadWatched());
@@ -319,7 +324,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 : CardMenuAction(
                     value: _DownloadCardAction.markWatched,
                     icon: Icons.done_all_rounded,
-                    label: series ? 'Mark series as watched' : 'Mark as watched',
+                    label: series
+                        ? 'Mark series as watched'
+                        : 'Mark as watched',
                     description:
                         'Marks it watched and clears any resume position, here '
                         'and on your synced trackers.',
@@ -598,7 +605,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             TextSpan(
                               text: '   ${posters.length}',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.32),
+                                color: GlassChrome.enabled(app)
+                                    ? app.fade(app.core.tx, 0.45)
+                                    : Colors.white.withValues(alpha: 0.32),
                                 fontSize: metrics.headerFontSize - 2,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: 0.2,
@@ -609,7 +618,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white,
+                        color: GlassChrome.enabled(app)
+                            ? app.core.tx
+                            : Colors.white,
                         fontSize: metrics.headerFontSize + 4,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.6,
@@ -664,8 +675,10 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   bottom: MediaQuery.paddingOf(context).bottom,
                 ),
                 child: _loading
-                    ? const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: app.core.accent,
+                        ),
                       )
                     : _error != null || posters.isEmpty
                     ? Center(
@@ -675,13 +688,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             Icon(
                               Icons.download_rounded,
                               size: 44,
-                              color: Colors.white.withValues(alpha: 0.32),
+                              color: GlassChrome.enabled(app)
+                                  ? app.fade(app.core.tx, 0.45)
+                                  : Colors.white.withValues(alpha: 0.32),
                             ),
                             const SizedBox(height: 14),
                             Text(
                               _error ?? 'No downloads yet',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: GlassChrome.enabled(app)
+                                    ? app.core.tx
+                                    : Colors.white,
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -690,7 +707,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                             Text(
                               'Use Download on a title to keep it on this device.',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.55),
+                                color: GlassChrome.enabled(app)
+                                    ? app.fade(app.core.tx, 0.65)
+                                    : Colors.white.withValues(alpha: 0.55),
                                 fontSize: 13,
                               ),
                             ),
@@ -1855,7 +1874,7 @@ class _DownloadRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: t.panel,
+        color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
         borderRadius: radius,
         child: InkWell(
           borderRadius: radius,
@@ -1864,7 +1883,11 @@ class _DownloadRow extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
             decoration: BoxDecoration(
               borderRadius: radius,
-              border: Border.all(color: t.hair),
+              border: Border.all(
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app)
+                    : t.hair,
+              ),
             ),
             child: stacked
                 ? Column(
@@ -2025,7 +2048,9 @@ class _GlassPillButton extends StatelessWidget {
     final app = AppThemeScope.of(context);
     final radius = app.shape.brPill;
     return Material(
-      color: Colors.white.withValues(alpha: 0.08),
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : Colors.white.withValues(alpha: 0.08),
       borderRadius: radius,
       child: InkWell(
         borderRadius: radius,
@@ -2034,7 +2059,11 @@ class _GlassPillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: radius,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            border: Border.all(
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.edge(app)
+                  : Colors.white.withValues(alpha: 0.16),
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -2067,23 +2096,32 @@ class _GlassIconButton extends StatelessWidget {
     required this.onTap,
   });
   @override
-  Widget build(BuildContext context) => Tooltip(
-    message: tooltip,
-    child: Material(
-      color: Colors.white.withValues(alpha: 0.08),
-      shape: CircleBorder(
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: SizedBox.square(
-          dimension: 40,
-          child: Icon(icon, color: Colors.white, size: 20),
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : Colors.white.withValues(alpha: 0.08),
+        shape: CircleBorder(
+          side: BorderSide(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : Colors.white.withValues(alpha: 0.16),
+          ),
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 40,
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// A file name cut down to something a catalog search can match: no
