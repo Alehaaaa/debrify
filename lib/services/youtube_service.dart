@@ -557,6 +557,26 @@ class YoutubeService {
     if (pending != null) _resolutionQueue.promote(pending);
   }
 
+  static void deprioritizePreviewStreams(
+    String videoId, {
+    required int maxHeightOverride,
+    bool preferVp9 = false,
+    bool preferMuxed = false,
+  }) {
+    final key = _resolveKey(
+      videoId,
+      maxHeightOverride.clamp(144, 1080),
+      false,
+      preferVp9,
+      false,
+      preferMuxed,
+      true,
+      true,
+    );
+    final pending = _resolveInFlight[key];
+    if (pending != null) _resolutionQueue.deprioritize(pending);
+  }
+
   static const Duration _resolveCacheTtl = Duration(minutes: 10);
 
   static bool _cacheUsable(_ResolvedCacheEntry entry) {

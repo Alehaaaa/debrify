@@ -1778,7 +1778,9 @@ class _ExternalPlayerSettingsPageState
                 ),
                 decoration: BoxDecoration(
                   color: isSelected || isFocused
-                      ? t.panel2
+                      ? (GlassChrome.enabled(app)
+                            ? GlassChrome.fill(app, raised: true)
+                            : t.panel2)
                       : Colors.transparent,
                   borderRadius: app.shape.br(12),
                   border: Border.all(
@@ -2842,7 +2844,9 @@ class _ExternalPlayerSettingsPageState
                               ),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? t.panel2
+                                    ? (GlassChrome.enabled(app)
+                                          ? GlassChrome.fill(app, raised: true)
+                                          : t.panel2)
                                     : Colors.transparent,
                                 borderRadius: app.shape.br(8),
                                 border: Border.all(
@@ -3398,10 +3402,12 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: t.panel2,
-                    borderRadius: app.shape.br(8),
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(app, radius: app.shape.br(8))
+                      : BoxDecoration(
+                          color: t.panel2,
+                          borderRadius: app.shape.br(8),
+                        ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

@@ -440,6 +440,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
   void _onPage(int index) {
     if (index == _index) return;
     final previous = _reels[_index];
+    if (previous.state == _ClipState.resolving && widget.resolver == null) {
+      YoutubeService.deprioritizePreviewStreams(
+        previous.title.clipKey,
+        maxHeightOverride: 1080,
+        preferMuxed: PlatformUtil.isIosMobile,
+      );
+    }
     previous.leftAt = DateTime.now();
     final next = _reels[index];
     final leftAt = next.leftAt;

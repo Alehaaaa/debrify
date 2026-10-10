@@ -74,6 +74,30 @@ void main() {
       expect(order, ['visible', 'speculative']);
     },
   );
+  test(
+    'rapid reverse navigation returns an unstarted clip to the background',
+    () async {
+      final queue = YoutubeResolutionQueue(concurrency: 1);
+      final busy = Completer<void>();
+      final order = <String>[];
+      final active = queue.run(() => busy.future);
+      final firstVisible = queue.run(() async {
+        order.add('old');
+        return 1;
+      });
+      final nextVisible = queue.run(() async {
+        order.add('new');
+        return 2;
+      }, foreground: false);
+      expect(queue.deprioritize(firstVisible), true);
+      expect(queue.promote(nextVisible), true);
+      expect(queue.deprioritize(firstVisible), false);
+      busy.complete();
+      await active;
+      await Future.wait([firstVisible, nextVisible]);
+      expect(order, ['new', 'old']);
+    },
+  );
   test('CDN validation uses bounded GET rather than rejected HEAD', () async {
     final client = YoutubePlaybackHttpClient(
       MockClient((request) async {

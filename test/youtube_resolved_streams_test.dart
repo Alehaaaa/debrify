@@ -99,6 +99,52 @@ void main() {
       expect(started.length, 4);
     });
     test(
+      'reverse swipe demotes obsolete extraction without losing its result',
+      () async {
+        final gates = [
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+        ];
+        final started = <String>[];
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) {
+              started.add(id);
+              if (started.length <= 2) return gates[started.length - 1].future;
+              return Future.value((streams: stream, client: 'androidVr'));
+            };
+        Future<YoutubeResolvedStreams?> resolve(
+          String id, {
+          bool visible = false,
+        }) => YoutubeService.resolvePreviewStreams(
+          id,
+          maxHeightOverride: 1080,
+          foreground: visible,
+        );
+        final a = resolve('aaaaaaaaaaa');
+        final b = resolve('bbbbbbbbbbb');
+        await Future<void>.delayed(Duration.zero);
+        final c = resolve('ccccccccccc', visible: true);
+        final d = resolve('ddddddddddd');
+        YoutubeService.deprioritizePreviewStreams(
+          'ccccccccccc',
+          maxHeightOverride: 1080,
+        );
+        YoutubeService.promotePreviewStreams(
+          'ddddddddddd',
+          maxHeightOverride: 1080,
+        );
+        gates[0].complete((streams: stream, client: 'androidVr'));
+        await a;
+        await Future<void>.delayed(Duration.zero);
+        expect(started.take(3), ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ddddddddddd']);
+        gates[1].complete((streams: stream, client: 'androidVr'));
+        expect(await c, stream);
+        await Future.wait([b, d]);
+        expect(started.length, 4);
+      },
+    );
+    test(
       'trailers and reels both resolve through Cobalt without direct extraction',
       () async {
         final heights = <int>[];

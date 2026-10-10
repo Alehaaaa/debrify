@@ -3,6 +3,10 @@ import 'package:debrify/screens/settings/playback_settings_page.dart';
 import 'package:debrify/screens/settings/playback_settings_section.dart';
 import 'package:debrify/screens/settings/widgets/settings_widgets.dart';
 import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/utils/platform_util.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,6 +44,45 @@ void main() {
   tearDown(() {
     PlatformUtil.debugSetTvOS(null);
     PlatformUtil.debugSetAndroidTvCached(null);
+  });
+
+  testWidgets('selected player radio row follows Frosted Glass appearance', (
+    tester,
+  ) async {
+    Future<void> verify(AppTheme app, Color expected) async {
+      await tester.runAsync(
+        () => tester.pumpWidget(
+          MaterialApp(
+            home: AppThemeScope(
+              theme: app,
+              child: const ExternalPlayerSettingsPage(
+                section: PlaybackSettingsSection.player,
+              ),
+            ),
+          ),
+        ),
+      );
+      await settleSettings(tester);
+      final decorated = find.ancestor(
+        of: find.text('Nextup Player'),
+        matching: find.byType(Container),
+      );
+      expect(
+        tester
+            .widgetList<Container>(decorated)
+            .any(
+              (container) =>
+                  container.decoration is BoxDecoration &&
+                  (container.decoration! as BoxDecoration).color == expected,
+            ),
+        true,
+      );
+    }
+
+    final glass = PremiumLooks.glass.build();
+    await verify(glass, GlassChrome.fill(glass, raised: true));
+    await tester.pumpWidget(const SizedBox());
+    await verify(AppThemes.legacy, AppThemes.legacy.settings.panel2);
   });
 
   testWidgets('Playback contains four categories and back returns to the hub', (

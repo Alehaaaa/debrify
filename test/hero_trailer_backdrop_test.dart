@@ -555,6 +555,40 @@ void main() {
     expect(failures, 1);
   });
 
+  testWidgets('dependency rebuild does not create a second pending player', (
+    tester,
+  ) async {
+    final pending = Completer<TrailerEngine>();
+    final engine = _PendingFirstFrameEngine();
+    var creations = 0;
+    Widget host(double scale) => MaterialApp(
+      home: MediaQuery(
+        data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+        child: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/single.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          engineFactory: () {
+            creations++;
+            return pending.future;
+          },
+        ),
+      ),
+    );
+    await tester.pumpWidget(host(1));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(creations, 1);
+    await tester.pumpWidget(host(1.2));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(creations, 1);
+    pending.complete(engine);
+    await tester.pump();
+    await tester.pump();
+    expect(engine.openCalls, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a hung initial seek remains covered by the startup timeout', (
     tester,
   ) async {

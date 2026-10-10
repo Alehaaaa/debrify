@@ -9,12 +9,12 @@ class YoutubeResolutionQueue {
   int _active = 0;
   final _foreground = Queue<void Function()>();
   final _background = Queue<void Function()>();
-  final _pending = <Future<Object?>, void Function()>{};
+  final _queued = <Future<Object?>, void Function()>{};
 
   Future<T> run<T>(Future<T> Function() action, {bool foreground = true}) {
     final result = Completer<T>();
     void start() {
-      _pending.remove(result.future);
+      _queued.remove(result.future);
       _active++;
       Future<T>.sync(
         action,
@@ -25,7 +25,7 @@ class YoutubeResolutionQueue {
     }
 
     (foreground ? _foreground : _background).add(start);
-    if (!foreground) _pending[result.future] = start;
+    _queued[result.future] = start;
     _drain();
     return result.future;
   }
@@ -34,9 +34,20 @@ class YoutubeResolutionQueue {
   /// future, extraction and consumers remain unchanged. Running work cannot
   /// be preempted, but the promoted request takes the next available slot.
   bool promote(Future<Object?> future) {
-    final start = _pending.remove(future);
+    final start = _queued[future];
     if (start == null || !_background.remove(start)) return false;
     _foreground.addFirst(start);
+    _drain();
+    return true;
+  }
+
+  /// A selected clip can become speculative again when the user reverses a
+  /// swipe. Preserve its existing future/cache but give the next visible clip
+  /// priority for scarce extraction slots.
+  bool deprioritize(Future<Object?> future) {
+    final start = _queued[future];
+    if (start == null || !_foreground.remove(start)) return false;
+    _background.add(start);
     _drain();
     return true;
   }

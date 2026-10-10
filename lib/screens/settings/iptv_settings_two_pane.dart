@@ -1724,7 +1724,11 @@ class _RailEntryState extends State<_RailEntry> {
             margin: const EdgeInsets.symmetric(vertical: 2),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
-              color: _focused ? t.panel2 : (widget.selected ? t.panel : null),
+              color: _focused || widget.selected
+                  ? (GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: _focused)
+                        : (_focused ? t.panel2 : t.panel))
+                  : null,
               borderRadius: app.shape.br(11),
               border: Border.all(
                 color: _focused ? t.accent : Colors.transparent,
@@ -2039,7 +2043,8 @@ class _PaneRowState extends State<_PaneRow> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     final tint = widget.danger ? t.danger : t.accent2;
     return Focus(
       focusNode: _focusNode,
@@ -2088,7 +2093,11 @@ class _PaneRowState extends State<_PaneRow> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
-              color: _focused ? t.panel2 : null,
+              color: _focused
+                  ? (GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : t.panel2)
+                  : null,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: _focused ? t.accent : Colors.transparent,
@@ -2172,7 +2181,8 @@ class _MethodCardState extends State<_MethodCard> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Focus(
       focusNode: widget.focusNode,
       onFocusChange: (has) {
@@ -2213,7 +2223,11 @@ class _MethodCardState extends State<_MethodCard> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
             decoration: BoxDecoration(
-              color: _focused ? t.panel2 : (widget.selected ? t.panel : null),
+              color: _focused || widget.selected
+                  ? (GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: _focused)
+                        : (_focused ? t.panel2 : t.panel))
+                  : null,
               borderRadius: BorderRadius.circular(13),
               border: Border.all(
                 color: _focused

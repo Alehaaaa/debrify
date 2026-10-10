@@ -294,6 +294,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Bumped by every teardown. An engine creation that is parked on the video
   /// output lease compares against it when the wait ends.
   int _engineGen = 0;
+  int? _creatingEngineGen;
 
   /// The app is backgrounded — don't start (or resume) playback until resume.
   bool _appPaused = false;
@@ -594,7 +595,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   }
 
   Future<void> _initPlayer() async {
-    if (_engine != null || !_mayStartPlayer) return;
+    if (_engine != null || _creatingEngineGen != null || !_mayStartPlayer) {
+      return;
+    }
     final usePlatformView = _usePlatformView;
     final url = _playbackUrl;
     if (url == null || url.isEmpty) return;
@@ -604,6 +607,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // on the far side of it. `_teardownPlayer` bumps the generation, which is
     // what tells an in-flight creation that its reason has gone.
     final gen = ++_engineGen;
+    _creatingEngineGen = gen;
     TrailerEngine? created;
     try {
       // AVPlayer and the Android-TV native Exo path can keep a bounded current
@@ -623,9 +627,11 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         );
       }
     } catch (_) {
+      if (_creatingEngineGen == gen) _creatingEngineGen = null;
       if (mounted && gen == _engineGen) _notifyPlaybackFailed();
       return;
     }
+    if (_creatingEngineGen == gen) _creatingEngineGen = null;
     final engine = created;
     if (engine == null) return;
     if (!mounted ||
@@ -879,6 +885,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // an engine still waiting on the video-output lease is not yet in
     // `_engine`, and this is the only thing that will tell it to stand down.
     _engineGen++;
+    _creatingEngineGen = null;
     _startTimer?.cancel();
     _startTimer = null;
     _firstFrameTimer?.cancel();
