@@ -840,6 +840,26 @@ class _ReelsScreenState extends State<ReelsScreen> {
           fit: StackFit.expand,
           children: [
             body,
+            if (_reels.isNotEmpty && _index == _reels.length - 1 && !_exhausted)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 16,
+                left: 24,
+                right: 24,
+                child: IgnorePointer(
+                  child: Center(
+                    child: _GlassCircle(
+                      size: 40,
+                      child: const Padding(
+                        padding: EdgeInsets.all(11),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             if (_reels.isNotEmpty &&
                 _index == _reels.length - 1 &&
                 _exhausted &&
@@ -1000,7 +1020,10 @@ class _ReelPage extends StatefulWidget {
 
 class _ReelPageState extends State<_ReelPage>
     with AutomaticKeepAliveClientMixin {
-  static const _doubleTapWindow = Duration(milliseconds: 180);
+  static const _doubleTapWindow = Duration(milliseconds: 260);
+  // A normal page swipe can start with less than 40px of travel. Treat even a
+  // short scroll as a scroll, so it never pauses the outgoing video on lift.
+  static const double _tapSlopSquared = 144;
   Timer? _pauseTapTimer;
   Offset? _firstTapPosition;
   Offset? _tapDownPosition;
@@ -1035,13 +1058,17 @@ class _ReelPageState extends State<_ReelPage>
 
   void _onVideoPointerMove(PointerMoveEvent event) {
     final down = _tapDownPosition;
-    if (down != null && (event.position - down).distanceSquared > 1600) {
+    if (down != null &&
+        (event.position - down).distanceSquared > _tapSlopSquared) {
       _tapDragged = true;
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
     }
   }
 
   void _onVideoPointerUp(PointerUpEvent event) {
-    if (_tapDragged) {
+    if (_tapDragged || !widget.active) {
       _pauseTapTimer?.cancel();
       _pauseTapTimer = null;
       _firstTapPosition = null;
@@ -1052,7 +1079,7 @@ class _ReelPageState extends State<_ReelPage>
     final first = _firstTapPosition;
     if (_pauseTapTimer != null &&
         first != null &&
-        (event.position - first).distanceSquared <= 1600) {
+        (event.position - first).distanceSquared <= _tapSlopSquared) {
       _pauseTapTimer!.cancel();
       _pauseTapTimer = null;
       _firstTapPosition = null;

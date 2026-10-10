@@ -588,6 +588,22 @@ void main() {
       expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
     });
 
+    testWidgets('a short reel swipe does not turn into a pause tap', (
+      tester,
+    ) async {
+      await tester.pumpWidget(host(feedFor(FakeTmdb())));
+      await tester.pumpAndSettle();
+      final id = activeId(tester)!;
+
+      // This is enough movement to be a scroll gesture, but not enough to
+      // move to the next clip. Releasing must leave playback uninterrupted.
+      await tester.dragFrom(const Offset(200, 150), const Offset(0, -32));
+      await tester.pumpAndSettle();
+      expect(activeId(tester), id);
+      expect(playing(id), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow_rounded), findsNothing);
+    });
+
     testWidgets('Space pauses and resumes the active reel', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb())));
       await tester.pumpAndSettle();

@@ -3308,13 +3308,25 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// Touch layouts: one continuous horizontal surface across the visible
   /// tabs (see [ShellTabPager]).
   Widget _buildSwipeableTabs(List<int> visible, {required bool iosEdge}) {
+    // Settings is a destination in the navigation controls, not another
+    // discoverable page in the horizontal content carousel.
+    if (_selectedIndex == MainTab.settings) {
+      return SafeArea(
+        left: false,
+        right: false,
+        top: true,
+        bottom: true,
+        child: _buildPage(MainTab.settings),
+      );
+    }
     return ShellTabPager(
-      tabs: visible,
+      tabs: visible.where((tab) => tab != MainTab.settings).toList(),
       selectedTab: _selectedIndex,
       fallbackTab: MainTab.home,
       onTabSelected: _selectTab,
-      // A player owns every gesture while it's up.
-      swipeEnabled: !_playerRouteOpen,
+      // Any pushed detail, sheet or dialog owns its navigation gesture. The
+      // underlying tab pager must not change sections while it is covered.
+      swipeEnabled: !_sectionRouteCovering && !_playerRouteOpen,
       pageBuilder: (context, index) {
         // Safe-area mode is per page: an edge-to-edge tab and an inset tab
         // can share the screen mid-swipe without either one jumping when
