@@ -7,17 +7,24 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../utils/platform_util.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
+import '../theme/widgets/glass_surface.dart';
 import 'reels_feed.dart';
 
 /// Share the media's permanent IMDb page rather than its incidental scene clip.
-/// A rare title without an IMDb id still has its public YouTube clip as backup.
+/// A title without an IMDb id links to an IMDb title search for that movie/show.
 class ReelShareContent {
   ReelShareContent.fromReel(ReelTitle reel)
     : title = reel.item.name.trim(),
       url =
           _imdbUrl(reel.item.effectiveImdbId) ??
           _imdbUrl(reel.item.id) ??
-          Uri.https('youtu.be', '/${reel.clipKey}');
+          Uri.https('www.imdb.com', '/find/', {
+            'q': reel.item.name.trim(),
+            's': 'tt',
+            'ttype': reel.item.type == 'series' ? 'tv' : 'ft',
+          });
 
   final String title;
   final Uri url;
@@ -58,14 +65,17 @@ class ReelShareService {
       // Missing OS sharing support should leave a useful, local fallback.
     }
     if (!context.mounted) return;
+    final glass = GlassChrome.enabled(AppThemeScope.of(context));
     final copied = await showModalBottomSheet<bool>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
       showDragHandle: true,
-      backgroundColor: const Color(0xFF17191D),
+      backgroundColor: glass ? Colors.transparent : const Color(0xFF17191D),
       constraints: const BoxConstraints(maxWidth: 520),
-      builder: (_) => _ReelShareSheet(content: content),
+      builder: (_) => glass
+          ? GlassSurface(child: _ReelShareSheet(content: content))
+          : _ReelShareSheet(content: content),
     );
     if (copied == true && context.mounted) {
       ScaffoldMessenger.maybeOf(

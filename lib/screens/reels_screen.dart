@@ -13,6 +13,8 @@ import '../services/offline_title_store.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
 import '../services/reel_share_service.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/storage_service.dart';
 import '../services/watchlist_sync_service.dart';
 import '../widgets/detail/showcase_parts.dart'
@@ -188,6 +190,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   int? _swipePreviewIndex;
   bool _sharing = false;
   bool _filling = false;
+  Future<List<ReelTitle>>? _nextTitle;
   bool _exhausted = false;
   bool _refreshing = false;
   double _pull = 0;
@@ -254,15 +257,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
         if (need <= 0) break;
         // Publish each confirmed title immediately. Waiting for the whole
         // look-ahead batch lets one slow lookup hold back already-ready reels.
-        final titles = await _feed.take(
-          1,
-          // Feed replay only begins when its *entire* catalog is exhausted;
-          // scan gaps and failed requests never recycle already seen titles.
-          // This lets Reels continue with alternate scenes when new titles
-          // really have run out.
-          allowRepeat: true,
-        );
+        final request = _nextTitle ?? _requestTitle();
+        _nextTitle = null;
+        final titles = await request;
         if (!_current) return;
+        // Start the following TMDB lookup while local/remote watch status for
+        // this candidate is being checked. At most one lookup is pipelined;
+        // an empty feed cannot fan out unlimited network work.
+        if (titles.isNotEmpty && need > 1) _nextTitle = _requestTitle();
         final unseen = await Future.wait([
           for (final title in titles)
             _shouldExclude(
@@ -298,6 +300,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
       _filling = false;
     }
   }
+
+  Future<List<ReelTitle>> _requestTitle() =>
+      // The feed itself only repeats after real catalog exhaustion. An
+      // unavailable scan window or a network failure never causes a replay.
+      _feed.take(1, allowRepeat: true).catchError((Object _) => <ReelTitle>[]);
 
   void _retryFeed() {
     if (!_current || _filling) return;
@@ -691,7 +698,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (imdb == null) return false;
     try {
       final series = item.type == 'series';
-      final statuses = await Future.wait<Object?>([
+      final local = await Future.wait<Object?>([
         StorageService.isInMyWatchlist(item),
         series
             ? Future.wait([
@@ -699,20 +706,23 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 LocalSeriesCompletionService.instance.caughtUpIds(),
               ])
             : StorageService.isMovieFinished(imdb),
-        TraktService.instance.fetchTitleStatus(imdb, item.type),
-        SimklService.instance.fetchTitleStatus(imdb, contentType: item.type),
       ]);
-      final localWatchlist = statuses[0] as bool;
+      final localWatchlist = local[0] as bool;
       final localFinished = series
-          ? (statuses[1] as List<Object?>).cast<Set<String>>().any(
+          ? (local[1] as List<Object?>).cast<Set<String>>().any(
               (ids) => ids.contains(imdb.toLowerCase()),
             )
-          : statuses[1] as bool;
-      final trakt = statuses[2] as TraktTitleStatus?;
-      final simkl = statuses[3] as SimklTitleStatus?;
-      return localWatchlist ||
-          localFinished ||
-          trakt?.inWatchlist == true ||
+          : local[1] as bool;
+      // Never wait on remote tracking when the local library already excludes
+      // the title. A slow/offline tracker must not hold the entire feed queue.
+      if (localWatchlist || localFinished) return true;
+      final remote = await Future.wait<Object?>([
+        TraktService.instance.fetchTitleStatus(imdb, item.type),
+        SimklService.instance.fetchTitleStatus(imdb, contentType: item.type),
+      ]).timeout(const Duration(seconds: 2));
+      final trakt = remote[0] as TraktTitleStatus?;
+      final simkl = remote[1] as SimklTitleStatus?;
+      return trakt?.inWatchlist == true ||
           trakt?.titleWatched == true ||
           simkl?.currentStatus == 'plantowatch' ||
           simkl?.currentStatus == 'completed';
@@ -1691,14 +1701,28 @@ class _GlassCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     // A stable translucent surface avoids three live backdrop-blur passes
     // over every video frame while the feed is scrolling.
+    final theme = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(theme);
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Color.lerp(const Color(0xB3000000), Colors.white, tint),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+        color: glass
+            ? Color.alphaBlend(
+                GlassChrome.fill(
+                  theme,
+                  raised: tint > 0.2,
+                ).withValues(alpha: 0.40),
+                const Color(0xAA000000),
+              )
+            : Color.lerp(const Color(0xB3000000), Colors.white, tint),
+        border: Border.all(
+          color: glass
+              ? GlassChrome.edge(theme, active: tint > 0.2)
+              : Colors.white.withValues(alpha: 0.22),
+        ),
       ),
       child: child,
     );

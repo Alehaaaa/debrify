@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../utils/platform_util.dart';
 
 /// The ambient trailer chip shared by the Home Spotlight hero and the detail
@@ -248,10 +249,14 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
             padding: const EdgeInsets.symmetric(horizontal: 13),
             decoration: BoxDecoration(
               // Glassy page ink — fade 0.8 pins the legacy 0xCC alpha.
-              color: app.fade(app.home.bg, _showButton ? 0.9 : 0.8),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: _showButton)
+                  : app.fade(app.home.bg, _showButton ? 0.9 : 0.8),
               borderRadius: app.shape.brPill,
               border: Border.all(
-                color: app.fade(app.core.tx, _showButton ? 0.28 : 0.16),
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app, active: _showButton)
+                    : app.fade(app.core.tx, _showButton ? 0.28 : 0.16),
               ),
             ),
             child: Row(

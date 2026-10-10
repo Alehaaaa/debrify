@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/main_page_bridge.dart';
 import '../../theme/app_focus.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../theme/widgets/parallax_focus.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -513,9 +514,17 @@ class _SettingsSpotlightSearchButtonState
             decoration: BoxDecoration(
               color: inverse
                   ? app.core.tx
+                  : GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: lit)
                   : (lit ? t.panel2 : app.fade(app.core.tx, 0.07)),
               borderRadius: radius,
-              border: Border.all(color: inverse ? app.core.tx : t.line),
+              border: Border.all(
+                color: inverse
+                    ? app.core.tx
+                    : GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app, active: lit)
+                    : t.line,
+              ),
             ),
             child: Row(
               children: [

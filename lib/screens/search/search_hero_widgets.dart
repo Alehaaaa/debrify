@@ -1079,9 +1079,13 @@ class _SpotlightSearchButtonState extends State<_SpotlightSearchButton> {
           height: widget.expanded ? 52 : _SpotlightSearchButton.diameter,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            color: app.fade(app.home.bg, _hovered ? 0.9 : 0.8),
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: _hovered || widget.expanded)
+                : app.fade(app.home.bg, _hovered ? 0.9 : 0.8),
             border: Border.all(
-              color: app.fade(app.core.tx, _hovered ? 0.28 : 0.16),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.edge(app, active: _hovered || widget.expanded)
+                  : app.fade(app.core.tx, _hovered ? 0.28 : 0.16),
             ),
           ),
           child: ClipRRect(
@@ -1864,9 +1868,15 @@ class _HeroLiveChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         // Glassy page ink — 0.8 of the opaque bg pins the legacy 0xCC alpha.
-        color: app.fade(app.home.bg, 0.8),
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : app.fade(app.home.bg, 0.8),
         borderRadius: app.shape.brPill,
-        border: Border.all(color: app.fade(app.core.tx, 0.16)),
+        border: Border.all(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : app.fade(app.core.tx, 0.16),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -20,15 +20,30 @@ void main() {
     expect(content.text, isNot(contains('The opening scene')));
   });
 
-  test('titles with no valid IMDb id still have a working public link', () {
+  test('titles without a valid IMDb id share an IMDb title search', () {
     const withoutImdb = ReelTitle(
       item: StremioMeta(id: 'catalog-1234', type: 'movie', name: 'Unknown'),
       clipKey: 'backupClip123',
       clipName: 'A scene',
     );
     final content = ReelShareContent.fromReel(withoutImdb);
-    expect(content.url.toString(), 'https://youtu.be/backupClip123');
-    expect(content.isImdb, isFalse);
+    expect(content.url.host, 'www.imdb.com');
+    expect(content.url.path, '/find/');
+    expect(content.url.queryParameters['q'], 'Unknown');
+    expect(content.url.queryParameters['ttype'], 'ft');
+    expect(content.text, isNot(contains('backupClip123')));
+    expect(content.isImdb, isTrue);
+  });
+
+  test('series without an IMDb id search for television titles', () {
+    const series = ReelTitle(
+      item: StremioMeta(id: 'series-42', type: 'series', name: 'The Show'),
+      clipKey: 'clip456',
+      clipName: 'Scene',
+    );
+    final content = ReelShareContent.fromReel(series);
+    expect(content.url.queryParameters['ttype'], 'tv');
+    expect(content.url.queryParameters['q'], 'The Show');
   });
 
   Widget host(ReelShareService service) => MaterialApp(
