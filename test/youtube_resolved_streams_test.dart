@@ -145,6 +145,37 @@ void main() {
       },
     );
     test(
+      'invalidation cancels a pending YouTube extraction before it starts',
+      () async {
+        final gates = [
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+        ];
+        final started = <String>[];
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) {
+              started.add(id);
+              if (started.length <= 2) return gates[started.length - 1].future;
+              return Future.value((streams: stream, client: 'androidVr'));
+            };
+        Future<YoutubeResolvedStreams?> resolve(String id) =>
+            YoutubeService.resolvePreviewStreams(id, maxHeightOverride: 1080);
+        final a = resolve('aaaaaaaaaaa');
+        final b = resolve('bbbbbbbbbbb');
+        await Future<void>.delayed(Duration.zero);
+        final obsolete = resolve('ccccccccccc');
+        YoutubeService.invalidateStreams('ccccccccccc');
+        expect(await obsolete, isNull);
+        final fresh = resolve('ddddddddddd');
+        gates[0].complete((streams: stream, client: 'androidVr'));
+        await a;
+        gates[1].complete((streams: stream, client: 'androidVr'));
+        await Future.wait([b, fresh]);
+        expect(started, ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ddddddddddd']);
+      },
+    );
+    test(
       'trailers and reels both resolve through Cobalt without direct extraction',
       () async {
         final heights = <int>[];

@@ -864,7 +864,11 @@ class _FocusButtonState extends State<_FocusButton> {
         constraints: const BoxConstraints(minHeight: 46),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: widget.selected ? t.panel2 : Colors.transparent,
+          color: widget.selected || focused
+              ? (GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: focused)
+                    : (widget.selected ? t.panel2 : Colors.transparent))
+              : Colors.transparent,
           borderRadius: app.shape.br(10),
           border: Border.all(
             color: focused ? t.accent : Colors.transparent,

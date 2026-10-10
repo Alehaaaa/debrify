@@ -3599,10 +3599,12 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: t.panel2,
-                    borderRadius: app.shape.br(8),
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(app, radius: app.shape.br(8))
+                      : BoxDecoration(
+                          color: t.panel2,
+                          borderRadius: app.shape.br(8),
+                        ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -3789,10 +3791,12 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: t.panel2,
-                    borderRadius: app.shape.br(8),
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(app, radius: app.shape.br(8))
+                      : BoxDecoration(
+                          color: t.panel2,
+                          borderRadius: app.shape.br(8),
+                        ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -3919,10 +3923,12 @@ class _ExternalPlayerSettingsPageState
                 if (_customAppPath != null) ...[
                   Container(
                     padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: t.panel2,
-                      borderRadius: app.shape.br(8),
-                    ),
+                    decoration: GlassChrome.enabled(app)
+                        ? GlassChrome.decoration(app, radius: app.shape.br(8))
+                        : BoxDecoration(
+                            color: t.panel2,
+                            borderRadius: app.shape.br(8),
+                          ),
                     child: Row(
                       children: [
                         Icon(Icons.apps_rounded, color: t.accent),
@@ -4078,10 +4084,12 @@ class _ExternalPlayerSettingsPageState
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: t.panel2,
-                    borderRadius: app.shape.br(8),
-                  ),
+                  decoration: GlassChrome.enabled(app)
+                      ? GlassChrome.decoration(app, radius: app.shape.br(8))
+                      : BoxDecoration(
+                          color: t.panel2,
+                          borderRadius: app.shape.br(8),
+                        ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

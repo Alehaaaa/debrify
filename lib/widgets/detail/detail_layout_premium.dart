@@ -1,6 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../services/debrify_image_cache.dart';
@@ -832,12 +834,20 @@ class _DetailPremiumState extends State<DetailPremium> {
     imdbId: _m.item.effectiveImdbId,
     builder: (context, r) {
       if (r == null) return const SizedBox.shrink();
-      final style = _t.titleStyle(size: 18, weight: FontWeight.w800, tracking: -.2);
+      final style = _t.titleStyle(
+        size: 18,
+        weight: FontWeight.w800,
+        tracking: -.2,
+      );
       Widget fact(Widget glyph, String value) => Padding(
         padding: const EdgeInsets.only(left: 14),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [glyph, const SizedBox(width: 6), Text(value, style: style)],
+          children: [
+            glyph,
+            const SizedBox(width: 6),
+            Text(value, style: style),
+          ],
         ),
       );
       return Row(
@@ -846,7 +856,10 @@ class _DetailPremiumState extends State<DetailPremium> {
           if (r.score != null)
             fact(TomatoGlyph(size: 20, color: _t.rating), '${r.score}%'),
           if (r.metacritic != null)
-            fact(MetacriticGlyph(size: 20, color: _t.rating), '${r.metacritic}'),
+            fact(
+              MetacriticGlyph(size: 20, color: _t.rating),
+              '${r.metacritic}',
+            ),
         ],
       );
     },
@@ -1149,7 +1162,9 @@ class _DetailPremiumState extends State<DetailPremium> {
       (s) => s.number == view.selectedSeasonNumber,
     );
     return DetailSeasonControl(
-      onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+      onOptions: view.seasonOptions == null
+          ? null
+          : () => view.seasonOptions!(view.selectedSeasonNumber),
       seasonNumber: view.selectedSeasonNumber,
       episodeCount: view.episodes.length,
       canPrev: index > 0,
@@ -1523,6 +1538,7 @@ class _AccessibleEpisodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
+    final app = AppThemeScope.of(context);
     return DetailEpisodeInteraction(
       focusNode: focusNode,
       gesture: DetailOptionsGesture.rightArrow,
@@ -1535,7 +1551,11 @@ class _AccessibleEpisodeRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
           decoration: BoxDecoration(
-            color: focused ? t.panel : null,
+            color: focused
+                ? (GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app, raised: true)
+                      : t.panel)
+                : null,
             borderRadius: t.brRadius,
           ),
           child: Row(
@@ -1664,11 +1684,16 @@ class _PremiumRecRowState extends State<_PremiumRecRow> {
   @override
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
+    final app = AppThemeScope.of(context);
     return DetailFocusRing(
       focused: _focused,
       radius: t.brRadius,
       child: Material(
-        color: _focused ? t.panel : Colors.transparent,
+        color: _focused
+            ? (GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : t.panel)
+            : Colors.transparent,
         borderRadius: t.brRadius,
         child: InkWell(
           focusNode: widget.focusNode,

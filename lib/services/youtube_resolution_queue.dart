@@ -10,11 +10,17 @@ class YoutubeResolutionQueue {
   final _foreground = Queue<void Function()>();
   final _background = Queue<void Function()>();
   final _queued = <Future<Object?>, void Function()>{};
+  final _cancelQueued = <Future<Object?>, void Function()>{};
 
-  Future<T> run<T>(Future<T> Function() action, {bool foreground = true}) {
+  Future<T> run<T>(
+    Future<T> Function() action, {
+    bool foreground = true,
+    T Function()? onCancel,
+  }) {
     final result = Completer<T>();
     void start() {
       _queued.remove(result.future);
+      _cancelQueued.remove(result.future);
       _active++;
       Future<T>.sync(
         action,
@@ -26,6 +32,9 @@ class YoutubeResolutionQueue {
 
     (foreground ? _foreground : _background).add(start);
     _queued[result.future] = start;
+    if (onCancel != null) {
+      _cancelQueued[result.future] = () => result.complete(onCancel());
+    }
     _drain();
     return result.future;
   }
@@ -49,6 +58,20 @@ class YoutubeResolutionQueue {
     if (start == null || !_foreground.remove(start)) return false;
     _background.add(start);
     _drain();
+    return true;
+  }
+
+  /// Invalidation can cancel an extraction that has no useful consumers left
+  /// before it occupies a scarce connection slot. Running work is never
+  /// interrupted; cancellable callers provide a safe result via [onCancel].
+  bool cancel(Future<Object?> future) {
+    final start = _queued[future];
+    final complete = _cancelQueued[future];
+    if (start == null || complete == null) return false;
+    if (!_foreground.remove(start) && !_background.remove(start)) return false;
+    _queued.remove(future);
+    _cancelQueued.remove(future);
+    complete();
     return true;
   }
 

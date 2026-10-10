@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 import '../../services/debrify_image_cache.dart';
 import '../../services/imdb_enrichment_service.dart';
@@ -326,7 +328,9 @@ class _DetailStageState extends State<DetailStage> {
               border: Border(bottom: BorderSide(color: _t.hair)),
             ),
             child: DetailSeasonControl(
-              onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+              onOptions: view.seasonOptions == null
+                  ? null
+                  : () => view.seasonOptions!(view.selectedSeasonNumber),
               seasonNumber: view.selectedSeasonNumber,
               episodeCount: episodes.length,
               canPrev: idx > 0,
@@ -561,6 +565,7 @@ class _TabButtonState extends State<_TabButton> {
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
     final active = widget.active;
+    final app = AppThemeScope.of(context);
     return DetailEdgeTrap(
       trapLeft: widget.trapLeft,
       trapRight: widget.trapRight,
@@ -606,7 +611,11 @@ class _TabButtonState extends State<_TabButton> {
               // Several themes set focus == tx, where an underline alone makes
               // the focused tab identical to the active one. A ground says
               // "the cursor is here" regardless of the palette.
-              color: _focused ? t.panel : null,
+              color: _focused
+                  ? (GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : t.panel)
+                  : null,
               border: Border(
                 bottom: BorderSide(
                   // Focus WINS over active. The other way round, landing on the
@@ -664,8 +673,7 @@ class _CastLine extends StatelessWidget {
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 140,
                     placeholder: (_, _) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, _, _) =>
-                        ColoredBox(color: t.placeholder),
+                    errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),
           ),

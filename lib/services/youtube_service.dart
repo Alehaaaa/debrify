@@ -481,6 +481,11 @@ class YoutubeService {
     _resolveGeneration[videoId] = (_resolveGeneration[videoId] ?? 0) + 1;
     bool matches(String key) => key == videoId || key.startsWith('$videoId#');
     _resolveCache.removeWhere((key, _) => matches(key));
+    // Invalidation supersedes these waiters. A queued request otherwise
+    // consumes a connection slot just to notice its obsolete generation.
+    for (final entry in _resolveInFlight.entries.toList()) {
+      if (matches(entry.key)) _resolutionQueue.cancel(entry.value);
+    }
     _resolveInFlight.removeWhere((key, _) => matches(key));
   }
 
@@ -686,23 +691,27 @@ class YoutubeService {
     final inFlight = _resolveInFlight[key];
     if (inFlight != null) return inFlight;
     final generation = _resolveGeneration[videoId] ?? 0;
-    final future = _resolutionQueue.run<YoutubeResolvedStreams?>(() {
-      if (generation != (_resolveGeneration[videoId] ?? 0)) {
-        return Future.value(null);
-      }
-      return _resolveUncached(
-        videoId,
-        maxHeightOverride: maxHeightOverride,
-        withCaptions: withCaptions,
-        preferVp9: preferVp9,
-        includeMetadata: includeMetadata,
-        preferMuxed: preferMuxed,
-        relayFirst: relayFirst,
-        relayFallback: relayFallback,
-        cacheKey: key,
-        generation: generation,
-      );
-    }, foreground: foreground || includeMetadata || withCaptions);
+    final future = _resolutionQueue.run<YoutubeResolvedStreams?>(
+      () {
+        if (generation != (_resolveGeneration[videoId] ?? 0)) {
+          return Future.value(null);
+        }
+        return _resolveUncached(
+          videoId,
+          maxHeightOverride: maxHeightOverride,
+          withCaptions: withCaptions,
+          preferVp9: preferVp9,
+          includeMetadata: includeMetadata,
+          preferMuxed: preferMuxed,
+          relayFirst: relayFirst,
+          relayFallback: relayFallback,
+          cacheKey: key,
+          generation: generation,
+        );
+      },
+      foreground: foreground || includeMetadata || withCaptions,
+      onCancel: () => null,
+    );
     _resolveInFlight[key] = future;
     // Block body: an arrow would return the removed (already-completed)
     // future for whenComplete to await — harmless here because the map holds

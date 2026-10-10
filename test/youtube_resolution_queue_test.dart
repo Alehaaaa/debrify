@@ -98,6 +98,23 @@ void main() {
       expect(order, ['new', 'old']);
     },
   );
+  test('invalidated pending extraction releases its queued slot', () async {
+    final queue = YoutubeResolutionQueue(concurrency: 1);
+    final busy = Completer<void>();
+    final active = queue.run(() => busy.future);
+    var called = false;
+    final obsolete = queue.run<int?>(() async {
+      called = true;
+      return 1;
+    }, onCancel: () => null);
+    expect(queue.cancel(obsolete), true);
+    expect(queue.cancel(obsolete), false);
+    expect(await obsolete, isNull);
+    busy.complete();
+    await active;
+    expect(called, false);
+    expect(await queue.run(() async => 2), 2);
+  });
   test('CDN validation uses bounded GET rather than rejected HEAD', () async {
     final client = YoutubePlaybackHttpClient(
       MockClient((request) async {
