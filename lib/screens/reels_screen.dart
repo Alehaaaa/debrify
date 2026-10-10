@@ -350,6 +350,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Future<void> _resolve(int index) async {
     if (index < 0 || index >= _reels.length) return;
     final reel = _reels[index];
+    if (reel.state == _ClipState.resolving &&
+        index == _index &&
+        widget.resolver == null) {
+      YoutubeService.promotePreviewStreams(
+        reel.title.clipKey,
+        maxHeightOverride: 1080,
+        preferMuxed: PlatformUtil.isIosMobile,
+      );
+      return;
+    }
     if (reel.state != _ClipState.idle) return;
     reel.state = _ClipState.resolving;
     final revision = reel.revision;
@@ -364,6 +374,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                     maxHeightOverride: 1080,
                     preferMuxed: PlatformUtil.isIosMobile,
                     preferVp9: false,
+                    foreground: index == _index,
                   ))
               .timeout(const Duration(seconds: 30));
     } catch (_) {

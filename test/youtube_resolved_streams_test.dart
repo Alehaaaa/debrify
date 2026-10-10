@@ -65,6 +65,39 @@ void main() {
       );
       expect(requested, [1080]);
     });
+    test('visible Reel promotes its existing YouTube extraction', () async {
+      final gates = [
+        Completer<({YoutubeResolvedStreams streams, String client})?>(),
+        Completer<({YoutubeResolvedStreams streams, String client})?>(),
+      ];
+      final started = <String>[];
+      YoutubeService.cobaltResolverOverride = (_, _) async => null;
+      YoutubeService.streamResolverOverride =
+          (id, height, cc, vp9, meta, muxed, client) {
+            started.add(id);
+            if (started.length <= 2) return gates[started.length - 1].future;
+            return Future.value((streams: stream, client: 'androidVr'));
+          };
+      Future<YoutubeResolvedStreams?> resolve(String id) =>
+          YoutubeService.resolvePreviewStreams(id, maxHeightOverride: 1080);
+      final a = resolve('aaaaaaaaaaa');
+      final b = resolve('bbbbbbbbbbb');
+      await Future<void>.delayed(Duration.zero);
+      final c = resolve('ccccccccccc');
+      final d = resolve('ddddddddddd');
+      YoutubeService.promotePreviewStreams(
+        'ddddddddddd',
+        maxHeightOverride: 1080,
+      );
+      gates[0].complete((streams: stream, client: 'androidVr'));
+      await a;
+      // Queue draining resumes on a later microtask after the first resolve.
+      await Future<void>.delayed(Duration.zero);
+      expect(started.take(3), ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ddddddddddd']);
+      gates[1].complete((streams: stream, client: 'androidVr'));
+      await Future.wait([b, c, d]);
+      expect(started.length, 4);
+    });
     test(
       'trailers and reels both resolve through Cobalt without direct extraction',
       () async {

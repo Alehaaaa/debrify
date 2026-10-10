@@ -16,6 +16,7 @@ import '../../services/xtream_codes_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/m3u_parser.dart';
 import '../../utils/platform_util.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/tv_keys.dart';
 import '../../utils/tv_reveal.dart';
 import '../../services/desktop_schedule_service.dart';
@@ -2979,11 +2980,13 @@ class _TvFocusableTabBarState extends State<_TvFocusableTabBar> {
     final theme = Theme.of(context);
 
     return Container(
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(12),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.br(12))
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(12),
+              border: Border.all(color: t.line),
+            ),
       padding: const EdgeInsets.all(4),
       child: Row(
         children: [

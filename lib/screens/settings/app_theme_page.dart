@@ -4,6 +4,7 @@ import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_controller.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../theme/premium_looks.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/detail/theme/detail_theme.dart';
@@ -46,11 +47,15 @@ class _AppThemePageState extends State<AppThemePage> {
   /// The two classes of theme, told apart — see the note in
   /// `detail_theme_page.dart`. A spec look restyles the app's STRUCTURE; a
   /// core theme is a palette whose vocabulary is neutral by construction.
-  static List<DetailTheme> get _complete =>
-      [for (final t in _choices) if (PremiumLooks.byId(t.id) != null) t];
+  static List<DetailTheme> get _complete => [
+    for (final t in _choices)
+      if (PremiumLooks.byId(t.id) != null) t,
+  ];
 
-  static List<DetailTheme> get _palettes =>
-      [for (final t in _choices) if (PremiumLooks.byId(t.id) == null) t];
+  static List<DetailTheme> get _palettes => [
+    for (final t in _choices)
+      if (PremiumLooks.byId(t.id) == null) t,
+  ];
 
   @override
   void initState() {
@@ -109,8 +114,11 @@ class _AppThemePageState extends State<AppThemePage> {
                         onPressed: () => Navigator.of(context).maybePop(),
                       ),
                       const SizedBox(width: 4),
-                      Icon(Icons.format_paint_rounded,
-                          size: 22, color: t.accent2),
+                      Icon(
+                        Icons.format_paint_rounded,
+                        size: 22,
+                        color: t.accent2,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -171,16 +179,22 @@ class _AppThemePageState extends State<AppThemePage> {
                             swatches: null,
                           ),
                         ]),
-                        _heading(app, 'Complete looks',
-                            'Change structure, focus and motion — not just '
-                                'colour.'),
+                        _heading(
+                          app,
+                          'Complete looks',
+                          'Change structure, focus and motion — not just '
+                              'colour.',
+                        ),
                         _group(app, [
                           for (final choice in _complete)
                             _row(app, choice, selected),
                         ]),
-                        _heading(app, 'Palettes',
-                            'Recolour the app; layout and motion stay as they '
-                                'are.'),
+                        _heading(
+                          app,
+                          'Palettes',
+                          'Recolour the app; layout and motion stay as they '
+                              'are.',
+                        ),
                         _group(app, [
                           for (final choice in _palettes)
                             _row(app, choice, selected),
@@ -248,11 +262,13 @@ class _AppThemePageState extends State<AppThemePage> {
   Widget _group(AppTheme app, List<Widget> rows) {
     final t = app.settings;
     return Container(
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(14),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.br(14))
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(14),
+              border: Border.all(color: t.line),
+            ),
       child: Column(children: rows),
     );
   }

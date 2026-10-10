@@ -22621,9 +22621,15 @@ class _HomeGlassState extends StatelessWidget {
               width: 380,
               padding: const EdgeInsets.fromLTRB(28, 26, 28, 24),
               decoration: BoxDecoration(
-                color: app.fade(app.home.bg, 0.72),
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : app.fade(app.home.bg, 0.72),
                 borderRadius: app.shape.br(24),
-                border: Border.all(color: app.fade(app.core.tx, 0.16)),
+                border: Border.all(
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.edge(app)
+                      : app.fade(app.core.tx, 0.16),
+                ),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -22843,8 +22849,14 @@ class _GlassIconButton extends StatelessWidget {
             child: Ink(
               decoration: BoxDecoration(
                 borderRadius: radius,
-                color: app.fade(app.core.tx, 0.07),
-                border: Border.all(color: app.fade(app.core.tx, 0.10)),
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app)
+                    : app.fade(app.core.tx, 0.07),
+                border: Border.all(
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.edge(app)
+                      : app.fade(app.core.tx, 0.10),
+                ),
               ),
               child: InkWell(
                 onTap: onPressed,

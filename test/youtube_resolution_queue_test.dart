@@ -47,6 +47,33 @@ void main() {
     await preview;
     expect(order, ['playback', 'preview']);
   });
+  test(
+    'an offscreen request can be promoted without a duplicate extraction',
+    () async {
+      final queue = YoutubeResolutionQueue(concurrency: 1);
+      final busy = Completer<void>();
+      final order = <String>[];
+      final first = queue.run(() => busy.future);
+      var promotedCalls = 0;
+      final promoted = queue.run(() async {
+        promotedCalls++;
+        order.add('visible');
+        return 2;
+      }, foreground: false);
+      final later = queue.run(() async {
+        order.add('speculative');
+        return 3;
+      }, foreground: false);
+      expect(queue.promote(promoted), true);
+      expect(queue.promote(promoted), false);
+      busy.complete();
+      await first;
+      expect(await promoted, 2);
+      expect(await later, 3);
+      expect(promotedCalls, 1);
+      expect(order, ['visible', 'speculative']);
+    },
+  );
   test('CDN validation uses bounded GET rather than rejected HEAD', () async {
     final client = YoutubePlaybackHttpClient(
       MockClient((request) async {

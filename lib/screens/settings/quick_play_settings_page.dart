@@ -8,6 +8,7 @@ import '../../services/source_priority.dart';
 import '../../services/storage_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../../utils/tv_reveal.dart';
@@ -326,30 +327,35 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                 const SizedBox(height: 10),
                 _playModeSelect(),
                 const SizedBox(height: 24),
-                SettingsSection(title: 'Sources', children: [
-                  SettingsToggleTile(
-                    icon: Icons.image_outlined,
-                    title: 'Show add-on logos',
-                    subtitle: 'Show the provider logo and name beside each source',
-                    value: _addonLogos,
-                    onChanged: (value) async {
-                      await StorageService.setShowAddonLogos(value);
-                      MainPageBridge.notifyHomeSettingsChanged();
-                      if (mounted) setState(() => _addonLogos = value);
-                    },
-                  ),
-                  SettingsToggleTile(
-                    icon: Icons.notes_rounded,
-                    title: 'Use add-on text formatting',
-                    subtitle: 'Show original stream names, line breaks and emojis from add-ons such as AIOStreams',
-                    value: _addonText,
-                    onChanged: (value) async {
-                      await StorageService.setUseAddonTextFormatting(value);
-                      MainPageBridge.notifyHomeSettingsChanged();
-                      if (mounted) setState(() => _addonText = value);
-                    },
-                  ),
-                ]),
+                SettingsSection(
+                  title: 'Sources',
+                  children: [
+                    SettingsToggleTile(
+                      icon: Icons.image_outlined,
+                      title: 'Show add-on logos',
+                      subtitle:
+                          'Show the provider logo and name beside each source',
+                      value: _addonLogos,
+                      onChanged: (value) async {
+                        await StorageService.setShowAddonLogos(value);
+                        MainPageBridge.notifyHomeSettingsChanged();
+                        if (mounted) setState(() => _addonLogos = value);
+                      },
+                    ),
+                    SettingsToggleTile(
+                      icon: Icons.notes_rounded,
+                      title: 'Use add-on text formatting',
+                      subtitle:
+                          'Show original stream names, line breaks and emojis from add-ons such as AIOStreams',
+                      value: _addonText,
+                      onChanged: (value) async {
+                        await StorageService.setUseAddonTextFormatting(value);
+                        MainPageBridge.notifyHomeSettingsChanged();
+                        if (mounted) setState(() => _addonText = value);
+                      },
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 24),
                 _tabs(),
                 const SizedBox(height: 20),
@@ -719,7 +725,11 @@ class _PriorityRowState extends State<_PriorityRow> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.provider.isIptv ? 'IPTV playlist' : widget.provider.isEngine ? 'Torrent engine' : 'Addon',
+                          widget.provider.isIptv
+                              ? 'IPTV playlist'
+                              : widget.provider.isEngine
+                              ? 'Torrent engine'
+                              : 'Addon',
                           style: TextStyle(color: t.dim, fontSize: 11),
                         ),
                       ],
@@ -802,11 +812,13 @@ class _Panel extends StatelessWidget {
     final t = app.settings;
     return Container(
       padding: padding,
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app)
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: t.line),
+            ),
       clipBehavior: Clip.antiAlias,
       child: child,
     );

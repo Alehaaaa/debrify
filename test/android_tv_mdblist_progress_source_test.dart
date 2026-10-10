@@ -52,7 +52,7 @@ void main() {
     () {
       final guideBuilder = _between(
         source,
-        'Future<\n          ({',
+        'buildUpdates() async {',
         'Future<bool> pushUpdates',
       );
 

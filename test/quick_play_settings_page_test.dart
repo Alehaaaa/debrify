@@ -7,15 +7,17 @@ import 'package:debrify/screens/settings/quick_play_settings_page.dart';
 import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(WidgetTester tester, {AppTheme? appearance}) async {
     await tester.pumpWidget(
       MaterialApp(
         home: AppThemeScope(
-          theme: AppThemes.legacy,
+          theme: appearance ?? AppThemes.legacy,
           child: const QuickPlaySettingsPage(),
         ),
       ),
@@ -28,7 +30,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('add-on formatting defaults on and saves its toggle', (tester) async {
+  testWidgets('add-on formatting defaults on and saves its toggle', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await pumpPage(tester);
     expect(await StorageService.getUseAddonTextFormatting(), isTrue);
@@ -217,5 +221,22 @@ void main() {
     final movie = await StorageService.getQuickPlayRules(isMovie: true);
     expect(movie.matchesDebrifyDefault(isMovie: true), isTrue);
     expect(movie.sourcePriority, isEmpty);
+  });
+
+  testWidgets('Quick Play panels adopt the frosted surface only for glass', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final glass = PremiumLooks.glass.build();
+    await pumpPage(tester, appearance: glass);
+    List<Color?> panelColors() => tester
+        .widgetList<Container>(find.byType(Container))
+        .map((w) => w.decoration)
+        .whereType<BoxDecoration>()
+        .map((d) => d.color)
+        .toList();
+    expect(panelColors(), contains(GlassChrome.fill(glass)));
+    await pumpPage(tester);
+    expect(panelColors(), isNot(contains(GlassChrome.fill(glass))));
   });
 }

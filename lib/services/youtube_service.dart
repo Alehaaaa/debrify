@@ -523,6 +523,7 @@ class YoutubeService {
     bool preferVp9 = false,
     bool? preferMuxed,
     bool? allowRelay,
+    bool foreground = false,
   }) => resolveStreams(
     videoId,
     maxHeightOverride: maxHeightOverride ?? ambientTrailerMaxHeight,
@@ -530,7 +531,31 @@ class YoutubeService {
     includeMetadata: false,
     preferMuxed: preferMuxed ?? PlatformUtil.isIosMobile,
     allowRelay: allowRelay,
+    foreground: foreground,
   );
+
+  /// An offscreen preview may have entered the resolution queue before a
+  /// swipe. Promote that pending request when it becomes visible, reusing the
+  /// same future and keeping speculative extraction behind playback.
+  static void promotePreviewStreams(
+    String videoId, {
+    required int maxHeightOverride,
+    bool preferVp9 = false,
+    bool preferMuxed = false,
+  }) {
+    final key = _resolveKey(
+      videoId,
+      maxHeightOverride.clamp(144, 1080),
+      false,
+      preferVp9,
+      false,
+      preferMuxed,
+      true,
+      true,
+    );
+    final pending = _resolveInFlight[key];
+    if (pending != null) _resolutionQueue.promote(pending);
+  }
 
   static const Duration _resolveCacheTtl = Duration(minutes: 10);
 
@@ -597,6 +622,7 @@ class YoutubeService {
     bool includeMetadata = true,
     bool preferMuxed = false,
     bool? allowRelay,
+    bool foreground = false,
   }) {
     // Key the effective preference, so changing playback quality does not
     // reuse a lower-resolution result cached under a preference-free key.
@@ -610,6 +636,7 @@ class YoutubeService {
           includeMetadata: includeMetadata,
           preferMuxed: preferMuxed,
           allowRelay: allowRelay,
+          foreground: foreground,
         ),
       );
     }
@@ -655,7 +682,7 @@ class YoutubeService {
         cacheKey: key,
         generation: generation,
       );
-    }, foreground: includeMetadata || withCaptions);
+    }, foreground: foreground || includeMetadata || withCaptions);
     _resolveInFlight[key] = future;
     // Block body: an arrow would return the removed (already-completed)
     // future for whenComplete to await — harmless here because the map holds

@@ -8,6 +8,7 @@ import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 @visibleForTesting
 bool pikPakProviderIsSelectable({
@@ -277,11 +278,13 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
     final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app)
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: t.line),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

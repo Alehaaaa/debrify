@@ -7,6 +7,7 @@ import '../../services/engine/engine_registry.dart';
 import '../../services/engine/config_loader.dart';
 import '../../utils/platform_util.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class DebrifyTvSettingsPage extends StatefulWidget {
   const DebrifyTvSettingsPage({super.key});
@@ -129,11 +130,13 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
     final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app)
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: t.line),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -185,8 +188,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
             EdgeInsets.symmetric(vertical: 16),
           ),
           backgroundColor: WidgetStateProperty.resolveWith(
-            (states) =>
-                states.contains(WidgetState.focused) ? t.panel2 : null,
+            (states) => states.contains(WidgetState.focused) ? t.panel2 : null,
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.focused)
@@ -225,9 +227,8 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
             onPressed: () => Navigator.of(context).pop(),
             style: ButtonStyle(
               backgroundColor: WidgetStateProperty.resolveWith(
-                (states) => states.contains(WidgetState.focused)
-                    ? t.panel
-                    : null,
+                (states) =>
+                    states.contains(WidgetState.focused) ? t.panel : null,
               ),
               side: WidgetStateProperty.resolveWith(
                 (states) => states.contains(WidgetState.focused)

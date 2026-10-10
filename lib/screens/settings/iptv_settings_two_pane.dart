@@ -7,6 +7,7 @@ import '../../services/iptv_source_stats.dart';
 import '../../services/storage_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import 'iptv_style_page.dart';
 
 String iptvAutoRefreshLabel(int hours) =>
@@ -1888,7 +1889,8 @@ class _StatStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Row(
       children: [
         for (var i = 0; i < stats.length; i++) ...[
@@ -1896,11 +1898,16 @@ class _StatStrip extends StatelessWidget {
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: t.panel,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: t.line),
-              ),
+              decoration: GlassChrome.enabled(app)
+                  ? GlassChrome.decoration(
+                      app,
+                      radius: BorderRadius.circular(12),
+                    )
+                  : BoxDecoration(
+                      color: t.panel,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: t.line),
+                    ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1941,14 +1948,17 @@ class _QuietBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(12))
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: t.line),
+            ),
       child: Row(
         children: [
           Icon(icon, size: 18, color: t.dim),
@@ -1968,13 +1978,16 @@ class _RowGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Container(
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(14))
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: t.line),
+            ),
       child: Column(children: children),
     );
   }

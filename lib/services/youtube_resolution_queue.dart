@@ -9,10 +9,12 @@ class YoutubeResolutionQueue {
   int _active = 0;
   final _foreground = Queue<void Function()>();
   final _background = Queue<void Function()>();
+  final _pending = <Future<Object?>, void Function()>{};
 
   Future<T> run<T>(Future<T> Function() action, {bool foreground = true}) {
     final result = Completer<T>();
     void start() {
+      _pending.remove(result.future);
       _active++;
       Future<T>.sync(
         action,
@@ -23,8 +25,20 @@ class YoutubeResolutionQueue {
     }
 
     (foreground ? _foreground : _background).add(start);
+    if (!foreground) _pending[result.future] = start;
     _drain();
     return result.future;
+  }
+
+  /// Promote a queued preview when it becomes the visible reel. Its original
+  /// future, extraction and consumers remain unchanged. Running work cannot
+  /// be preempted, but the promoted request takes the next available slot.
+  bool promote(Future<Object?> future) {
+    final start = _pending.remove(future);
+    if (start == null || !_background.remove(start)) return false;
+    _foreground.addFirst(start);
+    _drain();
+    return true;
   }
 
   void _drain() {

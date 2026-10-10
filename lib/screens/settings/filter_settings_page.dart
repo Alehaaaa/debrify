@@ -6,6 +6,7 @@ import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class FilterSettingsPage extends StatefulWidget {
   const FilterSettingsPage({super.key});
@@ -128,7 +129,9 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
           if (lang != null) _selectedLanguages.add(lang);
         }
         for (final s in sizes) {
-          final bucket = SizeBucket.values.where((e) => e.name == s).firstOrNull;
+          final bucket = SizeBucket.values
+              .where((e) => e.name == s)
+              .firstOrNull;
           if (bucket != null) _selectedSizes.add(bucket);
         }
         for (final r in ranges) {
@@ -138,9 +141,7 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
           if (range != null) _selectedRanges.add(range);
         }
         for (final c in codecs) {
-          final codec = VideoCodec.values
-              .where((e) => e.name == c)
-              .firstOrNull;
+          final codec = VideoCodec.values.where((e) => e.name == c).firstOrNull;
           if (codec != null) _selectedCodecs.add(codec);
         }
         _loading = false;
@@ -389,7 +390,8 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
                   _buildSection(
                     context,
                     title: 'Size',
-                    subtitle: 'Skipped for TV series — pack sizes are unreliable',
+                    subtitle:
+                        'Skipped for TV series — pack sizes are unreliable',
                     children: _buildSizeChips(),
                   ),
                   const SizedBox(height: 20),
@@ -416,11 +418,13 @@ class _FilterSettingsPageState extends State<FilterSettingsPage> {
     final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app)
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: t.line),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -587,9 +591,7 @@ class _DpadFilterChipState extends State<_DpadFilterChip> {
       child: Container(
         decoration: BoxDecoration(
           color: _isFocused ? t.panel2 : null,
-          border: _isFocused
-              ? Border.all(color: t.accent, width: 2)
-              : null,
+          border: _isFocused ? Border.all(color: t.accent, width: 2) : null,
           borderRadius: BorderRadius.circular(8),
         ),
         // ExcludeFocus: FilterChip is itself focusable, which would make each
