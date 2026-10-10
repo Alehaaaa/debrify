@@ -1409,7 +1409,7 @@ class DetailRatingBox extends StatelessWidget {
   final double value;
   final double scale;
 
-  const DetailRatingBox({required this.value, this.scale = 1});
+  const DetailRatingBox({super.key, required this.value, this.scale = 1});
 
   @override
   Widget build(BuildContext context) {

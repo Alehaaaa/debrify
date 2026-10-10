@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../../models/profiles/profile_avatar.dart';
-import '../../utils/app_storage.dart';
 import 'profile_scope.dart';
 import 'profile_storage_paths.dart';
 

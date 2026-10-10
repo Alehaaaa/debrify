@@ -608,7 +608,7 @@ class _IndexerManagerEditorDialogState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<IndexerManagerType>(
-                        value: _type,
+                        initialValue: _type,
                         // TV: seed DPAD focus on the first control (not a
                         // text field — that would pop the soft keyboard).
                         autofocus: PlatformUtil.isTelevision,
@@ -709,7 +709,7 @@ class _IndexerManagerEditorDialogState
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<int>(
-                        value: _maxResults,
+                        initialValue: _maxResults,
                         decoration: const InputDecoration(
                           labelText: 'Max results',
                         ),

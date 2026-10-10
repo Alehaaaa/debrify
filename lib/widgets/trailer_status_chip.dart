@@ -45,6 +45,7 @@ class TrailerStatusChip extends StatefulWidget {
   final VoidCallback? onOpen;
 
   const TrailerStatusChip({
+    super.key,
     required this.loading,
     required this.playing,
     this.soundOn = false,

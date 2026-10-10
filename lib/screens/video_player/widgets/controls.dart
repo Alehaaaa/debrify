@@ -501,7 +501,7 @@ class Controls extends StatelessWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (infoPanel != null) infoPanel!,
+                  ?infoPanel,
                   // Netflix-style Bottom Bar with all controls (conditionally shown)
                   if (!hideOptions)
                     Container(

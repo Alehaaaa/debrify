@@ -76,7 +76,7 @@ class RemoteChannelFile {
             where: lastHash == null
                 ? 'channel_id = ?'
                 : 'channel_id = ? AND infohash > ?',
-            whereArgs: [channelId, if (lastHash != null) lastHash],
+            whereArgs: [channelId, ?lastHash],
             orderBy: 'infohash',
             limit: _pageSize,
           );

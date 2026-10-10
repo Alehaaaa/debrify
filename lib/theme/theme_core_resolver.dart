@@ -47,7 +47,7 @@ abstract final class ThemeCoreResolver {
     if (structured) {
       // Classic is hand-built on the Signal core, so its form is Signal's.
       base = base.withStructureOf(
-        DetailThemes.byId(structureId == 'legacy' ? 'signal' : structureId!),
+        DetailThemes.byId(structureId == 'legacy' ? 'signal' : structureId),
       );
     }
     if (!overrides.touchesCore) {

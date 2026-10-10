@@ -313,7 +313,7 @@ class TvosTopShelfService {
               '${_previewHeight}p-${_previewDurationSeconds}s-'
               '${includeAudio ? 'audio' : 'silent'}',
           'videoURL': videoUrl,
-          if (streams?.audioUrl case final audioUrl?) 'audioURL': audioUrl,
+          'audioURL': ?streams?.audioUrl,
           'includeAudio': includeAudio,
           'maxDurationSeconds': _previewDurationSeconds,
         };
@@ -414,18 +414,16 @@ class TvosTopShelfService {
         'type': _normalizedType(meta.type),
         'title': meta.name.trim(),
         'imageURL': image,
-        if (poster != null) 'posterURL': poster,
-        if (_firstNonEmpty(meta.description) case final description?)
-          'summary': description,
-        if (_firstNonEmpty(meta.year) case final year?) 'year': year,
+        'posterURL': ?poster,
+        'summary': ?_firstNonEmpty(meta.description),
+        'year': ?_firstNonEmpty(meta.year),
         if (meta.imdbRating case final rating?
             when rating.isFinite && rating > 0)
           'rating': rating,
         if (meta.genres?.where((genre) => genre.trim().isNotEmpty).toList()
             case final genres? when genres.isNotEmpty)
           'genres': genres.take(3).toList(),
-        if (_runtimeMinutes(meta.runtime) case final minutes?)
-          'runtimeMinutes': minutes,
+        'runtimeMinutes': ?_runtimeMinutes(meta.runtime),
       });
       if (items.length == 8) break;
     }

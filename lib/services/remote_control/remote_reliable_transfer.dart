@@ -706,8 +706,8 @@ class RemoteReliableTransfer {
     request.response.headers.contentType = ContentType.json;
     final body = jsonEncode({
       'phase': phase,
-      if (result != null) 'result': result,
-      if (received != null) 'received': received,
+      'result': ?result,
+      'received': ?received,
     });
     if (status == HttpStatus.ok || status == HttpStatus.accepted) {
       final id = request.uri.pathSegments.last;

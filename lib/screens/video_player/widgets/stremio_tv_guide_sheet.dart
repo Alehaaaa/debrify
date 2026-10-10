@@ -827,8 +827,7 @@ class _ChannelData {
     required this.type,
     required this.number,
     this.isFavorite = false,
-    this.hasGuideData = false,
-  });
+  }) : hasGuideData = false;
 
   factory _ChannelData.fromMap(Map<String, dynamic> map, {int index = 0}) {
     final ch = _ChannelData(

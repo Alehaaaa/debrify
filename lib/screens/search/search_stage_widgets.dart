@@ -582,7 +582,7 @@ class _TonightCardCaption extends StatelessWidget {
                     final left = _timeLeft(runtime, nfo?.progress);
                     final parts = <String>[
                       if (nfo?.episode != null) nfo!.episode!,
-                      if (left != null) left else if (runtime != null) runtime,
+                      if (left != null) left else ?runtime,
                       if (nfo?.episode == null && left == null)
                         (it0.type == 'series' ? 'SERIES' : 'MOVIE'),
                     ];
@@ -1156,7 +1156,7 @@ class _CanvasArtLayer extends StatelessWidget {
                     fit: StackFit.expand,
                     children: [
                       ...previousChildren,
-                      if (currentChild != null) currentChild,
+                      ?currentChild,
                     ],
                   ),
                   child: art,
@@ -1452,8 +1452,8 @@ class _CanvasIdentity extends StatelessWidget {
           // The narrow column splits the line rather than ellipsising it.
           final metaParts = <String>[
             it0.type == 'series' ? 'SERIES' : 'MOVIE',
-            if (year != null) year,
-            if (runtime != null) runtime,
+            ?year,
+            ?runtime,
             if (!narrow && !headline && genreText != null) genreText,
           ];
           // Headline stands in for narrow on short columns, so it wraps the
@@ -1478,7 +1478,7 @@ class _CanvasIdentity extends StatelessWidget {
                   : Alignment.bottomLeft,
               children: [
                 ...previousChildren,
-                if (currentChild != null) currentChild,
+                ?currentChild,
               ],
             ),
             child: Column(

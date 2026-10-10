@@ -2382,8 +2382,10 @@ sheetAnimationStyle: kMenuSheetAnimation,context: context,
         ? 'Season $number marked $action $name.'
         : 'Could not mark $failures episodes $action $name. Reopen the season menu to retry.')));
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Could not update season watch status. Please retry.')));
+      }
     } finally { _seasonActionBusy = false; }
   }
 

@@ -467,7 +467,7 @@ class IptvZapBanner extends StatelessWidget {
           SizedBox(height: s(3)),
           Text(
             [
-              if (times != null) times,
+              ?times,
               if (group != null && group.isNotEmpty) group.toUpperCase(),
             ].join('  ·  '),
             maxLines: 1,

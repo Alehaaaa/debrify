@@ -79,9 +79,7 @@ class PlayLoaderArt {
       posterUrl: _clean(meta.poster) ?? derived('poster'),
       logoUrl: _clean(meta.logo) ?? derived('logo'),
       yearLabel: _clean(meta.year),
-      ratingLabel: meta.imdbRating == null
-          ? null
-          : meta.imdbRating!.toStringAsFixed(1),
+      ratingLabel: meta.imdbRating?.toStringAsFixed(1),
       runtimeLabel: _clean(meta.runtimeDisplay),
       certificate: _clean(certificate),
       genreLabel: (genres == null || genres.isEmpty)

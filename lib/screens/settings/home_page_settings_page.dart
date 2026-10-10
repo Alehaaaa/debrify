@@ -698,7 +698,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       padding: const EdgeInsets.all(16),
                       child: DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: _selectedSourceType,
+                        initialValue: _selectedSourceType,
                         decoration: InputDecoration(
                           labelText: 'Default view',
                           prefixIcon: Icon(
@@ -947,7 +947,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                           child: DropdownButtonFormField<int>(
                             isExpanded: true,
-                            value: _ambientTrailerVolume,
+                            initialValue: _ambientTrailerVolume,
                             decoration: const InputDecoration(
                               labelText: 'Trailer volume',
                               prefixIcon: Icon(Icons.tune_rounded),

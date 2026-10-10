@@ -3962,9 +3962,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
                       alignment: Alignment.centerRight,
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          if (onCopy != null) {
-                            await onCopy();
-                          }
+                          await onCopy();
                         },
                         icon: const Icon(Icons.copy_rounded, size: 16),
                         label: const Text(
@@ -5661,7 +5659,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
           focusNode: _viewModeDropdownFocusNode,
           autofocus: true,
           isExpanded: true,
-          value: mode,
+          initialValue: mode,
           decoration: InputDecoration(
             labelText: 'View Mode',
             prefixIcon: Icon(
@@ -7048,8 +7046,7 @@ class _TorboxMoreOption {
     required this.label,
     required this.onTap,
     this.destructive = false,
-    this.enabled = true,
-  });
+  }) : enabled = true;
 
   final IconData icon;
   final String label;

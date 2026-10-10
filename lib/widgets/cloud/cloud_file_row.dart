@@ -487,7 +487,7 @@ popUpAnimationStyle: kPopupMenuAnimation,
       crossAxisAlignment:
           compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        if (leadingCheckbox != null) leadingCheckbox,
+        ?leadingCheckbox,
         iconChip,
         const SizedBox(width: 12),
         Expanded(
@@ -500,7 +500,7 @@ popUpAnimationStyle: kPopupMenuAnimation,
                 Row(
                   children: [
                     Expanded(child: metaLine ?? const SizedBox.shrink()),
-                    if (strip != null) strip,
+                    ?strip,
                   ],
                 ),
               ] else if (!compact && metaLine != null) ...[

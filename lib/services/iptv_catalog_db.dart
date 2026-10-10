@@ -3602,10 +3602,10 @@ class CatalogSnapshot {
   List<Object?> _args({String? group, String? search, int? beforePosition}) => [
     catalogKey,
     generation,
-    if (group != null) group,
+    ?group,
     if (search != null && search.isNotEmpty)
       '%${_escapeLike(search.toLowerCase())}%',
-    if (beforePosition != null) beforePosition,
+    ?beforePosition,
   ];
 
   String _where({

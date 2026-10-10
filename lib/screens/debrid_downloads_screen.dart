@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import '../models/playlist_view_mode.dart';
@@ -2743,7 +2744,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
           focusNode: _viewModeDropdownFocusNode,
           autofocus: true,
           isExpanded: true,
-          value: mode,
+          initialValue: mode,
           decoration: InputDecoration(
             labelText: 'View Mode',
             prefixIcon: Icon(
@@ -2851,9 +2852,8 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _currentViewNodes!.length,
-      cacheExtent: 200.0, // Pre-cache items for smoother scrolling
+      scrollCacheExtent: ScrollCacheExtent.pixels(200.0), padding: const EdgeInsets.all(16),
+      itemCount: _currentViewNodes!.length, // Pre-cache items for smoother scrolling
       addRepaintBoundaries: true, // Optimize repainting
       itemBuilder: (context, index) {
         final node = _currentViewNodes![index];
@@ -3318,10 +3318,9 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         backgroundColor: const Color(0xFF1E293B),
         strokeWidth: 3,
         child: ListView.builder(
-          controller: _torrentScrollController,
+          scrollCacheExtent: ScrollCacheExtent.pixels(200.0), controller: _torrentScrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: _torrents.length + (_hasMoreTorrents ? 1 : 0),
-          cacheExtent: 200.0, // Pre-cache items for smoother scrolling
+          itemCount: _torrents.length + (_hasMoreTorrents ? 1 : 0), // Pre-cache items for smoother scrolling
           addRepaintBoundaries: true, // Optimize repainting
           itemBuilder: (context, index) {
             if (index == _torrents.length) {
@@ -3604,10 +3603,9 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         backgroundColor: const Color(0xFF1E293B),
         strokeWidth: 3,
         child: ListView.builder(
-          controller: _downloadScrollController,
+          scrollCacheExtent: ScrollCacheExtent.pixels(200.0), controller: _downloadScrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: _downloads.length + (_hasMoreDownloads ? 1 : 0),
-          cacheExtent: 200.0, // Pre-cache items for smoother scrolling
+          itemCount: _downloads.length + (_hasMoreDownloads ? 1 : 0), // Pre-cache items for smoother scrolling
           addRepaintBoundaries: true, // Optimize repainting
           itemBuilder: (context, index) {
             if (index == _downloads.length) {
@@ -5468,7 +5466,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     required StateSetter setLocal,
   }) {
     // Track current season for navigation
-    int? _currentSeason;
+    int? currentSeason;
 
     return StatefulBuilder(
       builder: (context, setBrowserState) {
@@ -5482,10 +5480,10 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
           torrent: torrent,
           setLocal: setLocal,
           setBrowserState: setBrowserState,
-          currentSeason: _currentSeason,
+          currentSeason: currentSeason,
           onSeasonChanged: (season) {
             setBrowserState(() {
-              _currentSeason = season;
+              currentSeason = season;
             });
           },
         );
@@ -5508,7 +5506,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
   }) {
     final app = AppThemeScope.of(context);
     // Use the passed currentSeason instead of defining a local one
-    final _currentSeason = currentSeason;
+    final currentSeason0 = currentSeason;
     // Group files by season
     final seasonMap = <int, List<Map<String, dynamic>>>{};
     String? seriesTitle;
@@ -5536,7 +5534,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     return Column(
       children: [
         // Breadcrumb navigation
-        if (_currentSeason != null) ...[
+        if (currentSeason0 != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(
@@ -5593,7 +5591,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'Season $_currentSeason',
+                    'Season $currentSeason0',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -5629,7 +5627,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
 
         // Content area
         Expanded(
-          child: _currentSeason == null
+          child: currentSeason0 == null
               ? _buildSeasonsList(
                   seasonMap: seasonMap,
                   sortedSeasons: sortedSeasons,
@@ -5643,7 +5641,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
                   onSeasonChanged: onSeasonChanged,
                 )
               : _buildEpisodesList(
-                  seasonFiles: seasonMap[_currentSeason]!,
+                  seasonFiles: seasonMap[currentSeason0]!,
                   selectedFiles: selectedFiles,
                   added: added,
                   unrestrictingFiles: unrestrictingFiles,

@@ -190,9 +190,7 @@ abstract final class AppThemeAdapter {
       surfaceContainerHigh: Color(0xFF1C2233), // Input fills
       surfaceContainer: Color(0xFF2A3040), // Mid containers
       surfaceContainerLow: Color(0xFF3A4050), // Lighter containers
-      surfaceContainerLowest: Color(0xFF94A3B8), // Slate 400
-      background: Color(0xFF020408), // True near-black
-      onBackground: Colors.white,
+      surfaceContainerLowest: Color(0xFF94A3B8),
       error: Color(0xFFEF4444), // Red 500
       onError: Colors.white,
       errorContainer: Color(0xFF7F1D1D), // Red 900

@@ -88,7 +88,7 @@ String chunkStartBody({
       'sid': encSidB64,
       'n': encN,
     },
-    if (resultRequestId != null) 'resultRequestId': resultRequestId,
+    'resultRequestId': ?resultRequestId,
   });
 }
 
@@ -167,7 +167,7 @@ String profileGraphResultBody({
   required String message,
 }) {
   return jsonEncode({
-    if (requestId != null) 'requestId': requestId,
+    'requestId': ?requestId,
     'ok': ok,
     'message': message,
   });

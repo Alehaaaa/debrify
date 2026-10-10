@@ -51,7 +51,11 @@ class TrackerScrobbleOutbox {
       return;
     }
     next['key'] = key;
-    if (index >= 0) values[index] = next; else values.add(next);
+    if (index >= 0) {
+      values[index] = next;
+    } else {
+      values.add(next);
+    }
     await prefs.setString(_key, jsonEncode(values));
   }
 

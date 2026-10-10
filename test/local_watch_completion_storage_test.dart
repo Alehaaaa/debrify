@@ -158,8 +158,9 @@ void main() {
         },
         () => MockClient((request) async {
           requests.add(request.url);
-          if (request.url.host.contains('trakt'))
+          if (request.url.host.contains('trakt')) {
             return http.Response('{}', 503);
+          }
           return http.Response('[]', 200);
         }),
       );

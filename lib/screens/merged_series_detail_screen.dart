@@ -33,7 +33,6 @@ import '../services/storage_service.dart';
 import '../services/local_playback_resume_resolver.dart';
 import '../services/playback_restart_ticket.dart';
 import '../services/tracking_source_policy.dart';
-import '../models/tracking_source.dart';
 import '../widgets/detail/detail_resume_choice.dart';
 import '../services/watchlist_sync_service.dart';
 import '../services/movie_completion_service.dart';
@@ -326,7 +325,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   void _openMetadataRecommendation(StremioMeta item) {
     final onOpen = widget.onRecommendationTap;
-    if (onOpen != null)
+    if (onOpen != null) {
       unawaited(
         openMetadataTitle(
           context,
@@ -334,6 +333,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
           onOpen,
         ),
       );
+    }
   }
 
   List<StremioMeta>? _recommendations;
@@ -748,8 +748,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
           _item.imdbId ?? _item.id,
           season: promised?.season ?? _resumeSeason ?? widget.initialSeason,
           episode: promised?.episode ?? _resumeEpisode ?? widget.initialEpisode,
-        ))
+        )) {
           return;
+        }
         if (mounted) await widget.onResume(promised);
       }),
     );
@@ -1015,8 +1016,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
           _item.imdbId ?? _item.id,
           season: selection.season,
           episode: selection.episode,
-        ))
+        )) {
           return;
+        }
         if (mounted) await play(selection);
       }),
     );
@@ -1032,8 +1034,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
           _item.imdbId ?? _item.id,
           season: episode.season,
           episode: episode.number,
-        ))
+        )) {
           return;
+        }
         if (mounted) await play(episode);
       }),
     );
@@ -3575,8 +3578,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         ],
         onAction: (action) async {
           await widget.onTraktAction?.call(action);
-          if (mounted && action == TraktItemMenuAction.clearTraktProgress)
+          if (mounted && action == TraktItemMenuAction.clearTraktProgress) {
             _refreshAfterPlayback();
+          }
         },
         onRate: widget.onTraktRate,
         statusLoader: widget.traktStatusLoader,
@@ -3612,8 +3616,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
             widget.simklMenuBuilder?.call(status) ?? widget.simklMenuOptions,
         onAction: (action) async {
           await widget.onSimklAction?.call(action);
-          if (mounted && action == SimklItemMenuAction.clearWatchProgress)
+          if (mounted && action == SimklItemMenuAction.clearWatchProgress) {
             _refreshAfterPlayback();
+          }
         },
         onRate: widget.onSimklRate,
         statusLoader: widget.simklStatusLoader,
@@ -3665,8 +3670,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
                     await widget.onMdblistAction?.call(option.action);
                     if (mounted &&
                         option.action ==
-                            MdblistItemMenuAction.clearWatchProgress)
+                            MdblistItemMenuAction.clearWatchProgress) {
                       _refreshAfterPlayback();
+                    }
                     await _loadMdblistStatus();
                     if (sheetContext.mounted) Navigator.pop(sheetContext);
                   },
@@ -6147,7 +6153,7 @@ class _AmbientStill extends StatelessWidget {
       // BoxFit.cover image would size itself to its own aspect and letterbox.
       layoutBuilder: (current, previous) => Stack(
         fit: StackFit.expand,
-        children: [...previous, if (current != null) current],
+        children: [...previous, ?current],
       ),
       child: image,
     );

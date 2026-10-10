@@ -596,7 +596,7 @@ class LinuxWrappedDeviceKey {
     'salt': base64Encode(salt),
     'wrappedKey': wrappedKey,
     'keyId': keyId,
-    if (localUnlockSecret != null) 'localUnlockSecret': localUnlockSecret!,
+    'localUnlockSecret': ?localUnlockSecret,
   });
 }
 

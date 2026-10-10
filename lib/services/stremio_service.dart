@@ -416,8 +416,7 @@ class StremioService {
     }
     final executableByResourceId = <String, StremioAddon>{
       for (final addon in executable)
-        if (addon.connectionResourceId case final resourceId?)
-          resourceId: addon,
+        ?addon.connectionResourceId: addon,
     };
     final merged = <StremioAddon>[];
     final seenResourceIds = <String>{};
@@ -1985,21 +1984,24 @@ class StremioService {
               'exp',
               'expires',
               'expiry',
-            }.contains(parameter.key.toLowerCase()))
+            }.contains(parameter.key.toLowerCase())) {
               continue;
+            }
             final seconds = int.tryParse(parameter.value);
             if (seconds == null) {
               final expiry = DateTime.tryParse(parameter.value);
               if (expiry != null &&
-                  (earliest == null || expiry.isBefore(earliest)))
+                  (earliest == null || expiry.isBefore(earliest))) {
                 earliest = expiry;
+              }
               continue;
             }
             final millis = seconds > 100000000000 ? seconds : seconds * 1000;
             if (millis.abs() > 8640000000000000) continue;
             final expiry = DateTime.fromMillisecondsSinceEpoch(millis);
-            if (earliest == null || expiry.isBefore(earliest))
+            if (earliest == null || expiry.isBefore(earliest)) {
               earliest = expiry;
+            }
           }
         }
         return earliest;
@@ -3001,7 +3003,9 @@ class StremioService {
   Future<String?> restoredCatalogProgressIdentity(StremioMeta item) async {
     final addon = item.sourceAddon;
     if (item.type != 'series' || addon == null ||
-        CustomSeriesIdentity.isCustom(item.imdbId)) return catalogProgressIdentity(item);
+        CustomSeriesIdentity.isCustom(item.imdbId)) {
+      return catalogProgressIdentity(item);
+    }
     final key = '${addon.portableConfigurationKey}:${item.id}';
     final prefs = await ProfilePreferences.instance();
     final saved = prefs.getString('$_progressIdentityPrefix$key');

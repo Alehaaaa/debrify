@@ -2242,9 +2242,9 @@ class _ImportTraktDialogState extends State<_ImportTraktDialog> {
               ? 'custom'
               : 'liked',
           'traktSlug': slug,
-          if (listId != null) 'traktListId': listId,
-          if (ownerSlug != null) 'traktOwnerSlug': ownerSlug,
-          if (owner != null) 'traktOwner': owner,
+          'traktListId': ?listId,
+          'traktOwnerSlug': ?ownerSlug,
+          'traktOwner': ?owner,
         },
       );
     } catch (e) {
@@ -2387,7 +2387,7 @@ class _ImportTraktDialogState extends State<_ImportTraktDialog> {
             // Source dropdown
             DropdownButtonFormField<_TraktListSource>(
               isExpanded: true,
-              value: _source,
+              initialValue: _source,
               decoration: InputDecoration(
                 labelText: 'List Type',
                 border: OutlineInputBorder(
@@ -2752,7 +2752,7 @@ class _ImportMdblistDialogState extends State<_ImportMdblistDialog> {
           children: [
             DropdownButtonFormField<_MdblistListCategory>(
               isExpanded: true,
-              value: _category,
+              initialValue: _category,
               decoration: InputDecoration(
                 labelText: 'Lists',
                 border: OutlineInputBorder(

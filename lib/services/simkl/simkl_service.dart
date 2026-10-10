@@ -848,8 +848,9 @@ class SimklService {
       for (final season in row['seasons'] as List) {
         if (season is! Map ||
             season['number'] is! num ||
-            season['episodes'] is! List)
+            season['episodes'] is! List) {
           return false;
+        }
         final episodes = <Map<String, dynamic>>[];
         for (final episode in season['episodes'] as List) {
           if (episode is! Map) return false;
@@ -857,8 +858,9 @@ class SimklService {
           if (episode['number'] is! num) return false;
           episodes.add({'number': episode['number']});
         }
-        if (episodes.isNotEmpty)
+        if (episodes.isNotEmpty) {
           seasons.add({'number': season['number'], 'episodes': episodes});
+        }
       }
     }
     if (seasons.isEmpty) return true;

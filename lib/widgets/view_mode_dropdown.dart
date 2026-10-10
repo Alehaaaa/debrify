@@ -66,7 +66,7 @@ class ViewModeDropdown extends StatelessWidget {
         focusNode: focusNode,
         autofocus: autofocus,
         isExpanded: true,
-        value: currentMode,
+        initialValue: currentMode,
         decoration: InputDecoration(
           labelText: 'View Mode',
           prefixIcon: Icon(

@@ -3365,8 +3365,7 @@ class StorageService {
       'speed': speed,
       'aspect': aspect,
       'updatedAt': recoveryUpdatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
-      if (recoveryCheckpointId != null)
-        'recoveryCheckpointId': recoveryCheckpointId,
+      'recoveryCheckpointId': ?recoveryCheckpointId,
     };
 
     debugPrint(
@@ -3717,7 +3716,7 @@ class StorageService {
         if (episodes is! Map) continue;
         result.putIfAbsent(entry.key.toString(), () => <int>{}).addAll({
           for (final episode in episodes.keys)
-            if (int.tryParse(episode.toString()) case final value?) value,
+            ?int.tryParse(episode.toString()),
         });
       }
     }
@@ -3772,7 +3771,7 @@ class StorageService {
           entry.key.toString(): {
             if (entry.value is Map)
               for (final episode in (entry.value as Map).keys)
-                if (int.tryParse(episode.toString()) case final value?) value,
+                ?int.tryParse(episode.toString()),
           },
       };
       void mergeInto(String key) {
@@ -4196,9 +4195,8 @@ class StorageService {
       'speed': speed,
       'aspect': aspect,
       'updatedAt': recoveryUpdatedAtMs ?? DateTime.now().millisecondsSinceEpoch,
-      if (recoveryCheckpointId != null)
-        'recoveryCheckpointId': recoveryCheckpointId,
-      if (imdbId != null) 'imdbId': imdbId,
+      'recoveryCheckpointId': ?recoveryCheckpointId,
+      'imdbId': ?imdbId,
     };
 
     await _savePlaybackStateMap(map);
@@ -6290,7 +6288,7 @@ class StorageService {
         // Prefer when playback last moved; a rebuilt-metadata entry can be
         // older than the watching it describes.
         'sortAt': sortAt,
-        if (seriesKey != null) '_seriesKey': seriesKey,
+        '_seriesKey': ?seriesKey,
       });
     }
 
@@ -7079,7 +7077,7 @@ class StorageService {
     if (stored == null) return Set<TrackingSource>.of(_allTrackingSources);
     return <TrackingSource>{
       for (final value in stored)
-        if (TrackingSourceStorageName.parse(value) case final source?) source,
+        ?TrackingSourceStorageName.parse(value),
     };
   }
 
@@ -7129,7 +7127,7 @@ class StorageService {
     if (scrobble is List) {
       await setTrackingScrobbleTargets(<TrackingSource>{
         for (final value in scrobble.whereType<String>())
-          if (TrackingSourceStorageName.parse(value) case final source?) source,
+          ?TrackingSourceStorageName.parse(value),
       });
     }
     final progress = payload['progress_source'];
@@ -7143,7 +7141,7 @@ class StorageService {
     if (ticks is List) {
       await setHomeTickSources(<TrackingSource>{
         for (final value in ticks.whereType<String>())
-          if (TrackingSourceStorageName.parse(value) case final source?) source,
+          ?TrackingSourceStorageName.parse(value),
       });
     }
     final hideWatched = payload['hide_watched'];
@@ -10162,7 +10160,7 @@ class StorageService {
         'name': name,
         if (playlistId != null && playlistId.isNotEmpty)
           'playlistId': playlistId,
-        if (channelNumber != null) 'channelNumber': channelNumber,
+        'channelNumber': ?channelNumber,
         if (group != null && group.isNotEmpty) 'group': group,
         if (logoUrl != null && logoUrl.isNotEmpty) 'logoUrl': logoUrl,
         if (httpHeaders != null && httpHeaders.isNotEmpty)
@@ -10301,7 +10299,7 @@ class StorageService {
         'name': name,
         if (playlistId != null && playlistId.isNotEmpty)
           'playlistId': playlistId,
-        if (channelNumber != null) 'channelNumber': channelNumber,
+        'channelNumber': ?channelNumber,
         if (group != null && group.isNotEmpty) 'group': group,
         if (logoUrl != null && logoUrl.isNotEmpty) 'logoUrl': logoUrl,
         if (httpHeaders != null && httpHeaders.isNotEmpty)

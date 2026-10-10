@@ -7,7 +7,6 @@ import 'recoverable_network_image.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
 import '../services/debrify_image_cache.dart';

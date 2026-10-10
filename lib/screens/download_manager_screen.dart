@@ -658,7 +658,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             indicatorSize: TabBarIndicatorSize.tab,
             indicatorPadding: const EdgeInsets.all(6),
             labelPadding: const EdgeInsets.symmetric(vertical: 10),
-            overlayColor: MaterialStateProperty.all(Colors.transparent),
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
             indicator: BoxDecoration(
               color: Theme.of(context).colorScheme.primary,
               borderRadius: app.shape.br(10),
@@ -2098,7 +2098,7 @@ class _TorrentGroupCard extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: group.progress.isNaN ? 0 : group.progress.clamp(0.0, 1.0),
                 minHeight: 8,
-                backgroundColor: theme.colorScheme.surfaceVariant.withValues(alpha: 0.3),
+                backgroundColor: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 valueColor: AlwaysStoppedAnimation(stateColor),
               ),
             ),
@@ -2159,7 +2159,7 @@ class _InfoChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color fg = foreground ?? theme.colorScheme.onSurfaceVariant;
-    final Color bg = background ?? theme.colorScheme.surfaceVariant.withValues(alpha: 0.4);
+    final Color bg = background ?? theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

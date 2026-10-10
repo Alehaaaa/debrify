@@ -382,7 +382,7 @@ class _SourceSheetState extends State<SourceSheet> {
           );
           return;
         }
-        if (!_sourceScrollController.hasClients || targetIndex == null) return;
+        if (!_sourceScrollController.hasClients) return;
         // Source cards have variable heights (addon text and badges). Walk
         // until the lazy target mounts, then align its actual geometry.
         final firstMounted = _visibleEntries.indexWhere(

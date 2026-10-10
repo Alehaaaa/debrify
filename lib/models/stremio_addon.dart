@@ -501,7 +501,7 @@ class StremioMeta {
       if (imdbRating != null) 'rating': imdbRating,
       if (genres != null && genres!.isNotEmpty) 'genres': genres,
       if (runtime != null) 'runtime': runtime,
-      if (sourceAddonJson != null) 'source_addon': sourceAddonJson,
+      'source_addon': ?sourceAddonJson,
       if (trailerYtId != null) 'trailer_yt_id': trailerYtId,
       if (logo != null) 'logo': logo,
     };

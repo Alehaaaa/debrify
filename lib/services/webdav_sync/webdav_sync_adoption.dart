@@ -706,7 +706,7 @@ final class WebDavSyncCircleAdoption implements WebDavSyncAdoptionRunner {
     Map<String, String> newMap,
   ) => Map<String, String>.unmodifiable(<String, String>{
     for (final entry in oldMap.entries)
-      if (newMap[entry.key] case final newId?) entry.value: newId,
+      entry.value: ?newMap[entry.key],
   });
 
   static String? _unfinishedSource(WebDavSyncAdoptionRecord record) {

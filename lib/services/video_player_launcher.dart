@@ -2029,7 +2029,7 @@ class VideoPlayerLauncher {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: selectedScreenType,
+                initialValue: selectedScreenType,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
@@ -2055,7 +2055,7 @@ class VideoPlayerLauncher {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: selectedStereoMode,
+                initialValue: selectedStereoMode,
                 isExpanded: true,
                 decoration: const InputDecoration(
                   border: OutlineInputBorder(),
@@ -2337,8 +2337,9 @@ class VideoPlayerLauncher {
               !await recoveryPreflight.allows(
                 torrent,
                 enabled: validateRecoveryDirectLinks,
-              ))
+              )) {
             return null;
+          }
           final playlistEntries = automaticRecovery
               ? await TorrentPlaybackService.resolveRecoverySource(
                   torrent,
@@ -2565,8 +2566,8 @@ class VideoPlayerLauncher {
               if (entry.hdVideoUrl != null) 'hdVideoUrl': entry.hdVideoUrl,
               if (entry.audioUrl != null) 'audioUrl': entry.audioUrl,
               'index': i,
-              if (season != null) 'season': season,
-              if (episodeNumber != null) 'episode': episodeNumber,
+              'season': ?season,
+              'episode': ?episodeNumber,
               if (epInfo?.poster != null) 'artwork': epInfo!.poster,
               if (epInfo?.plot != null) 'description': epInfo!.plot,
               if (epInfo?.rating != null) 'rating': epInfo!.rating,
@@ -2575,8 +2576,7 @@ class VideoPlayerLauncher {
               'durationMs': localDurationMs,
               'updatedAt': (localState?['updatedAt'] as num?)?.toInt() ?? 0,
               if (entry.provider != null) 'provider': entry.provider,
-              if (trackerPercent != null)
-                'traktProgressPercent': trackerPercent,
+              'traktProgressPercent': ?trackerPercent,
               'watched': resolvedLocal.watched,
               'allowLocalProgressDisplay': trackingPolicy.progressFrom(
                 TrackingSource.local,
@@ -2609,7 +2609,7 @@ class VideoPlayerLauncher {
       }
 
       final sourceCommit = args.onStremioSourceCommitted;
-      final sourceCommitterForTv = (int sourceIndex) async {
+      Future<Null> sourceCommitterForTv(int sourceIndex) async {
         if (sourceIndex < 0 || sourceIndex >= currentStremioSources.length) {
           return;
         }
@@ -2619,9 +2619,10 @@ class VideoPlayerLauncher {
           index: sourceIndex,
           player: 'exo',
         );
-        if (sourceCommit != null)
+        if (sourceCommit != null) {
           await sourceCommit(currentStremioSources[sourceIndex]);
-      };
+        }
+      }
 
       // "Load more sources" for the series source tabs: run the missing
       // category's search (packs/episodes), APPEND the deduped results onto
@@ -3551,9 +3552,8 @@ class VideoPlayerLauncher {
             },
         ],
         'categories': categories,
-        if (seriesAudioKey != null) 'seriesAudioKey': seriesAudioKey,
-        if (preferredAudioLang != null)
-          'preferredAudioLang': preferredAudioLang,
+        'seriesAudioKey': ?seriesAudioKey,
+        'preferredAudioLang': ?preferredAudioLang,
       };
 
       // Hide auto-launch overlay before launching player
@@ -3870,8 +3870,8 @@ class VideoPlayerLauncher {
               final number = episode.seriesInfo.episode;
               metadataUpdates.add({
                 'originalIndex': episode.originalIndex,
-                if (season != null) 'season': season,
-                if (number != null) 'episode': number,
+                'season': ?season,
+                'episode': ?number,
                 if (info?.title != null) 'title': info!.title,
                 if (info?.plot != null) 'description': info!.plot,
                 if (info?.poster != null) 'artwork': info!.poster,
@@ -4592,7 +4592,7 @@ class VideoPlayerLauncher {
           );
           final persistedUrl =
               progressUrl ??
-              (resumeId != null ? _resolvedStreamCache[resumeId] : null) ??
+              (_resolvedStreamCache[resumeId]) ??
               item.url;
 
           await StorageService.saveVideoPlaybackState(
@@ -5297,7 +5297,7 @@ class _AndroidTvPlaylistResolver {
         index < entries.length) {
       target = entries[index];
       debugPrint(
-        'AndroidTvPlaylistResolver: found by index: ${target != null}, entry: ${target?.entry.title}',
+        'AndroidTvPlaylistResolver: found by index: ${target != null}, entry: ${target.entry.title}',
       );
     }
     if (target == null) {

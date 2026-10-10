@@ -596,7 +596,7 @@ class _DiscoverDetailRailState extends State<DiscoverDetailRail>
         duration: const Duration(milliseconds: 220),
         layoutBuilder: (current, previous) => Stack(
           alignment: Alignment.bottomLeft,
-          children: [...previous, if (current != null) current],
+          children: [...previous, ?current],
         ),
         child: _StageContent(
           key: ValueKey('disc-stage-id-${item.id}'),

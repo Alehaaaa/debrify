@@ -191,12 +191,9 @@ class DownloadService {
   }) => jsonEncode(<String, Object?>{
     'schema': 1,
     'ownerProfileId': _activeOwnerProfileId,
-    if (authorizationRevision != null)
-      'profileAuthorizationRevision': authorizationRevision,
-    if (connectionResourceId != null)
-      'connectionResourceId': connectionResourceId,
-    if (resourceAuthorizationRevision != null)
-      'resourceAuthorizationRevision': resourceAuthorizationRevision,
+    'profileAuthorizationRevision': ?authorizationRevision,
+    'connectionResourceId': ?connectionResourceId,
+    'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
   });
 
   String? _pluginOwner(Task task) {
@@ -2395,13 +2392,11 @@ class DownloadService {
       if (authorization != null)
         'profileAuthorizationRevision':
             authorization.profileAuthorizationRevision,
-      if (connectionResourceId != null)
-        'connectionResourceId': connectionResourceId,
-      if (resourceAuthorizationRevision != null)
-        'resourceAuthorizationRevision': resourceAuthorizationRevision,
-      if (destPath != null) 'destPath': destPath,
-      if (relativeSubDir != null) 'relativeSubDir': relativeSubDir,
-      if (treeUri != null) 'treeUri': treeUri,
+      'connectionResourceId': ?connectionResourceId,
+      'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
+      'destPath': ?destPath,
+      'relativeSubDir': ?relativeSubDir,
+      'treeUri': ?treeUri,
     });
 
     // Add to in-memory pending queue (prevent duplicates by contentKey)
@@ -2899,7 +2894,7 @@ class DownloadService {
       );
       for (final directory in <Directory>[
         Directory('/storage/emulated/0/Download/Debrify'),
-        if (external != null) external,
+        ?external,
       ]) {
         try {
           return await _placeGeneratedFile(
@@ -4048,7 +4043,7 @@ class DownloadService {
           if (finalFileName.isNotEmpty) {
             name = finalFileName;
           } else {
-            final (_dir, fn) = await _smartLocationFor(
+            final (dir, fn) = await _smartLocationFor(
               finalUrl,
               null,
               p.torrentName,

@@ -456,11 +456,12 @@ class _SourcesScreenState extends State<_SourcesScreen> {
   Future<void> _loadAddonText() async {
     final value = await StorageService.getUseAddonTextFormatting();
     final logos = await StorageService.getShowAddonLogos();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _useAddonText = value;
         _showAddonLogos = logos;
       });
+    }
   }
 
   Future<void> _loadSourcePriority() async {
@@ -1663,7 +1664,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                                   },
                                   child: SourceListScrollAnchor(
                                     child: ListView.builder(
-                                      controller: _resultsScroll,
+                                      cacheExtent: 1200, controller: _resultsScroll,
                                       padding: EdgeInsets.symmetric(
                                         // Spotlight expands the focused
                                         // SourceRow beyond its layout box.
@@ -1673,7 +1674,6 @@ sheetAnimationStyle: kMenuSheetAnimation,
                                         vertical: widget.isTelevision ? 24 : 8,
                                         horizontal: _redesign ? 10 : 0,
                                       ),
-                                      cacheExtent: 1200,
                                       itemCount: _visible.length,
                                       itemBuilder: (context, i) {
                                         final t = _visible[i];
@@ -3663,7 +3663,7 @@ class _DiscoverStageBackdropState extends State<_DiscoverStageBackdrop> {
       // crop, or the swap reads as a jump in zoom.
       layoutBuilder: (current, previous) => Stack(
         fit: StackFit.expand,
-        children: [...previous, if (current != null) current],
+        children: [...previous, ?current],
       ),
       child: art,
     );

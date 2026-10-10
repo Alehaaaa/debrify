@@ -900,7 +900,7 @@ class TraktService {
     final apiKey = type == 'series' ? 'shows' : 'movies';
     final item = <String, dynamic>{
       'ids': ids,
-      if (extraItemFields != null) ...extraItemFields,
+      ...?extraItemFields,
     };
     final body = {
       apiKey: [item],
@@ -986,7 +986,7 @@ class TraktService {
     if (ids == null) return false;
     final ep = <String, dynamic>{
       'number': episode,
-      if (extraEpisodeFields != null) ...extraEpisodeFields,
+      ...?extraEpisodeFields,
     };
     final body = {
       'shows': [

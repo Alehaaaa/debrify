@@ -676,7 +676,9 @@ class AndroidTvPlayerBridge {
           final failure = call.arguments;
           final failureSession = _sourcePersistenceSession;
           if (failure is! Map || failureSession == null ||
-              failure['sourcePersistenceSessionId'] != failureSession.id) return null;
+              failure['sourcePersistenceSessionId'] != failureSession.id) {
+            return null;
+          }
           final failureCallback = _startupSourceFailedCallback;
           final failedIndex = failure['sourceIndex'];
           final failureReason = failure['reason'];
@@ -1487,7 +1489,7 @@ class AndroidTvPlayerBridge {
                 return {
                   'kind': 'movie',
                   'title': meta?.title ?? parsed.title,
-                  if (year != null) 'year': year,
+                  'year': ?year,
                   if (meta?.poster != null) 'poster': meta!.poster,
                   'badges': badges,
                 };
@@ -2047,7 +2049,7 @@ class AndroidTvPlayerBridge {
         'updateEpisodeMetadata',
         {
           'updates': metadataUpdates,
-          if (imdbId != null) 'imdbId': imdbId,
+          'imdbId': ?imdbId,
           if (guideEpisodes != null && guideEpisodes.isNotEmpty)
             'guideEpisodes': guideEpisodes,
           // TVMaze's official show title, for the native OTT dock's

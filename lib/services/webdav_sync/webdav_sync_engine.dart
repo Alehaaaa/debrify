@@ -2897,7 +2897,7 @@ final class WebDavSyncEngine
       }
     }
     return _PeerProfileData(
-      hotDocuments: [if (hot != null) hot, ...collectionDocuments],
+      hotDocuments: [?hot, ...collectionDocuments],
       tombstoneDocuments: tombstone == null
           ? const <WebDavSyncTombstoneDocument>[]
           : <WebDavSyncTombstoneDocument>[tombstone],

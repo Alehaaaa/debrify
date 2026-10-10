@@ -228,7 +228,7 @@ class WebDavLogUpload with WidgetsBindingObserver {
     String? appVersion,
   }) {
     final header = utf8.encode(
-      '${jsonEncode({'event': 'webdav_log_snapshot', 'deviceId': deviceId, 'platform': Platform.operatingSystem, if (appVersion != null) 'appVersion': appVersion, 'windowEnd': snapshot.windowEnd.toUtc().toIso8601String(), 'truncated': snapshot.truncated || snapshot.bytes.length > maxUploadBytes - 1024})}\n',
+      '${jsonEncode({'event': 'webdav_log_snapshot', 'deviceId': deviceId, 'platform': Platform.operatingSystem, 'appVersion': ?appVersion, 'windowEnd': snapshot.windowEnd.toUtc().toIso8601String(), 'truncated': snapshot.truncated || snapshot.bytes.length > maxUploadBytes - 1024})}\n',
     );
     final budget = maxUploadBytes - 1024;
     var start = snapshot.bytes.length > budget

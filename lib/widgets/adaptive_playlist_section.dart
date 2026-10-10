@@ -331,11 +331,10 @@ String _getDedupeKey(Map<String, dynamic> item) {
         controller: _scrollController,
         child: _edgeFade(
         ListView.builder(
-          controller: _scrollController,
+          cacheExtent: 600, controller: _scrollController,
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          clipBehavior: Clip.none, // Allow shadow overflow
-          cacheExtent: 600, // Pre-cache more items for smoother scrolling
+          clipBehavior: Clip.none, // Pre-cache more items for smoother scrolling
           itemCount: widget.items.length,
           itemBuilder: (context, index) {
             return Padding(

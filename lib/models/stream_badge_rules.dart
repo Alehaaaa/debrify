@@ -63,12 +63,12 @@ class StreamBadgeRuleset {
     final groups = <StreamBadgeGroup>[
       if (rawGroups is List)
         for (final g in rawGroups)
-          if (StreamBadgeGroup.fromJson(g) case final group?) group,
+          ?StreamBadgeGroup.fromJson(g),
     ];
     final rules = <StreamBadgeRule>[
       if (rawRules is List)
         for (final r in rawRules)
-          if (StreamBadgeRule.fromJson(r) case final rule?) rule,
+          ?StreamBadgeRule.fromJson(r),
     ];
     if (rules.isEmpty) {
       throw const FormatException('The file contains no badge rules.');

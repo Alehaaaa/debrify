@@ -2139,6 +2139,18 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                     'Keywords are search terms. Add one or several and Nextup will pool the results.',
                 icon: Icons.tv_rounded,
                 maxWidth: 720,
+                actions: [
+                  DebrifyTvDialogButton(
+                    label: 'Cancel',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                  ),
+                  DebrifyTvDialogButton(
+                    label: 'Save channel',
+                    icon: Icons.check_rounded,
+                    tone: DebrifyTvDialogButtonTone.primary,
+                    onPressed: submit,
+                  ),
+                ],
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2302,18 +2314,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                     ],
                   ],
                 ),
-                actions: [
-                  DebrifyTvDialogButton(
-                    label: 'Cancel',
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                  DebrifyTvDialogButton(
-                    label: 'Save channel',
-                    icon: Icons.check_rounded,
-                    tone: DebrifyTvDialogButtonTone.primary,
-                    onPressed: submit,
-                  ),
-                ],
               );
             },
           );
@@ -3241,36 +3241,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   'Use a debrify:// share link or an http(s) URL to a supported channel file.',
               icon: Icons.link_rounded,
               maxWidth: 650,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TvTextField(
-                    controller: controller,
-                    accent: app.settings.accent,
-                    keyboardGround: app.youtube.keyboardPanel,
-                    keyboardInk: app.core.tx,
-                    keyboardInkOnAccent: app.inkOn(app.settings.accent),
-                    decoration: InputDecoration(
-                      labelText: 'Nextup link or file URL',
-                      hintText: 'debrify://channel?... or https://...',
-                      errorText: errorText,
-                    ),
-                    autofocus: true,
-                    focusNode: urlFocusNode,
-                    keyboardType: TextInputType.url,
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    'Supported: .zip · .yaml · .txt · .debrify',
-                    style: TextStyle(
-                      fontFamily: 'JetBrainsMono',
-                      fontSize: 10,
-                      color: app.debrifyTv.textFaint,
-                    ),
-                  ),
-                ],
-              ),
               actions: [
                 DebrifyTvDialogButton(
                   label: 'Cancel',
@@ -3315,6 +3285,36 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   },
                 ),
               ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TvTextField(
+                    controller: controller,
+                    accent: app.settings.accent,
+                    keyboardGround: app.youtube.keyboardPanel,
+                    keyboardInk: app.core.tx,
+                    keyboardInkOnAccent: app.inkOn(app.settings.accent),
+                    decoration: InputDecoration(
+                      labelText: 'Nextup link or file URL',
+                      hintText: 'debrify://channel?... or https://...',
+                      errorText: errorText,
+                    ),
+                    autofocus: true,
+                    focusNode: urlFocusNode,
+                    keyboardType: TextInputType.url,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Supported: .zip · .yaml · .txt · .debrify',
+                    style: TextStyle(
+                      fontFamily: 'JetBrainsMono',
+                      fontSize: 10,
+                      color: app.debrifyTv.textFaint,
+                    ),
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -3485,6 +3485,13 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               ? Icons.check_circle_outline_rounded
               : Icons.error_outline_rounded,
           maxWidth: 680,
+          actions: [
+            DebrifyTvDialogButton(
+              autofocus: true,
+              label: 'Close',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3533,13 +3540,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               ],
             ],
           ),
-          actions: [
-            DebrifyTvDialogButton(
-              autofocus: true,
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
         );
       },
     );
@@ -3636,7 +3636,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           subtitle: message,
           icon: icon,
           maxWidth: 580,
-          child: const SizedBox.shrink(),
           actions: [
             DebrifyTvDialogButton(
               autofocus: true,
@@ -3652,6 +3651,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               onPressed: () => Navigator.of(dialogContext).pop(true),
             ),
           ],
+          child: const SizedBox.shrink(),
         ),
       ),
     );
@@ -3740,6 +3740,23 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 'Anyone on Nextup can paste this link to import the channel and its saved pool.',
             icon: Icons.share_rounded,
             maxWidth: 720,
+            actions: [
+              DebrifyTvDialogButton(
+                label: 'Close',
+                onPressed: () => Navigator.of(dialogContext).pop(),
+              ),
+              DebrifyTvDialogButton(
+                autofocus: true,
+                label: 'Copy link',
+                icon: Icons.copy_rounded,
+                tone: DebrifyTvDialogButtonTone.primary,
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: magnetLink));
+                  _showSnack('Channel link copied!', color: Colors.green);
+                  Navigator.of(dialogContext).pop();
+                },
+              ),
+            ],
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3783,23 +3800,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 ),
               ],
             ),
-            actions: [
-              DebrifyTvDialogButton(
-                label: 'Close',
-                onPressed: () => Navigator.of(dialogContext).pop(),
-              ),
-              DebrifyTvDialogButton(
-                autofocus: true,
-                label: 'Copy link',
-                icon: Icons.copy_rounded,
-                tone: DebrifyTvDialogButtonTone.primary,
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: magnetLink));
-                  _showSnack('Channel link copied!', color: Colors.green);
-                  Navigator.of(dialogContext).pop();
-                },
-              ),
-            ],
           );
         },
       );
@@ -4358,10 +4358,10 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     _rdSizeRejections = 0;
     _sizeFilterRelaxed = false;
     _originalMaxCap = null;
-    void _log(String m) {
+    void log(String m) {
       final copy = List<String>.from(_progress.value)..add(m);
       _progress.value = copy;
-      debugPrint('NextupTV: ' + m);
+      debugPrint('NextupTV: $m');
     }
 
     await _syncProviderAvailability();
@@ -4458,22 +4458,22 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     });
 
     if (_quickProvider == _providerTorbox) {
-      await _watchWithTorbox(keywords, _log);
+      await _watchWithTorbox(keywords, log);
       return;
     }
 
     if (_quickProvider == _providerPikPak) {
-      await _watchWithPikPak(keywords, _log);
+      await _watchWithPikPak(keywords, log);
       return;
     }
 
     if (_quickProvider == _providerPremiumize) {
-      await _watchWithPremiumize(keywords, _log);
+      await _watchWithPremiumize(keywords, log);
       return;
     }
 
     if (_quickProvider == _providerAllDebrid) {
-      await _watchWithAllDebrid(keywords, _log);
+      await _watchWithAllDebrid(keywords, log);
       return;
     }
 
@@ -4484,7 +4484,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       final String? apiKeyEarlyRaw = await StorageService.getApiKey();
       if (apiKeyEarlyRaw == null || apiKeyEarlyRaw.isEmpty) {
         if (!mounted) return;
-        _log('❌ Real Debrid API key not found - please add it in Settings');
+        log('❌ Real Debrid API key not found - please add it in Settings');
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -4498,7 +4498,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       final String apiKeyEarly = apiKeyEarlyRaw;
 
       // Helper to infer a filename-like title from a URL
-      String _inferTitleFromUrl(String url) {
+      String inferTitleFromUrl(String url) {
         final uri = Uri.tryParse(url);
         final last = (uri != null && uri.pathSegments.isNotEmpty)
             ? uri.pathSegments.last
@@ -4544,7 +4544,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 debugPrint(
                   'NextupTV: Success (RD link). Unrestricted in ${elapsed}s',
                 );
-                final inferred = _inferTitleFromUrl(videoUrl).trim();
+                final inferred = inferTitleFromUrl(videoUrl).trim();
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
@@ -4618,7 +4618,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 debugPrint(
                   'NextupTV: Success. Got unrestricted URL in ${elapsed}s',
                 );
-                final inferred = _inferTitleFromUrl(videoUrl).trim();
+                final inferred = inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
                     : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
@@ -4921,7 +4921,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         _status = 'No results found';
       });
       debugPrint('NextupTV: No results found after combining.');
-      _log('❌ No results found - trying different search strategies');
+      log('❌ No results found - trying different search strategies');
 
       // Close popup and show user-friendly message
       if (_progressOpen && _progressSheetContext != null) {
@@ -4958,7 +4958,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     }
 
     // Helper to infer a filename-like title from a URL
-    String _inferTitleFromUrl(String url) {
+    String inferTitleFromUrl(String url) {
       final uri = Uri.tryParse(url);
       final last = (uri != null && uri.pathSegments.isNotEmpty)
           ? uri.pathSegments.last
@@ -5006,7 +5006,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 'MagicTV: Success (RD link). Unrestricted in ${elapsed}s',
               );
               // Prefer filename inferred from URL; fallback to any stored displayName
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
@@ -5068,7 +5068,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                 'MagicTV: Success. Got unrestricted URL in ${elapsed}s',
               );
               // Prefer filename inferred from URL; fallback to torrent name
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
                   : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
@@ -5088,7 +5088,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       _status = 'Finding a playable stream...';
       _isBusy = true;
     });
-    _log('🎬 Selecting the best quality stream for you');
+    log('🎬 Selecting the best quality stream for you');
 
     try {
       final first = await requestMagicNext();
@@ -5978,7 +5978,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     _lastQueueSize = _queue.length;
     _lastSearchAt = DateTime.now();
 
-    String _inferTitleFromUrl(String url) {
+    String inferTitleFromUrl(String url) {
       final uri = Uri.tryParse(url);
       final last = (uri != null && uri.pathSegments.isNotEmpty)
           ? uri.pathSegments.last
@@ -6007,7 +6007,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
             final videoUrl = unrestrict['download'] as String?;
             if (videoUrl != null && videoUrl.isNotEmpty) {
               debugPrint('NextupTV: Cached success (RD link) in ${elapsed}s');
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
@@ -6072,7 +6072,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               debugPrint(
                 'NextupTV: Cached success: unrestricted in ${elapsed}s',
               );
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
                   : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
@@ -6269,7 +6269,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     _lastQueueSize = _queue.length;
     _lastSearchAt = DateTime.now();
 
-    String _inferTitleFromUrl(String url) {
+    String inferTitleFromUrl(String url) {
       final uri = Uri.tryParse(url);
       final last = (uri != null && uri.pathSegments.isNotEmpty)
           ? uri.pathSegments.last
@@ -6289,7 +6289,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           try {
             final videoUrl = await AllDebridService.unlockLink(apiKey, link);
             if (videoUrl.isNotEmpty) {
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
@@ -6329,7 +6329,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               headLink,
             );
             if (videoUrl.isNotEmpty) {
-              final inferred = _inferTitleFromUrl(videoUrl).trim();
+              final inferred = inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
                   : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
@@ -7373,7 +7373,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
         final next = _queue.removeAt(0);
         if (next is Map && next['type'] == _torboxFileEntryType) {
           final resolved = await _resolveTorboxQueuedFile(
-            entry: Map<String, dynamic>.from(next as Map),
+            entry: Map<String, dynamic>.from(next),
             apiKey: apiKey,
             log: log,
           );
@@ -9030,6 +9030,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
           subtitle: 'Manage this channel without leaving the current view.',
           icon: Icons.tune_rounded,
           maxWidth: 680,
+          actions: [
+            DebrifyTvDialogButton(
+              label: 'Close',
+              onPressed: () => Navigator.of(dialogContext).pop(),
+            ),
+          ],
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -9085,12 +9091,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               ),
             ],
           ),
-          actions: [
-            DebrifyTvDialogButton(
-              label: 'Close',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
         );
       },
     );
@@ -9401,6 +9401,51 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   'Enter up to $_quickPlayMaxKeywords search terms. Nothing is saved when playback ends.',
               icon: Icons.play_arrow_rounded,
               maxWidth: 680,
+              actions: [
+                DebrifyTvDialogButton(
+                  label: 'Cancel',
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                ),
+                DebrifyTvDialogButton(
+                  label: 'Play now',
+                  icon: Icons.play_arrow_rounded,
+                  tone: DebrifyTvDialogButtonTone.primary,
+                  onPressed: () async {
+                    final keywords = controller.text.trim();
+                    if (keywords.isEmpty) {
+                      setDialogState(
+                        () => error = 'Enter one or more keywords to continue.',
+                      );
+                      return;
+                    }
+
+                    if (mounted) {
+                      setState(() {
+                        _quickStartRandom = _startRandom;
+                        _quickRandomStartPercent = _randomStartPercent;
+                        _quickHideSeekbar = _hideSeekbar;
+                        _quickShowChannelName = _showChannelName;
+                        _quickShowVideoTitle = _showVideoTitle;
+                        _quickHideOptions = false; // Always false now
+                        _quickHideBackButton = false; // Always false now
+                        _quickAvoidNsfw = avoidNsfw;
+                        _quickProvider = _provider;
+                      });
+                      // Copy keywords from Quick Play controller to main controller for _watch()
+                      _keywordsController.text = keywords;
+                    }
+
+                    Navigator.of(dialogContext).pop();
+                    // Wait for frames to ensure UI has updated and touch events are processed
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    await WidgetsBinding.instance.endOfFrame;
+                    await WidgetsBinding.instance.endOfFrame;
+                    if (mounted) {
+                      await _watch();
+                    }
+                  },
+                ),
+              ],
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -9460,51 +9505,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   ],
                 ],
               ),
-              actions: [
-                DebrifyTvDialogButton(
-                  label: 'Cancel',
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                ),
-                DebrifyTvDialogButton(
-                  label: 'Play now',
-                  icon: Icons.play_arrow_rounded,
-                  tone: DebrifyTvDialogButtonTone.primary,
-                  onPressed: () async {
-                    final keywords = controller.text.trim();
-                    if (keywords.isEmpty) {
-                      setDialogState(
-                        () => error = 'Enter one or more keywords to continue.',
-                      );
-                      return;
-                    }
-
-                    if (mounted) {
-                      setState(() {
-                        _quickStartRandom = _startRandom;
-                        _quickRandomStartPercent = _randomStartPercent;
-                        _quickHideSeekbar = _hideSeekbar;
-                        _quickShowChannelName = _showChannelName;
-                        _quickShowVideoTitle = _showVideoTitle;
-                        _quickHideOptions = false; // Always false now
-                        _quickHideBackButton = false; // Always false now
-                        _quickAvoidNsfw = avoidNsfw;
-                        _quickProvider = _provider;
-                      });
-                      // Copy keywords from Quick Play controller to main controller for _watch()
-                      _keywordsController.text = keywords;
-                    }
-
-                    Navigator.of(dialogContext).pop();
-                    // Wait for frames to ensure UI has updated and touch events are processed
-                    await Future.delayed(const Duration(milliseconds: 100));
-                    await WidgetsBinding.instance.endOfFrame;
-                    await WidgetsBinding.instance.endOfFrame;
-                    if (mounted) {
-                      await _watch();
-                    }
-                  },
-                ),
-              ],
             );
           },
         );
@@ -9530,12 +9530,6 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               icon: Icons.settings_rounded,
               maxWidth: 920,
               maxHeightFactor: .94,
-              child: _buildSettingsCard(
-                scope: _SettingsScope.channels,
-                includeNsfwToggle: false,
-                title: 'Playback rules',
-                dialogSetState: setDialogState,
-              ),
               actions: [
                 DebrifyTvDialogButton(
                   autofocus: true,
@@ -9545,6 +9539,12 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
                   onPressed: () => Navigator.of(dialogContext).pop(),
                 ),
               ],
+              child: _buildSettingsCard(
+                scope: _SettingsScope.channels,
+                includeNsfwToggle: false,
+                title: 'Playback rules',
+                dialogSetState: setDialogState,
+              ),
             );
           },
         );
@@ -10600,7 +10600,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
       _seenRestrictedLinks.clear();
       _seenLinkWithTorrentId.clear();
 
-      String _inferTitleFromUrl(String url) {
+      String inferTitleFromUrl(String url) {
         final uri = Uri.tryParse(url);
         final last = (uri != null && uri.pathSegments.isNotEmpty)
             ? uri.pathSegments.last
@@ -10622,7 +10622,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               final videoUrl = await AllDebridService.unlockLink(apiKey, link);
               if (_watchCancelled) return null;
               if (videoUrl.isNotEmpty) {
-                final inferred = _inferTitleFromUrl(videoUrl).trim();
+                final inferred = inferTitleFromUrl(videoUrl).trim();
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
@@ -10659,7 +10659,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
               );
               if (_watchCancelled) return null;
               if (videoUrl.isNotEmpty) {
-                final inferred = _inferTitleFromUrl(videoUrl).trim();
+                final inferred = inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
                     : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');

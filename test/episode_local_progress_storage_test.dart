@@ -219,7 +219,7 @@ void main() {
       Map<String, dynamic> episode(int position, {int? updatedAt}) => {
         'positionMs': position,
         'durationMs': 10000,
-        if (updatedAt != null) 'updatedAt': updatedAt,
+        'updatedAt': ?updatedAt,
       };
 
       Map<String, dynamic> series(

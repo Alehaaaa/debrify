@@ -184,13 +184,14 @@ void main() {
                 'Type': 'Episode',
                 'ParentIndexNumber': 1,
                 'IndexNumber': episodeNumber,
-                if (episodeEnd != null) 'IndexNumberEnd': episodeEnd,
+                'IndexNumberEnd': ?episodeEnd,
               },
             ],
           };
         } else if (request.url.path.endsWith('/PlaybackInfo')) {
-          if (request.url.path.contains('/broken/'))
+          if (request.url.path.contains('/broken/')) {
             return http.Response('', 500);
+          }
           data = {
             'MediaSources': [
               for (final height in [1080, 2160])

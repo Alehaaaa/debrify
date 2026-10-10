@@ -90,17 +90,15 @@ class AndroidNativeDownloader {
       final id = await _channel
           .invokeMethod<String>('startMediaStoreDownload', {
             'url': url,
-            if (taskId != null) 'taskId': taskId,
+            'taskId': ?taskId,
             'fileName': fileName,
             'subDir': subDir,
             'mimeType': mimeType,
             'headers': headers ?? <String, String>{},
-            if (treeUri != null) 'treeUri': treeUri,
+            'treeUri': ?treeUri,
             ...owner,
-            if (connectionResourceId != null)
-              'connectionResourceId': connectionResourceId,
-            if (resourceAuthorizationRevision != null)
-              'resourceAuthorizationRevision': resourceAuthorizationRevision,
+            'connectionResourceId': ?connectionResourceId,
+            'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
           });
       if (id == null) {
         return const AndroidStartResult(errorCode: 'no_task_id');
@@ -201,7 +199,7 @@ class AndroidNativeDownloader {
             'fileName': fileName,
             'subDir': subDir,
             'mimeType': mimeType,
-            if (treeUri != null) 'treeUri': treeUri,
+            'treeUri': ?treeUri,
           });
       // Accept the old string response as well so a hot-restarted Dart
       // isolate can still talk to a native runner built before this change.
@@ -240,7 +238,7 @@ class AndroidNativeDownloader {
       final raw = await _channel.invokeMethod<List<dynamic>>(
         'queryDownloadTasks',
         <String, Object?>{
-          if (owner != null) 'ownerProfileId': owner,
+          'ownerProfileId': ?owner,
           'adminAggregate': adminAggregate,
         },
       );

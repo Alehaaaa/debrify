@@ -73,7 +73,7 @@ class SeriesProgressResetService {
       }
     }
 
-    if (provider == null)
+    if (provider == null) {
       await attempt('this device', () async {
         if (isMovie) {
           await StorageService.clearPlaybackStateByImdbId(id);
@@ -87,12 +87,13 @@ class SeriesProgressResetService {
         await StorageService.removeContinueWatchingItem(id);
         return true;
       });
+    }
     // Sequential per account, but a failed account never prevents the others.
     if (CustomSeriesIdentity.isCustom(id)) {
       EpisodeTrackerSnapshotRevision.invalidateTitle('local', id);
       return failures;
     }
-    if (provider == null || provider == TrackingSource.trakt)
+    if (provider == null || provider == TrackingSource.trakt) {
       await attempt('Trakt', () async {
         final service = TraktService.instance;
         final token = await StorageService.getTraktAccessToken();
@@ -123,19 +124,23 @@ class SeriesProgressResetService {
             ok = false;
             continue;
           }
-          if (!await service.removePlaybackItem((row['id'] as num).toInt()))
+          if (!await service.removePlaybackItem((row['id'] as num).toInt())) {
             ok = false;
+          }
         }
-        if (!await service.removeFromHistory(id, isMovie ? 'movie' : 'series'))
+        if (!await service.removeFromHistory(id, isMovie ? 'movie' : 'series')) {
           ok = false;
-        if (ok && !isMovie)
+        }
+        if (ok && !isMovie) {
           await StorageService.saveEpisodeTraktProgress(
             imdbId: id,
             percents: {},
           );
+        }
         return ok;
       });
-    if (provider == null || provider == TrackingSource.simkl)
+    }
+    if (provider == null || provider == TrackingSource.simkl) {
       await attempt('Simkl', () async {
         final service = SimklService.instance;
         if (!await service.isAuthenticated()) return provider == null;
@@ -145,14 +150,16 @@ class SeriesProgressResetService {
           id,
           contentType: 'series',
         );
-        if (history && playback && !isMovie)
+        if (history && playback && !isMovie) {
           await StorageService.saveEpisodeSimklProgress(
             imdbId: id,
             percents: {},
           );
+        }
         return history && playback;
       });
-    if (provider == null || provider == TrackingSource.mdblist)
+    }
+    if (provider == null || provider == TrackingSource.mdblist) {
       await attempt('MDBList', () async {
         final service = mdblistService ?? MdblistService.instance;
         if (!await service.isAuthenticated()) return provider == null;
@@ -184,16 +191,19 @@ class SeriesProgressResetService {
           );
           if (!result.isSuccess) ok = false;
         }
-        if (!await service.markUnwatched(targetIds, isMovie ? 'movie' : 'show'))
+        if (!await service.markUnwatched(targetIds, isMovie ? 'movie' : 'show')) {
           ok = false;
+        }
         MdblistContinueWatchingService.instance.invalidate();
-        if (ok && !isMovie)
+        if (ok && !isMovie) {
           await StorageService.saveEpisodeMdblistProgress(
             imdbId: id,
             percents: {},
           );
+        }
         return ok;
       });
+    }
     for (final tracker in ['trakt', 'simkl', 'mdblist']) {
       if (provider != null && provider.name != tracker) continue;
       EpisodeTrackerSnapshotRevision.invalidateTitle(tracker, id);

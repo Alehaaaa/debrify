@@ -1777,7 +1777,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
           focusNode: _viewModeDropdownFocusNode,
           autofocus: true,
           isExpanded: true,
-          value: mode,
+          initialValue: mode,
           decoration: InputDecoration(
             labelText: 'View Mode',
             prefixIcon: Icon(

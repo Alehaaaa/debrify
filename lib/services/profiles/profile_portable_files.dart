@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../models/profiles/profile_avatar.dart';
-import '../../utils/app_storage.dart';
 import '../launch_animation/launch_animation_library.dart';
 import '../subtitle_font_service.dart';
 import 'profile_app_assets_codec.dart';

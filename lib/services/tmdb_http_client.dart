@@ -327,10 +327,12 @@ class TmdbConnections {
 
   Future<List<InternetAddress>> _resolve() async {
     if (_closed) throw const SocketException('TMDB client is closed');
-    if (_dnsCache.expires != null && _now().isBefore(_dnsCache.expires!))
+    if (_dnsCache.expires != null && _now().isBefore(_dnsCache.expires!)) {
       return _dnsCache.addresses;
-    if (_dnsCache.retryAt != null && _now().isBefore(_dnsCache.retryAt!))
+    }
+    if (_dnsCache.retryAt != null && _now().isBefore(_dnsCache.retryAt!)) {
       return [];
+    }
     final pending = _resolving;
     if (pending != null) return pending;
     final work = _lookup();

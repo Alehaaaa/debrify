@@ -475,8 +475,9 @@ void main() {
           return answer();
         }),
         startConnect: (host, port) async {
-          if (host is String)
+          if (host is String) {
             throw const SocketException('system DNS unavailable');
+          }
           return success();
         },
       );

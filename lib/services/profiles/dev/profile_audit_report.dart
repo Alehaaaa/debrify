@@ -381,7 +381,7 @@ abstract final class ProfileAuditReport {
           'authorizationRevision': resource.authorizationRevision,
           'grants': grants,
           'secretKeysReadable': secretKeys != null,
-          if (secretKeys != null) 'secretKeys': secretKeys,
+          'secretKeys': ?secretKeys,
         });
       }
     }

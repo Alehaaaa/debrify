@@ -1690,7 +1690,7 @@ class _PremiumizeFilesScreenState extends State<PremiumizeFilesScreen> {
         child: DropdownButtonFormField<_FolderViewMode>(
           focusNode: _viewModeDropdownFocusNode,
           isExpanded: true,
-          value: mode,
+          initialValue: mode,
           decoration: InputDecoration(
             labelText: 'View Mode',
             prefixIcon: Icon(

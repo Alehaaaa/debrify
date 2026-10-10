@@ -80,7 +80,7 @@ class RandomStartSlider extends StatelessWidget {
           Text('Random start within first $current%', style: textStyle),
           const SizedBox(height: 10),
           DropdownButtonFormField<int>(
-            value: current,
+            initialValue: current,
             isExpanded: true,
             dropdownColor: tv.cardBg,
             borderRadius: BorderRadius.circular(12),

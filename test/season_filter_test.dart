@@ -159,22 +159,22 @@ void main() {
     });
 
     test('Single episodes should match their season', () {
-      final s04e01_format1 = createTorrent(
+      final s04e01Format1 = createTorrent(
         name: 'Stranger Things S04E01',
         coverageType: 'singleEpisode',
       );
 
-      final s04e01_format2 = createTorrent(
+      final s04e01Format2 = createTorrent(
         name: 'Stranger Things S4E01',
         coverageType: 'singleEpisode',
       );
 
-      final s04e01_format3 = createTorrent(
+      final s04e01Format3 = createTorrent(
         name: 'Stranger Things 4x01',
         coverageType: 'singleEpisode',
       );
 
-      final s04e01_format4 = createTorrent(
+      final s04e01Format4 = createTorrent(
         name: 'Stranger Things Season 4 Episode 1',
         coverageType: 'singleEpisode',
       );
@@ -185,15 +185,15 @@ void main() {
       );
 
       // When searching for Season 4
-      expect(shouldIncludeTorrent(s04e01_format1, 4), isTrue);
-      expect(shouldIncludeTorrent(s04e01_format2, 4), isTrue);
-      expect(shouldIncludeTorrent(s04e01_format3, 4), isTrue);
-      expect(shouldIncludeTorrent(s04e01_format4, 4), isTrue);
+      expect(shouldIncludeTorrent(s04e01Format1, 4), isTrue);
+      expect(shouldIncludeTorrent(s04e01Format2, 4), isTrue);
+      expect(shouldIncludeTorrent(s04e01Format3, 4), isTrue);
+      expect(shouldIncludeTorrent(s04e01Format4, 4), isTrue);
       expect(shouldIncludeTorrent(s01e01, 4), isFalse);
 
       // When searching for Season 1
       expect(shouldIncludeTorrent(s01e01, 1), isTrue);
-      expect(shouldIncludeTorrent(s04e01_format1, 1), isFalse);
+      expect(shouldIncludeTorrent(s04e01Format1, 1), isFalse);
     });
 
     test('Unknown coverage type should be kept', () {

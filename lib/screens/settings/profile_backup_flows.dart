@@ -1108,7 +1108,7 @@ class ProfileBackupFlows {
         omissions['libraryDatabasesTooLarge'] != null;
     final debrifyTvOmission = DebrifyTvBackupOmission.fromOmissions(omissions);
     final databaseNotices = <String>[
-      if (syncNotice != null) syncNotice,
+      ?syncNotice,
       if (legacyDatabasesMissing)
         'Warning: this older backup omitted one or more library databases; '
             'those playlists/history rows cannot be recovered from it.',

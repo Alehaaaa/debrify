@@ -6,7 +6,6 @@
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 
-import 'package:media_kit_video_tvos/src/video/video.dart';
 import 'package:media_kit_video_tvos/src/subtitle/subtitle_view.dart';
 
 /// {@template video_view_parameters}

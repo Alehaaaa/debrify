@@ -495,7 +495,7 @@ void main() {
     url: 'http://127.0.0.1:$port/live/user/pass/$id.ts',
     duration: -1,
     contentType: 'live',
-    attributes: {if (tvgId != null) 'tvg-id': tvgId},
+    attributes: {'tvg-id': ?tvgId},
   );
 
   test('shifted panel: schedule keeps the XMLTV timeline while merging '

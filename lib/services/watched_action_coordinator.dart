@@ -144,8 +144,9 @@ class WatchedActionCoordinator {
     }
     EpisodeTrackerSnapshotRevision.invalidateTitle('local', imdbId);
 
-    if (CustomSeriesIdentity.isCustom(imdbId))
+    if (CustomSeriesIdentity.isCustom(imdbId)) {
       return const WatchedActionResult([]);
+    }
 
     final policy = (await TrackingSourcePolicy.load()).forContent(imdbId);
     final failures = <String>[];

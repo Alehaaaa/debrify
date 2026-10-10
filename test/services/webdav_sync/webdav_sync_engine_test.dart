@@ -5225,8 +5225,7 @@ WebDavSyncHotDocument _document({
   Object? recordValue,
 }) {
   final records = <String, WebDavSyncStampedValue>{
-    if (recordKey != null)
-      recordKey: WebDavSyncStampedValue(
+    ?recordKey: WebDavSyncStampedValue(
         stamp: WebDavSyncStamp(
           normalizedTimeMs: recordTime,
           originDeviceId: 'device-b',
@@ -6068,10 +6067,10 @@ class _FakeTransport implements WebDavSyncTransport {
       sections: <WebDavSyncSectionReference>[
         hotRef,
         tombstoneRef,
-        if (profileRef != null) profileRef,
-        if (resourceRef != null) resourceRef,
-        if (libraryRef != null) libraryRef,
-        if (tvLibraryRef != null) tvLibraryRef,
+        ?profileRef,
+        ?resourceRef,
+        ?libraryRef,
+        ?tvLibraryRef,
       ],
     );
     manifests[deviceId] = await codec.sealDocument(

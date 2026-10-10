@@ -376,7 +376,7 @@ class PortableProfilePackage {
         'compression': 'gzip',
         'expandedBytes': plain.length,
         'data': base64Encode(compressed),
-        if (requestId != null) 'requestId': requestId,
+        'requestId': ?requestId,
       });
       final wrappedBytes = utf8.encode(wrapped).length;
       return wrappedBytes < plain.length

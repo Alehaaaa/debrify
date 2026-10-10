@@ -44,8 +44,9 @@ class ResolvedPlaybackLinkCache {
     final query =
         Uri.tryParse(url)?.queryParameters ?? const <String, String>{};
     for (final entry in query.entries) {
-      if (!const ['exp', 'expires', 'expiry'].contains(entry.key.toLowerCase()))
+      if (!const ['exp', 'expires', 'expiry'].contains(entry.key.toLowerCase())) {
         continue;
+      }
       final n = int.tryParse(entry.value);
       final value = n == null
           ? DateTime.tryParse(entry.value)
@@ -77,8 +78,9 @@ class ResolvedPlaybackLinkCache {
   }) async {
     if (source.directUrl == null ||
         source.stremioAddonKey == null ||
-        source.stremioStreamKey == null)
+        source.stremioStreamKey == null) {
       return;
+    }
     if (type != 'movie' && (season == null || episode == null)) return;
     final prefs = await ProfilePreferences.instance();
     await _lock.synchronized(() async {
@@ -143,14 +145,16 @@ class ResolvedPlaybackLinkCache {
             pin.streamKey ?? '',
           )];
       if (entry == null ||
-          (entry['expires'] as int) <= DateTime.now().millisecondsSinceEpoch)
+          (entry['expires'] as int) <= DateTime.now().millisecondsSinceEpoch) {
         return null;
+      }
       final source = Torrent.fromJson(
         Map<String, dynamic>.from(entry['source']),
       );
       if (source.stremioBingeGroup != pin.bingeGroup ||
-          source.stremioStreamIndex != pin.streamIndex)
+          source.stremioStreamIndex != pin.streamIndex) {
         return null;
+      }
       return source;
     } catch (_) {
       return null;

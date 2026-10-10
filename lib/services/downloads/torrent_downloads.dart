@@ -74,8 +74,9 @@ abstract final class TorrentDownloads {
         meta: downloadMediaMetadata(meta, fileName: torrent.displayTitle),
         torrentName: torrent.displayTitle,
       );
-      if (context.mounted)
+      if (context.mounted) {
         DownloadFeedback.started(context, titleId: _titleId(meta));
+      }
     } catch (_) {
       if (context.mounted) {
         DownloadFeedback.failed(context);
@@ -306,8 +307,9 @@ abstract final class TorrentDownloads {
       return const DownloadOutcome.missed(DownloadMiss.nothingFound);
     }
     final provider = await TorrentPlaybackService._pickProvider(context);
-    if (!context.mounted || provider == TorrentPlaybackService._cancelled)
+    if (!context.mounted || provider == TorrentPlaybackService._cancelled) {
       return done;
+    }
     if (provider == null) {
       DownloadFeedback.info(
         context,
@@ -650,8 +652,9 @@ abstract final class TorrentDownloads {
       }
       return;
     }
-    if (context.mounted)
+    if (context.mounted) {
       DownloadFeedback.started(context, titleId: _titleId(meta));
+    }
   }
 
   /// Episodes of [meta]'s title already downloaded or downloading here.
@@ -885,8 +888,9 @@ abstract final class TorrentDownloads {
       resolved = await TorrentPlaybackService._add(provider, magnet, torrent);
     } on TorrentNotCachedException catch (e) {
       // Only reachable without a tracked RD id; drop the duplicate it made.
-      if (e.torrentId != rdId)
+      if (e.torrentId != rdId) {
         await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(e);
+      }
       return null;
     } on AllDebridTorrentNotReadyException {
       return null;
@@ -936,8 +940,9 @@ abstract final class TorrentDownloads {
 
   static void _notifyReady(String message) {
     final context = _navigatorKey?.currentContext;
-    if (context != null && context.mounted)
+    if (context != null && context.mounted) {
       DownloadFeedback.info(context, message);
+    }
   }
 
   static String? _titleId(PlaybackMeta? meta) =>

@@ -1231,8 +1231,8 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
             jsonEncode({
               'access_token': access,
               'refresh_token': refresh,
-              if (expiry != null) 'expiry_ms': expiry,
-              if (username != null) 'username': username,
+              'expiry_ms': ?expiry,
+              'username': ?username,
             }),
           ),
         );
@@ -1248,7 +1248,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           configData: transferData(
             jsonEncode({
               'access_token': access,
-              if (username != null) 'username': username,
+              'username': ?username,
             }),
           ),
         );
@@ -1264,7 +1264,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           configData: transferData(
             jsonEncode({
               'api_key': apiKey,
-              if (username != null) 'username': username,
+              'username': ?username,
             }),
           ),
         );

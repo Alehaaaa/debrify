@@ -103,7 +103,7 @@ class HomeLoadProgress {
       ..._lists,
       ..._collections.where((row) => !row.collection.pinToTop),
       for (final id in _order)
-        if (_catalogs[id] case final row?) row,
+        ?_catalogs[id],
     ];
     if (rows.isEmpty && !allowEmpty) return;
     if (hasPublished &&

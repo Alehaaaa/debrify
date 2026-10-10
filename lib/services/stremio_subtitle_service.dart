@@ -192,10 +192,12 @@ class StremioSubtitleService {
     int? season,
     int? episode,
   }) async {
-    if (CustomSeriesIdentity.isCustom(imdbId)) return AddonSubtitleSlot(
+    if (CustomSeriesIdentity.isCustom(imdbId)) {
+      return AddonSubtitleSlot(
       addonId: addonId, addonName: addonId, status: AddonSubtitleStatus.failed,
       error: 'Choose a subtitle identity for this custom series',
     );
+    }
     final addons = await getSubtitleAddons();
     StremioAddon? addon;
     for (final a in addons) {

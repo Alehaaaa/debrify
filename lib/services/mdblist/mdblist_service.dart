@@ -370,7 +370,7 @@ class MdblistService {
         query: {
           ...query,
           'limit': query['limit'] ?? 100,
-          if (cursor != null) 'cursor': cursor,
+          'cursor': ?cursor,
           if (cursor == null && offset > 0) 'offset': offset,
         },
         capability: capability,
@@ -567,7 +567,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      if (mediaType != null) 'mediatype': mediaType,
+      'mediatype': ?mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -583,7 +583,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      if (mediaType != null) 'mediatype': mediaType,
+      'mediatype': ?mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -599,7 +599,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      if (mediaType != null) 'mediatype': mediaType,
+      'mediatype': ?mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -739,7 +739,7 @@ class MdblistService {
         '/lists/$listId/items',
         query: {
           'limit': 1000,
-          if (cursor != null) 'cursor': cursor,
+          'cursor': ?cursor,
           if (cursor == null && fallbackOffset > 0) 'offset': fallbackOffset,
         },
         capability: capability,
@@ -1168,8 +1168,8 @@ class MdblistService {
     if (ids.toJson().isEmpty) return null;
     final timestamp = (watchedAt ?? DateTime.now()).toUtc().toIso8601String();
     final attributes = <String, dynamic>{
-      if (rating != null) 'rating': rating,
-      if (timestampField != null) timestampField: timestamp,
+      'rating': ?rating,
+      ?timestampField: timestamp,
     };
     if (type == 'episode') {
       if (season == null || episode == null) return null;
@@ -1392,7 +1392,7 @@ class MdblistService {
         '/watchlist/items',
         query: {
           'limit': 1000,
-          if (cursor != null) 'cursor': cursor,
+          'cursor': ?cursor,
           if (cursor == null && offset > 0) 'offset': offset,
           'append_to_response': 'poster,ratings,description,genres',
         },
@@ -1788,7 +1788,7 @@ class MdblistService {
     'GET',
     '/sync/journal',
     query: {
-      if (cursor != null) 'cursor': cursor,
+      'cursor': ?cursor,
       if (cursor == null && since != null)
         'since': since.toUtc().toIso8601String(),
       'limit': limit.clamp(1, 1000),
@@ -1897,10 +1897,10 @@ class MdblistService {
         '/sync/$bucket',
         query: {
           'limit': 1000,
-          if (cursor != null) 'cursor': cursor,
+          'cursor': ?cursor,
           if (cursor == null && since != null)
             'since': since.toUtc().toIso8601String(),
-          if (mediaType != null) 'mediatype': mediaType,
+          'mediatype': ?mediaType,
         },
       );
       if (!response.isSuccess) {
@@ -2161,7 +2161,7 @@ class MdblistService {
         final imdb = (ids is Map ? ids['imdb'] : null) ?? item['imdb_id'];
         if (tmdb == null && (imdb is! String || imdb.isEmpty)) continue;
         out.add({
-          if (tmdb != null) 'tmdb': tmdb,
+          'tmdb': ?tmdb,
           if (imdb is String && imdb.isNotEmpty) 'imdb': imdb,
         });
       }

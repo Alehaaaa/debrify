@@ -1700,7 +1700,7 @@ void main() {
             'debridTorrentId': '',
             'addonKey': stream,
             'streamKey': 'profile',
-            if (catalog != null) 'addonCatalogId': catalog,
+            'addonCatalogId': ?catalog,
             if (catalog != null) 'addonCatalogKey': origin,
           },
     ];

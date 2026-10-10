@@ -25,6 +25,7 @@ class OpticalLogo extends StatefulWidget {
   final double area;
 
   const OpticalLogo({
+    super.key,
     required this.image,
     required this.alignment,
     required this.maxWidth,

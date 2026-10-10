@@ -64,11 +64,12 @@ void main() {
             ),
             findsOneWidget,
           );
-          if (provider == TrackingSource.simkl)
+          if (provider == TrackingSource.simkl) {
             expect(
               find.textContaining('removes the movie from its library'),
               findsOneWidget,
             );
+          }
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();
         },
@@ -199,21 +200,24 @@ void main() {
           expect(requests, isNotEmpty);
           expect(prefs.getString('playback_state_v1'), local);
           expect(prefs.getString('series_source_tt001'), 'keep');
-          if (provider != TrackingSource.trakt || movie)
+          if (provider != TrackingSource.trakt || movie) {
             expect(
               await StorageService.getEpisodeTraktProgress(imdbId: 'tt001'),
               {'1_1': 50},
             );
-          if (provider != TrackingSource.simkl || movie)
+          }
+          if (provider != TrackingSource.simkl || movie) {
             expect(
               await StorageService.getEpisodeSimklProgress(imdbId: 'tt001'),
               {'1_1': 60},
             );
-          if (provider != TrackingSource.mdblist || movie)
+          }
+          if (provider != TrackingSource.mdblist || movie) {
             expect(
               await StorageService.getEpisodeMdblistProgress(imdbId: 'tt001'),
               {'1_1': 70},
             );
+          }
         },
       );
     }

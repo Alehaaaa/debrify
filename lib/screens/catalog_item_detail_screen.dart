@@ -172,7 +172,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
   /// empty = loaded but nothing to show (rail stays hidden either way).
   void _openMetadataRecommendation(StremioMeta item) {
     final onOpen = widget.onRecommendationTap;
-    if (onOpen != null)
+    if (onOpen != null) {
       unawaited(
         openMetadataTitle(
           context,
@@ -180,6 +180,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
           onOpen,
         ),
       );
+    }
   }
 
   List<StremioMeta>? _recommendations;

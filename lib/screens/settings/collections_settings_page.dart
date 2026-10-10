@@ -428,8 +428,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   Set<String> _issuesFor(HomeCollection c) => {
     for (final folder in c.folders)
       for (final source in folder.sources)
-        if (HomeCollectionsStore.sourceIssue(source, _addons) case final issue?)
-          issue,
+        ?HomeCollectionsStore.sourceIssue(source, _addons),
   };
 
   String _describe(HomeCollection c) {

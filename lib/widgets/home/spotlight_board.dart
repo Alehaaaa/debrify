@@ -73,8 +73,9 @@ class SpotlightCard {
           ? null
           : fallbackImage;
     }
-    if (presented == null || identical(presented, metadata))
+    if (presented == null || identical(presented, metadata)) {
       return fallbackImage;
+    }
     bool selected(MetadataCategory category) =>
         preferences.provider(category) != MetadataPreferences.current;
     final selectedArtwork =
@@ -770,8 +771,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
           hovered ?? focused,
           scrolling: _scrollingSources.isNotEmpty,
         );
-        if (_scrollingSources.isEmpty && _desktopPreviewOwners.isEmpty)
+        if (_scrollingSources.isEmpty && _desktopPreviewOwners.isEmpty) {
           _restartCadence();
+        }
         return;
       }
       final render = context.findRenderObject();
@@ -786,8 +788,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
         if (!card.mounted || !card.widget.largeInteractions) continue;
         if (_selectionFromScroll &&
             _scrollRowId != null &&
-            card.widget.rowId != _scrollRowId)
+            card.widget.rowId != _scrollRowId) {
           continue;
+        }
         final box = card.context.findRenderObject();
         if (box is! RenderBox || !box.hasSize || !box.attached) continue;
         final rect =
@@ -806,8 +809,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
         }
       }
       _selectCard(nearest, scrolling: _scrollingSources.isNotEmpty);
-      if (_scrollingSources.isEmpty && _desktopPreviewOwners.isEmpty)
+      if (_scrollingSources.isEmpty && _desktopPreviewOwners.isEmpty) {
         _restartCadence();
+      }
     });
   }
 
@@ -1502,8 +1506,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
     if (metadataArtworkPending(MetadataCategory.backgrounds)) return null;
     final b = item.background;
     if (b != null && b.isNotEmpty) return highQualityArtworkUrl(b);
-    if (usesMetadataProvider(MetadataCategory.backgrounds))
+    if (usesMetadataProvider(MetadataCategory.backgrounds)) {
       return _heroPoster(item);
+    }
     final tt = item.imdbId ?? (item.id.startsWith('tt') ? item.id : null);
     if (tt != null) {
       return 'https://images.metahub.space/background/large/$tt/img';
@@ -1551,8 +1556,9 @@ class SpotlightBoardState extends State<SpotlightBoard>
     _finishProgressiveDown();
     if (widget.dpad && PlatformUtil.isAndroidTvCached && _lastMetrics != null) {
       for (final section in old.sections) {
-        if (section.id == null || !section.nodes.any((node) => node.hasFocus))
+        if (section.id == null || !section.nodes.any((node) => node.hasFocus)) {
           continue;
+        }
         preserveHomeInsertionAnchor(
           scroll: _scroll,
           previous: [for (final s in old.sections) s.id ?? ''],
@@ -2245,9 +2251,8 @@ class SpotlightBoardState extends State<SpotlightBoard>
     // shelf's nodes ATTACHED — a viewport of lead keeps the next rows built
     // ahead of the cursor without resurrecting the build-everything burst.
     final list = ListView.builder(
-      controller: _scroll,
+      cacheExtent: 600, controller: _scroll,
       padding: EdgeInsets.zero,
-      cacheExtent: 600,
       itemCount: widget.sections.length + 2,
       findChildIndexCallback: (key) {
         if (key is! ValueKey<String>) return null;
@@ -3921,8 +3926,9 @@ class _CardState extends State<_Card>
         _moving ||
         !_canExpand ||
         !widget.trailerEnabled ||
-        MediaQuery.disableAnimationsOf(context))
+        MediaQuery.disableAnimationsOf(context)) {
       return;
+    }
     _trailerDwell = Timer(const Duration(seconds: 2), () {
       if (!mounted ||
           !_activeCard ||
@@ -3933,8 +3939,9 @@ class _CardState extends State<_Card>
           !TickerMode.of(context) ||
           (WidgetsBinding.instance.lifecycleState != null &&
               WidgetsBinding.instance.lifecycleState !=
-                  AppLifecycleState.resumed))
+                  AppLifecycleState.resumed)) {
         return;
+      }
       widget.onTrailerStart?.call();
       _trailerAttempted = true;
       setState(() => _trailerRequested = true);
@@ -4004,8 +4011,9 @@ class _CardState extends State<_Card>
           if (prefs == null || !current()) return;
           if (prefs.provider(MetadataCategory.information) !=
                   MetadataPreferences.current &&
-              !prefs.fallback)
+              !prefs.fallback) {
             return;
+          }
           if ((heroPresentation?.description ?? '').trim().isNotEmpty) return;
           final imdb = item.effectiveImdbId;
           if (imdb == null) return;
@@ -4509,8 +4517,9 @@ class _CardState extends State<_Card>
                         !_activeCard ||
                         _moving ||
                         !_trailerRequested ||
-                        _trailerPlaying == playing)
+                        _trailerPlaying == playing) {
                       return;
+                    }
                     setState(() => _trailerPlaying = playing);
                     _trailerTextTimer?.cancel();
                     if (playing) {

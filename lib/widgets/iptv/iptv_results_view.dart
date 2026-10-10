@@ -2439,7 +2439,7 @@ class IptvResultsViewState extends State<IptvResultsView>
         : 'Step ${step + 1} of ${IptvLoadPhases.ordered.length}';
 
     final meta = <String>[
-      if (_loadBytesLabel != null) _loadBytesLabel!,
+      ?_loadBytesLabel,
       if (elapsed.inSeconds > 0) formatLoadElapsed(elapsed),
     ].join('  ·  ');
 
@@ -7087,7 +7087,7 @@ class IptvResultsViewState extends State<IptvResultsView>
     final group = channel.group?.trim();
     final subParts = <String>[
       if (group != null && group.isNotEmpty) group,
-      if (resolution != null) resolution,
+      ?resolution,
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -8777,7 +8777,7 @@ class _IptvFocusStageInfo extends StatelessWidget {
     final group = channel.group?.trim();
     final subParts = <String>[
       if (group != null && group.isNotEmpty) group,
-      if (resolution != null) resolution,
+      ?resolution,
     ];
 
     return LayoutBuilder(
@@ -8924,7 +8924,7 @@ class _IptvRailInfo extends StatelessWidget {
     final group = ch.group?.trim();
     final subParts = <String>[
       if (group != null && group.isNotEmpty) group,
-      if (resolution != null) resolution,
+      ?resolution,
     ];
 
     return Column(

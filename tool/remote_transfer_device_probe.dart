@@ -75,8 +75,9 @@ Future<void> _run() async {
       directory: Directory('${root.path}/receiver'),
       receiveKey: (_, _) async => key,
       onReceive: (transfer) async {
-        if (await transfer.file.length() != 64 * 1024 * 1024)
+        if (await transfer.file.length() != 64 * 1024 * 1024) {
           throw StateError('Truncated file');
+        }
         imports++;
       },
     );
@@ -199,8 +200,9 @@ Future<void> _run() async {
       file: channel,
       metadata: {'format': 'channel-records-v1', 'requestId': 'device-probe'},
     );
-    if (jsonDecode(result!['data'] as String)['ok'] != true)
+    if (jsonDecode(result!['data'] as String)['ok'] != true) {
       throw StateError('Import refused');
+    }
     final actual = (await db.rawQuery(
       'SELECT COUNT(*) AS n FROM tv_cached_torrents',
     )).single['n'];

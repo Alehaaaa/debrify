@@ -268,8 +268,8 @@ class ProfilePackageService {
           if (!sanitized) 'lockOnResume': profile.lockOnResume,
           if (!sanitized)
             'inactivityTimeoutMinutes': profile.inactivityTimeoutMinutes,
-          if (pinRecord != null) 'pinRecord': pinRecord,
-          if (portableAvatar != null) 'avatarFile': portableAvatar,
+          'pinRecord': ?pinRecord,
+          'avatarFile': ?portableAvatar,
           if (appAssets.isNotEmpty) ProfileAppAssetsCodec.field: appAssets,
           'preferencesSection': 'profile-0-preferences',
           if (databaseSnapshots.isNotEmpty)
@@ -425,7 +425,7 @@ class ProfilePackageService {
         'role': profile.role.name,
         'policy': profile.policy.encode(),
         'wasPinProtected': profile.hasPin || profile.pinResetRequired,
-        if (pinRecord != null) 'pinRecord': pinRecord,
+        'pinRecord': ?pinRecord,
         'setupComplete': profile.setupComplete,
         'createdAtMs': profile.createdAt.millisecondsSinceEpoch,
         'disabled': !profile.isEnabled,

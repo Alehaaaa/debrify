@@ -47,7 +47,7 @@ Widget _stepDropdown(
   final app = AppThemeScope.of(context);
   final t = app.settings;
   return DropdownButtonFormField<int>(
-    value: value,
+    initialValue: value,
     isExpanded: true,
     decoration: const InputDecoration(),
     onChanged: (v) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/widgets/playback_startup_view.dart';
+import 'package:debrify/widgets/playback_startup_view.dart';
 
 void main() {
   for (final size in <Size>[

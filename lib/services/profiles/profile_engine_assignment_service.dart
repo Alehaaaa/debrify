@@ -8,7 +8,6 @@ import 'package:path/path.dart' as p;
 
 import '../../models/profiles/profile_policy.dart';
 import '../../models/profiles/user_profile.dart';
-import '../../utils/app_storage.dart';
 import '../engine/local_engine_storage.dart';
 import 'profile_authorization.dart';
 import 'profile_data_generation.dart';

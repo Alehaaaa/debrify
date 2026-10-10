@@ -163,7 +163,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
   bool _isSimklAuthenticated = false;
 
   // Bound sources for movies
-  Map<String, List<SeriesSource>> _boundSources = {};
+  final Map<String, List<SeriesSource>> _boundSources = {};
 
   // Episode drill-down mode
   StremioMeta? _pendingEpisodeShow; // Deferred until _loadAddons completes

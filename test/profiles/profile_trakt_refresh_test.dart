@@ -277,7 +277,7 @@ void main() {
         'trakt': {
           'access_token': 'import-access',
           'refresh_token': 'import-refresh',
-          if (expiry != null) 'expiry_ms': expiry,
+          'expiry_ms': ?expiry,
         },
       }, refreshEngineRuntime: false);
       expect(report.errors, isEmpty);

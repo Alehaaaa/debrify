@@ -3227,8 +3227,9 @@ class TorrentPlaybackService {
         }
         for (final pin in pins) {
           // Existing pack handling retains precedence for a primary pack.
-          if (!pin.isAddonDirect && !pin.isIptvDirect && !pin.isMediaServer)
+          if (!pin.isAddonDirect && !pin.isIptvDirect && !pin.isMediaServer) {
             break;
+          }
           try {
             final fresh = pin.isMediaServer
                 ? await MediaServerService.resolvePinned(
@@ -3281,8 +3282,9 @@ class TorrentPlaybackService {
               candidateAddonKey: source.stremioAddonKey,
               candidateStreamKey: source.stremioStreamKey,
               candidateBingeGroup: source.stremioBingeGroup,
-            ))
+            )) {
           return;
+        }
         final ({int season, int episode})? next;
         if (meta.hasStremioEpisodeIdentity) {
           final target = await StremioService.instance
@@ -4026,8 +4028,9 @@ class TorrentPlaybackService {
       return true;
     }
     void onDirectBatch(String source, List<Torrent> batch) {
-      if (source != leadingAddon || early.isCompleted || cancel.cancelled)
+      if (source != leadingAddon || early.isCompleted || cancel.cancelled) {
         return;
+      }
       if (ProfileRuntime.scope.value != earlyScope) return;
       final selected = earlyDirectCandidate(
         batch,
@@ -4205,8 +4208,9 @@ class TorrentPlaybackService {
             );
             if (!context.mounted ||
                 cancel.cancelled ||
-                ProfileRuntime.scope.value != earlyScope)
+                ProfileRuntime.scope.value != earlyScope) {
               return;
+            }
             await playBest(
               context,
               recovery.sources,
@@ -5218,8 +5222,9 @@ class TorrentPlaybackService {
                 usingCache = false;
                 fresh = await refresh();
                 freshUrl = fresh?.directUrl;
-                if (fresh == null || freshUrl == null || freshUrl.isEmpty)
+                if (fresh == null || freshUrl == null || freshUrl.isEmpty) {
                   continue;
+                }
                 alive =
                     !shouldPreflightDirectStream(fresh) ||
                     await StreamUrlValidator.isPlayableVideoUrl(
@@ -5627,8 +5632,9 @@ class TorrentPlaybackService {
     try {
       await DirectSourceAuthorization.authorize(torrent);
     } catch (_) {
-      if (context.mounted)
+      if (context.mounted) {
         _snack(context, 'Connection changed. Search sources again.');
+      }
       return false;
     }
     if (!context.mounted) return false;
@@ -6588,8 +6594,9 @@ class TorrentPlaybackService {
   }) {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (source.streamType == StreamType.directUrl) {
-      if (MediaServerService.owns(source))
+      if (MediaServerService.owns(source)) {
         return MediaServerService.bindingFor(source);
+      }
       if (IptvSourceSearch.owns(source)) {
         final playlistId = source.iptvPlaylistId;
         final catalogType = source.iptvCatalogType;
@@ -6869,7 +6876,7 @@ class TorrentPlaybackService {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedScreenType,
+                  initialValue: selectedScreenType,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -6899,7 +6906,7 @@ class TorrentPlaybackService {
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedStereoMode,
+                  initialValue: selectedStereoMode,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
@@ -7150,8 +7157,9 @@ class TorrentPlaybackService {
     Torrent source,
   ) async {
     if (meta?.hasStremioEpisodeIdentity == true) return;
-    if (meta?.imdbId == null || source.streamType != StreamType.directUrl)
+    if (meta?.imdbId == null || source.streamType != StreamType.directUrl) {
       return;
+    }
     // The player can advance while its launch callback retains old metadata.
     // Use the addon's actual request identity, never a filename guess.
     final parts = source.stremioVideoId?.split(':');

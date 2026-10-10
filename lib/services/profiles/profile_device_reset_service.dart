@@ -91,7 +91,7 @@ class ProfileDeviceResetService {
         await NativeProfileProjection.authorizeUnopenableDeviceReset();
     await _writeJournal('prepared', <String, Object?>{
       'unopenableAuthority': true,
-      if (nativeResetToken != null) 'nativeResetToken': nativeResetToken,
+      'nativeResetToken': ?nativeResetToken,
     });
     await NativeProfileProjection.beginUnopenableDeviceReset(nativeResetToken);
     _enterMaintenanceIfAvailable();

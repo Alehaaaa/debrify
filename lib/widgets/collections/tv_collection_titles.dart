@@ -90,16 +90,18 @@ class TvCollectionTitlesState extends State<TvCollectionTitles>
 
   void _armPreview() {
     _trailerDwell?.cancel();
-    if (_previewIdentity != null && mounted)
+    if (_previewIdentity != null && mounted) {
       setState(() => _previewIdentity = null);
+    }
     if (!mounted || !_previewEligible) return;
     final identity = _identity(widget.items[_index]);
     _trailerDwell = Timer(const Duration(seconds: 2), () {
       if (!mounted ||
           !_previewEligible ||
           ModalRoute.of(context)?.isCurrent == false ||
-          identity != _identity(widget.items[_index]))
+          identity != _identity(widget.items[_index])) {
         return;
+      }
       setState(() => _previewIdentity = identity);
     });
   }

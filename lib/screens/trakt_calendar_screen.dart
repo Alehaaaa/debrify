@@ -1381,7 +1381,7 @@ class _SelectorField<T> extends StatelessWidget {
     final app = AppThemeScope.of(context);
     return DropdownButtonFormField<T>(
       isExpanded: true,
-      value: value,
+      initialValue: value,
       focusNode: focusNode,
       items: items,
       onChanged: onChanged,

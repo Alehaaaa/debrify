@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/widgets/playback_startup_view.dart';
+import 'package:debrify/widgets/playback_startup_view.dart';
 
 void main() {
   test('startup shield remains opaque and noninteractive in PiP', () {

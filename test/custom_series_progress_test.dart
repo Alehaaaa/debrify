@@ -319,7 +319,7 @@ void main() {
   });
 
   test('long custom pin keys survive portable backup and restore', () async {
-    final id = CustomSeriesIdentity('a' * 64, 'catalog-' + 'b' * 200).id;
+    final id = CustomSeriesIdentity('a' * 64, 'catalog-${'b' * 200}').id;
     final key = 'series_source_$id';
     expect(key.length, greaterThan(256));
     const pin = SeriesSource(torrentHash: 'abc', torrentName: 'Edit',
@@ -331,7 +331,7 @@ void main() {
     SharedPreferences.setMockInitialValues({key: portable.value!});
     expect((await SeriesSourceService.getSources(id)).single.bindingKey, pin.bindingKey);
     expect(ProfilePreferencePortability.allowsKey('x' * 300), isFalse);
-    expect(ProfilePreferencePortability.allowsKey('series_source_custom-series:' + 'z' * 300), isFalse);
+    expect(ProfilePreferencePortability.allowsKey('series_source_custom-series:${'z' * 300}'), isFalse);
   });
 
   test('catalog identity, next and completion use custom inventory', () async {

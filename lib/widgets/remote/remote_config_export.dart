@@ -453,7 +453,7 @@ class RemoteConfigExportState extends State<RemoteConfigExport> {
       _iptvLists,
       _streamBadges,
     ])
-      if (item != null) item,
+      ?item,
   ];
 
   /// File-imported playlists aren't sendable, but a user whose only IPTV setup
@@ -649,8 +649,8 @@ class RemoteConfigExportState extends State<RemoteConfigExport> {
               jsonEncode(<String, Object?>{
                 'access_token': access,
                 'refresh_token': refresh,
-                if (expiry != null) 'expiry_ms': expiry,
-                if (username != null) 'username': username,
+                'expiry_ms': ?expiry,
+                'username': ?username,
               }),
             ),
           );
@@ -672,7 +672,7 @@ class RemoteConfigExportState extends State<RemoteConfigExport> {
             configData: transferData(
               jsonEncode(<String, Object?>{
                 'access_token': access,
-                if (username != null) 'username': username,
+                'username': ?username,
               }),
             ),
           );
@@ -694,7 +694,7 @@ class RemoteConfigExportState extends State<RemoteConfigExport> {
             configData: transferData(
               jsonEncode(<String, Object?>{
                 'api_key': apiKey,
-                if (username != null) 'username': username,
+                'username': ?username,
               }),
             ),
           );

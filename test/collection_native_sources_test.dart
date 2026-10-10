@@ -31,7 +31,7 @@ void main() {
         final query = CollectionNativeSourceService.discoverQuery(
           source('DISCOVER', media: media, filters: {
             'monetization': 'free',
-            if (region != null) 'watchRegion': region,
+            'watchRegion': ?region,
           }),
           1,
         );

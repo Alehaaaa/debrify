@@ -551,11 +551,8 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
               // Folder and file list
               Flexible(
                 child: ListView.builder(
-                  controller: _scrollController,
+                  cacheExtent: 600, controller: _scrollController,
                   shrinkWrap: true,
-                  // Keep a few off-screen rows built so ensureVisible can scroll
-                  // to the next focused item during D-pad navigation.
-                  cacheExtent: 600,
                   itemCount: _currentFolder.subfolders.length + _currentFolder.files.length,
                   itemBuilder: (context, index) {
                     final isFolder = index < _currentFolder.subfolders.length;

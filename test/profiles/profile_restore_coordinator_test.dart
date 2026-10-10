@@ -90,7 +90,7 @@ Future<PortableProfilePackage> _singleProfilePackage({
     profiles: <Map<String, dynamic>>[
       <String, dynamic>{
         'backupId': 'profile-0',
-        if (setupComplete != null) 'setupComplete': setupComplete,
+        'setupComplete': ?setupComplete,
         'preferencesSection': 'preferences',
       },
     ],
@@ -1396,7 +1396,7 @@ void main() {
     final prefix = 'p.$profileId.g.${report.publishedGeneration}.';
     expect(raw.getString('${prefix}theme_mode'), 'restored');
     expect(
-      raw.containsKey('${prefix}${StorageService.importedLaunchAnimationKey}'),
+      raw.containsKey('$prefix${StorageService.importedLaunchAnimationKey}'),
       isFalse,
     );
     await StorageService.getLaunchAnimation();

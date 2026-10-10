@@ -56,7 +56,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
   String? _errorMessage;
 
   // Current navigation state
-  List<String> _folderPath = []; // Path segments for breadcrumbs
+  final List<String> _folderPath = []; // Path segments for breadcrumbs
   RDFileNode? _rootContent; // Root content tree
   List<RDFileNode>?
   _currentViewNodes; // Current folder's visible nodes (after view mode transformation)
@@ -811,9 +811,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
           break;
         }
 
-        if (child != null) {
-          currentFolder = child;
-        }
+        currentFolder = child;
       }
 
       // Apply transformation based on mode
@@ -2093,25 +2091,25 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
   Future<void> _saveImdbIdToPlaylist({bool force = false}) async {
     final imdbId = _seriesPlaylist?.imdbId;
     if (imdbId == null || !imdbId.startsWith('tt')) return;
-    if (!force && (widget.playlistItem?['imdbId'] as String?) != null) return;
+    if (!force && (widget.playlistItem['imdbId'] as String?) != null) return;
 
-    final rdTorrentId = widget.playlistItem?['rdTorrentId'] as String?;
-    final torboxTorrentId = widget.playlistItem?['torboxTorrentId']?.toString();
-    final pikpakCollectionId = widget.playlistItem?['pikpakFileId'] as String?;
+    final rdTorrentId = widget.playlistItem['rdTorrentId'] as String?;
+    final torboxTorrentId = widget.playlistItem['torboxTorrentId']?.toString();
+    final pikpakCollectionId = widget.playlistItem['pikpakFileId'] as String?;
     final isPremiumize =
-        (widget.playlistItem?['provider'] as String?)?.toLowerCase() ==
+        (widget.playlistItem['provider'] as String?)?.toLowerCase() ==
         'premiumize';
     final String? premiumizeHash = isPremiumize
-        ? (widget.playlistItem?['torrent_hash'] as String?)
+        ? (widget.playlistItem['torrent_hash'] as String?)
         : null;
     final String? premiumizeItemId = isPremiumize
-        ? (widget.playlistItem?['premiumizeItemId']?.toString())
+        ? (widget.playlistItem['premiumizeItemId']?.toString())
         : null;
     final bool isAllDebrid =
-        (widget.playlistItem?['provider'] as String?)?.toLowerCase() ==
+        (widget.playlistItem['provider'] as String?)?.toLowerCase() ==
         'alldebrid';
     final String? allDebridHash = isAllDebrid
-        ? (widget.playlistItem?['torrent_hash'] as String?)
+        ? (widget.playlistItem['torrent_hash'] as String?)
         : null;
 
     await StorageService.updatePlaylistItemImdbId(
@@ -2191,13 +2189,11 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       // Check if we have a saved TVMaze mapping (indicates cached data)
       // Only show loading indicator if data needs to be fetched
       bool showLoading = true;
-      if (widget.playlistItem != null) {
-        final mapping = await StorageService.getTVMazeSeriesMapping(
-          widget.playlistItem!,
-        );
-        if (mapping != null) {
-          showLoading = false; // Data should be cached, skip loading indicator
-        }
+      final mapping = await StorageService.getTVMazeSeriesMapping(
+        widget.playlistItem,
+      );
+      if (mapping != null) {
+        showLoading = false; // Data should be cached, skip loading indicator
       }
 
       if (showLoading) {
@@ -2211,7 +2207,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         _seriesPlaylist!
             .fetchEpisodeInfo(
               playlistItem: widget.playlistItem,
-              imdbId: widget.playlistItem?['imdbId'] as String?,
+              imdbId: widget.playlistItem['imdbId'] as String?,
             )
             .then((_) async {
               await _saveImdbIdToPlaylist();
@@ -2308,7 +2304,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         _seriesPlaylist!
             .fetchEpisodeInfo(
               playlistItem: widget.playlistItem,
-              imdbId: widget.playlistItem?['imdbId'] as String?,
+              imdbId: widget.playlistItem['imdbId'] as String?,
             )
             .then((_) async {
               await _saveImdbIdToPlaylist(force: true);

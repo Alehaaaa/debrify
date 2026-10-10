@@ -467,8 +467,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
     if (playlist.isXtreamCodes) {
       return <String, WebDavSyncCatalogOwnerReference>{
         for (final type in IptvCatalogKey.xtreamContentTypes)
-          if (IptvCatalogKey.forPlaylist(playlist, type) case final key?)
-            key: WebDavSyncCatalogOwnerReference(
+          ?IptvCatalogKey.forPlaylist(playlist, type): WebDavSyncCatalogOwnerReference(
               localResourceId: resourceId,
               variant: 'xc-$type',
             ),

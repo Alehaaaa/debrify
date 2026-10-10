@@ -83,7 +83,7 @@ class MediaServerClient {
     return {
       'Authorization':
           '${kind == MediaServerKind.emby ? 'Emby' : 'MediaBrowser'} $parameters',
-      if (token != null) 'X-Emby-Token': token,
+      'X-Emby-Token': ?token,
       'Accept': 'application/json',
     };
   }

@@ -55,8 +55,9 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
       if (ModalRoute.of(context)?.isCurrent == false ||
           (WidgetsBinding.instance.lifecycleState != null &&
               WidgetsBinding.instance.lifecycleState !=
-                  AppLifecycleState.resumed))
+                  AppLifecycleState.resumed)) {
         return;
+      }
       // Notify competing ambient surfaces before mounting this decoder.
       CollectionFocusPlayback.claim(_owner);
       setState(() => _streams = streams);

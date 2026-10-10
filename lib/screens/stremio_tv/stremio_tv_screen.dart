@@ -3631,7 +3631,7 @@ class _ManualSourcePickerSheetState extends State<_ManualSourcePickerSheet> {
                         title: source.displayTitle,
                         meta: [
                           if (isDirect) 'Direct' else 'Torrent',
-                          if (size != null) size,
+                          ?size,
                           if (!isDirect && source.seeders > 0)
                             '${source.seeders} seeders',
                           if (source.source.isNotEmpty) source.source,

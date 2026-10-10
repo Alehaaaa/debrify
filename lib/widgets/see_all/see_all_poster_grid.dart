@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
@@ -514,13 +515,9 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
           SizedBox(
             height: m.boxHeight,
             child: ListView.builder(
-              controller: _scroll,
+              cacheExtent: 400, controller: _scroll,
               scrollDirection: Axis.horizontal,
               clipBehavior: Clip.hardEdge,
-              // ~1.5 cards of lookahead, matching the wall's reasoning: a
-              // DPAD target must already be built, since requestFocus on an
-              // unbuilt tile's detached node is a silent no-op (dead DPAD).
-              cacheExtent: 400,
               padding: EdgeInsets.symmetric(horizontal: m.hPad),
               itemCount: items.length,
               itemBuilder: (context, index) {
@@ -616,14 +613,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     final options = _resolveOptions();
 
     return CustomScrollView(
-      controller: _scroll,
-      // Pre-warm offscreen posters so DPAD scrolling doesn't decode on-screen
-      // mid-scroll. ~1.5 rows of lookahead: a DPAD-down target row is always
-      // already built (requestFocus on an unbuilt tile's detached node is a
-      // silent no-op — dead DPAD), while the old 800px window mounted ~16 extra
-      // offscreen tiles on every grid mount, a real slice of the Discover tab's
-      // entry cost on TV.
-      cacheExtent: widget.isTelevision ? 400 : 250,
+      scrollCacheExtent: ScrollCacheExtent.pixels(widget.isTelevision ? 400 : 250), controller: _scroll,
       slivers: [
         SliverPadding(
           padding: SeeAllGridMetrics.padding,

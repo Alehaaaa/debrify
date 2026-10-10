@@ -85,6 +85,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
     with TickerProviderStateMixin, MetadataPresentationMixin<_HeroSpotlight> {
   @override
   StremioMeta? _hostBaseline;
+  @override
   StremioMeta get originalMetadata => _hostBaseline ??= _buildHostBaseline();
 
   StremioMeta _buildHostBaseline() => mergeHeroMetadata(

@@ -961,8 +961,9 @@ class _SearchScreenState extends State<SearchScreen>
   ) {
     if (!mounted ||
         generation != _boardLoadGen ||
-        scope != ProfileRuntime.scope.value)
+        scope != ProfileRuntime.scope.value) {
       return;
+    }
     _homeSections = rows;
     if (_catalogQuery.isNotEmpty || _catalogSearching) return;
     if (!(ModalRoute.of(context)?.isCurrent ?? true)) {
@@ -1000,8 +1001,9 @@ class _SearchScreenState extends State<SearchScreen>
       _deferredHomeProgress = null;
       if (pending != null) {
         if (pending.generation != _boardLoadGen ||
-            pending.scope != ProfileRuntime.scope.value)
+            pending.scope != ProfileRuntime.scope.value) {
           return;
+        }
         _publishHomeProgress(
           pending.rows,
           pending.first,
@@ -3192,8 +3194,9 @@ class _SearchScreenState extends State<SearchScreen>
             isCurrent: current,
             rowId: _sectionRowId,
             onPublish: (rows, first) {
-              if (first)
+              if (first) {
                 developer.Timeline.instantSync('Home.contentPublished');
+              }
               _publishHomeProgress(rows, first, gen, scope);
             },
           )
@@ -3649,8 +3652,9 @@ class _SearchScreenState extends State<SearchScreen>
       );
       if (!mounted ||
           gen != _boardLoadGen ||
-          scope != ProfileRuntime.scope.value)
+          scope != ProfileRuntime.scope.value) {
         return false;
+      }
       _commitBoardSnapshot();
       if (more.isNotEmpty) {
         final merged = mergeHomeCatalogRows(
@@ -4166,8 +4170,9 @@ class _SearchScreenState extends State<SearchScreen>
     }, concurrency: 3);
     if (!mounted ||
         !isCurrent() ||
-        metadataGeneration != _metadataArtworkGeneration)
+        metadataGeneration != _metadataArtworkGeneration) {
       return;
+    }
     final artwork = <String, String>{
       for (final item in resolved)
         if (item.art != null && item.art!.isNotEmpty) item.id: item.art!,
@@ -5355,8 +5360,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
     for (final addon in _addonsById.values) {
       if (addon.sourceBindingKey == addonId ||
-          addon.portableConfigurationKey == addonId)
+          addon.portableConfigurationKey == addonId) {
         return addon;
+      }
     }
     if (addonId != null && _addonsById.containsKey(addonId)) {
       return _addonsById[addonId]!;
@@ -6132,7 +6138,7 @@ class _SearchScreenState extends State<SearchScreen>
         title: item.name,
         isTelevision: widget.isTelevision,
         posterUrl: item.poster,
-        subtitle: [row.title, if (episode != null) episode].join('  ·  '),
+        subtitle: [row.title, ?episode].join('  ·  '),
         actions: [
           // Mirrors the card's own long-press-to-play gate: PikPak-only
           // setups have no quick play, so the menu skips it.
@@ -7115,8 +7121,7 @@ class _SearchScreenState extends State<SearchScreen>
         ..clear()
         ..addAll({
           for (var i = 0; i < sections.length; i++)
-            if (columns[_sectionRowId(sections[i])] case final column?)
-              i: column,
+            i: ?columns[_sectionRowId(sections[i])],
         });
     } else {
       _disposeNodes();
@@ -7799,11 +7804,12 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _loadSourceTextFormatting() async {
     final value = await StorageService.getUseAddonTextFormatting();
     final logos = await StorageService.getShowAddonLogos();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _useAddonSourceText = value;
         _showAddonSourceLogos = logos;
       });
+    }
   }
 
   bool _hideHomeCollectionNames = false;
@@ -9763,10 +9769,9 @@ class _SearchScreenState extends State<SearchScreen>
                           child: favRail
                               ? ListView.builder(
                                   // Keyed by rail IDENTITY, like the meta shelf.
-                                  key: ValueKey('canvas-rail-$railKey'),
+                                  cacheExtent: 400, key: ValueKey('canvas-rail-$railKey'),
                                   scrollDirection: Axis.horizontal,
                                   clipBehavior: Clip.hardEdge,
-                                  cacheExtent: 400,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 48,
                                   ),
@@ -9793,10 +9798,9 @@ class _SearchScreenState extends State<SearchScreen>
                               : ListView.builder(
                                   // Keyed by rail IDENTITY: insertions above the active
                                   // rail must never read as a content swap.
-                                  key: ValueKey('canvas-rail-$railKey'),
+                                  cacheExtent: 400, key: ValueKey('canvas-rail-$railKey'),
                                   scrollDirection: Axis.horizontal,
                                   clipBehavior: Clip.hardEdge,
-                                  cacheExtent: 400,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 48,
                                   ),
@@ -10258,10 +10262,9 @@ class _SearchScreenState extends State<SearchScreen>
                         child: ListView.builder(
                           // Keyed by rail IDENTITY: insertions above the
                           // active rail must never read as a content swap.
-                          key: ValueKey('prom-rail-$railKey'),
+                          cacheExtent: 400, key: ValueKey('prom-rail-$railKey'),
                           scrollDirection: Axis.horizontal,
                           clipBehavior: Clip.hardEdge,
-                          cacheExtent: 400,
                           padding: EdgeInsets.symmetric(horizontal: sidePad),
                           itemCount: itemCount,
                           itemBuilder: (context, col) => Padding(
@@ -10777,10 +10780,9 @@ class _SearchScreenState extends State<SearchScreen>
           height: rowBoxH,
           child: ListView.builder(
             // Keyed by rail IDENTITY, never index.
-            key: ValueKey('atrium-rail-$railKey'),
+            cacheExtent: 400, key: ValueKey('atrium-rail-$railKey'),
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
-            cacheExtent: 400,
             itemCount: count,
             itemBuilder: (context, col) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 7),
@@ -11064,10 +11066,9 @@ class _SearchScreenState extends State<SearchScreen>
                     child: GridView.builder(
                       // Keyed by rail IDENTITY: a rail streaming in above the
                       // active one must never swap the wall's contents.
-                      key: ValueKey('mosaic-rail-$railKey'),
+                      cacheExtent: 600, key: ValueKey('mosaic-rail-$railKey'),
                       padding: const EdgeInsets.only(bottom: 24),
                       clipBehavior: Clip.hardEdge,
-                      cacheExtent: 600,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: perRow,
                         crossAxisSpacing: _kMosaicGap,
@@ -11458,10 +11459,9 @@ class _SearchScreenState extends State<SearchScreen>
                       SizedBox(
                         height: railBoxH,
                         child: ListView.builder(
-                          key: ValueKey('deck-rail-$railKey'),
+                          cacheExtent: 400, key: ValueKey('deck-rail-$railKey'),
                           scrollDirection: Axis.horizontal,
                           clipBehavior: Clip.hardEdge,
-                          cacheExtent: 400,
                           itemCount: count,
                           itemBuilder: (context, col) => Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 7),
@@ -12195,10 +12195,9 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: boxH,
           child: ListView.builder(
-            key: ValueKey('tonight-rail-$railKey'),
+            cacheExtent: 400, key: ValueKey('tonight-rail-$railKey'),
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
-            cacheExtent: 400,
             itemCount: count,
             itemBuilder: (context, col) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 7),
@@ -12560,8 +12559,9 @@ class _SearchScreenState extends State<SearchScreen>
       final prefs = await MetadataPreferencesService.load();
       if (!mounted ||
           generation != _metadataFeatureGeneration ||
-          scope != ProfileRuntime.scope.value)
+          scope != ProfileRuntime.scope.value) {
         return;
+      }
       setState(() => _metadataFeaturePolicy = prefs);
       _titleSearchPolicyReady = true;
       _scheduleTitleSuggestions();
@@ -14659,8 +14659,9 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     addon = origin;
-    if (CustomSeriesIdentity.isCustom(item.imdbId))
+    if (CustomSeriesIdentity.isCustom(item.imdbId)) {
       item = item.withSourceAddon(origin);
+    }
     _activeAddonId = addon.id;
     final imdb = _imdbOf(item);
     // Show a "Remove from Continue Watching" action when this title is on the
@@ -15780,8 +15781,9 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     addon = origin;
-    if (CustomSeriesIdentity.isCustom(item.imdbId))
+    if (CustomSeriesIdentity.isCustom(item.imdbId)) {
       item = item.withSourceAddon(origin);
+    }
     final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
       item.progressId,
     );
@@ -16822,8 +16824,9 @@ class _SearchScreenState extends State<SearchScreen>
     final id = item.progressId ?? item.id;
     // Use the exact IMDb, TMDB, or Simkl identity.
     if (id.isEmpty ||
-        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id)))
+        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id))) {
       return null;
+    }
     // The show's most recently paused session, WITH its paused_at timestamp —
     // it competes on recency inside [_reconcileSeriesResume] rather than
     // holding a fixed slot above local history, so a stale orphaned session
@@ -16843,8 +16846,9 @@ class _SearchScreenState extends State<SearchScreen>
     if (item.type != 'series') return null;
     final id = item.progressId ?? item.id;
     if (id.isEmpty ||
-        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id)))
+        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id))) {
       return null;
+    }
     return SimklService.instance.fetchNextToWatch(id);
   }
 
@@ -17124,8 +17128,9 @@ class _SearchScreenState extends State<SearchScreen>
   Future<double?> _simklMoviePercent(StremioMeta item) async {
     final id = item.progressId ?? item.id;
     if (id.isEmpty ||
-        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id)))
+        (!MediaIdentity.isImdb(id) && !MediaIdentity.isNative(id))) {
       return null;
+    }
     return _resumableMoviePercent(
       await SimklService.instance.fetchMoviePlaybackProgress(id),
     );
@@ -18268,9 +18273,8 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: rowH,
           child: ListView.builder(
-            scrollDirection: Axis.horizontal,
+            cacheExtent: 400, scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
-            cacheExtent: 400,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             itemCount: _listsResults.length,
             itemBuilder: (context, index) => Padding(
@@ -18585,7 +18589,7 @@ class _SearchScreenState extends State<SearchScreen>
                         },
                         child: SourceListScrollAnchor(
                           child: ListView.builder(
-                            controller: _kwScroll,
+                            cacheExtent: 1200, controller: _kwScroll,
                             // A focused SourceRow can scale and rise in
                             // Spotlight. The first item starts at scroll offset
                             // zero, so it needs real viewport clearance rather
@@ -18594,7 +18598,6 @@ class _SearchScreenState extends State<SearchScreen>
                               vertical: widget.isTelevision ? 24 : 8,
                               horizontal: 10,
                             ),
-                            cacheExtent: 1200,
                             itemCount: _kwResults.length,
                             itemBuilder: (context, i) {
                               final t = _kwResults[i];
@@ -20940,7 +20943,7 @@ class _SearchScreenState extends State<SearchScreen>
 
                           final showFooter = _boardLoadingMore;
                           return ListView.builder(
-                            controller: _boardScroll,
+                            cacheExtent: 300, controller: _boardScroll,
                             // A lazy sliver cannot relocate a keyed child by
                             // itself. Tracker/CW rows can arrive above the
                             // focused row, so provide the new index to preserve
@@ -20952,9 +20955,6 @@ class _SearchScreenState extends State<SearchScreen>
                               top: 6,
                               bottom: 32 + _classicAnchorTailPadding,
                             ),
-                            // ~1.5 rows of pre-build. Smaller extent means
-                            // smaller, more frequent builds on weak TV chips.
-                            cacheExtent: 300,
                             itemCount:
                                 (orderedHome
                                     ? homeRails.length
@@ -21915,14 +21915,11 @@ class _SearchScreenState extends State<SearchScreen>
                         }
                       };
                 return ListView.builder(
-                  scrollDirection: Axis.horizontal,
+                  cacheExtent: 400, scrollDirection: Axis.horizontal,
                   // Clip the horizontal viewport so scrolled-off cards don't paint
                   // over the sidebar to the left. rowH has enough headroom that the
                   // hover/focus lift still isn't clipped.
                   clipBehavior: Clip.hardEdge,
-                  // ~4 posters of pre-build either side (was 800 ≈ a dozen —
-                  // amplified every row mounted by the vertical cache).
-                  cacheExtent: 400,
                   padding: const EdgeInsets.symmetric(horizontal: 13),
                   // +1 trailing paging spinner.
                   itemCount:
@@ -22157,9 +22154,8 @@ class _SearchScreenState extends State<SearchScreen>
               VoidCallback down(int col) =>
                   () => _focusRelativeHomeRail(homeRowId, 1, col);
               return ListView.builder(
-                scrollDirection: Axis.horizontal,
+                cacheExtent: 400, scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.hardEdge,
-                cacheExtent: 400,
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 itemCount: items.length,
                 itemBuilder: (context, index) {
@@ -22333,9 +22329,8 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: rowH,
           child: ListView.builder(
-            scrollDirection: Axis.horizontal,
+            cacheExtent: 400, scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
-            cacheExtent: 400,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             itemCount: itemCount,
             itemBuilder: (context, col) {

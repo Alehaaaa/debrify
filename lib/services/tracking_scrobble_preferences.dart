@@ -100,7 +100,7 @@ class TrackingScrobblePreferences {
   static Set<TrackingSource> _decode(List<String> stored) => <TrackingSource>{
     TrackingSource.local,
     for (final value in stored)
-      if (TrackingSourceStorageName.parse(value) case final source?) source,
+      ?TrackingSourceStorageName.parse(value),
   };
 
   static List<String> _encode(Set<TrackingSource> value) => <String>[

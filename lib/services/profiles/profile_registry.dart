@@ -1051,8 +1051,7 @@ class ProfileRegistry {
         'profile_setup_complete': setupComplete ? 1 : 0,
         'pin_reset_required': 0,
         'lock_on_resume': lockOnResume ? 1 : 0,
-        if (inactivityTimeoutMinutes != null)
-          'inactivity_timeout_minutes': inactivityTimeoutMinutes,
+        'inactivity_timeout_minutes': ?inactivityTimeoutMinutes,
         'created_at_ms': effectiveCreatedAt,
         'updated_at_ms': now,
         if (disabled) 'disabled_at_ms': now,
@@ -1472,7 +1471,7 @@ class ProfileRegistry {
         'user_profiles',
         <String, Object?>{
           if (name != null) 'name': name.trim(),
-          if (avatarKey != null) 'avatar_key': avatarKey,
+          'avatar_key': ?avatarKey,
           'role': nextRole.name,
           'policy_json': nextPolicy.encode(),
           'policy_schema_version': nextPolicy.schemaVersion,
@@ -2307,8 +2306,7 @@ class ProfileRegistry {
           secretPayloadVersion,
           now,
           resourceId,
-          if (expectedResourceAuthorizationRevision != null)
-            expectedResourceAuthorizationRevision,
+          ?expectedResourceAuthorizationRevision,
         ],
       );
       if (changed != 1) throw StateError('Resource is unavailable');
@@ -2438,8 +2436,7 @@ class ProfileRegistry {
             'id = ? ${expectedResourceAuthorizationRevision == null ? '' : 'AND authorization_revision = ?'}',
         whereArgs: <Object>[
           resourceId,
-          if (expectedResourceAuthorizationRevision != null)
-            expectedResourceAuthorizationRevision,
+          ?expectedResourceAuthorizationRevision,
         ],
       );
       if (changed != 1) throw StateError('Connection deletion failed');

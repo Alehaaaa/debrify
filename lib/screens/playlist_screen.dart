@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import '../services/storage_service.dart';
 import '../services/main_page_bridge.dart';
@@ -468,10 +469,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   backgroundColor: app.cloud.dialogSurface,
                   color: app.playlist.accent,
                   child: CustomScrollView(
-                    physics: const AlwaysScrollableScrollPhysics(
+                    scrollCacheExtent: ScrollCacheExtent.pixels(500.0), physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    cacheExtent: 500.0,
                     slivers: [
                       // Search area - inline bar + toggle button
                       SliverToBoxAdapter(child: _buildSearchArea(query)),

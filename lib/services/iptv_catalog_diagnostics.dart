@@ -92,7 +92,7 @@ void logIptvCatalogFailure(
   final fields = <String, Object?>{
     'stage': stage,
     ...iptvCatalogFailureFields(error),
-    if (elapsedMs != null) 'elapsed_ms': elapsedMs,
+    'elapsed_ms': ?elapsedMs,
   };
   // Scalar fields survive PrivacyLog's blanket JSON-payload redaction.
   debugPrint(

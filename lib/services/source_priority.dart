@@ -290,10 +290,11 @@ class SourcePriority {
     try {
       for (final server in await MediaServerService.connections()) {
         final key = 'mediaserver:${server.id}'.toLowerCase();
-        if (seen.add(key))
+        if (seen.add(key)) {
           refs.add(
             SourceProviderRef(key: key, name: server.label, isEngine: false),
           );
+        }
       }
     } catch (_) {}
     return refs;

@@ -1345,8 +1345,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// initialization, this may legitimately appear after launch when TVMaze
   /// enriches a release-only playlist.
   String? get _currentSeriesImdbId {
-    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId))
+    if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId)) {
       return _effectiveContentImdbId;
+    }
     final value =
         _seriesPlaylist?.imdbId ??
         _syntheticGuidePlaylist?.imdbId ??
@@ -7534,7 +7535,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       group: channel.name,
       contentType: 'vod',
       httpHeaders: channel.httpHeaders,
-      attributes: {if (sourceId != null) 'source_playlist_id': sourceId},
+      attributes: {'source_playlist_id': ?sourceId},
     );
     await StorageService.recordIptvWatch(
       replay.url,
@@ -11829,15 +11830,17 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         !_playerCreated ||
         _isTransitioning ||
         _iosPipStarting ||
-        _isPipActive)
+        _isPipActive) {
       return;
+    }
     final player = _player;
     if (Platform.isIOS) setState(() => _iosPipStarting = true);
     var entered = false;
     try {
       final handle = Platform.isIOS ? await player.handle : null;
-      if (!mounted || !PipService.isOwner(this) || !identical(player, _player))
+      if (!mounted || !PipService.isOwner(this) || !identical(player, _player)) {
         return;
+      }
       if (Platform.isIOS) {
         await _setNativeSubtitleVisibilityForTrack(player.state.track.subtitle);
       }
@@ -12781,8 +12784,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId) ||
             (_effectiveContentImdbId?.startsWith('medialibrary:') ?? false)) {
           if (_effectiveContentSeason == null ||
-              _effectiveContentEpisode == null)
+              _effectiveContentEpisode == null) {
             return null;
+          }
           return LocalPlaybackResumeResolver.episode(
             seriesTitle: _effectiveContentTitle ?? widget.title,
             season: _effectiveContentSeason!,
@@ -13095,7 +13099,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     } catch (e) {}
 
     // Also save to legacy system for backward compatibility
-    if (!CustomSeriesIdentity.isCustom(_effectiveContentImdbId))
+    if (!CustomSeriesIdentity.isCustom(_effectiveContentImdbId)) {
       await StorageService.upsertVideoResume(
         _resumeKey,
         {
@@ -13111,6 +13115,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             _iptvGuideContextOverride?.sourceId ??
             widget.iptvSourceId,
       );
+    }
 
     // Explicit checkpoints (pause, settled seek, exit-adjacent saves) are the
     // handoff moments another device would resume from — let sync flush now
@@ -15201,8 +15206,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }) {
     // Custom catalogs own their episode order, even after TVMaze fills the guide.
     if (!allowResolverFallback &&
-        widget.seriesSourceFetcher?.resolveAdjacentEpisode != null)
+        widget.seriesSourceFetcher?.resolveAdjacentEpisode != null) {
       return null;
+    }
     final full = _seriesPlaylist?.fullTvmazeEpisodes.isNotEmpty == true
         ? _seriesPlaylist!.fullTvmazeEpisodes
         : (_syntheticGuidePlaylist?.fullTvmazeEpisodes ??
@@ -15220,8 +15226,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         _isTransitioning ||
         sources == null ||
         _currentSourceIndex < 0 ||
-        _currentSourceIndex >= sources.length)
+        _currentSourceIndex >= sources.length) {
       return;
+    }
     final current = _currentSeasonEpisodeForIdentity();
     if (current == null) return;
     unawaited(
@@ -17036,6 +17043,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             return SpotlightDialogCard(
               title: 'Which episode?',
               bodyText: title,
+              actions: [
+                SpotlightDialogAction(
+                  'Cancel',
+                  () => Navigator.of(dialogContext).pop(),
+                ),
+                // solid: the recommended action, and on TV the autofocus
+                // anchor — without it the dialog opens with nothing focused
+                // and the first OK press dies.
+                SpotlightDialogAction('Apply', solid: true, () {
+                  final season = int.tryParse(seasonController.text.trim());
+                  final episode = int.tryParse(episodeController.text.trim());
+                  if (season == null ||
+                      season <= 0 ||
+                      episode == null ||
+                      episode <= 0) {
+                    setDialogState(() {
+                      errorText = 'Enter a valid season and episode.';
+                    });
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(
+                    _SeasonEpisodeSelection(season: season, episode: episode),
+                  );
+                }),
+              ],
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -17082,31 +17114,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                   ],
                 ],
               ),
-              actions: [
-                SpotlightDialogAction(
-                  'Cancel',
-                  () => Navigator.of(dialogContext).pop(),
-                ),
-                // solid: the recommended action, and on TV the autofocus
-                // anchor — without it the dialog opens with nothing focused
-                // and the first OK press dies.
-                SpotlightDialogAction('Apply', solid: true, () {
-                  final season = int.tryParse(seasonController.text.trim());
-                  final episode = int.tryParse(episodeController.text.trim());
-                  if (season == null ||
-                      season <= 0 ||
-                      episode == null ||
-                      episode <= 0) {
-                    setDialogState(() {
-                      errorText = 'Enter a valid season and episode.';
-                    });
-                    return;
-                  }
-                  Navigator.of(dialogContext).pop(
-                    _SeasonEpisodeSelection(season: season, episode: episode),
-                  );
-                }),
-              ],
             );
           },
         );
@@ -18386,8 +18393,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// This mirrors the Android TV behavior where subtitles are always fetched on playback start.
   Future<void> _fetchAndMaybeAutoSelectAddonSubtitle() async {
     if (CustomSeriesIdentity.isCustom(_effectiveContentImdbId) &&
-        _manualContentImdbId == null)
+        _manualContentImdbId == null) {
       return;
+    }
     // Capture token at start to detect if content changes during async operations
     final fetchToken = _addonSubtitleFetchToken;
 

@@ -10,7 +10,6 @@ import '../episodes_panel.dart';
 import '../parents_guide_section.dart';
 import 'detail_episode_cells.dart';
 import 'detail_identity.dart';
-import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';

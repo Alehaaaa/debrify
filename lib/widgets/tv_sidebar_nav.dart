@@ -329,8 +329,9 @@ class TvSidebarNavState extends State<TvSidebarNav>
       // an ancestor walk from one of those asserts.
       if (ctx == null || !ctx.mounted) return;
       final scrollable = Scrollable.maybeOf(ctx);
-      if (scrollable == null || scrollable.position.maxScrollExtent <= 0)
+      if (scrollable == null || scrollable.position.maxScrollExtent <= 0) {
         return;
+      }
       Scrollable.ensureVisible(
         ctx,
         alignment: 0.5,
@@ -946,8 +947,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
       // left-edge brighten.
       animation: Listenable.merge([
         _expand,
-        if (label != null) label,
-        if (glow != null) glow,
+        ?label,
+        ?glow,
       ]),
       builder: (context, _) {
         // Gone by the halfway point of the open: past that the drawer covers

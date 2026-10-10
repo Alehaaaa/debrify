@@ -215,7 +215,7 @@ class BackupRestoreService {
           'trakt': <String, dynamic>{
             'access_token': traktAccess,
             'refresh_token': traktRefresh,
-            if (traktExpiry != null) 'expiry_ms': traktExpiry,
+            'expiry_ms': ?traktExpiry,
             if (traktUsername != null && traktUsername.isNotEmpty)
               'username': traktUsername,
           },
@@ -234,8 +234,7 @@ class BackupRestoreService {
             // restores. Derive it from the new master; never read the retired
             // preference again after one-time master seeding.
             'sync_catalog_items': scrobbleTargets.contains('mdblist'),
-            if (mdblistSyncCheckpoint != null)
-              'sync_checkpoint': mdblistSyncCheckpoint,
+            'sync_checkpoint': ?mdblistSyncCheckpoint,
           },
       },
       if (engineIds.isNotEmpty) 'searchEngineIds': engineIds,
