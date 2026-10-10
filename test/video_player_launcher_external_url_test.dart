@@ -314,7 +314,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('External player unavailable'), findsOneWidget);
 
-      await tester.tap(find.text('Use Debrify player'));
+      await tester.tap(find.text('Use Nextup player'));
       await tester.pumpAndSettle();
       expect(await result, isTrue);
     });

@@ -2031,7 +2031,11 @@ class _ExternalPlayerSettingsPageState
         child: Container(
           decoration: BoxDecoration(
             borderRadius: app.shape.br(8),
-            color: isFocused ? t.panel2 : null,
+            color: isFocused
+                ? (GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app, raised: true)
+                      : t.panel2)
+                : null,
             border: isFocused ? Border.all(color: t.accent, width: 2) : null,
             boxShadow: isFocused
                 ? [

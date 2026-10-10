@@ -143,7 +143,7 @@ void main() {
       await nextByLabel(tester, 'Next');
     }
     await nextByLabel(tester, 'Review');
-    expect(find.text("Maya's corner of Debrify"), findsOneWidget);
+    expect(find.text("Maya's corner of Nextup"), findsOneWidget);
 
     await nextByLabel(tester, 'Cancel');
 
@@ -369,7 +369,7 @@ void main() {
     await nextByLabel(tester, 'Next'); // → sources
     await nextByLabel(tester, 'Next'); // → abilities
     await nextByLabel(tester, 'Review'); // → review
-    expect(find.text("Maya's corner of Debrify"), findsOneWidget);
+    expect(find.text("Maya's corner of Nextup"), findsOneWidget);
 
     await nextByLabel(tester, 'Create Maya');
 
@@ -422,11 +422,12 @@ void main() {
     // questionnaire never asks about). An untouched save must round-trip
     // BOTH — the asked one via seeding, the unasked one because edit-saves
     // base on the stored policy, not the role preset.
-    final diverged = Set<ProfileFeature>.from(
-      ProfilePolicy.defaultsFor(UserProfileRole.child).enabled,
-    )
-      ..add(ProfileFeature.youtube)
-      ..remove(ProfileFeature.trackersAndDiscovery);
+    final diverged =
+        Set<ProfileFeature>.from(
+            ProfilePolicy.defaultsFor(UserProfileRole.child).enabled,
+          )
+          ..add(ProfileFeature.youtube)
+          ..remove(ProfileFeature.trackersAndDiscovery);
     final kid = await io(
       tester,
       () => registry.createProfile(
@@ -444,11 +445,11 @@ void main() {
     await pumpFrames(tester);
 
     // Lands on review, speaking Can/Can't for the stored policy.
-    expect(find.text("Noor's corner of Debrify"), findsOneWidget);
+    expect(find.text("Noor's corner of Nextup"), findsOneWidget);
     expect(find.text('CAN'), findsOneWidget);
     expect(find.text("CAN'T"), findsOneWidget);
     // Debrify TV is a Can; Live TV a Can't (one chip each).
-    expect(find.text('Debrify TV'), findsOneWidget);
+    expect(find.text('Nextup TV'), findsOneWidget);
     expect(find.text('Live TV'), findsOneWidget);
 
     await nextByLabel(tester, 'Save changes');
@@ -456,7 +457,8 @@ void main() {
     expect(
       saved!.policy.enabled,
       diverged,
-      reason: 'an untouched edit round-trips the stored policy exactly — '
+      reason:
+          'an untouched edit round-trips the stored policy exactly — '
           'including features the questionnaire never asks about',
     );
   });

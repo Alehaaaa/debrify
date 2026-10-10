@@ -921,7 +921,9 @@ class _ActionRowState extends State<_ActionRow> {
         constraints: const BoxConstraints(minHeight: 62),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: focused ? t.panel2 : t.panel,
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: focused)
+              : (focused ? t.panel2 : t.panel),
           borderRadius: app.shape.br(14),
           border: Border.all(color: focused ? t.accent : t.line),
         ),

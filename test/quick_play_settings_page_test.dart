@@ -239,4 +239,34 @@ void main() {
     await pumpPage(tester);
     expect(panelColors(), isNot(contains(GlassChrome.fill(glass))));
   });
+
+  testWidgets('Quick Play action row follows appearance changes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final glass = PremiumLooks.glass.build();
+    Container actionRow() => tester
+        .widgetList<Container>(
+          find.ancestor(
+            of: find.text('Restore defaults'),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((w) => w.constraints?.minHeight == 62);
+
+    await pumpPage(tester, appearance: glass);
+    await tester.ensureVisible(find.text('Restore defaults'));
+    await tester.pump();
+    expect(
+      (actionRow().decoration! as BoxDecoration).color,
+      GlassChrome.fill(glass),
+    );
+    await pumpPage(tester);
+    await tester.ensureVisible(find.text('Restore defaults'));
+    await tester.pump();
+    expect(
+      (actionRow().decoration! as BoxDecoration).color,
+      AppThemes.legacy.settings.panel,
+    );
+  });
 }

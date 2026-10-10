@@ -127,7 +127,7 @@ void main() {
         items.map((item) => (item as Map<String, dynamic>)['imdbId']).toSet(),
         hasLength(8),
       );
-      expect(snapshot['contextTitle'], 'Spotlight on Debrify');
+      expect(snapshot['contextTitle'], 'Spotlight on Nextup');
     });
   });
 

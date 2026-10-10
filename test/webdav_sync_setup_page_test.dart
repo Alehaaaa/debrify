@@ -916,7 +916,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('Finish the first sync before syncing Debrify TV'),
+      find.text('Finish the first sync before syncing Nextup TV'),
       findsOneWidget,
     );
 
@@ -978,7 +978,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Finish the first sync before syncing Debrify TV'),
+        find.text('Finish the first sync before syncing Nextup TV'),
         findsOneWidget,
       );
 
@@ -1038,7 +1038,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 
-  testWidgets('setup discloses manual-only Debrify TV sync', (tester) async {
+  testWidgets('setup discloses manual-only Nextup TV sync', (tester) async {
     await pumpPage(tester, enabled: true);
 
     expect(
@@ -1049,7 +1049,7 @@ void main() {
     );
   });
 
-  testWidgets('manual Debrify TV block shows pending status and Stop works', (
+  testWidgets('manual Nextup TV block shows pending status and Stop works', (
     tester,
   ) async {
     final marker = await codec.sealRoot(
@@ -1083,7 +1083,7 @@ void main() {
       ..tvStageRelease = release;
     await pumpPage(tester, enabled: true, activation: activation);
 
-    expect(find.text('DEBRIFY TV CHANNELS'), findsOneWidget);
+    expect(find.text('NEXTUP TV CHANNELS'), findsOneWidget);
     expect(find.text('Sync channels now'), findsOneWidget);
     expect(find.text('Changes are waiting for a manual sync'), findsOneWidget);
     expect(find.textContaining('Channels last synced'), findsOneWidget);
@@ -1091,7 +1091,7 @@ void main() {
     await tester.ensureVisible(find.text('Sync channels now'));
     await tester.tap(find.text('Sync channels now'));
     await tester.pump();
-    expect(find.text('Syncing Debrify TV'), findsOneWidget);
+    expect(find.text('Syncing Nextup TV'), findsOneWidget);
     expect(find.text('Reading'), findsOneWidget);
     expect(find.text('Stop'), findsOneWidget);
     await tester.tap(find.text('Stop'));
@@ -1101,7 +1101,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(activation.tvSyncs, 1);
-    expect(find.text('Debrify TV sync stopped safely.'), findsOneWidget);
+    expect(find.text('Nextup TV sync stopped safely.'), findsOneWidget);
   });
 
   testWidgets('manual TV platform gates show actionable disabled reasons', (
@@ -1195,7 +1195,7 @@ void main() {
 
     expect(activation.tvAvailabilityReads, 1);
     expect(activation.tvSyncs, 1);
-    expect(find.text('Syncing Debrify TV'), findsOneWidget);
+    expect(find.text('Syncing Nextup TV'), findsOneWidget);
     readRelease.complete();
     await tester.pumpAndSettle();
   });

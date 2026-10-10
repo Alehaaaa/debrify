@@ -496,8 +496,11 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     if (urlChanged || widget.enabled != oldWidget.enabled) {
       if (!_canPlay) {
         _teardownPlayer();
-      } else if (urlChanged && _engine != null) {
-        // The URL changed under a live player — restart on the new media.
+      } else if (urlChanged &&
+          (_engine != null || _creatingEngineGen != null)) {
+        // A pending factory also owns the old URL. Invalidate that creation
+        // before scheduling the replacement, or the new start gets discarded
+        // while waiting for the obsolete factory to complete.
         _teardownPlayer();
         _scheduleStart();
       } else if (_engine == null) {
@@ -875,8 +878,11 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     YoutubeService.invalidateStreamUrl(widget.muxedVideoUrl);
     final cb = widget.onPlaybackFailed;
     if (cb == null) return;
+    final generation = _engineGen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) cb();
+      // The old URL can fail immediately before a new Reel takes this state.
+      // Its queued callback must not fail the replacement player.
+      if (mounted && generation == _engineGen) cb();
     });
   }
 

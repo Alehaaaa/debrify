@@ -13,6 +13,7 @@ import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// House DPAD idiom: focus the node, then scroll it into view — plain
 /// `requestFocus` from a key handler skips the traversal policy's
@@ -592,7 +593,8 @@ class _FocusRingState extends State<_FocusRing> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Focus(
       skipTraversal: true,
       canRequestFocus: false,
@@ -602,7 +604,11 @@ class _FocusRingState extends State<_FocusRing> {
       onFocusChange: (_) => setState(() {}),
       child: Container(
         decoration: BoxDecoration(
-          color: _focused ? t.panel2 : Colors.transparent,
+          color: _focused
+              ? (GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : t.panel2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _focused ? t.accent : Colors.transparent),
         ),

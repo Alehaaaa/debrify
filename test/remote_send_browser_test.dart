@@ -141,7 +141,7 @@ void main() {
     expect(everything, 1);
     expect(photo, 1);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Debrify TV channels'));
+    await tester.tap(find.text('Nextup TV channels'));
     await tester.pump();
     expect(find.text('News'), findsOneWidget);
     expect(tester.takeException(), isNull);

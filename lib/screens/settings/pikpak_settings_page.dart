@@ -8,6 +8,7 @@ import '../../widgets/pikpak_folder_picker_dialog.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class PikPakSettingsPage extends StatefulWidget {
   const PikPakSettingsPage({super.key});
@@ -1049,7 +1050,8 @@ class _FocusRingState extends State<_FocusRing> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Focus(
       skipTraversal: true,
       canRequestFocus: false,
@@ -1059,7 +1061,11 @@ class _FocusRingState extends State<_FocusRing> {
       onFocusChange: (_) => setState(() {}),
       child: Container(
         decoration: BoxDecoration(
-          color: _focused ? t.panel2 : Colors.transparent,
+          color: _focused
+              ? (GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : t.panel2)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _focused ? t.accent : Colors.transparent),
         ),

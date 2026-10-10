@@ -589,6 +589,40 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('URL replacement supersedes a player factory still pending', (
+    tester,
+  ) async {
+    final obsolete = Completer<TrailerEngine>();
+    final oldEngine = _PendingFirstFrameEngine();
+    final currentEngine = _PendingFirstFrameEngine();
+    var creations = 0;
+    Widget host(String clip) => MaterialApp(
+      home: HeroTrailerBackdrop(
+        imageUrl: null,
+        videoUrl: 'https://example.invalid/$clip.mp4',
+        enabled: true,
+        startDelay: Duration.zero,
+        engineFactory: () {
+          creations++;
+          return clip == 'old' ? obsolete.future : Future.value(currentEngine);
+        },
+      ),
+    );
+
+    await tester.pumpWidget(host('old'));
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(creations, 1);
+    await tester.pumpWidget(host('new'));
+    await tester.pump(const Duration(milliseconds: 1));
+    obsolete.complete(oldEngine);
+    await tester.pump();
+    await tester.pump();
+    expect(oldEngine.disposed, isTrue);
+    expect(currentEngine.openedUrl, 'https://example.invalid/new.mp4');
+    expect(creations, 2);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('a hung initial seek remains covered by the startup timeout', (
     tester,
   ) async {
