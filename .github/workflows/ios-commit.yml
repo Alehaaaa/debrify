@@ -1,12 +1,12 @@
 name: iOS Commit Build
 
 # Builds a sideloadable IPA for every pushed commit. Commits on the default
-# branch are also published: the IPA goes to the rolling `ios-commits`
-# pre-release and the SideStore/AltStore source to the `sidestore` branch,
+# branch each get their own pre-release (also containing Android / Android TV
+# APKs), while the SideStore/AltStore source lives on the `sidestore` branch,
 # reachable at:
 #   https://raw.githubusercontent.com/<owner>/<repo>/sidestore/apps.json
-# A git push swaps the file atomically, so SideStore never sees a missing or
-# half-written source (re-uploading a release asset deletes it first).
+# A git push swaps the file atomically, so SideStore never sees a half-written
+# source. Old IPA downloads remain valid when a newer build arrives.
 
 on:
   push:
@@ -18,16 +18,13 @@ on:
 permissions:
   contents: write
 
-# A newer push to the same branch supersedes the build in flight: cancel it
-# rather than queue a second macOS runner for an IPA nobody will install.
-# (Publishing is safe to cut short — the source branch is swapped by an
-# atomic git push, and the next build republishes.)
+# Preserve all default-branch builds: each must finish publishing its own
+# release and Android APKs. Supersede in-flight builds on feature branches.
 concurrency:
-  group: ios-commit-${{ github.ref }}
-  cancel-in-progress: true
+  group: ios-commit-${{ github.ref_name == github.event.repository.default_branch && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}
 
 env:
-  RELEASE_TAG: ios-commits
   SOURCE_BRANCH: sidestore
 
 jobs:
@@ -35,6 +32,7 @@ jobs:
     runs-on: macos-latest
     outputs:
       ipa_name: ${{ steps.ipa.outputs.name }}
+      release_tag: ${{ steps.publish.outputs.release_tag }}
 
     steps:
     - name: Checkout code
@@ -144,7 +142,8 @@ jobs:
         name: nextup-ios-${{ github.run_number }}
         path: build/ios/iphoneos/${{ steps.ipa.outputs.name }}
 
-    - name: Publish to SideStore source
+    - name: Publish commit release and SideStore source
+      id: publish
       if: github.ref_name == github.event.repository.default_branch
       env:
         GH_TOKEN: ${{ github.token }}
@@ -153,19 +152,19 @@ jobs:
       run: |
         set -euo pipefail
         IPA="build/ios/iphoneos/$IPA_NAME"
+        RELEASE_TAG="build-${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}"
         BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG"
         SOURCE_URL="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$SOURCE_BRANCH/apps.json"
 
         if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
           gh release create "$RELEASE_TAG" --prerelease --target "$GITHUB_SHA" \
-            --title "iOS commit builds" \
-            --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`."
+            --title "Nextup build #$GITHUB_RUN_NUMBER (${GITHUB_SHA::7})" \
+            --notes "Commit $GITHUB_SHA on $GITHUB_REF_NAME. Android and Android TV APKs are attached when their build finishes."
         fi
 
-        # No downtime: each build's IPA has its own name, so uploading it never
-        # touches the IPAs already listed. The source switches to it only after
-        # the upload has finished, and old IPAs are pruned only after that.
+        # Each build's release tag and IPA name are unique and stay addressable.
         gh release upload "$RELEASE_TAG" "$IPA" --clobber
+        echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
         # The source lives alone on an orphan branch.
         SRC="$RUNNER_TEMP/sidestore"
@@ -180,7 +179,7 @@ jobs:
           else
             git init -q -b "$SOURCE_BRANCH" "$SRC"
             git -C "$SRC" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/$GITHUB_REPOSITORY.git"
-            # First run: carry over the builds already listed in the release.
+            # First run: carry over the previous SideStore source if available.
             mkdir -p "$RUNNER_TEMP/prev"
             gh release download "$RELEASE_TAG" -p apps.json -D "$RUNNER_TEMP/prev" --clobber || true
             PREVIOUS="$RUNNER_TEMP/prev/apps.json"
@@ -209,26 +208,21 @@ jobs:
           sleep $((attempt * 3))
         done
 
-        # The old release-asset copy of the source was re-uploaded in place,
-        # which briefly deleted it. Retire it so nobody fetches a stale copy.
-        gh release delete-asset "$RELEASE_TAG" apps.json -y 2>/dev/null || true
-
-        # Drop IPAs that have aged out of the source. IPAs the previous source
-        # listed survive one more build, since raw.githubusercontent.com can
-        # serve that version for a few minutes after the push.
-        git -C "$SRC" show HEAD^:apps.json > "$RUNNER_TEMP/previous.json" 2>/dev/null || echo '{"apps":[]}' > "$RUNNER_TEMP/previous.json"
-        keep=$(python3 -c 'import json,sys; print("\n".join(v["downloadURL"].rsplit("/",1)[1] for f in sys.argv[1:] for a in json.load(open(f))["apps"] for v in a["versions"]))' "$SRC/apps.json" "$RUNNER_TEMP/previous.json")
-        gh release view "$RELEASE_TAG" --json assets -q '.assets[].name' | grep '\.ipa$' | while read -r asset; do
-          if ! grep -qxF "$asset" <<<"$keep"; then
-            gh release delete-asset "$RELEASE_TAG" "$asset" -y
-          fi
-        done
-
-        gh release edit "$RELEASE_TAG" --notes "Rolling iOS builds of every commit to \`$GITHUB_REF_NAME\`.
-
-        Latest: build ${{ github.run_number }} from $GITHUB_SHA
-
-        **SideStore source:** \`$SOURCE_URL\`"
+        printf 'Commit %s on %s.\n\n**iOS:** %s\n**Android / Android TV:** universal APKs are attached by the Android build job.\n\n**SideStore source:** %s\n' \
+          "$GITHUB_SHA" "$GITHUB_REF_NAME" "$IPA_NAME" "$SOURCE_URL" > "$RUNNER_TEMP/nextup-release-notes.md"
+        gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/nextup-release-notes.md"
 
         echo "### SideStore source" >> "$GITHUB_STEP_SUMMARY"
         echo "\`$SOURCE_URL\`" >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    name: Build Android and Android TV APKs
+    needs: build
+    # SideStore publishing errors must not prevent Android from shipping once
+    # the iOS IPA is safely present in the release.
+    if: always() && needs.build.outputs.release_tag != ''
+    uses: ./.github/workflows/build.yml
+    with:
+      job: android
+      release_tag: ${{ needs.build.outputs.release_tag }}
+    secrets: inherit
