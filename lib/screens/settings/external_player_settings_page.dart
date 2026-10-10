@@ -18,6 +18,7 @@ import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 import 'playback_settings_section.dart';
 import 'subtitle_priority_page.dart';
@@ -1933,7 +1934,9 @@ class _ExternalPlayerSettingsPageState
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: t.panel2,
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.field(app)
+                      : t.panel2,
                   borderRadius: app.shape.br(8),
                   border: Border.all(
                     color: enabled && isFocused ? t.accent : t.line,
@@ -1952,6 +1955,9 @@ class _ExternalPlayerSettingsPageState
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: value,
+                    dropdownColor: GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : t.panel2,
                     focusNode: focusNode,
                     isExpanded: true,
                     icon: Icon(
@@ -2129,7 +2135,9 @@ class _ExternalPlayerSettingsPageState
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
-                  color: t.panel2,
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.field(app)
+                      : t.panel2,
                   borderRadius: app.shape.br(8),
                   border: Border.all(
                     color: isFocused ? t.accent : t.line,
@@ -2148,6 +2156,9 @@ class _ExternalPlayerSettingsPageState
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<int>(
                     value: value.clamp(0, items.length - 1),
+                    dropdownColor: GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : t.panel2,
                     focusNode: focusNode,
                     isExpanded: true,
                     icon: Icon(Icons.keyboard_arrow_down, color: t.dim),

@@ -493,6 +493,68 @@ void main() {
     expect(engine.disposed, true);
   });
 
+  testWidgets('buffering with playing false still triggers stall recovery', (
+    tester,
+  ) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/buffering.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          playbackStallTimeout: const Duration(seconds: 20),
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    engine.playing.add(false);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pump();
+    expect(failures, 1);
+    expect(engine.disposed, true);
+  });
+
+  testWidgets('a deliberately frozen frame does not trigger stall recovery', (
+    tester,
+  ) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    Widget host(bool paused) => MaterialApp(
+      home: HeroTrailerBackdrop(
+        imageUrl: null,
+        videoUrl: 'https://example.invalid/paused.mp4',
+        enabled: true,
+        startDelay: Duration.zero,
+        freezeFrame: paused,
+        playbackStallTimeout: const Duration(seconds: 20),
+        engineFactory: () async => engine,
+        onPlaybackFailed: () => failures++,
+      ),
+    );
+    await tester.pumpWidget(host(false));
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    await tester.pumpWidget(host(true));
+    await tester.pump(const Duration(seconds: 45));
+    expect(failures, 0);
+    expect(engine.disposed, false);
+    await tester.pumpWidget(host(false));
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pump();
+    expect(failures, 1);
+  });
+
   testWidgets('a hung initial seek remains covered by the startup timeout', (
     tester,
   ) async {

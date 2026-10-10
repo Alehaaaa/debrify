@@ -727,10 +727,13 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
               _playbackStallTimer?.cancel();
               _playbackStallTimer = Timer.periodic(interval, (_) {
                 if (!mounted || _engine != engine || !_videoVisible) return;
-                if (!_playing ||
-                    _covered ||
+                // A decoder can report `playing: false` while rebuffering.
+                // That is precisely the silent stall we must recover from;
+                // only explicit pause/visibility intent suspends this clock.
+                if (_covered ||
                     _appPaused ||
                     _pausedByUser ||
+                    widget.freezeFrame ||
                     widget.suspended ||
                     (_duration > Duration.zero &&
                         _lastPos >= _duration - const Duration(seconds: 1))) {
@@ -768,6 +771,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     });
     _posSub = engine.positionStream.listen((p) {
+      if (!mounted || _engine != engine) return;
       if (p > _lastPos + const Duration(milliseconds: 250)) {
         _stalledFor = Duration.zero;
       }

@@ -1475,7 +1475,8 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
   /// omitted at the ends rather than shown disabled — a focusable dead
   /// control is worse than an absent one on a remote.
   Future<void> _showListActions(IptvListMeta list) async {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     final lists = _customLists;
     final index = lists.indexWhere((l) => l.id == list.id);
     if (index < 0) return;
@@ -1483,7 +1484,9 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
     final action = await showModalBottomSheet<String>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: t.panel,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : t.panel,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),

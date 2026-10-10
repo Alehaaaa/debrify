@@ -208,7 +208,7 @@ void main() {
       expect(find.text('Default Audio'), findsNothing);
       await tester.tap(find.text('Choose player'));
       await settleSettings(tester);
-      await tester.tap(find.text('Debrify Player'));
+      await tester.tap(find.text('Nextup Player'));
       await tester.pumpAndSettle();
       await tester.pageBack();
       await settleSettings(tester);
