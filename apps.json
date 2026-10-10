@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Nextup for iPhone and iPad, built from every commit.",
   "description": "Nextup is an independent, unofficial fork of Debrify with a Reels feed, Continue Watching synced across Trakt, Simkl and MDBList, offline-first downloads and a reworked glass interface.\n\nEvery commit to nextup in Alehaaaa/debrify is built automatically and published here with a changelog of what changed since the previous build, so updates show up right in SideStore or AltStore. The source keeps the last few builds, so you can always roll back.\n\nNot affiliated with or endorsed by the official Debrify project.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/9bb4987437ca43d87ffdb95c367ef3b199610575/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/5d060f041fbc633f994d0be2c463687a5ec41de3/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,11 +16,20 @@
       "developerName": "Alehaaaa",
       "subtitle": "Your movies and shows, one swipe away.",
       "localizedDescription": "Nextup brings your cloud accounts, WebDAV servers, Stremio catalogs, IPTV and YouTube into one library, with a player built for movies and TV.\n\n• Reels: swipe through official scenes and trailers, then jump straight into the title\n• Continue Watching that follows you across Trakt, Simkl and MDBList\n• Up Next links: open any episode straight from Up Next for Trakt\n• Downloads that work fully offline, with auto-download filters\n• A glass interface with your own looks and colour palettes\n• Lock-screen controls, touch lock, pinch to fill, double-tap to pause\n• WebDAV sync with snapshots, and backups that restore cleanly\n\nNextup doesn't host or provide any content; you connect the services you already use.\n\nThese are untested builds of every commit, made by GitHub Actions. SideStore or AltStore re-signs them with your own certificate on install. Nextup is an independent fork of Debrify and isn't affiliated with the official project.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/9bb4987437ca43d87ffdb95c367ef3b199610575/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/5d060f041fbc633f994d0be2c463687a5ec41de3/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": {},
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610101858",
+          "date": "2026-10-10T19:05:13Z",
+          "localizedDescription": "What's new:\n• Unify frosted glass chrome across shared app widgets (5d060f04)\n• Polish frosted glass surfaces across Nextup chrome (da04dbc9)\n• chore: clear Dart and Flutter analysis diagnostics (7d60e409)\n• Fix Dart analyzer diagnostics and preserve Flutter compatibility (b61985a1)\n\nBuild 202610101858 from nextup@5d060f0\nhttps://github.com/Alehaaaa/debrify/compare/9bb4987...5d060f0",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/nextup-ios-61-5d060f0.ipa",
+          "size": 40296359,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610101616",
@@ -100,15 +109,6 @@
           "localizedDescription": "What's new:\n• Prepare upcoming reel posters and bound their decode to full HD (bea6230c)\n• Exercise the texture renderer in reel poster continuity regression (79a5eeba)\n• Keep reel posters mounted, prefer HD sources, and discard failed upcoming clips (2c8a1f98)\n\nBuild 202610061551 from nextup@bea6230\nhttps://github.com/Alehaaaa/debrify/compare/61b99cf...bea6230",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-48-bea6230.ipa",
           "size": 39898597,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610061528",
-          "date": "2026-10-06T15:33:40Z",
-          "localizedDescription": "What's new:\n• Satisfy strict analyzer in feed recovery regression test (61b99cfd)\n• Keep reels continuous, recover empty feeds, and play full HD scenes (13a7f46b)\n\nBuild 202610061528 from nextup@61b99cf\nhttps://github.com/Alehaaaa/debrify/compare/8154447...61b99cf",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/ios-commits/debrify-ios-45-61b99cf.ipa",
-          "size": 39894144,
           "minOSVersion": "14.0"
         }
       ],
