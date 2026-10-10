@@ -7,6 +7,7 @@ import '../../../services/engine/settings_manager.dart';
 import '../../../services/engine/engine_registry.dart';
 import '../../../services/profiles/profile_preferences.dart';
 import '../../../theme/app_theme_scope.dart';
+import '../../../theme/glass_chrome.dart';
 
 /// Discrete choices replacing a former slider's min..max range. Small ranges
 /// enumerate every value; large ones use a coarse ladder so the dropdown
@@ -64,7 +65,9 @@ Widget _stepDropdown(
         ),
     ],
     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: app.core.tx),
-    dropdownColor: t.panel2,
+    dropdownColor: GlassChrome.enabled(app)
+        ? GlassChrome.fill(app, raised: true)
+        : t.panel2,
     borderRadius: app.shape.br(14),
     icon: Icon(Icons.arrow_drop_down, color: t.dim),
   );

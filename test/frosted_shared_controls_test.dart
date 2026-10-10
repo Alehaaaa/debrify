@@ -8,6 +8,7 @@ import 'package:debrify/theme/widgets/glass_surface.dart';
 import 'package:debrify/widgets/search_source_dropdown.dart';
 import 'package:debrify/widgets/see_all/see_all_random_button.dart';
 import 'package:debrify/widgets/view_mode_dropdown.dart';
+import 'package:debrify/screens/settings/widgets/settings_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -78,4 +79,42 @@ void main() {
       expect(colors, contains(GlassChrome.fill(glass)));
     },
   );
+
+  testWidgets('Settings dropdown and theme follow the selected glass look', (
+    tester,
+  ) async {
+    const choices = [
+      SettingsSelectOption('auto', 'Automatic'),
+      SettingsSelectOption('1080', '1080p'),
+    ];
+    Widget selector() => Builder(
+      builder: (context) => Theme(
+        data: settingsPageTheme(context),
+        child: SettingsSelectDropdown(
+          options: choices,
+          value: 'auto',
+          onChanged: (_) {},
+        ),
+      ),
+    );
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass, selector()));
+    var dropdown = tester.widget<DropdownButton<String>>(
+      find.byType(DropdownButton<String>),
+    );
+    expect(dropdown.dropdownColor, GlassChrome.fill(glass, raised: true));
+    final settingsContext = tester.element(
+      find.byType(DropdownButtonFormField<String>),
+    );
+    expect(
+      Theme.of(settingsContext).canvasColor,
+      GlassChrome.fill(glass, raised: true),
+    );
+
+    await tester.pumpWidget(host(AppThemes.legacy, selector()));
+    dropdown = tester.widget<DropdownButton<String>>(
+      find.byType(DropdownButton<String>),
+    );
+    expect(dropdown.dropdownColor, AppThemes.legacy.settings.panel2);
+  });
 }

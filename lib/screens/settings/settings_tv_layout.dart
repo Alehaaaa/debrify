@@ -13,6 +13,7 @@ import '../../theme/widgets/parallax_focus.dart';
 import 'settings_spotlight_shell.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// TV-only two-pane Settings shell (the "Mock 1" layout): a category rail on
 /// the left, the selected category's rows on the right.
@@ -1598,9 +1599,20 @@ class _RailItemState extends State<_RailItem> {
                       color: inverse
                           ? app.core.tx
                           : selected
-                          ? app.fade(app.core.tx, 0.1)
-                          : (focused ? t.panel2 : Colors.transparent),
+                          ? (GlassChrome.enabled(app)
+                                ? GlassChrome.fill(app, raised: true)
+                                : app.fade(app.core.tx, 0.1))
+                          : (focused
+                                ? (GlassChrome.enabled(app)
+                                      ? GlassChrome.fill(app)
+                                      : t.panel2)
+                                : Colors.transparent),
                       borderRadius: radius,
+                      border: GlassChrome.enabled(app) && (selected || focused)
+                          ? Border.all(
+                              color: GlassChrome.edge(app, active: focused),
+                            )
+                          : null,
                     ),
                     child: Row(
                       children: [

@@ -1530,6 +1530,7 @@ class ReelVideoSurface extends StatelessWidget {
             videoBlurSigma: 0,
             startDelay: Duration.zero,
             firstFrameTimeout: const Duration(seconds: 15),
+            playbackStallTimeout: const Duration(seconds: 20),
             repeat: true,
             skipIntro: false,
           ),

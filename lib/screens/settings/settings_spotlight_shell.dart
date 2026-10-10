@@ -622,9 +622,18 @@ class _SettingsRailItemState extends State<_SettingsRailItem> {
               color: inverse
                   ? app.core.tx
                   : widget.selected
-                  ? app.fade(app.core.tx, 0.1)
-                  : (lit ? t.panel2 : Colors.transparent),
+                  ? (GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : app.fade(app.core.tx, 0.1))
+                  : (lit
+                        ? (GlassChrome.enabled(app)
+                              ? GlassChrome.fill(app)
+                              : t.panel2)
+                        : Colors.transparent),
               borderRadius: radius,
+              border: GlassChrome.enabled(app) && (widget.selected || lit)
+                  ? Border.all(color: GlassChrome.edge(app, active: lit))
+                  : null,
             ),
             child: Row(
               children: [
@@ -770,6 +779,8 @@ class _SettingsCategoryCardState extends State<_SettingsCategoryCard> {
             decoration: BoxDecoration(
               color: inverse
                   ? app.core.tx
+                  : GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: lit)
                   : (lit ? t.panel2 : app.fade(app.core.tx, 0.047)),
               borderRadius: radius,
               border: Border.all(
@@ -777,6 +788,8 @@ class _SettingsCategoryCardState extends State<_SettingsCategoryCard> {
                     ? app.core.tx
                     : widget.definition.destructive
                     ? t.danger.withValues(alpha: 0.28)
+                    : GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app, active: lit)
                     : t.line,
               ),
             ),
@@ -953,11 +966,17 @@ class _SettingsSpotlightSummaryCardState
                   ? app.core.tx
                   : Color.alphaBlend(
                       color.withValues(alpha: 0.1),
-                      app.fade(app.core.tx, 0.045),
+                      GlassChrome.enabled(app)
+                          ? GlassChrome.fill(app, raised: lit)
+                          : app.fade(app.core.tx, 0.045),
                     ),
               borderRadius: radius,
               border: Border.all(
-                color: inverse ? app.core.tx : color.withValues(alpha: 0.24),
+                color: inverse
+                    ? app.core.tx
+                    : GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app, active: lit)
+                    : color.withValues(alpha: 0.24),
               ),
             ),
             child: Column(

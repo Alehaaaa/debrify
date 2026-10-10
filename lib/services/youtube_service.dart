@@ -763,16 +763,16 @@ class YoutubeService {
         client: 'cobalt',
       );
 
-      // When the relay can't serve a trailer or reel, fall back to the
-      // original low-res path: one muxed (audio+video) MP4, usually 360p.
-      // It is the stream YouTube still hands out most reliably, opens in
-      // every player (AVFoundation included) and needs no audio pairing.
-      final directMuxed = preferMuxed || relayFirst;
+      // Respect the playback engine's audio-pairing capability when the
+      // relay fails. Forcing a muxed MP4 here limits most devices to 360p,
+      // even when the caller requested HD adaptive video with separate audio.
+      // iOS explicitly requests muxed streams where its player requires one.
+      final directMuxed = preferMuxed;
       Future<({YoutubeResolvedStreams streams, String client})?>
       direct() async {
         if (relayFirst) {
           debugPrint(
-            'YoutubeService: $videoId low-res fallback '
+            'YoutubeService: $videoId direct fallback '
             '${relayMissFinal ? '(every Cobalt instance refused it)' : '(Cobalt busy — retried on next request)'}',
           );
         }

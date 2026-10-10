@@ -507,6 +507,12 @@ ThemeData _buildSettingsPageTheme(ThemeData base, AppTheme app) {
   );
   return base.copyWith(
     colorScheme: scheme,
+    // DropdownButtonFormField opens its overlay using Theme.canvasColor,
+    // unlike DropdownMenu, which uses dropdownMenuTheme. Keep every settings
+    // dropdown translucent under Frosted Glass, including legacy form pages.
+    canvasColor: GlassChrome.enabled(app)
+        ? GlassChrome.fill(app, raised: true)
+        : base.canvasColor,
     scaffoldBackgroundColor: t.bg,
     appBarTheme: base.appBarTheme.copyWith(
       backgroundColor: Colors.transparent,
@@ -830,17 +836,20 @@ class SettingsPageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 44,
           height: 44,
-          decoration: BoxDecoration(
-            color: t.accent.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(12),
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(app, radius: app.shape.br(12))
+              : BoxDecoration(
+                  color: t.accent.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
           child: Icon(icon, color: t.accent2, size: 22),
         ),
         const SizedBox(width: 14),
@@ -900,9 +909,15 @@ class SettingsInfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.08),
+        color: GlassChrome.enabled(app)
+            ? Color.alphaBlend(c.withValues(alpha: 0.07), GlassChrome.fill(app))
+            : c.withValues(alpha: 0.08),
         borderRadius: app.shape.br(12),
-        border: Border.all(color: c.withValues(alpha: 0.22)),
+        border: Border.all(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : c.withValues(alpha: 0.22),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2581,7 +2596,8 @@ class SettingsSelectDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     final SettingsSelectOption? selected = options
         .cast<SettingsSelectOption?>()
         .firstWhere((o) => o!.value == value, orElse: () => null);
@@ -2596,7 +2612,9 @@ class SettingsSelectDropdown extends StatelessWidget {
           isExpanded: true,
           // Variable item heights so subtitles fit in the open menu.
           itemHeight: null,
-          dropdownColor: t.panel2,
+          dropdownColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : t.panel2,
           borderRadius: BorderRadius.circular(14),
           // No focusColor: with an InputDecoration the SDK swaps the fill
           // color for it on focus, which would blank the panel fill. Focus

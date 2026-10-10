@@ -412,6 +412,157 @@ void main() {
     expect(engine.firstFrameCompleted, isFalse);
     expect(engine.buildVideoCalls, greaterThan(0));
   });
+  testWidgets('failed first-frame future reports clip failure for recovery', (
+    tester,
+  ) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/failed.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.completeError(StateError('decoder failed'));
+    await tester.pump();
+    await tester.pump();
+    expect(failures, 1);
+    expect(engine.disposed, true);
+  });
+
+  testWidgets('poster remains visible until initial resume seek completes', (
+    tester,
+  ) async {
+    final engine = _DelayedSeekEngine();
+    var ready = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/resume.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          initialPosition: const Duration(seconds: 22),
+          onFirstFrameReady: () => ready++,
+          engineFactory: () async => engine,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    expect(engine.seekedTo, const Duration(seconds: 22));
+    expect(ready, 0);
+    engine.finishSeek.complete();
+    await tester.pump();
+    expect(ready, 1);
+  });
+
+  testWidgets('reel recovers a silent mid-playback stall', (tester) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/stall.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          playbackStallTimeout: const Duration(seconds: 20),
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 21));
+    await tester.pump();
+    expect(failures, 1);
+    expect(engine.disposed, true);
+  });
+
+  testWidgets('a hung initial seek remains covered by the startup timeout', (
+    tester,
+  ) async {
+    final engine = _DelayedSeekEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/hung-seek.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          firstFrameTimeout: const Duration(seconds: 15),
+          initialPosition: const Duration(seconds: 12),
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    expect(engine.seekedTo, const Duration(seconds: 12));
+    await tester.pump(const Duration(seconds: 16));
+    await tester.pump();
+    expect(failures, 1);
+    engine.finishSeek.complete();
+    await tester.pump();
+    expect(failures, 1);
+  });
+
+  testWidgets('progress resets the stalled timer', (tester) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/progress.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          playbackStallTimeout: const Duration(seconds: 20),
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    engine._firstFrame.complete();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 15));
+    engine.positions.add(const Duration(seconds: 2));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 15));
+    expect(failures, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+}
+
+class _DelayedSeekEngine extends _PendingFirstFrameEngine {
+  final finishSeek = Completer<void>();
+  Duration? seekedTo;
+
+  @override
+  Future<void> seek(Duration position) {
+    seekedTo = position;
+    return finishSeek.future;
+  }
 }
 
 class _PendingFirstFrameEngine implements TrailerEngine {

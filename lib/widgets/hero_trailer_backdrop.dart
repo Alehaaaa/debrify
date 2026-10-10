@@ -102,6 +102,11 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// a serial ladder stuck on them. Null keeps the wait unbounded.
   final Duration? firstFrameTimeout;
 
+  /// Detects a stream frozen after its first frame without a platform error.
+  /// Opt in on foreground Reels; paused, suspended and covered players do not
+  /// accumulate stalled time. Null leaves ambient/live playback unaffected.
+  final Duration? playbackStallTimeout;
+
   /// Blur applied to the static image (the app's "one lit surface" wash).
   final double imageBlurSigma;
 
@@ -211,6 +216,7 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.onPlayingChanged,
     this.onPlaybackFailed,
     this.firstFrameTimeout,
+    this.playbackStallTimeout,
     this.imageBlurSigma = 42,
     this.sharpStill = false,
     this.videoBlurSigma = 8,
@@ -268,6 +274,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Arms when open() begins, cancelled by the first rendered frame or any
   /// teardown. See [HeroTrailerBackdrop.firstFrameTimeout].
   Timer? _firstFrameTimer;
+  Timer? _playbackStallTimer;
+  Duration _stalledFor = Duration.zero;
 
   /// Auto-hides the foreground chrome (pause/seek/mute) a few seconds after the
   /// last interaction; a click/tap brings it back.
@@ -665,46 +673,90 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // frame has actually RENDERED — `playing` flips true the moment open()
     // starts, long before frames exist, which would kill the loading spinner
     // early and crossfade onto a black/buffering surface.
-    engine.firstFrameRendered.then((_) async {
-      if (!mounted || _engine != engine || _videoVisible) return;
-      _firstFrameTimer?.cancel();
-      _firstFrameTimer = null;
-      if (widget.prewarm && widget.suspended) {
-        // Exo open() completes at prepare(), before a frame exists. Let it
-        // preroll silently, then retain the decoded frame and buffer. A swipe
-        // that takes ownership during pause must win over this stale command.
-        await engine.pause();
-        if (!mounted || _engine != engine) return;
-        if (!widget.suspended && !_covered && !_appPaused && !_pausedByUser) {
-          _applyVolume(foreground: widget.foreground);
-          await engine.play();
-          if (!mounted || _engine != engine) return;
-        }
-      }
-      // Resume a reel before applying the decorative trailer intro skip.
-      final resumeAt = widget.initialPosition;
-      if (resumeAt != null && resumeAt > Duration.zero) {
-        engine.seek(resumeAt);
-        _position = resumeAt;
-      }
-      // Jump past the intro/rating card so the ambient loop shows footage.
-      // Skip only when the clip is comfortably longer than the cut (or its
-      // duration isn't known yet — trailers are minutes long, so assume it is).
-      final dur = _duration;
-      final longEnough =
-          dur == Duration.zero || dur > const Duration(seconds: 8);
-      if ((resumeAt == null || resumeAt <= Duration.zero) &&
-          widget.skipIntro &&
-          widget.focusPreviewOwner == null &&
-          !widget.live &&
-          !widget.foreground &&
-          longEnough) {
-        engine.seek(_introSkip);
-      }
-      setState(() => _videoVisible = true);
-      widget.onFirstFrameReady?.call();
-      _syncPlayingNotification();
-    });
+    unawaited(
+      engine.firstFrameRendered
+          .then((_) async {
+            if (!mounted || _engine != engine || _videoVisible) return;
+            if (widget.prewarm && widget.suspended) {
+              // Exo open() completes at prepare(), before a frame exists. Let it
+              // preroll silently, then retain the decoded frame and buffer. A swipe
+              // that takes ownership during pause must win over this stale command.
+              await engine.pause();
+              if (!mounted || _engine != engine) return;
+              if (!widget.suspended &&
+                  !_covered &&
+                  !_appPaused &&
+                  !_pausedByUser) {
+                _applyVolume(foreground: widget.foreground);
+                await engine.play();
+                if (!mounted || _engine != engine) return;
+              }
+            }
+            // Resume a reel before applying the decorative trailer intro skip.
+            final resumeAt = widget.initialPosition;
+            if (resumeAt != null && resumeAt > Duration.zero) {
+              // Keep the poster covering the player until the initial seek has
+              // completed: revealing the original frame flashes unrelated footage.
+              await engine.seek(resumeAt);
+              if (!mounted || _engine != engine) return;
+              _position = resumeAt;
+            }
+            // Jump past the intro/rating card so the ambient loop shows footage.
+            // Skip only when the clip is comfortably longer than the cut (or its
+            // duration isn't known yet — trailers are minutes long, so assume it is).
+            final dur = _duration;
+            final longEnough =
+                dur == Duration.zero || dur > const Duration(seconds: 8);
+            if ((resumeAt == null || resumeAt <= Duration.zero) &&
+                widget.skipIntro &&
+                widget.focusPreviewOwner == null &&
+                !widget.live &&
+                !widget.foreground &&
+                longEnough) {
+              await engine.seek(_introSkip);
+              if (!mounted || _engine != engine) return;
+            }
+            // The startup watchdog covers the entire path to a *usable*
+            // frame, including a slow or hung initial seek/resume.
+            _firstFrameTimer?.cancel();
+            _firstFrameTimer = null;
+            setState(() => _videoVisible = true);
+            _stalledFor = Duration.zero;
+            if (widget.playbackStallTimeout != null) {
+              const interval = Duration(seconds: 5);
+              _playbackStallTimer?.cancel();
+              _playbackStallTimer = Timer.periodic(interval, (_) {
+                if (!mounted || _engine != engine || !_videoVisible) return;
+                if (!_playing ||
+                    _covered ||
+                    _appPaused ||
+                    _pausedByUser ||
+                    widget.suspended ||
+                    (_duration > Duration.zero &&
+                        _lastPos >= _duration - const Duration(seconds: 1))) {
+                  _stalledFor = Duration.zero;
+                  return;
+                }
+                _stalledFor += interval;
+                if (_stalledFor >= widget.playbackStallTimeout!) {
+                  _teardownPlayer();
+                  _notifyPlaybackFailed();
+                }
+              });
+            }
+            widget.onFirstFrameReady?.call();
+            _syncPlayingNotification();
+          })
+          .catchError((Object error, StackTrace stack) {
+            // Platform decoder initialization and seek can fail asynchronously,
+            // independently of the player's error stream. Treat it as a failed
+            // clip so the feed can retry or skip without an unhandled future.
+            if (mounted && _engine == engine) {
+              _teardownPlayer();
+              _notifyPlaybackFailed();
+            }
+          }),
+    );
     // Fatal playback error (dead/expired stream), including mid-play after the
     // trailer was already showing or promoted to fullscreen → tear down so we
     // drop back to the poster (and, if foregrounded, back the user out) rather
@@ -716,6 +768,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     });
     _posSub = engine.positionStream.listen((p) {
+      if (p > _lastPos + const Duration(milliseconds: 250)) {
+        _stalledFor = Duration.zero;
+      }
       // Loop restart (position wrapped back to the start) → skip the intro
       // again. Ambient only: never fight a manual scrub or foreground seek.
       if (widget.repeat &&
@@ -824,6 +879,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     _startTimer = null;
     _firstFrameTimer?.cancel();
     _firstFrameTimer = null;
+    _playbackStallTimer?.cancel();
+    _playbackStallTimer = null;
+    _stalledFor = Duration.zero;
     _playingSub?.cancel();
     _playingSub = null;
     _posSub?.cancel();
@@ -1121,6 +1179,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     MainPageBridge.removePlayerLaunchListener(_onContentPlayerLaunching);
     _startTimer?.cancel();
     _firstFrameTimer?.cancel();
+    _playbackStallTimer?.cancel();
     _controlsTimer?.cancel();
     _playingSub?.cancel();
     _posSub?.cancel();

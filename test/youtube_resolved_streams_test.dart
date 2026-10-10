@@ -135,7 +135,9 @@ void main() {
         };
         YoutubeService.streamResolverOverride =
             (id, height, cc, vp9, meta, muxed, client) async =>
-                id == 'aaaaaaaaaaa' ? (streams: stream, client: 'androidVr') : null;
+                id == 'aaaaaaaaaaa'
+                ? (streams: stream, client: 'androidVr')
+                : null;
         expect(
           await YoutubeService.resolveStreams(
             'aaaaaaaaaaa',
@@ -243,26 +245,29 @@ void main() {
         expect(relayCalls, 2);
       },
     );
-    test('a fallback while Cobalt is unreachable is reused, not re-relayed per request', () async {
-      var relayCalls = 0;
-      YoutubeService.cobaltResolverOverride = (_, _) async {
-        relayCalls++;
-        throw StateError('instance timed out');
-      };
-      YoutubeService.streamResolverOverride =
-          (id, height, cc, vp9, meta, muxed, client) async =>
-              (streams: stream, client: 'androidVr');
-      await YoutubeService.resolvePreviewStreams(
-        'aaaaaaaaaaa',
-        maxHeightOverride: 720,
-      );
-      // Still cached for the next minute (no repeated relay hammering)...
-      await YoutubeService.resolvePreviewStreams(
-        'aaaaaaaaaaa',
-        maxHeightOverride: 720,
-      );
-      expect(relayCalls, 1);
-    });
+    test(
+      'a fallback while Cobalt is unreachable is reused, not re-relayed per request',
+      () async {
+        var relayCalls = 0;
+        YoutubeService.cobaltResolverOverride = (_, _) async {
+          relayCalls++;
+          throw StateError('instance timed out');
+        };
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) async =>
+                (streams: stream, client: 'androidVr');
+        await YoutubeService.resolvePreviewStreams(
+          'aaaaaaaaaaa',
+          maxHeightOverride: 720,
+        );
+        // Still cached for the next minute (no repeated relay hammering)...
+        await YoutubeService.resolvePreviewStreams(
+          'aaaaaaaaaaa',
+          maxHeightOverride: 720,
+        );
+        expect(relayCalls, 1);
+      },
+    );
     test('a throwing relay falls back to direct extraction', () async {
       YoutubeService.cobaltResolverOverride = (_, _) async =>
           throw StateError('instance down');
@@ -277,23 +282,46 @@ void main() {
         same(stream),
       );
     });
-    test('unavailable Cobalt falls back to the low-res muxed stream', () async {
-      YoutubeService.cobaltResolverOverride = (_, _) async => null;
-      YoutubeService.streamResolverOverride =
-          (id, height, cc, vp9, meta, muxed, client) async {
-            expect(meta, false);
-            // One audio+video file, not the adaptive HD pair.
-            expect(muxed, true);
-            return (streams: stream, client: 'androidVr');
-          };
-      expect(
-        await YoutubeService.resolvePreviewStreams(
-          'aaaaaaaaaaa',
-          maxHeightOverride: 1080,
-        ),
-        same(stream),
-      );
-    });
+    test(
+      'unavailable Cobalt preserves adaptive HD stream preference',
+      () async {
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) async {
+              expect(meta, false);
+              // The player can pair video and audio; relay unavailability must
+              // not downgrade it to YouTube's low-resolution muxed variant.
+              expect(muxed, false);
+              return (streams: stream, client: 'androidVr');
+            };
+        expect(
+          await YoutubeService.resolvePreviewStreams(
+            'aaaaaaaaaaa',
+            maxHeightOverride: 1080,
+          ),
+          same(stream),
+        );
+      },
+    );
+    test(
+      'explicitly muxed players keep their fallback compatibility',
+      () async {
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) async {
+              expect(muxed, true);
+              return (streams: stream, client: 'androidVr');
+            };
+        expect(
+          await YoutubeService.resolvePreviewStreams(
+            'bbbbbbbbbbb',
+            maxHeightOverride: 1080,
+            preferMuxed: true,
+          ),
+          same(stream),
+        );
+      },
+    );
     test('a prefetched relay is refreshed when its lifetime expires', () {
       expect(
         YoutubeResolvedStreams(

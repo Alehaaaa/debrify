@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../services/storage_service.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class StremioTvSettingsPage extends StatefulWidget {
   const StremioTvSettingsPage({super.key});
@@ -264,7 +265,9 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
                                   const SizedBox(width: 16),
                                   DropdownButton<int>(
                                     value: _rotationMinutes,
-                                    dropdownColor: t.panel2,
+                                    dropdownColor: GlassChrome.enabled(app)
+                                        ? GlassChrome.fill(app, raised: true)
+                                        : t.panel2,
                                     items: const [
                                       DropdownMenuItem(
                                         value: 30,
@@ -308,7 +311,9 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
                                   const SizedBox(width: 16),
                                   DropdownButton<int>(
                                     value: _seriesRotationMinutes,
-                                    dropdownColor: t.panel2,
+                                    dropdownColor: GlassChrome.enabled(app)
+                                        ? GlassChrome.fill(app, raised: true)
+                                        : t.panel2,
                                     items: const [
                                       DropdownMenuItem(
                                         value: 15,
@@ -383,7 +388,9 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
                                   const SizedBox(width: 16),
                                   DropdownButton<String>(
                                     value: _preferredQuality,
-                                    dropdownColor: t.panel2,
+                                    dropdownColor: GlassChrome.enabled(app)
+                                        ? GlassChrome.fill(app, raised: true)
+                                        : t.panel2,
                                     items: const [
                                       DropdownMenuItem(
                                         value: 'auto',
@@ -423,7 +430,9 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
                                   const SizedBox(width: 16),
                                   DropdownButton<int>(
                                     value: _maxStartPercent,
-                                    dropdownColor: t.panel2,
+                                    dropdownColor: GlassChrome.enabled(app)
+                                        ? GlassChrome.fill(app, raised: true)
+                                        : t.panel2,
                                     items: const [
                                       DropdownMenuItem(
                                         value: 0,
@@ -472,7 +481,9 @@ class _StremioTvSettingsPageState extends State<StremioTvSettingsPage> {
                                     const SizedBox(width: 16),
                                     DropdownButton<String>(
                                       value: _debridProvider,
-                                      dropdownColor: t.panel2,
+                                      dropdownColor: GlassChrome.enabled(app)
+                                          ? GlassChrome.fill(app, raised: true)
+                                          : t.panel2,
                                       items: [
                                         DropdownMenuItem(
                                           value: 'auto',
