@@ -24,15 +24,11 @@ class _FolderNode {
   bool hasLoadedChildren;
   List<_FolderNode> children;
 
-  _FolderNode({
-    required this.id,
-    required this.name,
-    required this.level,
-    this.isExpanded = false,
-    this.isLoading = false,
-    this.hasLoadedChildren = false,
-    this.children = const [],
-  });
+  _FolderNode({required this.id, required this.name, required this.level})
+    : isExpanded = false,
+      isLoading = false,
+      hasLoadedChildren = false,
+      children = const [];
 }
 
 class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
@@ -331,7 +327,8 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
       );
 
       final newFolderId = result['file']?['id'] ?? result['id'];
-      final newFolderName = result['file']?['name'] ?? result['name'] ?? folderName;
+      final newFolderName =
+          result['file']?['name'] ?? result['name'] ?? folderName;
 
       if (mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -355,11 +352,18 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
         if (_lastFocusedFolder == null) {
           // Add to root
           _rootFolders.add(newNode);
-          _rootFolders.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          _rootFolders.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
         } else {
           // Add to last focused folder's children
-          _lastFocusedFolder!.children = [..._lastFocusedFolder!.children, newNode];
-          _lastFocusedFolder!.children.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          _lastFocusedFolder!.children = [
+            ..._lastFocusedFolder!.children,
+            newNode,
+          ];
+          _lastFocusedFolder!.children.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
           _lastFocusedFolder!.hasLoadedChildren = true;
           _lastFocusedFolder!.isExpanded = true;
         }
@@ -371,8 +375,11 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _isTelevision) {
           final flatFolders = _getFlattenedFolders();
-          final newFolderIndex = flatFolders.indexWhere((f) => f.id == newFolderId);
-          if (newFolderIndex >= 0 && newFolderIndex < _folderFocusNodes.length) {
+          final newFolderIndex = flatFolders.indexWhere(
+            (f) => f.id == newFolderId,
+          );
+          if (newFolderIndex >= 0 &&
+              newFolderIndex < _folderFocusNodes.length) {
             _folderFocusNodes[newFolderIndex].requestFocus();
           }
         }
@@ -390,7 +397,6 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
       }
     }
   }
-
 
   void _ensureFocusNodes() {
     final flatFolders = _getFlattenedFolders();
@@ -474,16 +480,23 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
           policy: WidgetOrderTraversalPolicy(),
           child: Shortcuts(
             shortcuts: const <ShortcutActivator, Intent>{
-              SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(TraversalDirection.down),
-              SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(TraversalDirection.up),
-              SingleActivator(LogicalKeyboardKey.arrowLeft): DirectionalFocusIntent(TraversalDirection.left),
-              SingleActivator(LogicalKeyboardKey.arrowRight): DirectionalFocusIntent(TraversalDirection.right),
+              SingleActivator(LogicalKeyboardKey.arrowDown):
+                  DirectionalFocusIntent(TraversalDirection.down),
+              SingleActivator(LogicalKeyboardKey.arrowUp):
+                  DirectionalFocusIntent(TraversalDirection.up),
+              SingleActivator(LogicalKeyboardKey.arrowLeft):
+                  DirectionalFocusIntent(TraversalDirection.left),
+              SingleActivator(LogicalKeyboardKey.arrowRight):
+                  DirectionalFocusIntent(TraversalDirection.right),
               SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
               SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
               SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
             },
             child: Dialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 24,
+              ),
               backgroundColor: Colors.transparent,
               child: LayoutBuilder(
                 builder: (context, constraints) {
@@ -502,175 +515,194 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
                         ),
                         padding: EdgeInsets.all(screenWidth < 400 ? 16 : 20),
                         child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Header
-                    Row(
-                      children: [
-                        const Icon(Icons.folder_open, size: 24),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Select Folder to Restrict',
-                            style: TextStyle(
-                              fontSize: screenWidth < 400 ? 16 : 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        FocusTraversalOrder(
-                          order: const NumericFocusOrder(0),
-                          child: IconButton(
-                            focusNode: _closeButtonFocusNode,
-                            onPressed: () => Navigator.pop(context),
-                            icon: const Icon(Icons.close),
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Current location indicator
-                    Text(
-                      _lastFocusedFolder == null
-                          ? 'Creating in: Root'
-                          : 'Creating in: ${_lastFocusedFolder!.name}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Folder list
-                    Flexible(
-                      child: _isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : _errorMessage != null
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.error_outline,
-                                    size: 48,
-                                    color: Colors.red[300],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                    ),
-                                    child: Text(
-                                      _errorMessage!,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(color: Colors.red[300]),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  ElevatedButton.icon(
-                                    onPressed: _loadRootFolders,
-                                    icon: const Icon(Icons.refresh, size: 18),
-                                    label: const Text('Retry'),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : _rootFolders.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.folder_off,
-                                    size: 48,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No folders found in your account',
-                                    style: TextStyle(color: Colors.grey[600]),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              itemCount: _getFlattenedFolders().length,
-                              itemBuilder: (context, index) {
-                                return _buildFolderItem(context, index);
-                              },
-                            ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Action buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // New Folder button on the left
-                        FocusTraversalOrder(
-                          order: const NumericFocusOrder(1000),
-                          child: FilledButton.tonalIcon(
-                            focusNode: _newFolderButtonFocusNode,
-                            onPressed: _showNewFolderDialog,
-                            icon: const Icon(Icons.create_new_folder, size: 18),
-                            label: const Text('New Folder'),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // Cancel and Confirm buttons on the right
-                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            FocusTraversalOrder(
-                              order: const NumericFocusOrder(1001),
-                              child: TextButton(
-                                focusNode: _cancelButtonFocusNode,
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancel'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Flexible(
-                              child: FocusTraversalOrder(
-                                order: const NumericFocusOrder(1002),
-                                child: FilledButton.icon(
-                                  focusNode: _confirmButtonFocusNode,
-                                  onPressed: _selectedFolderId != null
-                                      ? () {
-                                          Navigator.pop(context, {
-                                            'folderId': _selectedFolderId,
-                                            'folderName': _selectedFolderName,
-                                          });
-                                        }
-                                      : null,
-                                  icon: const Icon(Icons.check, size: 18),
-                                  label: const Text('Select'),
+                            // Header
+                            Row(
+                              children: [
+                                const Icon(Icons.folder_open, size: 24),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Select Folder to Restrict',
+                                    style: TextStyle(
+                                      fontSize: screenWidth < 400 ? 16 : 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
+                                FocusTraversalOrder(
+                                  order: const NumericFocusOrder(0),
+                                  child: IconButton(
+                                    focusNode: _closeButtonFocusNode,
+                                    onPressed: () => Navigator.pop(context),
+                                    icon: const Icon(Icons.close),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Current location indicator
+                            Text(
+                              _lastFocusedFolder == null
+                                  ? 'Creating in: Root'
+                                  : 'Creating in: ${_lastFocusedFolder!.name}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontStyle: FontStyle.italic,
                               ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 12),
+
+                            // Folder list
+                            Flexible(
+                              child: _isLoading
+                                  ? const Center(
+                                      child: CircularProgressIndicator(),
+                                    )
+                                  : _errorMessage != null
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline,
+                                            size: 48,
+                                            color: Colors.red[300],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16,
+                                            ),
+                                            child: Text(
+                                              _errorMessage!,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                color: Colors.red[300],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 16),
+                                          ElevatedButton.icon(
+                                            onPressed: _loadRootFolders,
+                                            icon: const Icon(
+                                              Icons.refresh,
+                                              size: 18,
+                                            ),
+                                            label: const Text('Retry'),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : _rootFolders.isEmpty
+                                  ? Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.folder_off,
+                                            size: 48,
+                                            color: Colors.grey[400],
+                                          ),
+                                          const SizedBox(height: 16),
+                                          Text(
+                                            'No folders found in your account',
+                                            style: TextStyle(
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: _getFlattenedFolders().length,
+                                      itemBuilder: (context, index) {
+                                        return _buildFolderItem(context, index);
+                                      },
+                                    ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Action buttons
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                // New Folder button on the left
+                                FocusTraversalOrder(
+                                  order: const NumericFocusOrder(1000),
+                                  child: FilledButton.tonalIcon(
+                                    focusNode: _newFolderButtonFocusNode,
+                                    onPressed: _showNewFolderDialog,
+                                    icon: const Icon(
+                                      Icons.create_new_folder,
+                                      size: 18,
+                                    ),
+                                    label: const Text('New Folder'),
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                // Cancel and Confirm buttons on the right
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    FocusTraversalOrder(
+                                      order: const NumericFocusOrder(1001),
+                                      child: TextButton(
+                                        focusNode: _cancelButtonFocusNode,
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Cancel'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Flexible(
+                                      child: FocusTraversalOrder(
+                                        order: const NumericFocusOrder(1002),
+                                        child: FilledButton.icon(
+                                          focusNode: _confirmButtonFocusNode,
+                                          onPressed: _selectedFolderId != null
+                                              ? () {
+                                                  Navigator.pop(context, {
+                                                    'folderId':
+                                                        _selectedFolderId,
+                                                    'folderName':
+                                                        _selectedFolderName,
+                                                  });
+                                                }
+                                              : null,
+                                          icon: const Icon(
+                                            Icons.check,
+                                            size: 18,
+                                          ),
+                                          label: const Text('Select'),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
-            ),
-          );
-        },
-      ),
             ),
           ),
         ),
@@ -724,12 +756,14 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
 
             // Radio indicator (visual only, not focusable)
             ExcludeFocus(
-              child: Radio<String>(
-                value: folder.id,
+              child: RadioGroup<String>(
                 groupValue: _selectedFolderId,
-                onChanged: (_) {}, // Non-null to keep enabled styling
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
+                onChanged: (_) {}, // Keep enabled styling; row owns selection.
+                child: Radio<String>(
+                  value: folder.id,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -769,71 +803,71 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
             }
           },
           onKeyEvent: (node, event) {
-          if (event is! KeyDownEvent) return KeyEventResult.ignored;
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
-          // Arrow Right: Expand folder
-          if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-            if (canExpand && !folder.isExpanded && !folder.isLoading) {
-              _loadFolderChildren(folder);
+            // Arrow Right: Expand folder
+            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              if (canExpand && !folder.isExpanded && !folder.isLoading) {
+                _loadFolderChildren(folder);
+                return KeyEventResult.handled;
+              }
+            }
+
+            // Arrow Left: Collapse folder
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              if (folder.isExpanded) {
+                setState(() {
+                  folder.isExpanded = false;
+                });
+                _ensureFocusNodes();
+                return KeyEventResult.handled;
+              }
+            }
+
+            // Arrow Down: Move to New Folder button if this is the last folder item
+            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              final flatFolders = _getFlattenedFolders();
+              if (index == flatFolders.length - 1) {
+                // This is the last folder item, move to New Folder button
+                _newFolderButtonFocusNode.requestFocus();
+                return KeyEventResult.handled;
+              }
+            }
+
+            // Select/Enter: Select folder for restriction
+            if (isActivateKey(event.logicalKey)) {
+              _selectFolder(folder.id, folder.name);
               return KeyEventResult.handled;
             }
-          }
 
-          // Arrow Left: Collapse folder
-          if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-            if (folder.isExpanded) {
-              setState(() {
-                folder.isExpanded = false;
-              });
-              _ensureFocusNodes();
-              return KeyEventResult.handled;
-            }
-          }
-
-          // Arrow Down: Move to New Folder button if this is the last folder item
-          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-            final flatFolders = _getFlattenedFolders();
-            if (index == flatFolders.length - 1) {
-              // This is the last folder item, move to New Folder button
-              _newFolderButtonFocusNode.requestFocus();
-              return KeyEventResult.handled;
-            }
-          }
-
-          // Select/Enter: Select folder for restriction
-          if (isActivateKey(event.logicalKey)) {
-            _selectFolder(folder.id, folder.name);
-            return KeyEventResult.handled;
-          }
-
-          return KeyEventResult.ignored;
-        },
-        child: ValueListenableBuilder<bool>(
-          valueListenable: _folderFocusStates[index],
-          builder: (context, isFocused, _) {
-            return Container(
-              decoration: BoxDecoration(
-                color: isFocused
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer.withValues(alpha: 0.5)
-                    : isSelected
-                    ? Theme.of(
-                        context,
-                      ).colorScheme.primaryContainer.withValues(alpha: 0.3)
-                    : null,
-                border: isFocused
-                    ? Border.all(
-                        color: Theme.of(context).colorScheme.primary,
-                        width: 2,
-                      )
-                    : null,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: itemWidget,
-            );
+            return KeyEventResult.ignored;
           },
-        ),
+          child: ValueListenableBuilder<bool>(
+            valueListenable: _folderFocusStates[index],
+            builder: (context, isFocused, _) {
+              return Container(
+                decoration: BoxDecoration(
+                  color: isFocused
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.5)
+                      : isSelected
+                      ? Theme.of(
+                          context,
+                        ).colorScheme.primaryContainer.withValues(alpha: 0.3)
+                      : null,
+                  border: isFocused
+                      ? Border.all(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        )
+                      : null,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: itemWidget,
+              );
+            },
+          ),
         ),
       );
     }
@@ -847,12 +881,6 @@ class _PikPakFolderPickerDialogState extends State<PikPakFolderPickerDialog> {
           : null,
       child: itemWidget,
     );
-  }
-
-  String _truncateFolderName(String name) {
-    const maxLength = 30;
-    if (name.length <= maxLength) return name;
-    return '${name.substring(0, maxLength - 3)}...';
   }
 
   @override
@@ -994,131 +1022,145 @@ class _NewFolderDialogState extends State<_NewFolderDialog> {
       autofocus: true,
       child: Shortcuts(
         shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(TraversalDirection.down),
-          SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(TraversalDirection.up),
-          SingleActivator(LogicalKeyboardKey.arrowLeft): DirectionalFocusIntent(TraversalDirection.left),
-          SingleActivator(LogicalKeyboardKey.arrowRight): DirectionalFocusIntent(TraversalDirection.right),
+          SingleActivator(LogicalKeyboardKey.arrowDown): DirectionalFocusIntent(
+            TraversalDirection.down,
+          ),
+          SingleActivator(LogicalKeyboardKey.arrowUp): DirectionalFocusIntent(
+            TraversalDirection.up,
+          ),
+          SingleActivator(LogicalKeyboardKey.arrowLeft): DirectionalFocusIntent(
+            TraversalDirection.left,
+          ),
+          SingleActivator(LogicalKeyboardKey.arrowRight):
+              DirectionalFocusIntent(TraversalDirection.right),
           SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
           SingleActivator(LogicalKeyboardKey.gameButtonA): ActivateIntent(),
         },
         child: Dialog(
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: (screenWidth * 0.9).clamp(300.0, 500.0),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 24,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: (screenWidth * 0.9).clamp(300.0, 500.0),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.create_new_folder, size: 24),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Text(
-                      'Create New Folder',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  // Header
+                  Row(
+                    children: [
+                      const Icon(Icons.create_new_folder, size: 24),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Create New Folder',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
 
-              // Parent folder info
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.folder,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  // Parent folder info
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Creating in: ${widget.parentFolderName}',
-                        style: TextStyle(
-                          fontSize: 12,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.folder,
+                          size: 16,
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Creating in: ${widget.parentFolderName}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Input field
+                  TvTextField(
+                    controller: _controller,
+                    focusNode: _inputFocusNode,
+                    autofocus: !widget.isTelevision,
+                    onDownArrow: () => _createButtonFocusNode.requestFocus(),
+                    decoration: InputDecoration(
+                      labelText: 'Folder Name',
+                      hintText: 'Enter folder name',
+                      errorText: _errorMessage.isEmpty ? null : _errorMessage,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        ),
+                      ),
+                      prefixIcon: const Icon(Icons.drive_file_rename_outline),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
+                    onChanged: (value) {
+                      // Clear error when user types
+                      if (_errorMessage.isNotEmpty) {
+                        setState(() {
+                          _errorMessage = '';
+                        });
+                      }
+                    },
+                    onSubmitted: (_) => _validateAndSubmit(),
+                  ),
+                  const SizedBox(height: 20),
 
-              // Input field
-              TvTextField(
-                controller: _controller,
-                focusNode: _inputFocusNode,
-                autofocus: !widget.isTelevision,
-                onDownArrow: () => _createButtonFocusNode.requestFocus(),
-                decoration: InputDecoration(
-                  labelText: 'Folder Name',
-                  hintText: 'Enter folder name',
-                  errorText: _errorMessage.isEmpty ? null : _errorMessage,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    ),
-                  ),
-                  prefixIcon: const Icon(Icons.drive_file_rename_outline),
-                ),
-                onChanged: (value) {
-                  // Clear error when user types
-                  if (_errorMessage.isNotEmpty) {
-                    setState(() {
-                      _errorMessage = '';
-                    });
-                  }
-                },
-                onSubmitted: (_) => _validateAndSubmit(),
-              ),
-              const SizedBox(height: 20),
-
-              // Action buttons
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    focusNode: _cancelButtonFocusNode,
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    focusNode: _createButtonFocusNode,
-                    onPressed: _validateAndSubmit,
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Create'),
+                  // Action buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        focusNode: _cancelButtonFocusNode,
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        focusNode: _createButtonFocusNode,
+                        onPressed: _validateAndSubmit,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Create'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
-      ),
-      ),
       ),
     );
   }

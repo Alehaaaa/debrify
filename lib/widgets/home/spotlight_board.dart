@@ -10,6 +10,7 @@ import 'dart:math' show max, min;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
@@ -1551,17 +1552,17 @@ class SpotlightBoardState extends State<SpotlightBoard>
   }
 
   @override
-  void didUpdateWidget(SpotlightBoard old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(SpotlightBoard oldWidget) {
+    super.didUpdateWidget(oldWidget);
     _finishProgressiveDown();
     if (widget.dpad && PlatformUtil.isAndroidTvCached && _lastMetrics != null) {
-      for (final section in old.sections) {
+      for (final section in oldWidget.sections) {
         if (section.id == null || !section.nodes.any((node) => node.hasFocus)) {
           continue;
         }
         preserveHomeInsertionAnchor(
           scroll: _scroll,
-          previous: [for (final s in old.sections) s.id ?? ''],
+          previous: [for (final s in oldWidget.sections) s.id ?? ''],
           next: [for (final s in widget.sections) s.id ?? ''],
           anchor: section.id!,
           extentOf: (id) => _shelfExtent(
@@ -1572,11 +1573,11 @@ class SpotlightBoardState extends State<SpotlightBoard>
         break;
       }
     }
-    if (old.hero.length != widget.hero.length ||
+    if (oldWidget.hero.length != widget.hero.length ||
         List.generate(
           widget.hero.length,
           (i) => i,
-        ).any((i) => !identical(old.hero[i], widget.hero[i]))) {
+        ).any((i) => !identical(oldWidget.hero[i], widget.hero[i]))) {
       _preloadHeroes();
     }
     // The reel can change under us as sections load. Keep the parked item if
@@ -1584,15 +1585,15 @@ class SpotlightBoardState extends State<SpotlightBoard>
     // stale index pointing at a different title.
     // The host can hand us a different node across a rebuild; without moving
     // the listener the old node keeps one forever and the new one has none.
-    if (old.heroNode != widget.heroNode) {
-      old.heroNode.removeListener(_onHeroFocus);
+    if (oldWidget.heroNode != widget.heroNode) {
+      oldWidget.heroNode.removeListener(_onHeroFocus);
       widget.heroNode.addListener(_onHeroFocus);
     }
     // The trailer pref flipped: rebuild the cadence from scratch. Disable
     // must also clear a stale `_rolling` (or nothing ever re-arms — the
     // reconcile below skips while rolling), and enable must arm a clock that
     // has nothing else to wake it.
-    if (old.trailersEnabled != widget.trailersEnabled) {
+    if (oldWidget.trailersEnabled != widget.trailersEnabled) {
       _restartCadence();
     }
     if (_heroId != null && !widget.hero.any((m) => m.id == _heroId)) {
@@ -1616,10 +1617,10 @@ class SpotlightBoardState extends State<SpotlightBoard>
     // was recorded for, and a stale column pointing outside the target row's
     // built cells makes the next DOWN/UP focus a detached node — a silently
     // eaten keypress. Re-key both by shelf IDENTITY across the update.
-    if (!identical(old.sections, widget.sections)) {
+    if (!identical(oldWidget.sections, widget.sections)) {
       int remap(int oldIndex) {
-        if (oldIndex < 0 || oldIndex >= old.sections.length) return -1;
-        final id = old.sections[oldIndex].id;
+        if (oldIndex < 0 || oldIndex >= oldWidget.sections.length) return -1;
+        final id = oldWidget.sections[oldIndex].id;
         if (id == null) return oldIndex;
         return widget.sections.indexWhere((s) => s.id == id);
       }
@@ -2251,7 +2252,8 @@ class SpotlightBoardState extends State<SpotlightBoard>
     // shelf's nodes ATTACHED — a viewport of lead keeps the next rows built
     // ahead of the cursor without resurrecting the build-everything burst.
     final list = ListView.builder(
-      cacheExtent: 600, controller: _scroll,
+      scrollCacheExtent: ScrollCacheExtent.pixels(600),
+      controller: _scroll,
       padding: EdgeInsets.zero,
       itemCount: widget.sections.length + 2,
       findChildIndexCallback: (key) {
@@ -3936,7 +3938,7 @@ class _CardState extends State<_Card>
           !widget.trailerEnabled ||
           !_canExpand ||
           ModalRoute.of(context)?.isCurrent == false ||
-          !TickerMode.of(context) ||
+          !TickerMode.valuesOf(context).enabled ||
           (WidgetsBinding.instance.lifecycleState != null &&
               WidgetsBinding.instance.lifecycleState !=
                   AppLifecycleState.resumed)) {

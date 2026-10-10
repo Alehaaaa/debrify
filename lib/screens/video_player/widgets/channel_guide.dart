@@ -58,8 +58,9 @@ class _ChannelGuideState extends State<ChannelGuide>
 
     // Find current channel index
     if (widget.currentChannelId != null) {
-      final idx = _filteredChannels
-          .indexWhere((c) => c.id == widget.currentChannelId);
+      final idx = _filteredChannels.indexWhere(
+        (c) => c.id == widget.currentChannelId,
+      );
       if (idx >= 0) _focusedIndex = idx;
     }
 
@@ -99,8 +100,9 @@ class _ChannelGuideState extends State<ChannelGuide>
       if (query.isEmpty) {
         _filteredChannels = List.from(widget.channels);
       } else {
-        _filteredChannels =
-            widget.channels.where((c) => c.matches(query)).toList();
+        _filteredChannels = widget.channels
+            .where((c) => c.matches(query))
+            .toList();
       }
       _focusedIndex = 0;
     });
@@ -118,8 +120,10 @@ class _ChannelGuideState extends State<ChannelGuide>
     if (targetOffset < currentOffset ||
         targetOffset > currentOffset + viewportHeight - itemHeight) {
       _scrollController.animateTo(
-        (targetOffset - viewportHeight / 2 + itemHeight / 2)
-            .clamp(0.0, _scrollController.position.maxScrollExtent),
+        (targetOffset - viewportHeight / 2 + itemHeight / 2).clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        ),
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOut,
       );
@@ -186,10 +190,7 @@ class _ChannelGuideState extends State<ChannelGuide>
       child: AnimatedBuilder(
         animation: _animationController,
         builder: (context, child) {
-          return FadeTransition(
-            opacity: _fadeAnimation,
-            child: child,
-          );
+          return FadeTransition(opacity: _fadeAnimation, child: child);
         },
         child: GestureDetector(
           onTap: widget.onClose,
@@ -316,8 +317,10 @@ class _ChannelGuideState extends State<ChannelGuide>
           ),
           filled: true,
           fillColor: Colors.white.withValues(alpha: 0.08),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: BorderSide.none,
@@ -414,7 +417,7 @@ class _ChannelListItem extends StatelessWidget {
           ),
         ),
         transform: isFocused
-            ? (Matrix4.identity()..scale(1.02))
+            ? (Matrix4.identity()..scaleByDouble(1.02, 1.02, 1.02, 1.0))
             : Matrix4.identity(),
         transformAlignment: Alignment.center,
         child: Row(
@@ -471,8 +474,7 @@ class _ChannelListItem extends StatelessWidget {
             // NOW badge for current channel
             if (isCurrent)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF66FF00), Color(0xFF00BCD4)],

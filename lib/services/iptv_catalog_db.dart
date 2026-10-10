@@ -72,7 +72,7 @@ bool _removeCatalogsJob(
       ownerAux: job.ownerAux,
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -102,7 +102,7 @@ bool _setCategoryOrderJob(
     );
     return true;
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -127,7 +127,7 @@ bool _setGroupChannelOrderJob(
       ordered: job.ordered,
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -142,7 +142,7 @@ int _adoptNumberingJob(List<String> args) {
       sourceKey: args[2],
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -155,7 +155,7 @@ int _migrateCatalogDb(String path) {
   try {
     return IptvCatalogDb._runPendingMigrations(db);
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -218,13 +218,13 @@ class _NativeSqliteApi {
     } catch (error) {
       throw StateError('Could not open IPTV catalog database: $error');
     } finally {
-      if (!transferred) db.dispose();
+      if (!transferred) db.close();
     }
   }
 
   void closeHandle(int address) {
     if (address == 0) return;
-    sqlite3.fromPointer(Pointer<Void>.fromAddress(address)).dispose();
+    sqlite3.fromPointer(Pointer<Void>.fromAddress(address)).close();
   }
 }
 
@@ -749,7 +749,7 @@ class IptvCatalogDb {
       _runPendingMigrations(db);
       return action(db);
     } finally {
-      db.dispose();
+      db.close();
     }
   });
 
@@ -823,7 +823,7 @@ class IptvCatalogDb {
           );
         }
       } finally {
-        normalize.dispose();
+        normalize.close();
       }
       final revision = _webDavSyncRevision(db);
       db.execute('COMMIT');
@@ -975,7 +975,7 @@ class IptvCatalogDb {
               insert.execute([target.catalogKey, target.groups[index], index]);
             }
           } finally {
-            insert.dispose();
+            insert.close();
           }
         }
         db.execute(
@@ -1131,7 +1131,7 @@ class IptvCatalogDb {
   static void debugClose() {
     _writeRevision++;
     _activeRevalidations.clear();
-    _db?.dispose();
+    _db?.close();
     _db = null;
     _path = null;
     _opening = null;
@@ -1157,7 +1157,7 @@ class IptvCatalogDb {
       }
     }
     _writeRevision++;
-    _db?.dispose();
+    _db?.close();
     _db = null;
     _path = null;
     _opening = null;
@@ -1388,11 +1388,11 @@ class IptvCatalogDb {
         } catch (_) {}
         rethrow;
       } finally {
-        insert.dispose();
+        insert.close();
       }
       return digest;
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1580,8 +1580,8 @@ class IptvCatalogDb {
       }
       rethrow;
     } finally {
-      insertChannel?.dispose();
-      insertNumberBase?.dispose();
+      insertChannel?.close();
+      insertNumberBase?.close();
       if (!published && generation > 0) {
         try {
           db.execute(
@@ -1590,7 +1590,7 @@ class IptvCatalogDb {
           );
         } catch (_) {}
       }
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1651,7 +1651,7 @@ class IptvCatalogDb {
           CatalogGroup(row['grp'] as String?, row['c'] as int),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1690,7 +1690,7 @@ class IptvCatalogDb {
       );
       return CatalogSnapshot._orderEntriesFromRows(rows);
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1853,7 +1853,7 @@ class IptvCatalogDb {
         upsert.execute([namespaceId, entry.value, number, now]);
       }
     } finally {
-      upsert.dispose();
+      upsert.close();
     }
     db.execute(
       'UPDATE channel_number_namespaces SET active_source_key = ?, '
@@ -2120,7 +2120,7 @@ class IptvCatalogDb {
         if (rows.length < _adoptionChunkSize) break;
       }
     } finally {
-      page.dispose();
+      page.close();
     }
     if (identities.isEmpty) return 0;
 
@@ -2161,7 +2161,7 @@ class IptvCatalogDb {
           corrected += db.updatedRows;
         }
       } finally {
-        update.dispose();
+        update.close();
       }
       db.execute('COMMIT');
       return corrected;
@@ -2193,7 +2193,7 @@ class IptvCatalogDb {
         insert.execute([identity]);
       }
     } finally {
-      insert.dispose();
+      insert.close();
     }
     return _archivedNamespaceMatchFromIncoming(db, incomingIdentities.length);
   }
@@ -2286,7 +2286,7 @@ class IptvCatalogDb {
           }(),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -2321,7 +2321,7 @@ class IptvCatalogDb {
           ),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -2399,10 +2399,10 @@ class IptvCatalogDb {
         _rollbackQuietly(db);
         rethrow;
       } finally {
-        insert.dispose();
+        insert.close();
       }
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -2957,7 +2957,7 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert?.dispose();
+      insert?.close();
     }
   }
 
@@ -3115,8 +3115,8 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert?.dispose();
-      update?.dispose();
+      insert?.close();
+      update?.close();
     }
     return true;
   }
@@ -3335,7 +3335,7 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert.dispose();
+      insert.close();
     }
     if (origin == WebDavSyncMutationOrigin.user) {
       WebDavSyncLibraryMutation.notifyUserMutation();

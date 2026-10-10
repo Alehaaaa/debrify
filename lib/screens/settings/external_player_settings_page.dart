@@ -66,8 +66,8 @@ class _ExternalPlayerSettingsPageState
   String? _commandError;
 
   // iOS external player settings
-  iOSExternalPlayer _selectedIOSPlayer = iOSExternalPlayer.vlc;
-  Map<iOSExternalPlayer, bool> _installedIOSPlayers = {};
+  IosExternalPlayer _selectedIOSPlayer = IosExternalPlayer.vlc;
+  Map<IosExternalPlayer, bool> _installedIOSPlayers = {};
   String? _iosCustomScheme;
   final TextEditingController _iosSchemeController = TextEditingController();
   final FocusNode _iosSchemeFocusNode = FocusNode();
@@ -353,8 +353,7 @@ class _ExternalPlayerSettingsPageState
     _subtitleForcedOnlyFocusNode.addListener(() {
       if (!mounted) return;
       setState(() {
-        _subtitleForcedOnlyFocused =
-            _subtitleForcedOnlyFocusNode.hasFocus;
+        _subtitleForcedOnlyFocused = _subtitleForcedOnlyFocusNode.hasFocus;
       });
     });
     _subtitleAutoSyncFocusNode.addListener(() {
@@ -519,7 +518,7 @@ class _ExternalPlayerSettingsPageState
       }
 
       // Load iOS-specific settings
-      Map<iOSExternalPlayer, bool> installedIOS = {};
+      Map<IosExternalPlayer, bool> installedIOS = {};
       String iosPreferredKey = 'vlc';
       String? iosCustomScheme;
 
@@ -650,7 +649,7 @@ class _ExternalPlayerSettingsPageState
         _customCommand = customCommand;
         // iOS settings
         _installedIOSPlayers = installedIOS;
-        _selectedIOSPlayer = iOSExternalPlayerExtension.fromStorageKey(
+        _selectedIOSPlayer = IosExternalPlayerExtension.fromStorageKey(
           iosPreferredKey,
         );
         _iosCustomScheme = iosCustomScheme;
@@ -884,7 +883,7 @@ class _ExternalPlayerSettingsPageState
   }
 
   // iOS external player settings methods
-  Future<void> _selectIOSPlayer(iOSExternalPlayer player) async {
+  Future<void> _selectIOSPlayer(IosExternalPlayer player) async {
     try {
       await StorageService.setPreferredIOSExternalPlayer(player.storageKey);
       setState(() {
@@ -917,7 +916,7 @@ class _ExternalPlayerSettingsPageState
       setState(() {
         _iosCustomScheme = scheme;
         _iosSchemeError = null;
-        _selectedIOSPlayer = iOSExternalPlayer.customScheme;
+        _selectedIOSPlayer = IosExternalPlayer.customScheme;
       });
 
       if (mounted) {
@@ -938,10 +937,10 @@ class _ExternalPlayerSettingsPageState
     try {
       await StorageService.setIOSCustomSchemeTemplate(null);
 
-      if (_selectedIOSPlayer == iOSExternalPlayer.customScheme) {
+      if (_selectedIOSPlayer == IosExternalPlayer.customScheme) {
         await StorageService.setPreferredIOSExternalPlayer('vlc');
         setState(() {
-          _selectedIOSPlayer = iOSExternalPlayer.vlc;
+          _selectedIOSPlayer = IosExternalPlayer.vlc;
         });
       }
 
@@ -1565,14 +1564,7 @@ class _ExternalPlayerSettingsPageState
 
     return RadioListTile<ExternalPlayer>(
       value: player,
-      groupValue: canSelect ? _selectedPlayer : null,
-      onChanged: canSelect
-          ? (value) {
-              if (value != null) {
-                _selectPlayer(value);
-              }
-            }
-          : null,
+      enabled: canSelect,
       secondary: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -1597,11 +1589,11 @@ class _ExternalPlayerSettingsPageState
     );
   }
 
-  Widget _buildIOSPlayerTile(iOSExternalPlayer player) {
+  Widget _buildIOSPlayerTile(IosExternalPlayer player) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
     final isInstalled = _installedIOSPlayers[player] ?? false;
-    final isCustom = player == iOSExternalPlayer.customScheme;
+    final isCustom = player == IosExternalPlayer.customScheme;
 
     String subtitle;
     Color? subtitleColor;
@@ -1624,14 +1616,8 @@ class _ExternalPlayerSettingsPageState
       }
     }
 
-    return RadioListTile<iOSExternalPlayer>(
+    return RadioListTile<IosExternalPlayer>(
       value: player,
-      groupValue: _selectedIOSPlayer,
-      onChanged: (value) {
-        if (value != null) {
-          _selectIOSPlayer(value);
-        }
-      },
       secondary: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -1682,12 +1668,6 @@ class _ExternalPlayerSettingsPageState
 
     return RadioListTile<LinuxExternalPlayer>(
       value: player,
-      groupValue: _selectedLinuxPlayer,
-      onChanged: (value) {
-        if (value != null) {
-          _selectLinuxPlayer(value);
-        }
-      },
       secondary: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -1738,12 +1718,6 @@ class _ExternalPlayerSettingsPageState
 
     return RadioListTile<WindowsExternalPlayer>(
       value: player,
-      groupValue: _selectedWindowsPlayer,
-      onChanged: (value) {
-        if (value != null) {
-          _selectWindowsPlayer(value);
-        }
-      },
       secondary: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -1824,15 +1798,19 @@ class _ExternalPlayerSettingsPageState
                   children: [
                     // The row is the single focus stop — the inner Radio must
                     // not add a second DPAD stop.
-                    ExcludeFocus(
-                      child: Radio<String>(
-                        value: value,
-                        groupValue: _defaultPlayerMode,
-                        onChanged: disabled
-                            ? null
-                            : (v) => _setDefaultPlayerMode(v!),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
+                    RadioGroup<String>(
+                      groupValue: _defaultPlayerMode,
+                      onChanged: (v) {
+                        if (!disabled && v != null) _setDefaultPlayerMode(v);
+                      },
+                      child: ExcludeFocus(
+                        child: Radio<String>(
+                          value: value,
+                          enabled: !disabled,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -2528,153 +2506,149 @@ class _ExternalPlayerSettingsPageState
     final theme = Theme.of(context);
     final t = AppThemeScope.of(context).settings;
     return [
-      _defaultsCard(
-        'Picture & decoding',
-        'Default picture fit and device compatibility',
-        [
-          // Default Aspect
-          _buildSettingDropdown(
+      _defaultsCard('Picture & decoding', 'Default picture fit and device compatibility', [
+        // Default Aspect
+        _buildSettingDropdown(
+          context,
+          label: 'Default Aspect',
+          value: _defaultAspectIndex,
+          items: _aspectLabels,
+          onChanged: (index) => _setDefaultAspectIndex(index),
+          focusNode: _aspectFocusNode,
+          isFocused: _aspectFocused,
+        ),
+        const SizedBox(height: 12),
+
+        if (_isAndroidTv || PlatformUtil.isTvOS) ...[
+          _buildDropdownSetting(
             context,
-            label: 'Default Aspect',
-            value: _defaultAspectIndex,
-            items: _aspectLabels,
-            onChanged: (index) => _setDefaultAspectIndex(index),
-            focusNode: _aspectFocusNode,
-            isFocused: _aspectFocused,
+            label: 'Match content display',
+            value: _contentDisplayMatchMode.storageKey,
+            items: {
+              for (final mode in ContentDisplayMatchMode.values)
+                mode.storageKey: mode.label,
+            },
+            onChanged: _setContentDisplayMatchMode,
+            focusNode: _contentDisplayMatchFocusNode,
+            isFocused: _contentDisplayMatchFocused,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            switch (_contentDisplayMatchMode) {
+              ContentDisplayMatchMode.systemDefault =>
+                'Keeps the player’s existing platform behavior. Choose a matching mode to request content-specific output.',
+              ContentDisplayMatchMode.off =>
+                'Disables player-requested display matching. Restart playback to apply.',
+              ContentDisplayMatchMode.frameRate =>
+                PlatformUtil.isTvOS
+                    ? 'Requests the source frame rate from Apple TV. Apple TV Settings → Video and Audio → Match Content → Match Frame Rate must be enabled.'
+                    : 'Keeps the current output resolution and selects a compatible refresh rate. A brief black screen during a mode switch is normal.',
+              ContentDisplayMatchMode.frameRateAndResolution =>
+                PlatformUtil.isTvOS
+                    ? 'Sends Apple TV the source frame rate, dimensions, and video format. tvOS chooses the output mode and may keep its configured resolution; resolution matching is best-effort. Match Content must be enabled in Apple TV settings.'
+                    : 'Selects the closest output resolution and compatible refresh rate. A brief black screen during a mode switch is normal.',
+            },
+            style: theme.textTheme.bodySmall?.copyWith(
+              color:
+                  _contentDisplayMatchMode ==
+                      ContentDisplayMatchMode.systemDefault
+                  ? t.dim
+                  : t.warning,
+            ),
           ),
           const SizedBox(height: 12),
-
-          if (_isAndroidTv || PlatformUtil.isTvOS) ...[
-            _buildDropdownSetting(
-              context,
-              label: 'Match content display',
-              value: _contentDisplayMatchMode.storageKey,
-              items: {
-                for (final mode in ContentDisplayMatchMode.values)
-                  mode.storageKey: mode.label,
-              },
-              onChanged: _setContentDisplayMatchMode,
-              focusNode: _contentDisplayMatchFocusNode,
-              isFocused: _contentDisplayMatchFocused,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              switch (_contentDisplayMatchMode) {
-                ContentDisplayMatchMode.systemDefault =>
-                  'Keeps the player’s existing platform behavior. Choose a matching mode to request content-specific output.',
-                ContentDisplayMatchMode.off =>
-                  'Disables player-requested display matching. Restart playback to apply.',
-                ContentDisplayMatchMode.frameRate =>
-                  PlatformUtil.isTvOS
-                      ? 'Requests the source frame rate from Apple TV. Apple TV Settings → Video and Audio → Match Content → Match Frame Rate must be enabled.'
-                      : 'Keeps the current output resolution and selects a compatible refresh rate. A brief black screen during a mode switch is normal.',
-                ContentDisplayMatchMode.frameRateAndResolution =>
-                  PlatformUtil.isTvOS
-                      ? 'Sends Apple TV the source frame rate, dimensions, and video format. tvOS chooses the output mode and may keep its configured resolution; resolution matching is best-effort. Match Content must be enabled in Apple TV settings.'
-                      : 'Selects the closest output resolution and compatible refresh rate. A brief black screen during a mode switch is normal.',
-              },
-              style: theme.textTheme.bodySmall?.copyWith(
-                color:
-                    _contentDisplayMatchMode ==
-                        ContentDisplayMatchMode.systemDefault
-                    ? t.dim
-                    : t.warning,
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // Android TV only. A frozen picture with running
-          // audio on live IPTV is almost always the box's
-          // hardware decoder choking on the stream — a device
-          // defect, which is why every IPTV player ships this
-          // switch rather than trying to auto-detect it.
-          if (Platform.isAndroid && _isAndroidTv) ...[
-            const SizedBox(height: 12),
-            _buildDropdownSetting(
-              context,
-              label: 'IPTV decoder',
-              value: _iptvDecoderMode,
-              items: const {
-                'auto': 'Automatic',
-                'hardware': 'Hardware',
-                'software': 'Software',
-              },
-              onChanged: _setIptvDecoderMode,
-              focusNode: _iptvDecoderFocusNode,
-              isFocused: _iptvDecoderFocused,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _iptvDecoderMode == 'software'
-                  ? 'Software decoding fixes channels that freeze '
-                        'while audio keeps playing, at the cost of '
-                        'more CPU. Re-open the channel to apply.'
-                  : 'Switch to Software if a channel freezes but '
-                        'audio keeps playing. Re-open the channel '
-                        'to apply.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: _iptvDecoderMode == 'auto' ? t.dim : t.warning,
-              ),
-            ),
-          ],
-
-          // Android phone/tablet only. Android TV already uses
-          // native Media3 + SurfaceView; Apple and desktop
-          // platforms have different decoder APIs entirely.
-          if (Platform.isAndroid && !_isAndroidTv) ...[
-            const SizedBox(height: 12),
-            _buildDropdownSetting(
-              context,
-              label: 'Video renderer',
-              value: _androidVideoRendererMode.storageKey,
-              items: {
-                for (final mode in AndroidVideoRendererMode.values)
-                  mode.storageKey: mode.label,
-              },
-              onChanged: _setAndroidVideoRendererMode,
-              focusNode: _androidVideoRendererFocusNode,
-              isFocused: _androidVideoRendererFocused,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${_androidVideoRendererMode.description} '
-              'Restart playback to apply. Use Automatic if a '
-              'video is black, has incorrect colors, or loses '
-              'a feature.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color:
-                    _androidVideoRendererMode ==
-                        AndroidVideoRendererMode.automatic
-                    ? t.dim
-                    : t.warning,
-              ),
-            ),
-          ],
-
-          // Apple TV only. The automatic 10-bit remedy
-          // (PLAYER_TVOS_10BIT_PLAN.md) handles what it can
-          // detect; this forces software decoding for
-          // anything it cannot — wrong colors on a
-          // clean-reading format, most likely.
-          if (PlatformUtil.isTvOS) ...[
-            const SizedBox(height: 4),
-            _buildCheckboxTile(
-              context,
-              title: 'Force software video decoding',
-              subtitle:
-                  'Compatibility option if a video plays with '
-                  'wrong colors or a blank picture. Slower — '
-                  '4K may stutter. Applies from the next '
-                  'playback.',
-              value: _tvosForceSoftwareDecode,
-              onChanged: _setTvosForceSoftwareDecode,
-              focusNode: _tvosForceSwDecodeFocusNode,
-              isFocused: _tvosForceSwDecodeFocused,
-            ),
-          ],
         ],
-      ),
+
+        // Android TV only. A frozen picture with running
+        // audio on live IPTV is almost always the box's
+        // hardware decoder choking on the stream — a device
+        // defect, which is why every IPTV player ships this
+        // switch rather than trying to auto-detect it.
+        if (Platform.isAndroid && _isAndroidTv) ...[
+          const SizedBox(height: 12),
+          _buildDropdownSetting(
+            context,
+            label: 'IPTV decoder',
+            value: _iptvDecoderMode,
+            items: const {
+              'auto': 'Automatic',
+              'hardware': 'Hardware',
+              'software': 'Software',
+            },
+            onChanged: _setIptvDecoderMode,
+            focusNode: _iptvDecoderFocusNode,
+            isFocused: _iptvDecoderFocused,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _iptvDecoderMode == 'software'
+                ? 'Software decoding fixes channels that freeze '
+                      'while audio keeps playing, at the cost of '
+                      'more CPU. Re-open the channel to apply.'
+                : 'Switch to Software if a channel freezes but '
+                      'audio keeps playing. Re-open the channel '
+                      'to apply.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: _iptvDecoderMode == 'auto' ? t.dim : t.warning,
+            ),
+          ),
+        ],
+
+        // Android phone/tablet only. Android TV already uses
+        // native Media3 + SurfaceView; Apple and desktop
+        // platforms have different decoder APIs entirely.
+        if (Platform.isAndroid && !_isAndroidTv) ...[
+          const SizedBox(height: 12),
+          _buildDropdownSetting(
+            context,
+            label: 'Video renderer',
+            value: _androidVideoRendererMode.storageKey,
+            items: {
+              for (final mode in AndroidVideoRendererMode.values)
+                mode.storageKey: mode.label,
+            },
+            onChanged: _setAndroidVideoRendererMode,
+            focusNode: _androidVideoRendererFocusNode,
+            isFocused: _androidVideoRendererFocused,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${_androidVideoRendererMode.description} '
+            'Restart playback to apply. Use Automatic if a '
+            'video is black, has incorrect colors, or loses '
+            'a feature.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color:
+                  _androidVideoRendererMode ==
+                      AndroidVideoRendererMode.automatic
+                  ? t.dim
+                  : t.warning,
+            ),
+          ),
+        ],
+
+        // Apple TV only. The automatic 10-bit remedy
+        // (PLAYER_TVOS_10BIT_PLAN.md) handles what it can
+        // detect; this forces software decoding for
+        // anything it cannot — wrong colors on a
+        // clean-reading format, most likely.
+        if (PlatformUtil.isTvOS) ...[
+          const SizedBox(height: 4),
+          _buildCheckboxTile(
+            context,
+            title: 'Force software video decoding',
+            subtitle:
+                'Compatibility option if a video plays with '
+                'wrong colors or a blank picture. Slower — '
+                '4K may stutter. Applies from the next '
+                'playback.',
+            value: _tvosForceSoftwareDecode,
+            onChanged: _setTvosForceSoftwareDecode,
+            focusNode: _tvosForceSwDecodeFocusNode,
+            isFocused: _tvosForceSwDecodeFocused,
+          ),
+        ],
+      ]),
     ];
   }
 
@@ -2885,14 +2859,18 @@ class _ExternalPlayerSettingsPageState
                                   // Single focus stop per row —
                                   // keep the Radio off the DPAD
                                   // traversal order.
-                                  ExcludeFocus(
-                                    child: Radio<int>(
-                                      value: index,
-                                      groupValue: _nightModeIndex,
-                                      onChanged: (v) => _setNightModeIndex(v!),
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      visualDensity: VisualDensity.compact,
+                                  RadioGroup<int>(
+                                    groupValue: _nightModeIndex,
+                                    onChanged: (v) {
+                                      if (v != null) _setNightModeIndex(v);
+                                    },
+                                    child: ExcludeFocus(
+                                      child: Radio<int>(
+                                        value: index,
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -3276,39 +3254,47 @@ class _ExternalPlayerSettingsPageState
           _defaultPlayerMode == 'external') ...[
         const SizedBox(height: 16),
         Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  'Preferred Player',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: RadioGroup<IosExternalPlayer>(
+            groupValue: _selectedIOSPlayer,
+            onChanged: (value) {
+              if (value != null) _selectIOSPlayer(value);
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Preferred Player',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Select the app to open videos with. Make sure the app is installed from the App Store.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Select the app to open videos with. Make sure the app is installed from the App Store.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              // tvOS lists only players with a real Apple TV app —
-              // a row that can never launch is worse than no row.
-              ...[
-                for (final (i, player)
-                    in iOSExternalPlayer.values
-                        .where((p) => !PlatformUtil.isTvOS || p.availableOnTvos)
-                        .indexed) ...[
-                  if (i > 0) const Divider(height: 1),
-                  _buildIOSPlayerTile(player),
+                const SizedBox(height: 8),
+                // tvOS lists only players with a real Apple TV app —
+                // a row that can never launch is worse than no row.
+                ...[
+                  for (final (i, player)
+                      in IosExternalPlayer.values
+                          .where(
+                            (p) => !PlatformUtil.isTvOS || p.availableOnTvos,
+                          )
+                          .indexed) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _buildIOSPlayerTile(player),
+                  ],
                 ],
+                const SizedBox(height: 8),
               ],
-              const SizedBox(height: 8),
-            ],
+            ),
           ),
         ),
       ],
@@ -3316,7 +3302,7 @@ class _ExternalPlayerSettingsPageState
       // iOS Custom URL Scheme configuration
       if ((PlatformUtil.isIosMobile || PlatformUtil.isTvOS) &&
           _defaultPlayerMode == 'external' &&
-          _selectedIOSPlayer == iOSExternalPlayer.customScheme) ...[
+          _selectedIOSPlayer == IosExternalPlayer.customScheme) ...[
         const SizedBox(height: 16),
         Card(
           child: Padding(
@@ -3461,39 +3447,45 @@ class _ExternalPlayerSettingsPageState
       if (Platform.isLinux && _defaultPlayerMode == 'external') ...[
         const SizedBox(height: 16),
         Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  'Preferred Player',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: RadioGroup<LinuxExternalPlayer>(
+            groupValue: _selectedLinuxPlayer,
+            onChanged: (value) {
+              if (value != null) _selectLinuxPlayer(value);
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Preferred Player',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Select the player to open videos with. Players marked as "Installed" were detected on your system.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Select the player to open videos with. Players marked as "Installed" were detected on your system.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.systemDefault),
-              const Divider(height: 1),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.vlc),
-              const Divider(height: 1),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.mpv),
-              const Divider(height: 1),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.celluloid),
-              const Divider(height: 1),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.smplayer),
-              const Divider(height: 1),
-              _buildLinuxPlayerTile(LinuxExternalPlayer.customCommand),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.systemDefault),
+                const Divider(height: 1),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.vlc),
+                const Divider(height: 1),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.mpv),
+                const Divider(height: 1),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.celluloid),
+                const Divider(height: 1),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.smplayer),
+                const Divider(height: 1),
+                _buildLinuxPlayerTile(LinuxExternalPlayer.customCommand),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ],
@@ -3645,39 +3637,45 @@ class _ExternalPlayerSettingsPageState
       if (Platform.isWindows && _defaultPlayerMode == 'external') ...[
         const SizedBox(height: 16),
         Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  'Preferred Player',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: RadioGroup<WindowsExternalPlayer>(
+            groupValue: _selectedWindowsPlayer,
+            onChanged: (value) {
+              if (value != null) _selectWindowsPlayer(value);
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Preferred Player',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Select the player to open videos with. Players marked as "Installed" were detected on your system.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Select the player to open videos with. Players marked as "Installed" were detected on your system.',
+                    style: theme.textTheme.bodySmall?.copyWith(color: t.dim),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.systemDefault),
-              const Divider(height: 1),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.vlc),
-              const Divider(height: 1),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.mpv),
-              const Divider(height: 1),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.mpcHc),
-              const Divider(height: 1),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.potPlayer),
-              const Divider(height: 1),
-              _buildWindowsPlayerTile(WindowsExternalPlayer.customCommand),
-              const SizedBox(height: 8),
-            ],
+                const SizedBox(height: 8),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.systemDefault),
+                const Divider(height: 1),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.vlc),
+                const Divider(height: 1),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.mpv),
+                const Divider(height: 1),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.mpcHc),
+                const Divider(height: 1),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.potPlayer),
+                const Divider(height: 1),
+                _buildWindowsPlayerTile(WindowsExternalPlayer.customCommand),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ],
@@ -3829,35 +3827,41 @@ class _ExternalPlayerSettingsPageState
       if (Platform.isMacOS && _defaultPlayerMode == 'external') ...[
         const SizedBox(height: 16),
         Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  'Preferred Player',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+          child: RadioGroup<ExternalPlayer>(
+            groupValue: _selectedPlayer,
+            onChanged: (value) {
+              if (value != null) _selectPlayer(value);
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Preferred Player',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              _buildPlayerTile(ExternalPlayer.systemDefault),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.vlc),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.iina),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.mpv),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.quickTime),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.infuse),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.customApp),
-              const Divider(height: 1),
-              _buildPlayerTile(ExternalPlayer.customCommand),
-              const SizedBox(height: 8),
-            ],
+                _buildPlayerTile(ExternalPlayer.systemDefault),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.vlc),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.iina),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.mpv),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.quickTime),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.infuse),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.customApp),
+                const Divider(height: 1),
+                _buildPlayerTile(ExternalPlayer.customCommand),
+                const SizedBox(height: 8),
+              ],
+            ),
           ),
         ),
       ],

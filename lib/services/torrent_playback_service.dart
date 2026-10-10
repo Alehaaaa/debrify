@@ -439,6 +439,7 @@ class TorrentPlaybackService {
         rootNav.pop();
       }
     }
+
     _Resolved? resolved;
     Object? notCached;
     try {
@@ -472,9 +473,10 @@ class TorrentPlaybackService {
     closeLoading();
     if (!context.mounted) {
       final app = background ? TorrentDownloads.appContext : null;
-      if (app == null) return;
+      if (app == null || !app.mounted) return;
       context = app;
     }
+    if (!context.mounted) return;
 
     if (notCached != null) {
       if (action == 'download') {
@@ -1068,6 +1070,10 @@ class TorrentPlaybackService {
       return;
     }
 
+    if (!context.mounted) {
+      if (ov != null) closeLoading();
+      return;
+    }
     final prov = provider ?? await _pickProvider(context);
     // These bail-outs are reachable when the caller passed no provider (the
     // non-IMDb addon-stream path with only torrent results). Dismiss the
@@ -1086,7 +1092,9 @@ class TorrentPlaybackService {
       // is still the guaranteed instant play (pre-ladder behavior).
       if (await playFirstAliveDirect()) return;
       if (ov != null) closeLoading();
-      _snack(context, 'No debrid provider configured. Add one in Settings.');
+      if (context.mounted) {
+        _snack(context, 'No debrid provider configured. Add one in Settings.');
+      }
       return;
     }
 
@@ -1098,7 +1106,9 @@ class TorrentPlaybackService {
     if (candidates.isEmpty) {
       if (await playFirstAliveDirect()) return;
       if (ov != null) closeLoading();
-      _snack(context, 'No playable sources found for this title.');
+      if (context.mounted) {
+        _snack(context, 'No playable sources found for this title.');
+      }
       return;
     }
     // Standalone play (no loader passed by the search flow): show one now.
@@ -1190,10 +1200,12 @@ class TorrentPlaybackService {
       // the loader up and hands its dismissal to the launcher).
       if (await playFirstAliveDirect()) return;
       closeLoading();
-      _snack(
-        context,
-        'No instantly-playable source found. Open Sources to pick or download one.',
-      );
+      if (context.mounted) {
+        _snack(
+          context,
+          'No instantly-playable source found. Open Sources to pick or download one.',
+        );
+      }
       return;
     }
     final idx = torrents.indexOf(winner!);
@@ -2059,7 +2071,7 @@ class TorrentPlaybackService {
         if (packed != false) return;
       }
       closeLoading();
-      _snack(context, 'No sources found for "$label".');
+      if (context.mounted) _snack(context, 'No sources found for "$label".');
       return;
     }
 
@@ -3519,7 +3531,7 @@ class TorrentPlaybackService {
         try {
           if (addonId.startsWith('mediaserver:')) {
             if (meta.hasStremioEpisodeIdentity) return const <Torrent>[];
-            return _fetchMediaServerSources(addonId, imdbId, false, s, e);
+            return await _fetchMediaServerSources(addonId, imdbId, false, s, e);
           }
           final originVideoId = await _originEpisodeVideoId(meta, s, e);
           if (meta.hasStremioEpisodeIdentity && originVideoId == null) {
@@ -3640,7 +3652,13 @@ class TorrentPlaybackService {
       fetchAddonEpisodes: (addonId, _, _) async {
         try {
           if (addonId.startsWith('mediaserver:')) {
-            return _fetchMediaServerSources(addonId, imdbId, true, null, null);
+            return await _fetchMediaServerSources(
+              addonId,
+              imdbId,
+              true,
+              null,
+              null,
+            );
           }
           return await StremioService.instance.retryAddonStreams(
             addonId: addonId,
@@ -5350,6 +5368,7 @@ class TorrentPlaybackService {
                 removePin: () =>
                     SeriesSourceService.removeSourceEntry(imdbId, source),
               );
+              if (!context.mounted) return;
               await _recoverAfterBoundStartupFailure(
                 context,
                 imdbId,
@@ -5475,6 +5494,7 @@ class TorrentPlaybackService {
               removePin: () =>
                   SeriesSourceService.removeSourceEntry(imdbId, source),
             );
+            if (!context.mounted) return;
             await _recoverAfterBoundStartupFailure(
               context,
               imdbId,
@@ -7431,8 +7451,15 @@ class TorrentPlaybackService {
             title: 'Download to device',
             subtitle: 'Grab the file(s) via ${_label(provider)}.',
             pillLabel: 'Download',
-            onTap: () =>
-                unawaited(TorrentDownloads._download(context, r, torrent, provider, meta: meta)),
+            onTap: () => unawaited(
+              TorrentDownloads._download(
+                context,
+                r,
+                torrent,
+                provider,
+                meta: meta,
+              ),
+            ),
           ),
         DebridActionItem(
           icon: Icons.playlist_add_rounded,

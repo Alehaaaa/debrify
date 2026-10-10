@@ -835,7 +835,7 @@ class IptvSourceSearch {
                   IptvCatalogKey.forPlaylist(playlist, catalogType)!,
                 )?.generation !=
                 snapshot.generation) {
-          return _playlist(
+          return await _playlist(
             playlist,
             selection,
             shouldContinue,

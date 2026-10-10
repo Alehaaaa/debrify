@@ -72,10 +72,7 @@ void main() {
         Size(2560, 1440),
         Size(3840, 2160),
       ];
-      const insets = [
-        EdgeInsets.zero,
-        EdgeInsets.only(top: 48, bottom: 34),
-      ];
+      const insets = [EdgeInsets.zero, EdgeInsets.only(top: 48, bottom: 34)];
       for (final viewport in viewports) {
         for (final size in PlayerDockSize.values) {
           for (final safeArea in insets) {
@@ -179,9 +176,7 @@ void main() {
     test('insets and panel height both reduce the budget', () {
       const viewport = Size(800, 480);
       final bare = DockMetrics.compute(input(viewport))!;
-      final withPanel = DockMetrics.compute(
-        input(viewport, infoPanelH: 100),
-      );
+      final withPanel = DockMetrics.compute(input(viewport, infoPanelH: 100));
       final withBoth = DockMetrics.compute(
         input(
           viewport,
@@ -261,10 +256,7 @@ void main() {
       expect(PlayerDockStyle.auto.forcedArrangement, isNull);
       expect(PlayerDockStyle.classic.forcedArrangement, isNull);
       expect(PlayerDockStyle.glass.forcedArrangement, isNull);
-      expect(
-        PlayerDockStyle.compact.forcedArrangement,
-        DockArrangement.narrow,
-      );
+      expect(PlayerDockStyle.compact.forcedArrangement, DockArrangement.narrow);
       expect(PlayerDockStyle.tiers.forcedArrangement, DockArrangement.regular);
       expect(PlayerDockStyle.cinema.forcedArrangement, DockArrangement.wide);
     });
@@ -285,17 +277,22 @@ void main() {
         (p) => DockPalettes.of(p).onPrimary != const Color(0xFFFFFFFF),
       );
       expect(dark, [PlayerDockPalette.aurum, PlayerDockPalette.ice]);
-      expect(DockPalettes.of(PlayerDockPalette.aurum).onPrimary.alpha, 0xFF);
+      expect(
+        (DockPalettes.of(PlayerDockPalette.aurum).onPrimary.a * 255.0)
+            .round()
+            .clamp(0, 255),
+        0xFF,
+      );
     });
 
     test('every token is fully opaque or deliberately pre-multiplied', () {
       // House rule: no Opacity widgets over video - alpha is baked in.
       for (final p in PlayerDockPalette.values) {
         final t = DockPalettes.of(p);
-        expect(t.hot.alpha, 0xFF);
-        expect(t.deep.alpha, 0xFF);
-        expect(t.onPrimary.alpha, 0xFF);
-        expect(t.scrim.alpha, greaterThan(0xD0));
+        expect((t.hot.a * 255.0).round().clamp(0, 255), 0xFF);
+        expect((t.deep.a * 255.0).round().clamp(0, 255), 0xFF);
+        expect((t.onPrimary.a * 255.0).round().clamp(0, 255), 0xFF);
+        expect((t.scrim.a * 255.0).round().clamp(0, 255), greaterThan(0xD0));
       }
     });
   });

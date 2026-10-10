@@ -167,10 +167,6 @@ const _ink = Color(0xFFFFFFFF);
 /// place.
 Color _slotFill(AppTheme app) => Color.lerp(app.home.bg, app.core.tx, 0.045)!;
 
-/// A contained mark — a channel logo — needs a lighter plate than a poster
-/// slot, or a dark logo lands on a dark card.
-Color _plateFill(AppTheme app) => Color.lerp(app.home.bg, app.core.tx, 0.10)!;
-
 /// The bed the ambient field is laid on, and the veil over it.
 ///
 /// **Darkens regardless of the ground, and that is not an oversight.** The
@@ -3018,8 +3014,7 @@ class _PosterState extends State<_Poster> {
                             cacheManager: DebrifyImageCache.manager,
                             memCacheWidth: 300,
                             placeholder: (_, _) => ColoredBox(color: slot),
-                            errorWidget: (_, _, _) =>
-                                ColoredBox(color: slot),
+                            errorWidget: (_, _, _) => ColoredBox(color: slot),
                           )
                         : ColoredBox(color: slot),
                   ),

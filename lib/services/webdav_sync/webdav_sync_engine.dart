@@ -1297,7 +1297,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(replayed)) {
-              return _persistAmbientCapacityBlock(
+              return await _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: listing.deviceIds.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -1849,7 +1849,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(mergedLibraryTarget)) {
-              return _persistAmbientCapacityBlock(
+              return await _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: manifests.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -3578,7 +3578,7 @@ final class WebDavSyncEngine
       for (final section in changed) section.reference.name: section.reference,
       ...retainedCollectionReferences,
       ...libraryReferences,
-      if (resourceReference != null) resourceReference.name: resourceReference,
+      ?resourceReference?.name: resourceReference!,
     };
     if (sections.isEmpty) {
       throw StateError('WebDAV sync refuses to publish an empty manifest');

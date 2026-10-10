@@ -333,7 +333,10 @@ abstract final class TorrentDownloads {
       working?.close();
     }
 
-    BuildContext? live() => context.mounted ? context : appContext;
+    BuildContext? live() {
+      final target = context.mounted ? context : appContext;
+      return target?.mounted == true ? target : null;
+    }
 
     // The title shows on the Downloads page from here on — poster plus the
     // phase — until a real download task takes over (or the search ends).
@@ -424,6 +427,7 @@ abstract final class TorrentDownloads {
           if (resolved != null && winner != null) {
             closeOverlay();
             phase(PendingDownloadPhase.adding);
+            if (!target.mounted) return null;
             await _download(
               target,
               resolved,
@@ -447,6 +451,7 @@ abstract final class TorrentDownloads {
         if (direct.isNotEmpty && target != null) {
           closeOverlay();
           phase(PendingDownloadPhase.adding);
+          if (!target.mounted) return null;
           await downloadDirectStream(target, direct.first, meta: itemMeta);
           return null;
         }
@@ -503,7 +508,7 @@ abstract final class TorrentDownloads {
       closeOverlay();
       if (cancelled) return done;
       final target = live();
-      if (target != null) {
+      if (target != null && target.mounted) {
         DownloadFeedback.info(
           target,
           'The search didn\'t work this time. Try again.',
@@ -691,6 +696,7 @@ abstract final class TorrentDownloads {
     final context = _navigatorKey?.currentContext;
     return context != null && context.mounted ? context : null;
   }
+
   static Timer? _readyTimer;
   static bool _checkingReady = false;
   static const Duration _readyInterval = Duration(minutes: 1);

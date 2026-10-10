@@ -515,7 +515,8 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
           SizedBox(
             height: m.boxHeight,
             child: ListView.builder(
-              cacheExtent: 400, controller: _scroll,
+              scrollCacheExtent: ScrollCacheExtent.pixels(400),
+              controller: _scroll,
               scrollDirection: Axis.horizontal,
               clipBehavior: Clip.hardEdge,
               padding: EdgeInsets.symmetric(horizontal: m.hPad),
@@ -613,7 +614,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     final options = _resolveOptions();
 
     return CustomScrollView(
-      scrollCacheExtent: ScrollCacheExtent.pixels(widget.isTelevision ? 400 : 250), controller: _scroll,
+      scrollCacheExtent: ScrollCacheExtent.pixels(
+        widget.isTelevision ? 400 : 250,
+      ),
+      controller: _scroll,
       slivers: [
         SliverPadding(
           padding: SeeAllGridMetrics.padding,

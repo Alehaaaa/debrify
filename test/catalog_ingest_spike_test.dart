@@ -25,15 +25,16 @@ void main() {
     sqfliteFfiInit();
   });
 
-  test('worker-isolate raw sqlite3 writes are visible to a sqflite reader',
-      () async {
-    final dir = await Directory.systemTemp.createTemp('ingest_spike');
-    final path = '${dir.path}/catalog.db';
+  test(
+    'worker-isolate raw sqlite3 writes are visible to a sqflite reader',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('ingest_spike');
+      final path = '${dir.path}/catalog.db';
 
-    // UI-side connection (sqflite), owns the schema, switches to WAL.
-    final ui = await databaseFactoryFfi.openDatabase(path);
-    await ui.rawQuery('PRAGMA journal_mode=WAL');
-    await ui.execute('''
+      // UI-side connection (sqflite), owns the schema, switches to WAL.
+      final ui = await databaseFactoryFfi.openDatabase(path);
+      await ui.rawQuery('PRAGMA journal_mode=WAL');
+      await ui.execute('''
       CREATE TABLE catalog (
         id INTEGER PRIMARY KEY,
         url TEXT NOT NULL,
@@ -42,64 +43,78 @@ void main() {
         generation INTEGER NOT NULL
       )
     ''');
-    await ui.execute('CREATE INDEX idx_catalog_grp ON catalog(grp)');
+      await ui.execute('CREATE INDEX idx_catalog_grp ON catalog(grp)');
 
-    // Worker ingest: raw sqlite3 connection in a spawned isolate.
-    const rows = 55000;
-    final progress = ReceivePort();
-    final sw = Stopwatch()..start();
-    await Isolate.spawn(_ingestWorker, [path, rows, progress.sendPort]);
+      // Worker ingest: raw sqlite3 connection in a spawned isolate.
+      const rows = 55000;
+      final progress = ReceivePort();
+      final sw = Stopwatch()..start();
+      await Isolate.spawn(_ingestWorker, [path, rows, progress.sendPort]);
 
-    var committed = false;
-    var midIngestCount = -1;
-    await for (final message in progress) {
-      if (message == 'mid-ingest') {
-        // The worker is inside its (uncommitted) transaction right now.
-        midIngestCount = (await ui.rawQuery(
-          'SELECT COUNT(*) AS c FROM catalog',
-        ))
-            .first['c'] as int;
-        // ACK so the worker only proceeds to COMMIT after we sampled.
-      } else if (message == 'done') {
-        committed = true;
-        break;
-      } else if (message is String && message.startsWith('error:')) {
-        fail(message);
+      var committed = false;
+      var midIngestCount = -1;
+      await for (final message in progress) {
+        if (message == 'mid-ingest') {
+          // The worker is inside its (uncommitted) transaction right now.
+          midIngestCount =
+              (await ui.rawQuery(
+                    'SELECT COUNT(*) AS c FROM catalog',
+                  )).first['c']
+                  as int;
+          // ACK so the worker only proceeds to COMMIT after we sampled.
+        } else if (message == 'done') {
+          committed = true;
+          break;
+        } else if (message is String && message.startsWith('error:')) {
+          fail(message);
+        }
       }
-    }
-    final elapsed = sw.elapsedMilliseconds;
-    progress.close();
+      final elapsed = sw.elapsedMilliseconds;
+      progress.close();
 
-    expect(committed, isTrue);
-    expect(midIngestCount, 0,
-        reason: 'WAL snapshot isolation: a reader never sees a half-done '
-            'ingest — the catalog swap is atomic from the UI\'s side');
+      expect(committed, isTrue);
+      expect(
+        midIngestCount,
+        0,
+        reason:
+            'WAL snapshot isolation: a reader never sees a half-done '
+            'ingest — the catalog swap is atomic from the UI\'s side',
+      );
 
-    final count = (await ui.rawQuery('SELECT COUNT(*) AS c FROM catalog'))
-        .first['c'] as int;
-    expect(count, rows,
-        reason: 'after COMMIT the sqflite connection sees every row without '
-            'reopening');
+      final count =
+          (await ui.rawQuery('SELECT COUNT(*) AS c FROM catalog')).first['c']
+              as int;
+      expect(
+        count,
+        rows,
+        reason:
+            'after COMMIT the sqflite connection sees every row without '
+            'reopening',
+      );
 
-    // Query-driven UI shapes stay cheap on the ingested data.
-    final window = await ui.rawQuery(
-      'SELECT name FROM catalog WHERE grp = ? ORDER BY id LIMIT 30',
-      ['Group 7'],
-    );
-    expect(window.length, 30);
+      // Query-driven UI shapes stay cheap on the ingested data.
+      final window = await ui.rawQuery(
+        'SELECT name FROM catalog WHERE grp = ? ORDER BY id LIMIT 30',
+        ['Group 7'],
+      );
+      expect(window.length, 30);
 
-    final groups = await ui.rawQuery(
-      'SELECT grp, COUNT(*) AS c FROM catalog GROUP BY grp',
-    );
-    expect(groups.length, 200);
+      final groups = await ui.rawQuery(
+        'SELECT grp, COUNT(*) AS c FROM catalog GROUP BY grp',
+      );
+      expect(groups.length, 200);
 
-    // ignore: avoid_print
-    print('spike: $rows rows ingested from worker isolate in ${elapsed}ms '
-        '(includes spawn + mid-ingest handshake)');
+      // ignore: avoid_print
+      print(
+        'spike: $rows rows ingested from worker isolate in ${elapsed}ms '
+        '(includes spawn + mid-ingest handshake)',
+      );
 
-    await ui.close();
-    await dir.delete(recursive: true);
-  }, timeout: const Timeout(Duration(minutes: 2)));
+      await ui.close();
+      await dir.delete(recursive: true);
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 }
 
 Future<void> _ingestWorker(List<Object> args) async {
@@ -133,8 +148,8 @@ Future<void> _ingestWorker(List<Object> args) async {
       }
     }
     db.execute('COMMIT');
-    stmt.dispose();
-    db.dispose();
+    stmt.close();
+    db.close();
     port.send('done');
   } catch (e) {
     port.send('error: $e');

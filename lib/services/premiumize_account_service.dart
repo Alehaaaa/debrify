@@ -74,7 +74,7 @@ class PremiumizeAccountService {
     try {
       final apiKey = await StorageService.getPremiumizeApiKey();
       if (apiKey == null || apiKey.isEmpty) return false;
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       return false;
     }
@@ -94,7 +94,7 @@ class PremiumizeAccountService {
         _setCurrentUser(null);
         return false;
       }
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       return false;
     }

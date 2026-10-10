@@ -1030,6 +1030,7 @@ class _SyncAndMigratePageState extends State<SyncAndMigratePage>
     if (inspection is! WebDavSyncFolderExisting) {
       throw StateError('The connected sync is no longer available.');
     }
+    if (!mounted) return false;
     await ProfileBackupFlows(
       context,
     ).createSyncVersion(inspection, announce: false);

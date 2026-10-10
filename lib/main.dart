@@ -957,7 +957,9 @@ void _updateFocusHighlightStrategy(bool isTv) {
 Future<void> _cleanupPlaybackState() async {
   try {
     await StorageService.cleanupOldPlaybackState();
-  } catch (e) {}
+  } catch (e) {
+    debugPrint('Playback state cleanup failed: $e');
+  }
 }
 
 // Global scaffold messenger key for showing snackbars from anywhere
@@ -1695,7 +1697,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1720,7 +1722,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1745,7 +1747,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1770,7 +1772,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1791,7 +1793,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvoked: (didPop) {
+            onPopInvokedWithResult: (didPop, result) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -2192,6 +2194,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           manifestUrl: manifestUrl,
         );
 
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -3463,7 +3466,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             settings: const RouteSettings(name: 'cloud_provider'),
             builder: (ctx) => PopScope(
               canPop: false,
-              onPopInvoked: (didPop) {
+              onPopInvokedWithResult: (didPop, result) {
                 if (didPop) return;
                 back(ctx);
               },
@@ -3632,7 +3635,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             // in SystemNavigator.pop (a no-op there); the handler now owns
             // the whole rail/exit contract via the runner's suspend channel.
             canPop: false,
-            onPopInvoked: _onRootPopInvoked,
+            onPopInvokedWithResult: (didPop, _) => _onRootPopInvoked(didPop),
             child: shell!,
           ),
           child: AnimatedPremiumBackground(
@@ -4070,8 +4073,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                                             : _buildAnimatedPage(),
                                       ),
                                     ],
-                                    onPopPage: (route, result) =>
-                                        route.didPop(result),
+                                    // The section root is fixed; Flutter has
+                                    // already completed the pop when notified.
+                                    onDidRemovePage: (_) {},
                                   ),
                                 ),
                                 // Invisible top strip keeps frameless desktop

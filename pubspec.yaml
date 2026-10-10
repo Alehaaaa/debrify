@@ -189,6 +189,9 @@ dependency_overrides:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  android_file_picker: ^2.0.0
+  clock: ^1.1.2
+  fake_async: ^1.3.3
   path_provider_platform_interface: ^2.1.2
   shared_preferences_platform_interface: ^2.4.1
 
@@ -200,6 +203,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
 
+  sqflite_common: any
 flutter_launcher_icons:
   # Home-screen icons are rendered by tool/generate_app_icons.py from
   # assets/icon/{background,foreground}.png; prefer that script, which also

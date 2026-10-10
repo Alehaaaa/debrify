@@ -1,12 +1,13 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2023 & onwards, Abdelaziz Mahdy <abdelaziz.h.mahdy@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2023 & onwards, Abdelaziz Mahdy <abdelaziz.h.mahdy@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import 'package:media_kit_video_tvos/src/subtitle/subtitle_view.dart';
+import 'package:media_kit_video_tvos/src/video/video.dart';
 
 /// {@template video_view_parameters}
 ///
@@ -24,7 +25,7 @@ class VideoViewParameters {
   final Alignment alignment;
   final double? aspectRatio;
   final FilterQuality filterQuality;
-  final /* VideoControlsBuilder? */ dynamic controls;
+  final VideoControlsBuilder? controls;
   final SubtitleViewConfiguration subtitleViewConfiguration;
   final FocusNode? focusNode;
 
@@ -50,7 +51,7 @@ class VideoViewParameters {
     Alignment? alignment,
     double? aspectRatio,
     FilterQuality? filterQuality,
-    /* VideoControlsBuilder? */ dynamic controls,
+    VideoControlsBuilder? controls,
     bool? pauseUponEnteringBackgroundMode,
     bool? resumeUponEnteringForegroundMode,
     SubtitleViewConfiguration? subtitleViewConfiguration,

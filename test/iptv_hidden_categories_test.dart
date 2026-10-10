@@ -198,7 +198,7 @@ void main() {
             .single['value'],
         '1',
       );
-      db.dispose();
+      db.close();
       expect(notifications, 1);
 
       IptvCatalogDb.debugLibraryClock = () =>
@@ -221,7 +221,7 @@ void main() {
             .single['value'],
         '2',
       );
-      db.dispose();
+      db.close();
       expect(notifications, 2);
     },
   );
@@ -250,7 +250,7 @@ void main() {
           .single['value'],
       '0',
     );
-    db.dispose();
+    db.close();
     expect(notifications, 0);
   });
 
@@ -297,7 +297,7 @@ void main() {
       expect(exact['origin_device_id'], exactStamp.originDeviceId);
       expect(exact['normalized'], 1);
       expect(exact['deleted'], 0);
-      db.dispose();
+      db.close();
       expect(notifications, 0);
 
       IptvCatalogDb.setGroupHidden(key, 'News', true);
@@ -331,7 +331,7 @@ void main() {
             .single['value'],
         '2',
       );
-      db.dispose();
+      db.close();
       expect(notifications, 1);
     },
   );
@@ -364,7 +364,7 @@ void main() {
       ),
       everyElement('local-resource'),
     );
-    db.dispose();
+    db.close();
     expect(IptvCatalogDb.hiddenGroups(key), isEmpty);
   });
 

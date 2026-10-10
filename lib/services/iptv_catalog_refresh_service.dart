@@ -161,7 +161,7 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
           _pending.insert(0, existing);
         }
         unawaited(_pump());
-        return existing.done.future;
+        return await existing.done.future;
       }
       if (!force && (_retryAfter[id]?.isAfter(DateTime.now()) ?? false)) {
         return _failure('Refresh will retry later');
@@ -252,7 +252,7 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
         _pending.add(job);
       }
       unawaited(_pump());
-      return job.done.future;
+      return await job.done.future;
     } catch (error) {
       return _failure('Refresh unavailable (${error.runtimeType})');
     }

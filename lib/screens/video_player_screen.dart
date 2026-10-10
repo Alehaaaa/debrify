@@ -520,7 +520,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   // PikPak cold storage retry logic
   bool _isPikPakRetrying = false;
-  int _pikPakRetryCount = 0;
   String? _pikPakRetryMessage;
   int _pikPakRetryId =
       0; // Cancellation token: increments on each new video to cancel old retries
@@ -645,7 +644,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   // Text subtitles stay in MediaKit's Flutter renderer. Bitmap subtitles are
   // the narrow exception: their decoded image cues cannot enter a text widget,
   // so the selection path temporarily enables mpv's native compositor.
-  bool _isSeekingWithSlider = false;
   Duration? _lastSliderSeekPos;
 
   // Channel badge auto-hide
@@ -1625,13 +1623,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   // Rainbow next animation
   late AnimationController _rainbowController;
-  late Animation<double> _rainbowOpacity;
   bool _rainbowActive = false;
   bool _transitionRunning = false;
   Timer? _transitionStopTimer;
   Timer? _transitionPhaseTimer;
-  int _transitionPhase = 1; // 1 = static, 2 = reveal
-  DateTime? _transitionPhase2Started;
 
   // Retro TV static loading messages
   String _tvStaticMessage = '📺 TUNING...';
@@ -1844,10 +1839,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _rainbowController = AnimationController(
       vsync: this,
       duration: VideoPlayerTimingConstants.rainbowAnimationDuration,
-    );
-    _rainbowOpacity = CurvedAnimation(
-      parent: _rainbowController,
-      curve: Curves.easeInOut,
     );
 
     // Check if Trakt scrobbling should be enabled for this playback
@@ -4139,15 +4130,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       if (p && _transitionRunning) {
         _transitionStopTimer?.cancel();
         _transitionPhaseTimer?.cancel();
-        _transitionPhase = 1;
-        _transitionPhase2Started = null;
         debugPrint(
           'Player: Playback started; overlay phase 1 (static) 1500ms.',
         );
         _transitionPhaseTimer = Timer(const Duration(milliseconds: 1500), () {
           if (!isCurrent()) return;
-          _transitionPhase = 2;
-          _transitionPhase2Started = DateTime.now();
           setState(() {});
           debugPrint('Player: Overlay phase 2 (cinematic bars) 1500ms.');
         });
@@ -5154,7 +5141,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // Intentional: print reaches desktop process consoles in release builds.
     // Keep this payload free of titles, URLs and account IDs.
     // ignore: avoid_print
-    print(message);
+    debugPrint(message);
   }
 
   @override
@@ -5531,7 +5518,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _transitionRunning = true;
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 1;
     // Pick a random retro TV message and reset subtext
     _tvStaticMessage =
         _tvStaticMessages[math.Random().nextInt(_tvStaticMessages.length)];
@@ -5700,7 +5686,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             }
             return '${seriesPlaylist.seriesTitle} • $seasonEpisode';
           }
-        } catch (e) {}
+        } catch (e) {
+          debugPrint('Unable to derive episode subtitle: $e');
+        }
       }
     }
 
@@ -5767,7 +5755,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
             return metadata;
           }
-        } catch (e) {}
+        } catch (e) {
+          debugPrint('Unable to derive episode metadata: $e');
+        }
       }
     }
 
@@ -7988,6 +7978,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       final channel = _currentIptvChannel;
       final recordUrl = await _engineRecordUrlForCurrent();
       if (channel != null && recordUrl != null) {
+        if (!mounted) return;
         if (!await ensureRecordingCapacity(context)) return;
         if (!mounted) return;
         // This path skips ensureEngineReady (support was pre-checked), so
@@ -8040,6 +8031,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // recordUrl == null: true segmented stream (no Xtream twin) — only the
       // tee can capture what mpv is demuxing. Fall through.
       if (ProfileRuntime.isProfileCommitted) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('This stream cannot be recorded safely'),
@@ -8057,6 +8049,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       final recordUrl = await _engineRecordUrlForCurrent();
       if (channel == null) return;
       if (recordUrl == null) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -8066,6 +8059,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         );
         return;
       }
+      if (!mounted) return;
       if (!await ensureRecordingCapacity(context)) return;
       if (!mounted) return;
       // Raw byte copy → the capture IS a transport stream: .ts, not the
@@ -8685,8 +8679,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // doesn't fire reliably for HLS/live streams.
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 2;
-    _transitionPhase2Started = DateTime.now();
     setState(() {
       _isTransitioning = false;
     });
@@ -9497,8 +9489,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // 'playing' event is unreliable for HLS/live streams.
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 2;
-    _transitionPhase2Started = DateTime.now();
     setState(() {
       _isTransitioning = false;
     });
@@ -9786,7 +9776,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (committed) {
       unawaited(_commitValidatedStremioSource(selectedSource));
     }
-    if (validateExplicitSelection && !committed) {
+    if (validateExplicitSelection && !committed && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('This source is unavailable. Choose another source.'),
@@ -9797,8 +9787,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // End transition (same pattern as _switchToStremioSource)
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 2;
-    _transitionPhase2Started = DateTime.now();
     setState(() {
       _isTransitioning = false;
     });
@@ -9993,8 +9981,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 2;
-    _transitionPhase2Started = DateTime.now();
     setState(() {
       _isTransitioning = false;
     });
@@ -10164,8 +10150,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // End transition
     _transitionStopTimer?.cancel();
     _transitionPhaseTimer?.cancel();
-    _transitionPhase = 2;
-    _transitionPhase2Started = DateTime.now();
     setState(() {
       _isTransitioning = false;
     });
@@ -10607,7 +10591,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           );
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Unable to update episode progress: $e');
+    }
   }
 
   Future<void> _markCurrentMovieAsFinished() async {
@@ -10798,7 +10784,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       _sleepStopLatched = false;
     }
 
-    print(
+    debugPrint(
       'PikPak: _loadPlaylistIndex called with index: $index, autoplay: $autoplay',
     );
 
@@ -10887,7 +10873,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       });
     }
 
-    print(
+    debugPrint(
       'PikPak: Loading playlist entry - provider: ${entry.provider}, pikpakFileId: ${entry.pikpakFileId}',
     );
 
@@ -11178,7 +11164,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     while (stopwatch.elapsed.inSeconds < totalTimeoutSeconds) {
       // Check if this retry has been cancelled (user navigated to different video)
       if (_pikPakRetryId != retryId) {
-        print(
+        debugPrint(
           'PikPak: Retry cancelled (token mismatch: current=$_pikPakRetryId, expected=$retryId)',
         );
         return false;
@@ -11186,7 +11172,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
       // Check if widget was disposed (prevents operations on unmounted widget)
       if (!mounted) {
-        print('PikPak: Widget disposed during metadata wait');
+        debugPrint('PikPak: Widget disposed during metadata wait');
         return false;
       }
 
@@ -11200,27 +11186,27 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           : directDuration;
 
       if (effectiveDuration > Duration.zero) {
-        print(
+        debugPrint(
           'PikPak: Video duration available (stream: $streamDuration, direct: $directDuration, effective: $effectiveDuration)',
         );
 
         // Additional verification: wait a bit longer to ensure playback actually started
         // This gives the player time to transition from "has duration" to "is playing"
         // and allows all stream listeners to synchronize their state updates
-        print(
+        debugPrint(
           'PikPak: Duration detected, waiting for playback to stabilize...',
         );
         await Future.delayed(const Duration(milliseconds: 800));
 
         // Check mounted state after delay
         if (!mounted) {
-          print('PikPak: Widget disposed during stabilization delay');
+          debugPrint('PikPak: Widget disposed during stabilization delay');
           return false;
         }
 
         // Final cancellation check after stabilization delay
         if (_pikPakRetryId != retryId) {
-          print(
+          debugPrint(
             'PikPak: Retry cancelled during stabilization (navigation occurred)',
           );
           return false;
@@ -11233,13 +11219,13 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         final directPlaying = _player.state.playing;
 
         if (streamPlaying || directPlaying) {
-          print(
+          debugPrint(
             'PikPak: Video confirmed playing - duration: $effectiveDuration, playing: true (stream: $streamPlaying, direct: $directPlaying)',
           );
         } else {
           // Duration is available but playback hasn't started yet
           // This is acceptable - duration alone is sufficient for cold storage detection
-          print(
+          debugPrint(
             'PikPak: Duration available ($effectiveDuration), playback will start shortly',
           );
         }
@@ -11248,7 +11234,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         // This prevents the retry UI from remaining visible if video loaded during monitoring
         _isPikPakRetrying = false;
         _pikPakRetryMessage = null;
-        _pikPakRetryCount = 0;
 
         if (mounted) {
           setState(() {
@@ -11264,7 +11249,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     }
 
     // Timeout - video metadata never loaded, file is likely in cold storage
-    print(
+    debugPrint(
       'PikPak: Timeout waiting for video metadata (${totalTimeoutSeconds}s elapsed)',
     );
     return false;
@@ -11298,7 +11283,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           'mypikpak.com',
         ); // Detect PikPak by URL (Stremio TV, etc.)
 
-    print(
+    debugPrint(
       'PikPak: _playPikPakVideoWithRetry called for index $_currentIndex, isPikPak: $isPikPak, overrideProvider: $overrideProvider, overridePikPakFileId: $overridePikPakFileId, isDebrifyTV: $isDebrifyTV',
     );
 
@@ -11312,15 +11297,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       return true;
     }
 
-    print('PikPak: Starting retry logic for cold storage handling');
+    debugPrint('PikPak: Starting retry logic for cold storage handling');
 
     // Generate a new retry ID to cancel any previous retry loops
     _pikPakRetryId++;
     final myRetryId = _pikPakRetryId;
-    print('PikPak: Generated retry ID: $myRetryId');
+    debugPrint('PikPak: Generated retry ID: $myRetryId');
 
     // Reset retry state
-    _pikPakRetryCount = 0;
     _isPikPakRetrying = false;
     _pikPakRetryMessage = null;
 
@@ -11333,7 +11317,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
     // CRITICAL FIX: Open player ONCE before the retry loop
     // This prevents resetting the video to 0:00 if it loads during a retry delay
-    print('PikPak: Initial playback attempt - opening media...');
+    debugPrint('PikPak: Initial playback attempt - opening media...');
     try {
       await _openMedia(
         mk.Media(videoUrl, httpHeaders: _activeHttpHeaders),
@@ -11341,7 +11325,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         request: request,
       );
     } catch (e) {
-      print('PikPak: Initial player.open() failed with error: $e');
+      debugPrint('PikPak: Initial player.open() failed with error: $e');
       // Continue with retry loop - might work on subsequent attempts
     }
 
@@ -11350,20 +11334,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       try {
         // Check if cancelled before starting attempt
         if (_pikPakRetryId != myRetryId || request?.isCurrent == false) {
-          print(
+          debugPrint(
             'PikPak: Retry loop cancelled before attempt ${attempt + 1} (navigation occurred)',
           );
           // Clear state synchronously
           _isPikPakRetrying = false;
           _pikPakRetryMessage = null;
-          _pikPakRetryCount = 0;
           if (mounted) {
             setState(() {});
           }
           return false;
         }
 
-        print('PikPak: Monitoring attempt ${attempt + 1}/${maxRetries + 1}...');
+        debugPrint(
+          'PikPak: Monitoring attempt ${attempt + 1}/${maxRetries + 1}...',
+        );
 
         // Calculate delay for this attempt (0 for first attempt)
         final delaySeconds = attempt == 0
@@ -11375,7 +11360,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
         // CRITICAL FIX: Wait for video metadata with EXTENDED monitoring during delay period
         // This allows detection of video loading DURING the delay, preventing unnecessary player resets
-        print(
+        debugPrint(
           'PikPak: Waiting for video duration (${metadataTimeoutSeconds}s) + monitoring during delay (${cappedDelay}s)...',
         );
         final loadSuccess = await _waitForVideoMetadata(
@@ -11387,33 +11372,40 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (request?.isCurrent == false) return false;
         if (loadSuccess) {
           // Success! Video loaded (either immediately or during monitoring/delay)
-          print('PikPak: Video metadata loaded successfully - file is ready!');
+          debugPrint(
+            'PikPak: Video metadata loaded successfully - file is ready!',
+          );
           // Note: Retry state already cleared by _waitForVideoMetadata
-          print('PikPak: Retry mechanism fully deactivated, playback ready');
+          debugPrint(
+            'PikPak: Retry mechanism fully deactivated, playback ready',
+          );
           return true;
         }
 
         // Video didn't load even after monitoring during delay
-        print(
+        debugPrint(
           'PikPak: Video metadata failed to load after ${metadataTimeoutSeconds + cappedDelay}s - file likely in cold storage',
         );
 
         // Check if this was the last attempt (all retries exhausted)
         if (attempt >= maxRetries) {
           // ALL RETRIES EXHAUSTED - handle here
-          print('PikPak: All retry attempts exhausted. Video failed to load.');
+          debugPrint(
+            'PikPak: All retry attempts exhausted. Video failed to load.',
+          );
 
           // Clear retry state
           _isPikPakRetrying = false;
           _pikPakRetryMessage = null;
-          _pikPakRetryCount = 0;
 
           if (mounted) {
             setState(() {});
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Nextup TV queue');
+              debugPrint(
+                'PikPak: Auto-advancing to next video in Nextup TV queue',
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -11453,30 +11445,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (mounted) {
           setState(() {
             _isPikPakRetrying = true;
-            _pikPakRetryCount = attempt + 1;
             _pikPakRetryMessage = 'Reactivating video...';
           });
         }
 
-        print(
+        debugPrint(
           'PikPak: Retry ${attempt + 1} - reopening player and waiting ${nextDelay}s before next check...',
         );
 
         // Check if widget was disposed
         if (!mounted) {
-          print('PikPak: Widget disposed before retry');
+          debugPrint('PikPak: Widget disposed before retry');
           return false;
         }
 
         // Check if cancelled
         if (_pikPakRetryId != myRetryId || request?.isCurrent == false) {
-          print(
+          debugPrint(
             'PikPak: Retry loop cancelled before reopening player (navigation occurred)',
           );
           // Clear state synchronously
           _isPikPakRetrying = false;
           _pikPakRetryMessage = null;
-          _pikPakRetryCount = 0;
           if (mounted) {
             setState(() {});
           }
@@ -11491,32 +11481,35 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             request: request,
           );
         } catch (e) {
-          print(
+          debugPrint(
             'PikPak: Retry ${attempt + 1} - player.open() failed with error: $e',
           );
           // Continue - the monitoring in next iteration might still detect if it loads
         }
       } catch (e) {
-        print('PikPak: Retry attempt ${attempt + 1} failed with error: $e');
+        debugPrint(
+          'PikPak: Retry attempt ${attempt + 1} failed with error: $e',
+        );
 
         // Check if this was the last attempt (all retries exhausted)
         if (attempt >= maxRetries) {
           // ALL RETRIES EXHAUSTED - handle here
-          print(
+          debugPrint(
             'PikPak: All retry attempts exhausted after error. Video failed to load.',
           );
 
           // Clear retry state
           _isPikPakRetrying = false;
           _pikPakRetryMessage = null;
-          _pikPakRetryCount = 0;
 
           if (mounted) {
             setState(() {});
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Nextup TV queue');
+              debugPrint(
+                'PikPak: Auto-advancing to next video in Nextup TV queue',
+              );
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -11555,30 +11548,28 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         if (mounted) {
           setState(() {
             _isPikPakRetrying = true;
-            _pikPakRetryCount = attempt + 1;
             _pikPakRetryMessage = 'Reactivating video...';
           });
         }
 
-        print(
+        debugPrint(
           'PikPak: Error in attempt ${attempt + 1}, waiting ${nextDelay}s before retry...',
         );
 
         // Check if widget was disposed
         if (!mounted) {
-          print('PikPak: Widget disposed during error handling');
+          debugPrint('PikPak: Widget disposed during error handling');
           return false;
         }
 
         // Check if cancelled
         if (_pikPakRetryId != myRetryId || request?.isCurrent == false) {
-          print(
+          debugPrint(
             'PikPak: Retry loop cancelled during error handling (navigation occurred)',
           );
           // Clear state synchronously
           _isPikPakRetrying = false;
           _pikPakRetryMessage = null;
-          _pikPakRetryCount = 0;
           if (mounted) {
             setState(() {});
           }
@@ -11593,7 +11584,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
             request: request,
           );
         } catch (reopenError) {
-          print(
+          debugPrint(
             'PikPak: Error retry - player.open() failed with error: $reopenError',
           );
           // Continue - next iteration might succeed
@@ -11763,11 +11754,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   Future<void> _saveSeriesPosterToPlaylist(
     SeriesPlaylist seriesPlaylist,
   ) async {
-    print('🎬 _saveSeriesPosterToPlaylist called');
-    print('  seriesTitle: ${seriesPlaylist.seriesTitle}');
+    debugPrint('🎬 _saveSeriesPosterToPlaylist called');
+    debugPrint('  seriesTitle: ${seriesPlaylist.seriesTitle}');
 
     if (seriesPlaylist.seriesTitle == null) {
-      print('  ⚠️ No series title, skipping poster save');
+      debugPrint('  ⚠️ No series title, skipping poster save');
       return;
     }
 
@@ -11776,25 +11767,25 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     final torboxTorrentId = widget.torboxTorrentId;
     final pikpakCollectionId = widget.pikpakCollectionId;
 
-    print('  rdTorrentId: $rdTorrentId');
-    print('  torboxTorrentId: $torboxTorrentId');
-    print('  pikpakCollectionId: $pikpakCollectionId');
+    debugPrint('  rdTorrentId: $rdTorrentId');
+    debugPrint('  torboxTorrentId: $torboxTorrentId');
+    debugPrint('  pikpakCollectionId: $pikpakCollectionId');
 
     // Need at least one identifier to save poster
     if ((rdTorrentId == null || rdTorrentId.isEmpty) &&
         (torboxTorrentId == null || torboxTorrentId.isEmpty) &&
         (pikpakCollectionId == null || pikpakCollectionId.isEmpty)) {
-      print('  ⚠️ No valid identifier found, skipping poster save');
+      debugPrint('  ⚠️ No valid identifier found, skipping poster save');
       return;
     }
 
     final posterUrl = seriesPlaylist.showPosterUrl;
     if (posterUrl == null || posterUrl.isEmpty) {
-      print('  ⚠️ No poster URL from fetchEpisodeInfo');
+      debugPrint('  ⚠️ No poster URL from fetchEpisodeInfo');
       return;
     }
 
-    print('  Poster URL: $posterUrl');
+    debugPrint('  Poster URL: $posterUrl');
     try {
       if (rdTorrentId != null && rdTorrentId.isNotEmpty) {
         await StorageService.updatePlaylistItemPoster(
@@ -11815,7 +11806,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         );
       }
     } catch (e) {
-      print('  ❌ Error saving poster: $e');
+      debugPrint('  ❌ Error saving poster: $e');
     }
   }
 
@@ -11838,7 +11829,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     var entered = false;
     try {
       final handle = Platform.isIOS ? await player.handle : null;
-      if (!mounted || !PipService.isOwner(this) || !identical(player, _player)) {
+      if (!mounted ||
+          !PipService.isOwner(this) ||
+          !identical(player, _player)) {
         return;
       }
       if (Platform.isIOS) {
@@ -12179,7 +12172,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     // Cancel any ongoing PikPak retry operations
     _pikPakRetryId++;
     _isPikPakRetrying = false;
-    _pikPakRetryCount = 0;
     _pikPakRetryMessage = null;
 
     _cleanupTempSubtitleFilesSync();
@@ -12758,7 +12750,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               currentEpisode.seriesInfo.episode != null) {
             // Catalog series follow IMDb + S/E across release-title aliases;
             // generic packs keep their exact title-keyed record.
-            return LocalPlaybackResumeResolver.episode(
+            return await LocalPlaybackResumeResolver.episode(
               seriesTitle: seriesPlaylist.seriesTitle ?? 'Unknown Series',
               season: currentEpisode.seriesInfo.season!,
               episode: currentEpisode.seriesInfo.episode!,
@@ -12787,7 +12779,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               _effectiveContentEpisode == null) {
             return null;
           }
-          return LocalPlaybackResumeResolver.episode(
+          return await LocalPlaybackResumeResolver.episode(
             seriesTitle: _effectiveContentTitle ?? widget.title,
             season: _effectiveContentSeason!,
             episode: _effectiveContentEpisode!,
@@ -12817,14 +12809,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
         // Legacy single-episode launches may only have the mirrored video row.
         if (currentEntry != null) {
-          return StorageService.getVideoPlaybackState(
+          return await StorageService.getVideoPlaybackState(
             videoTitle: _resumeIdForEntry(currentEntry),
           );
         }
         final legacyTitle = widget.title.isNotEmpty
             ? widget.title
             : 'Unknown Video';
-        return StorageService.getVideoPlaybackState(videoTitle: legacyTitle);
+        return await StorageService.getVideoPlaybackState(
+          videoTitle: legacyTitle,
+        );
       }
 
       final resumeId = currentEntry != null
@@ -12859,7 +12853,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         );
       }
       return videoState;
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Unable to load resume state: $e');
+    }
     return null;
   }
 
@@ -13096,7 +13092,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           }
         }
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Unable to save episode resume state: $e');
+    }
 
     // Also save to legacy system for backward compatibility
     if (!CustomSeriesIdentity.isCustom(_effectiveContentImdbId)) {
@@ -15296,8 +15294,8 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         child: Focus(
           focusNode: _tvRootFocus,
           autofocus: true,
-          onKey: (node, event) {
-            if (event is! RawKeyDownEvent) return KeyEventResult.ignored;
+          onKeyEvent: (node, event) {
+            if (event is! KeyDownEvent) return KeyEventResult.ignored;
             final key = event.logicalKey;
 
             // Unified menu is open. Like the IPTV sheet, it owns every key
@@ -15587,7 +15585,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
               // On Windows/Linux desktop, exit fullscreen first if in fullscreen
               if (Platform.isWindows || Platform.isLinux) {
                 windowManager.isFullScreen().then((isFullScreen) {
-                  if (!mounted) return; // Safety check for async callback
+                  if (!context.mounted) {
+                    return; // Safety check for async callback
+                  }
                   if (isFullScreen) {
                     // Exit fullscreen but don't quit the player
                     windowManager.setFullScreen(false);
@@ -16091,7 +16091,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                       _showPlaylistSheet(context),
                                   onShowTracks: () => _showTracksSheet(context),
                                   onSeekBarChangedStart: () {
-                                    _isSeekingWithSlider = true;
                                     // The viewer owns the position from the
                                     // first touch — release the resume guard
                                     // NOW, not at drag end, or the landing
@@ -16113,7 +16112,6 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                   onSeekForward: () => _seekRelative(true),
                                   glassBrightness: _glassProbe.brightness,
                                   onSeekBarChangeEnd: () {
-                                    _isSeekingWithSlider = false;
                                     _scheduleAutoHide();
                                     if (_lastSliderSeekPos != null) {
                                       final settledPosition =
@@ -18139,7 +18137,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         return false;
       }
       if (_subtitleForcedOnly) {
-        return _applyForcedSubtitle(defaultLang, current);
+        return await _applyForcedSubtitle(defaultLang, current);
       }
       if (!ignoreSourcePriority && defaultLang != 'off') {
         final order = await StorageService.getSubtitleSourcePriority();
@@ -18167,7 +18165,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
           selectedId: selectedId,
         );
         if (track == null) return false;
-        return _setSubtitleTrackWithDiagnostics(
+        return await _setSubtitleTrackWithDiagnostics(
           track,
           source: 'no-preference-embedded',
           isCurrent: current,
@@ -18206,7 +18204,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         debugPrint(
           'SubAuto: matched EMBEDDED track id=${matchingTrack.id} lang=${matchingTrack.language} title=${matchingTrack.title} — applying',
         );
-        return _setSubtitleTrackWithDiagnostics(
+        return await _setSubtitleTrackWithDiagnostics(
           matchingTrack,
           source: 'default-language-embedded',
           isCurrent: current,

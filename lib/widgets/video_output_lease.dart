@@ -104,8 +104,7 @@ class VideoOutputLease {
     return VideoOutputLeaseHandle._(c);
   }
 
-  /// Whether anything currently holds the slot. Diagnostics only.
-  @visibleForTesting
+  /// Whether anything currently holds the slot, for player coordination.
   static bool get isHeld => _inUse > 0;
 
   @visibleForTesting

@@ -2007,7 +2007,7 @@ class _AddonTileState extends State<_AddonTile> {
 
   void _showOptionsSheet() {
     showModalBottomSheet(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddonOptionsSheet(
@@ -2052,7 +2052,13 @@ sheetAnimationStyle: kMenuSheetAnimation,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          transform: Matrix4.identity()..scale(_isFocused ? 1.015 : 1.0),
+          transform: Matrix4.identity()
+            ..scaleByDouble(
+              _isFocused ? 1.015 : 1.0,
+              _isFocused ? 1.015 : 1.0,
+              _isFocused ? 1.015 : 1.0,
+              1.0,
+            ),
           transformAlignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),

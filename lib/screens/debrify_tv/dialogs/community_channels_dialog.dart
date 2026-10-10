@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import '../../../services/community/community_channel_model.dart';
 import '../../../services/community/community_channels_service.dart';
@@ -726,7 +727,7 @@ class CommunityChannelsDialogState extends State<CommunityChannelsDialog> {
                         padding: const EdgeInsets.all(6),
                         itemCount: _manifest!.channels.length,
                         // ignore: deprecated_member_use
-                        cacheExtent: 200,
+                        scrollCacheExtent: ScrollCacheExtent.pixels(200),
                         itemBuilder: (context, index) => RepaintBoundary(
                           child: _buildChannelTile(_manifest!.channels[index]),
                         ),

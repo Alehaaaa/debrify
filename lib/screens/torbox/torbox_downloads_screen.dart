@@ -329,8 +329,8 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
       return;
     }
 
-    print('📦 Showing file selection for torrent: ${torrent.name}');
-    print('   File count: ${torrent.files.length}');
+    debugPrint('📦 Showing file selection for torrent: ${torrent.name}');
+    debugPrint('   File count: ${torrent.files.length}');
 
     if (torrent.files.isEmpty) {
       _showSnackBar('No files found in torrent');
@@ -460,20 +460,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     }
   }
 
-  Future<void> _copyTorrentLink(TorboxTorrent torrent) async {
-    if (torrent.files.isEmpty) {
-      _showComingSoon('No files available');
-      return;
-    }
-
-    final file = torrent.files.firstWhere(
-      (file) => !file.zipped,
-      orElse: () => torrent.files.first,
-    );
-
-    await _copyTorboxFileLink(torrent, file);
-  }
-
   Future<void> _copyTorboxFileLink(
     TorboxTorrent torrent,
     TorboxFile file,
@@ -492,6 +478,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
       );
       if (!mounted) return;
       await Clipboard.setData(ClipboardData(text: link));
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Download link copied to clipboard.')),
       );
@@ -504,170 +491,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
         ),
       );
     }
-  }
-
-  Future<void> _copyTorrentZipLink(TorboxTorrent torrent) async {
-    final key = _apiKey;
-    if (key == null || key.isEmpty) {
-      _showComingSoon('Add Torbox API key');
-      return;
-    }
-
-    try {
-      final zipUrl = TorboxService.createZipPermalink(key, torrent.id);
-      await Clipboard.setData(ClipboardData(text: zipUrl));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ZIP download link copied to clipboard.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to copy ZIP link: ${_formatTorboxError(e)}'),
-          backgroundColor: const Color(0xFFEF4444),
-        ),
-      );
-    }
-  }
-
-  void _showTorboxTorrentMoreOptions(TorboxTorrent torrent) {
-    final isMultiFile = torrent.files.length > 1;
-    final options = <_TorboxMoreOption>[
-      _TorboxMoreOption(
-        icon: Icons.playlist_add,
-        label: 'Add to Playlist',
-        onTap: () => _handleAddToPlaylist(torrent),
-      ),
-      _TorboxMoreOption(
-        icon: Icons.live_tv_rounded,
-        label: 'Add to Nextup TV',
-        onTap: () => _handleAddToDebrifyTv(torrent),
-      ),
-      _TorboxMoreOption(
-        icon: Icons.copy,
-        label: 'Copy Link',
-        onTap: isMultiFile
-            ? () => _copyTorrentZipLink(torrent)
-            : () => _copyTorrentLink(torrent),
-      ),
-      _TorboxMoreOption(
-        icon: Icons.delete_outline,
-        label: 'Delete Torrent',
-        onTap: () => _confirmDeleteTorrent(torrent),
-        destructive: true,
-      ),
-    ];
-
-    showDialog(
-      context: context,
-      builder: (sheetContext) {
-        final app = AppThemeScope.of(sheetContext);
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: _maybeBlur(
-            Container(
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [const Color(0xFF0F172A), app.cloud.dialogSurface],
-                ),
-                borderRadius: app.shape.br(24),
-                border: Border.all(
-                  color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.45),
-                    blurRadius: 28,
-                    offset: const Offset(0, 16),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final option in options) ...[
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: InkWell(
-                          onTap: option.enabled
-                              ? () async {
-                                  Navigator.of(sheetContext).pop();
-                                  await option.onTap();
-                                }
-                              : null,
-                          borderRadius: app.shape.br(16),
-                          splashColor: option.enabled
-                              ? const Color(0xFF6366F1).withValues(alpha: 0.2)
-                              : Colors.transparent,
-                          highlightColor: option.enabled
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : Colors.transparent,
-                          child: Opacity(
-                            opacity: option.enabled ? 1.0 : 0.45,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF111C32),
-                                borderRadius: app.shape.br(16),
-                                border: Border.all(
-                                  color: const Color(
-                                    0xFF475569,
-                                  ).withValues(alpha: 0.35),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    option.icon,
-                                    size: 20,
-                                    color: option.destructive
-                                        ? const Color(0xFFEF4444)
-                                        : Colors.white,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      option.label,
-                                      style: TextStyle(
-                                        color: option.destructive
-                                            ? const Color(0xFFEF4444)
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onSurface,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                  Icon(
-                                    Icons.chevron_right,
-                                    size: 20,
-                                    color: Colors.white.withValues(alpha: 0.25),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _handlePlayTorrent(TorboxTorrent torrent) async {
@@ -1394,7 +1217,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
                             webId: webDownload.id,
                             fileId: file.id,
                           );
-                      if (!mounted) return;
+                      if (!context.mounted) return;
                       await VideoPlayerLauncher.push(
                         context,
                         VideoPlayerLaunchArgs(
@@ -1802,58 +1625,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
       await Clipboard.setData(ClipboardData(text: zipLink));
       if (!mounted) return;
       _showSnackBar('ZIP download link copied to clipboard.', isError: false);
-    }
-  }
-
-  Future<void> _handleAddWebDownloadToPlaylist(
-    TorboxWebDownload webDownload,
-  ) async {
-    final videoFiles = webDownload.files.where((file) {
-      if (file.zipped) return false;
-      return _torboxFileLooksLikeVideo(file);
-    }).toList();
-
-    if (videoFiles.isEmpty) {
-      _showSnackBar('No video files found in this download.');
-      return;
-    }
-
-    if (videoFiles.length == 1) {
-      // Single video - add as single item
-      final file = videoFiles.first;
-      final added = await StorageService.addPlaylistItemRaw({
-        'provider': 'torbox_webdl',
-        'title': FileUtils.cleanPlaylistTitle(webDownload.name),
-        'kind': 'single',
-        'torboxWebDownloadId': webDownload.id,
-        'torboxFileId': file.id,
-        'webdl_hash': webDownload.hash,
-        'sizeBytes': file.size,
-      });
-
-      _showSnackBar(
-        added ? 'Added to playlist' : 'Already in playlist',
-        isError: !added,
-      );
-    } else {
-      // Multiple videos - add as collection
-      final ids = videoFiles.map((f) => f.id).toList();
-      final added = await StorageService.addPlaylistItemRaw({
-        'provider': 'torbox_webdl',
-        'title': FileUtils.cleanPlaylistTitle(webDownload.name),
-        'kind': 'collection',
-        'torboxWebDownloadId': webDownload.id,
-        'torboxFileIds': ids,
-        'webdl_hash': webDownload.hash,
-        'count': videoFiles.length,
-      });
-
-      _showSnackBar(
-        added
-            ? 'Added ${videoFiles.length} videos to playlist'
-            : 'Already in playlist',
-        isError: !added,
-      );
     }
   }
 
@@ -2342,35 +2113,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     return 'File ${file.id}';
   }
 
-  int _findFirstEpisodeIndex(List<SeriesInfo> infos) {
-    int startIndex = 0;
-    int? bestSeason;
-    int? bestEpisode;
-
-    for (int i = 0; i < infos.length; i++) {
-      final info = infos[i];
-      final season = info.season;
-      final episode = info.episode;
-      if (!info.isSeries || season == null || episode == null) {
-        continue;
-      }
-
-      final bool isBetterSeason = bestSeason == null || season < bestSeason;
-      final bool isBetterEpisode =
-          bestSeason != null &&
-          season == bestSeason &&
-          (bestEpisode == null || episode < bestEpisode);
-
-      if (isBetterSeason || isBetterEpisode) {
-        bestSeason = season;
-        bestEpisode = episode;
-        startIndex = i;
-      }
-    }
-
-    return startIndex;
-  }
-
   void _maybeTriggerInitialAction() {
     if (_initialActionHandled) {
       return;
@@ -2467,601 +2209,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
   String _formatTorboxError(Object error) {
     final raw = error.toString();
     return raw.replaceFirst('Exception: ', '').trim();
-  }
-
-  bool _isLikelySeries(List<_TorboxFileEntry> entries) {
-    if (entries.length < 2) return false;
-
-    final episodeEntries = entries.where((entry) {
-      final info = entry.seriesInfo;
-      final season = info.season;
-      final episode = info.episode;
-      if (!info.isSeries) return false;
-      if (season == null || season <= 0) return false;
-      if (episode == null || episode <= 0) return false;
-      return true;
-    }).toList();
-
-    if (episodeEntries.length < 2) return false;
-
-    final uniqueEpisodeKeys = episodeEntries
-        .map(
-          (entry) => '${entry.seriesInfo.season}:${entry.seriesInfo.episode}',
-        )
-        .toSet();
-    if (uniqueEpisodeKeys.length < 2) return false;
-
-    final ratio = episodeEntries.length / entries.length;
-    if (ratio < 0.6) return false;
-
-    return true;
-  }
-
-  Future<void> _showTorboxFileSelectionSheet(TorboxTorrent torrent) async {
-    if (torrent.files.isEmpty) {
-      _showComingSoon('No files available');
-      return;
-    }
-
-    final files = torrent.files;
-    final filenames = files
-        .map(
-          (file) => file.shortName.isNotEmpty
-              ? file.shortName
-              : FileUtils.getFileName(file.name),
-        )
-        .toList();
-    final seriesInfos = SeriesParser.parsePlaylist(filenames);
-
-    final entries = List<_TorboxFileEntry>.generate(
-      files.length,
-      (index) => _TorboxFileEntry(
-        file: files[index],
-        index: index,
-        seriesInfo: index < seriesInfos.length
-            ? seriesInfos[index]
-            : SeriesParser.parseFilename(files[index].shortName),
-      ),
-    );
-
-    final Set<int> selectedIndices = <int>{};
-
-    bool showRaw = false;
-    int? currentSeason;
-    bool isProcessing = false;
-    final bool isSeries = _isLikelySeries(entries);
-    final bool hasVideo = entries.any(
-      (entry) => _torboxFileLooksLikeVideo(entry.file),
-    );
-    final bool isMovieCollection = !isSeries && hasVideo;
-
-    await showDialog<void>(
-      context: context,
-      builder: (sheetContext) {
-        final app = AppThemeScope.of(sheetContext);
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 24,
-          ),
-          child: _maybeBlur(
-            sigma: 8,
-            StatefulBuilder(
-              builder: (context, setSheetState) {
-                final selectedEntries =
-                    entries
-                        .where((entry) => selectedIndices.contains(entry.index))
-                        .toList()
-                      ..sort((a, b) => a.index.compareTo(b.index));
-                final selectedBytes = selectedEntries.fold<int>(
-                  0,
-                  (previousValue, entry) => previousValue + entry.file.size,
-                );
-
-                Widget content;
-                if (showRaw) {
-                  content = _buildTorboxRawList(
-                    entries: entries,
-                    selectedIndices: selectedIndices,
-                    onToggle: (index) {
-                      setSheetState(() {
-                        if (selectedIndices.contains(index)) {
-                          selectedIndices.remove(index);
-                        } else {
-                          selectedIndices.add(index);
-                        }
-                      });
-                    },
-                    onCopy: (entry) => _copyTorboxFileLink(torrent, entry.file),
-                  );
-                } else if (isSeries) {
-                  content = _buildTorboxSeriesView(
-                    entries: entries,
-                    selectedIndices: selectedIndices,
-                    currentSeason: currentSeason,
-                    onSeasonChange: (season) {
-                      setSheetState(() {
-                        currentSeason = season;
-                      });
-                    },
-                    onToggleFile: (index) {
-                      setSheetState(() {
-                        if (selectedIndices.contains(index)) {
-                          selectedIndices.remove(index);
-                        } else {
-                          selectedIndices.add(index);
-                        }
-                      });
-                    },
-                    onToggleSeason: (season, seasonIndices) {
-                      setSheetState(() {
-                        final hasAll = seasonIndices.every(
-                          (index) => selectedIndices.contains(index),
-                        );
-                        if (hasAll) {
-                          for (final idx in seasonIndices) {
-                            selectedIndices.remove(idx);
-                          }
-                        } else {
-                          selectedIndices.addAll(seasonIndices);
-                        }
-                      });
-                    },
-                    onCopy: (entry) => _copyTorboxFileLink(torrent, entry.file),
-                  );
-                } else if (isMovieCollection) {
-                  content = _buildTorboxMovieView(
-                    entries: entries,
-                    selectedIndices: selectedIndices,
-                    onToggle: (index) {
-                      setSheetState(() {
-                        if (selectedIndices.contains(index)) {
-                          selectedIndices.remove(index);
-                        } else {
-                          selectedIndices.add(index);
-                        }
-                      });
-                    },
-                    onCopy: (entry) => _copyTorboxFileLink(torrent, entry.file),
-                  );
-                } else {
-                  content = _buildTorboxGenericList(
-                    entries: entries,
-                    selectedIndices: selectedIndices,
-                    onToggle: (index) {
-                      setSheetState(() {
-                        if (selectedIndices.contains(index)) {
-                          selectedIndices.remove(index);
-                        } else {
-                          selectedIndices.add(index);
-                        }
-                      });
-                    },
-                    onCopy: (entry) => _copyTorboxFileLink(torrent, entry.file),
-                  );
-                }
-
-                final selectedCount = selectedEntries.length;
-                final totalCount = entries.length;
-                final selectionSummary = totalCount == 0
-                    ? 'No files available'
-                    : selectedCount == totalCount
-                    ? 'All $totalCount files selected'
-                    : '$selectedCount of $totalCount files selected';
-                final selectedSizeText = selectedCount == 0
-                    ? '0 B'
-                    : Formatters.formatFileSize(selectedBytes);
-
-                return Container(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.9,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        const Color(0xFF0F172A).withValues(alpha: 0.98),
-                        app.cloud.dialogSurface.withValues(alpha: 0.98),
-                      ],
-                    ),
-                    borderRadius: app.shape.br(28),
-                    border: Border.all(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.4),
-                        blurRadius: 30,
-                        offset: const Offset(0, 10),
-                      ),
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 0),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 24),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        decoration: BoxDecoration(
-                          color: app.cloud.dialogSurface.withValues(alpha: 0.6),
-                          borderRadius: app.shape.br(16),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF475569,
-                            ).withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    selectionSummary,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Selected size: $selectedSizeText',
-                                    style: TextStyle(
-                                      color: Colors.grey[400],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                Text(
-                                  'Raw',
-                                  style: TextStyle(
-                                    color: Colors.grey[300],
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Switch.adaptive(
-                                  value: showRaw,
-                                  activeColor: const Color(0xFF6366F1),
-                                  onChanged: (value) {
-                                    setSheetState(() {
-                                      showRaw = value;
-                                      currentSeason = null;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(child: content),
-                      Container(
-                        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0F172A).withValues(alpha: 0.9),
-                          borderRadius: const BorderRadius.vertical(
-                            bottom: Radius.circular(28),
-                          ),
-                          border: Border(
-                            top: BorderSide(
-                              color: const Color(
-                                0xFF1F2937,
-                              ).withValues(alpha: 0.6),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton.icon(
-                                    onPressed: isProcessing
-                                        ? null
-                                        : () async {
-                                            setSheetState(
-                                              () => isProcessing = true,
-                                            );
-                                            final closed =
-                                                await _enqueueTorboxDownloads(
-                                                  torrent: torrent,
-                                                  entriesToDownload: entries,
-                                                  sheetContext: sheetContext,
-                                                );
-                                            if (!closed) {
-                                              setSheetState(
-                                                () => isProcessing = false,
-                                              );
-                                            }
-                                          },
-                                    icon: const Icon(Icons.download_rounded),
-                                    label: Text(
-                                      isProcessing
-                                          ? 'Preparing…'
-                                          : 'Download All',
-                                    ),
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: const Color(
-                                        0xFF10B981,
-                                      ).withValues(alpha: 0.2),
-                                      foregroundColor: const Color(0xFF10B981),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 14,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: app.shape.br(16),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                if (selectedEntries.isNotEmpty) ...[
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: FilledButton.icon(
-                                      onPressed: isProcessing
-                                          ? null
-                                          : () async {
-                                              setSheetState(
-                                                () => isProcessing = true,
-                                              );
-                                              final closed =
-                                                  await _enqueueTorboxDownloads(
-                                                    torrent: torrent,
-                                                    entriesToDownload:
-                                                        selectedEntries,
-                                                    sheetContext: sheetContext,
-                                                  );
-                                              if (!closed) {
-                                                setSheetState(
-                                                  () => isProcessing = false,
-                                                );
-                                              }
-                                            },
-                                      icon: const Icon(Icons.checklist_rounded),
-                                      label: Text(
-                                        isProcessing
-                                            ? 'Preparing…'
-                                            : 'Download Selected',
-                                      ),
-                                      style: FilledButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 20,
-                                          vertical: 14,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                            16,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SizedBox(
-                              width: double.infinity,
-                              child: TextButton(
-                                onPressed: () =>
-                                    Navigator.of(sheetContext).pop(),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: app.shape.br(16),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Close',
-                                  style: TextStyle(
-                                    color: Color(0xFF6366F1),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<bool> _enqueueTorboxDownloads({
-    required TorboxTorrent torrent,
-    required List<_TorboxFileEntry> entriesToDownload,
-    required BuildContext sheetContext,
-  }) async {
-    final key = _apiKey;
-    if (key == null || key.isEmpty) {
-      Navigator.of(sheetContext).pop();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Torbox API key is required. Please add it in Settings.',
-            ),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
-      }
-      return true;
-    }
-
-    if (entriesToDownload.isEmpty) {
-      Navigator.of(sheetContext).pop();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No files selected for download.'),
-            backgroundColor: Color(0xFFEF4444),
-          ),
-        );
-      }
-      return true;
-    }
-
-    Navigator.of(sheetContext).pop();
-
-    if (!mounted) {
-      return true;
-    }
-
-    final count = entriesToDownload.length;
-    debugPrint(
-      'TorboxDownloadsScreen: Starting download for torrent ${torrent.id} ($count file(s)).',
-    );
-
-    // Show loading indicator
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'Preparing $count file${count == 1 ? '' : 's'} for download...',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-
-    int successCount = 0;
-    int failureCount = 0;
-    String? lastError;
-
-    try {
-      for (final entry in entriesToDownload) {
-        try {
-          final file = entry.file;
-          final fileName = file.shortName.isNotEmpty
-              ? file.shortName
-              : FileUtils.getFileName(file.name);
-
-          debugPrint(
-            'TorboxDownloadsScreen: Requesting download link for file ${file.id} in torrent ${torrent.id}',
-          );
-
-          // Request download link
-          final downloadUrl = await TorboxService.requestFileDownloadLink(
-            apiKey: key,
-            torrentId: torrent.id,
-            fileId: file.id,
-          );
-
-          if (downloadUrl.isEmpty) {
-            debugPrint(
-              'TorboxDownloadsScreen: Got empty download URL for file ${file.id}',
-            );
-            failureCount++;
-            lastError = 'Empty download URL returned';
-            continue;
-          }
-
-          debugPrint(
-            'TorboxDownloadsScreen: Got download URL for file ${file.id}, enqueueing...',
-          );
-
-          // Create meta JSON with Torbox-specific fields
-          final meta = jsonEncode({
-            'torboxTorrentId': torrent.id,
-            'torboxFileId': file.id,
-            'torboxDownload': true,
-          });
-
-          // Enqueue download
-          await DownloadService.instance.enqueueDownload(
-            credentialKey: 'torbox_api_key',
-            url: downloadUrl,
-            fileName: fileName,
-            meta: meta,
-            torrentName: torrent.name,
-          );
-
-          successCount++;
-          debugPrint(
-            'TorboxDownloadsScreen: Successfully enqueued file ${file.id} ($fileName)',
-          );
-        } catch (e, stackTrace) {
-          debugPrint(
-            'TorboxDownloadsScreen: Failed to enqueue file ${entry.file.id}: $e',
-          );
-          debugPrint('Stack trace: $stackTrace');
-          failureCount++;
-          lastError = e.toString();
-        }
-      }
-
-      if (!mounted) return true;
-
-      // Show result feedback
-      if (successCount > 0 && failureCount == 0) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              '$successCount file${successCount == 1 ? '' : 's'} queued for download',
-            ),
-            backgroundColor: const Color(0xFF10B981),
-          ),
-        );
-      } else if (successCount > 0 && failureCount > 0) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              '$successCount file${successCount == 1 ? '' : 's'} queued, $failureCount failed',
-            ),
-            backgroundColor: const Color(0xFFF59E0B),
-          ),
-        );
-      } else {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to queue downloads${lastError != null ? ': ${lastError.replaceFirst('Exception: ', '')}' : ''}',
-            ),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    } catch (e, stackTrace) {
-      debugPrint('TorboxDownloadsScreen: Error during batch download: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error: ${e.toString().replaceFirst('Exception: ', '')}',
-            ),
-            backgroundColor: const Color(0xFFEF4444),
-          ),
-        );
-      }
-    }
-
-    return true;
   }
 
   Future<void> _enqueueTorboxZipDownload({
@@ -3344,700 +2491,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTorboxRawList({
-    required List<_TorboxFileEntry> entries,
-    required Set<int> selectedIndices,
-    required ValueChanged<int> onToggle,
-    Future<void> Function(_TorboxFileEntry entry)? onCopy,
-  }) {
-    // Hoisted out of itemBuilder: one theme lookup per list build, not per row.
-    final app = AppThemeScope.of(context);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-      itemCount: entries.length,
-      itemBuilder: (context, listIndex) {
-        final entry = entries[listIndex];
-        final isSelected = selectedIndices.contains(entry.index);
-        final subtitle = entry.file.name != entry.file.shortName
-            ? entry.file.name
-            : entry.file.absolutePath;
-        return Container(
-          key: ValueKey('torbox-file-${entry.index}'),
-          margin: const EdgeInsets.only(bottom: 12),
-          child: _buildTorboxFileCard(
-            entry: entry,
-            isSelected: isSelected,
-            onToggle: () => onToggle(entry.index),
-            animationIndex: listIndex,
-            surface: app.cloud.dialogSurface,
-            subtitle: subtitle,
-            onCopy: onCopy == null ? null : () => onCopy(entry),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildTorboxGenericList({
-    required List<_TorboxFileEntry> entries,
-    required Set<int> selectedIndices,
-    required ValueChanged<int> onToggle,
-    Future<void> Function(_TorboxFileEntry entry)? onCopy,
-  }) {
-    if (entries.isEmpty) {
-      return _buildEmptyFilesState();
-    }
-
-    final app = AppThemeScope.of(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-      children: [
-        _buildSectionHeader('All Files'),
-        const SizedBox(height: 12),
-        for (int i = 0; i < entries.length; i++)
-          Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            child: _buildTorboxFileCard(
-              entry: entries[i],
-              isSelected: selectedIndices.contains(entries[i].index),
-              onToggle: () => onToggle(entries[i].index),
-              animationIndex: i,
-              surface: app.cloud.dialogSurface,
-              subtitle: entries[i].file.name != entries[i].file.shortName
-                  ? entries[i].file.name
-                  : entries[i].file.absolutePath,
-              onCopy: onCopy == null ? null : () => onCopy(entries[i]),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildTorboxMovieView({
-    required List<_TorboxFileEntry> entries,
-    required Set<int> selectedIndices,
-    required ValueChanged<int> onToggle,
-    Future<void> Function(_TorboxFileEntry entry)? onCopy,
-  }) {
-    final mainEntries = <_TorboxFileEntry>[];
-    final sampleEntries = <_TorboxFileEntry>[];
-    final extraEntries = <_TorboxFileEntry>[];
-
-    for (final entry in entries) {
-      final fileNameLower = entry.file.shortName.toLowerCase();
-      if (_torboxFileLooksLikeVideo(entry.file)) {
-        if (fileNameLower.contains('sample')) {
-          sampleEntries.add(entry);
-        } else {
-          mainEntries.add(entry);
-        }
-      } else {
-        extraEntries.add(entry);
-      }
-    }
-
-    if (mainEntries.isEmpty && sampleEntries.isEmpty && extraEntries.isEmpty) {
-      return _buildEmptyFilesState();
-    }
-
-    final app = AppThemeScope.of(context);
-
-    Widget buildSection(
-      String title,
-      List<_TorboxFileEntry> sectionEntries, {
-      String? badge,
-    }) {
-      if (sectionEntries.isEmpty) return const SizedBox.shrink();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildSectionHeader(title),
-          const SizedBox(height: 12),
-          for (int i = 0; i < sectionEntries.length; i++)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: _buildTorboxFileCard(
-                entry: sectionEntries[i],
-                isSelected: selectedIndices.contains(sectionEntries[i].index),
-                onToggle: () => onToggle(sectionEntries[i].index),
-                animationIndex: i,
-                surface: app.cloud.dialogSurface,
-                badge: badge,
-                subtitle:
-                    sectionEntries[i].file.name !=
-                        sectionEntries[i].file.shortName
-                    ? sectionEntries[i].file.name
-                    : null,
-                onCopy: onCopy == null ? null : () => onCopy(sectionEntries[i]),
-              ),
-            ),
-          const SizedBox(height: 16),
-        ],
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-      children: [
-        buildSection('Main', mainEntries, badge: 'Main'),
-        buildSection('Sample', sampleEntries, badge: 'Sample'),
-        buildSection('Extras', extraEntries, badge: 'Extra'),
-      ],
-    );
-  }
-
-  Widget _buildTorboxSeriesView({
-    required List<_TorboxFileEntry> entries,
-    required Set<int> selectedIndices,
-    required int? currentSeason,
-    required ValueChanged<int?> onSeasonChange,
-    required ValueChanged<int> onToggleFile,
-    required void Function(int season, List<int> indices) onToggleSeason,
-    Future<void> Function(_TorboxFileEntry entry)? onCopy,
-  }) {
-    final app = AppThemeScope.of(context);
-    final seasonMap = <int, List<_TorboxFileEntry>>{};
-    final otherEntries = <_TorboxFileEntry>[];
-
-    for (final entry in entries) {
-      final info = entry.seriesInfo;
-      if (info.isSeries && info.season != null && info.episode != null) {
-        seasonMap.putIfAbsent(info.season!, () => []).add(entry);
-      } else {
-        otherEntries.add(entry);
-      }
-    }
-
-    for (final seasonEntries in seasonMap.values) {
-      seasonEntries.sort((a, b) {
-        final epA = a.seriesInfo.episode ?? 0;
-        final epB = b.seriesInfo.episode ?? 0;
-        return epA.compareTo(epB);
-      });
-    }
-
-    final sortedSeasons = seasonMap.keys.toList()..sort();
-
-    if (currentSeason != null && !seasonMap.containsKey(currentSeason)) {
-      onSeasonChange(null);
-    }
-
-    if (currentSeason == null) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-        children: [
-          _buildSectionHeader('Seasons'),
-          const SizedBox(height: 12),
-          for (final seasonNumber in sortedSeasons)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    app.cloud.dialogSurface.withValues(alpha: 0.8),
-                    const Color(0xFF111827).withValues(alpha: 0.6),
-                  ],
-                ),
-                borderRadius: app.shape.br(18),
-                border: Border.all(
-                  color: const Color(0xFF475569).withValues(alpha: 0.3),
-                ),
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: app.shape.br(18),
-                  onTap: () => onSeasonChange(seasonNumber),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    child: Row(
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            onToggleSeason(
-                              seasonNumber,
-                              seasonMap[seasonNumber]!
-                                  .map((entry) => entry.index)
-                                  .toList(),
-                            );
-                          },
-                          child: Container(
-                            width: 26,
-                            height: 26,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withValues(
-                                alpha:
-                                    seasonMap[seasonNumber]!.every(
-                                      (entry) =>
-                                          selectedIndices.contains(entry.index),
-                                    )
-                                    ? 0.9
-                                    : seasonMap[seasonNumber]!.any(
-                                        (entry) => selectedIndices.contains(
-                                          entry.index,
-                                        ),
-                                      )
-                                    ? 0.4
-                                    : 0,
-                              ),
-                              borderRadius: app.shape.br(6),
-                              border: Border.all(
-                                color: const Color(0xFF10B981),
-                                width: 2,
-                              ),
-                            ),
-                            child:
-                                seasonMap[seasonNumber]!.every(
-                                  (entry) =>
-                                      selectedIndices.contains(entry.index),
-                                )
-                                ? const Icon(
-                                    Icons.check,
-                                    color: Colors.white,
-                                    size: 16,
-                                  )
-                                : seasonMap[seasonNumber]!.any(
-                                    (entry) =>
-                                        selectedIndices.contains(entry.index),
-                                  )
-                                ? const Icon(
-                                    Icons.remove,
-                                    color: Colors.white,
-                                    size: 16,
-                                  )
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-                            ),
-                            borderRadius: app.shape.br(16),
-                          ),
-                          child: const Icon(
-                            Icons.folder_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Season $seasonNumber',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${seasonMap[seasonNumber]!.length} episodes',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          color: Colors.grey[500],
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          if (otherEntries.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _buildSectionHeader('Extras'),
-            const SizedBox(height: 12),
-            for (int i = 0; i < otherEntries.length; i++)
-              Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                child: _buildTorboxFileCard(
-                  entry: otherEntries[i],
-                  isSelected: selectedIndices.contains(otherEntries[i].index),
-                  onToggle: () => onToggleFile(otherEntries[i].index),
-                  animationIndex: i,
-                  surface: app.cloud.dialogSurface,
-                  subtitle: otherEntries[i].file.name,
-                  badge: 'Extra',
-                  onCopy: onCopy == null ? null : () => onCopy(otherEntries[i]),
-                ),
-              ),
-          ],
-        ],
-      );
-    }
-
-    final chosenSeasonEntries = seasonMap[currentSeason] ?? [];
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Row(
-            children: [
-              TextButton.icon(
-                onPressed: () => onSeasonChange(null),
-                icon: const Icon(
-                  Icons.arrow_back_rounded,
-                  color: Color(0xFF6366F1),
-                ),
-                label: const Text(
-                  'Back to seasons',
-                  style: TextStyle(
-                    color: Color(0xFF6366F1),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Season $currentSeason',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
-            itemCount: chosenSeasonEntries.length,
-            itemBuilder: (context, index) {
-              final entry = chosenSeasonEntries[index];
-              final info = entry.seriesInfo;
-              final badge = info.episode != null
-                  ? 'E${info.episode.toString().padLeft(2, '0')}'
-                  : null;
-              return Container(
-                key: ValueKey('torbox-episode-${entry.index}'),
-                margin: const EdgeInsets.only(bottom: 12),
-                child: _buildTorboxFileCard(
-                  entry: entry,
-                  isSelected: selectedIndices.contains(entry.index),
-                  onToggle: () => onToggleFile(entry.index),
-                  animationIndex: index,
-                  surface: app.cloud.dialogSurface,
-                  badge: badge,
-                  onCopy: onCopy == null ? null : () => onCopy(entry),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTorboxFileCard({
-    required _TorboxFileEntry entry,
-    required bool isSelected,
-    required VoidCallback onToggle,
-    required int animationIndex,
-    // Hoisted by the caller: this builds once per list item, so the theme
-    // lookup must not happen in here.
-    required Color surface,
-    String? badge,
-    String? subtitle,
-    Future<void> Function()? onCopy,
-  }) {
-    final file = entry.file;
-    final fileName = file.shortName.isNotEmpty
-        ? file.shortName
-        : FileUtils.getFileName(file.name);
-    final isVideo = _torboxFileLooksLikeVideo(file);
-    final sizeText = Formatters.formatFileSize(file.size);
-
-    final selectionColor = isSelected
-        ? const Color(0xFF8B5CF6).withValues(alpha: 0.5)
-        : const Color(0xFF475569).withValues(alpha: 0.3);
-
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 250 + (animationIndex * 40)),
-      tween: Tween(begin: 0.0, end: 1.0),
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(0, 18 * (1 - value)),
-          child: Opacity(opacity: value, child: child),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              surface.withValues(alpha: 0.85),
-              const Color(0xFF111827).withValues(alpha: 0.7),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selectionColor, width: isSelected ? 2 : 1),
-          boxShadow: [
-            BoxShadow(
-              color: isSelected
-                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.2)
-                  : Colors.black.withValues(alpha: 0.15),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onToggle,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: isVideo
-                                ? [
-                                    const Color(0xFFE50914),
-                                    const Color(0xFFDC2626),
-                                  ]
-                                : [
-                                    const Color(0xFFF59E0B),
-                                    const Color(0xFFD97706),
-                                  ],
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  (isVideo
-                                          ? const Color(0xFFE50914)
-                                          : const Color(0xFFF59E0B))
-                                      .withValues(alpha: 0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          isVideo
-                              ? Icons.play_arrow_rounded
-                              : Icons.insert_drive_file_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    fileName,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? const Color(
-                                            0xFF8B5CF6,
-                                          ).withValues(alpha: 0.9)
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? const Color(0xFF8B5CF6)
-                                          : Colors.grey[600]!,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: isSelected
-                                      ? const Icon(
-                                          Icons.check,
-                                          size: 16,
-                                          color: Colors.white,
-                                        )
-                                      : null,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  sizeText,
-                                  style: TextStyle(
-                                    color: Colors.grey[300],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                if (badge != null) ...[
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(
-                                        0xFF6366F1,
-                                      ).withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: const Color(
-                                          0xFF6366F1,
-                                        ).withValues(alpha: 0.3),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      badge,
-                                      style: const TextStyle(
-                                        color: Color(0xFF6366F1),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                subtitle,
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (onCopy != null) ...[
-                    const SizedBox(height: 16),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await onCopy();
-                        },
-                        icon: const Icon(Icons.copy_rounded, size: 16),
-                        label: const Text(
-                          'Copy',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          side: BorderSide(
-                            color: Colors.white.withValues(alpha: 0.25),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0.2,
-      ),
-    );
-  }
-
-  Widget _buildEmptyFilesState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Icon(
-              Icons.folder_off_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No files available yet',
-            style: TextStyle(fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'We could not find any files for this torrent.',
-            style: TextStyle(color: Colors.grey[400], fontSize: 13),
-          ),
-        ],
       ),
     );
   }
@@ -4328,37 +2781,37 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
   /// Download a file or folder
   Future<void> _downloadFileOrFolder(RDFileNode node) async {
     if (_currentTorrent == null && _currentWebDownload == null) {
-      print('❌ Download: No current torrent or web download');
+      debugPrint('❌ Download: No current torrent or web download');
       return;
     }
 
     final files = _currentFiles;
-    print(
+    debugPrint(
       '📥 Download requested: isFolder=${node.isFolder}, name=${node.name}',
     );
-    print(
+    debugPrint(
       '   Node details: fileId=${node.fileId}, linkIndex=${node.linkIndex}, bytes=${node.bytes}',
     );
-    print('   Current files count: ${files.length}');
+    debugPrint('   Current files count: ${files.length}');
 
     if (node.isFolder) {
       // Show file selection dialog for folder
       final allFiles = TorboxFolderTreeBuilder.collectAllFiles(node);
-      print('   Collected ${allFiles.length} files from folder');
+      debugPrint('   Collected ${allFiles.length} files from folder');
 
       final torboxFiles = allFiles
           .map((n) {
-            print(
+            debugPrint(
               '   Mapping file: name=${n.name}, linkIndex=${n.linkIndex}, fileId=${n.fileId}',
             );
             if (n.linkIndex >= 0 && n.linkIndex < files.length) {
               final torboxFile = files[n.linkIndex];
-              print(
+              debugPrint(
                 '   ✅ Mapped to TorboxFile: id=${torboxFile.id}, name=${torboxFile.name}',
               );
               return torboxFile;
             }
-            print(
+            debugPrint(
               '   ❌ linkIndex out of bounds: ${n.linkIndex} >= ${files.length}',
             );
             return null;
@@ -4367,7 +2820,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
           .cast<TorboxFile>()
           .toList();
 
-      print('   Mapped to ${torboxFiles.length} TorboxFiles');
+      debugPrint('   Mapped to ${torboxFiles.length} TorboxFiles');
 
       if (torboxFiles.isEmpty) {
         _showSnackBar('No files found in folder');
@@ -4410,20 +2863,22 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
       );
     } else {
       // Download single file
-      print('   Attempting single file download');
-      print(
+      debugPrint('   Attempting single file download');
+      debugPrint(
         '   Bounds check: ${node.linkIndex} >= 0 && ${node.linkIndex} < ${files.length}',
       );
 
       if (node.linkIndex >= 0 && node.linkIndex < files.length) {
         final torboxFile = files[node.linkIndex];
-        print('   ✅ Found TorboxFile at index ${node.linkIndex}:');
-        print('      TorboxFile.id=${torboxFile.id}, name=${torboxFile.name}');
-        print('      Node.fileId=${node.fileId}');
-        print('      IDs match: ${torboxFile.id == node.fileId}');
+        debugPrint('   ✅ Found TorboxFile at index ${node.linkIndex}:');
+        debugPrint(
+          '      TorboxFile.id=${torboxFile.id}, name=${torboxFile.name}',
+        );
+        debugPrint('      Node.fileId=${node.fileId}');
+        debugPrint('      IDs match: ${torboxFile.id == node.fileId}');
         await _downloadSingleFile(torboxFile);
       } else {
-        print(
+        debugPrint(
           '   ❌ linkIndex out of bounds! linkIndex=${node.linkIndex}, filesLength=${files.length}',
         );
         _showSnackBar('Download failed: File index out of bounds');
@@ -4440,7 +2895,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     if (key == null ||
         key.isEmpty ||
         (_currentTorrent == null && _currentWebDownload == null)) {
-      print('❌ _downloadSelectedTorboxFiles: Missing requirements');
+      debugPrint('❌ _downloadSelectedTorboxFiles: Missing requirements');
       return;
     }
 
@@ -4451,7 +2906,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
 
     if (!mounted) return;
 
-    print(
+    debugPrint(
       '📦 _downloadSelectedTorboxFiles called: folderName=$folderName, selectedCount=${selectedFiles.length}',
     );
 
@@ -4489,7 +2944,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
               (fileData['_fullPath'] as String?) ??
               (fileData['name'] as String? ?? file.shortName);
 
-          print('   Processing file: ${file.name}');
+          debugPrint('   Processing file: ${file.name}');
 
           // Pass metadata for lazy URL fetching (no API call - instant!)
           // The download service will request the URL when ready
@@ -4519,10 +2974,10 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
             context: mounted ? context : null,
           );
 
-          print('     ✅ Enqueued successfully');
+          debugPrint('     ✅ Enqueued successfully');
           successCount++;
         } catch (e) {
-          print('     ❌ Error: $e');
+          debugPrint('     ❌ Error: $e');
           failCount++;
         }
       }
@@ -4696,24 +3151,24 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     if (key == null ||
         key.isEmpty ||
         (_currentTorrent == null && _currentWebDownload == null)) {
-      print('❌ _downloadSingleFile: Missing requirements');
+      debugPrint('❌ _downloadSingleFile: Missing requirements');
       return;
     }
 
     final isWebDownload = _currentWebDownload != null;
-    print('🔽 _downloadSingleFile called:');
-    print(
+    debugPrint('🔽 _downloadSingleFile called:');
+    debugPrint(
       '   File: id=${file.id}, name=${file.name}, shortName=${file.shortName}',
     );
-    print('   isWebDownload: $isWebDownload');
-    print('   API Key: ${key.substring(0, 8)}...');
+    debugPrint('   isWebDownload: $isWebDownload');
+    debugPrint('   API Key: ${key.substring(0, 8)}...');
 
     try {
       final fileName = file.shortName.isNotEmpty
           ? file.shortName
           : FileUtils.getFileName(file.name);
 
-      print('   Using fileName: $fileName');
+      debugPrint('   Using fileName: $fileName');
 
       // Pass metadata for lazy URL fetching (download service will fetch URL when ready)
       final Map<String, dynamic> metaMap;
@@ -4732,7 +3187,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
       }
       final meta = jsonEncode(metaMap);
 
-      print(
+      debugPrint(
         '   📥 Enqueueing download with DownloadService (lazy URL fetching)...',
       );
       await DownloadService.instance.enqueueDownload(
@@ -4743,131 +3198,13 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
         context: mounted ? context : null,
       );
 
-      print('   ✅ Download queued successfully!');
+      debugPrint('   ✅ Download queued successfully!');
       _showSnackBar('Download queued: $fileName', isError: false);
     } catch (e, stackTrace) {
-      print('   ❌ Error in _downloadSingleFile:');
-      print('   Error: $e');
-      print('   StackTrace: $stackTrace');
+      debugPrint('   ❌ Error in _downloadSingleFile:');
+      debugPrint('   Error: $e');
+      debugPrint('   StackTrace: $stackTrace');
       _showSnackBar('Failed to queue download: ${_formatTorboxError(e)}');
-    }
-  }
-
-  /// Helper: Download multiple files
-  Future<void> _downloadMultipleFiles(
-    List<TorboxFile> files,
-    String folderName,
-  ) async {
-    final key = _apiKey;
-    if (key == null ||
-        key.isEmpty ||
-        (_currentTorrent == null && _currentWebDownload == null)) {
-      print('❌ _downloadMultipleFiles: Missing requirements');
-      return;
-    }
-
-    print(
-      '📦 _downloadMultipleFiles called: folderName=$folderName, fileCount=${files.length}',
-    );
-
-    if (files.isEmpty) {
-      print('   ❌ No files to download (empty list)');
-      _showSnackBar('No files to download');
-      return;
-    }
-
-    // Show confirmation
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Download Files'),
-        content: Text(
-          'Download ${files.length} file${files.length == 1 ? '' : 's'} from "$folderName"?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Download'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true || !mounted) {
-      print('   User cancelled or context not mounted');
-      return;
-    }
-
-    print('   User confirmed download, processing ${files.length} files...');
-
-    final isWebDownload = _currentWebDownload != null;
-    int successCount = 0;
-    int failCount = 0;
-
-    // CRITICAL: Following the SAME pattern as Real-Debrid
-    // We DON'T request download URLs upfront - we queue with metadata for lazy fetching
-    // The DownloadService will request the URL when it's ready to download (lazy loading)
-    for (final file in files) {
-      print(
-        '   Processing file ${successCount + failCount + 1}/${files.length}: ${file.name}',
-      );
-      try {
-        final fileName = file.shortName.isNotEmpty
-            ? file.shortName
-            : FileUtils.getFileName(file.name);
-
-        // Pass metadata for lazy URL fetching (no API call - instant!)
-        // The download service will request the URL when ready
-        final Map<String, dynamic> metaMap;
-        if (isWebDownload) {
-          metaMap = {
-            'torboxWebDownloadId': _currentWebDownload!.id,
-            'torboxFileId': file.id,
-            'torboxWebDownload': true,
-          };
-        } else {
-          metaMap = {
-            'torboxTorrentId': _currentTorrent!.id,
-            'torboxFileId': file.id,
-            'torboxDownload': true,
-          };
-        }
-        final meta = jsonEncode(metaMap);
-
-        // Queue download instantly (download service will fetch URL when ready)
-        await DownloadService.instance.enqueueDownload(
-          credentialKey: 'torbox_api_key',
-          url: '', // Empty URL - will be fetched by download service
-          fileName: fileName,
-          meta: meta,
-          torrentName: folderName,
-          context: mounted ? context : null,
-        );
-
-        print('     ✅ Enqueued successfully');
-        successCount++;
-      } catch (e) {
-        print('     ❌ Error: $e');
-        failCount++;
-      }
-    }
-
-    // Show result
-    if (successCount > 0 && failCount == 0) {
-      _showSnackBar(
-        'Queued $successCount file${successCount == 1 ? '' : 's'} for download',
-        isError: false,
-      );
-    } else if (successCount > 0 && failCount > 0) {
-      _showSnackBar(
-        'Queued $successCount file${successCount == 1 ? '' : 's'}, $failCount failed',
-      );
-    } else {
-      _showSnackBar('Failed to queue any files for download');
     }
   }
 
@@ -5086,23 +3423,25 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     _shouldFocusOnLoad = true;
     _resetListScroll();
 
-    print('🔍 Navigating into torrent: id=${torrent.id}, name=${torrent.name}');
-    print('   Files count: ${torrent.files.length}');
-    print('   Sample files:');
+    debugPrint(
+      '🔍 Navigating into torrent: id=${torrent.id}, name=${torrent.name}',
+    );
+    debugPrint('   Files count: ${torrent.files.length}');
+    debugPrint('   Sample files:');
     for (
       int i = 0;
       i < (torrent.files.length < 5 ? torrent.files.length : 5);
       i++
     ) {
-      print(
+      debugPrint(
         '     [$i] id=${torrent.files[i].id}, name=${torrent.files[i].name}',
       );
     }
 
     // Build folder tree for this torrent
-    print('   Building folder tree...');
+    debugPrint('   Building folder tree...');
     final tree = TorboxFolderTreeBuilder.buildTree(torrent.files);
-    print('   Tree built: root has ${tree.children.length} children');
+    debugPrint('   Tree built: root has ${tree.children.length} children');
 
     // Initialize view mode for this torrent if not already set
     _torrentViewModes.putIfAbsent(torrent.id, () => _FolderViewMode.raw);
@@ -5334,7 +3673,7 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
 
     final filenames = videoFiles.map((n) => n.name).toList();
     final analysis = SeriesParser.analyzePlaylistConfidence(filenames);
-    return analysis.classification == PlaylistClassification.SERIES;
+    return analysis.classification == PlaylistClassification.series;
   }
 
   /// Recursively collect all video files from nodes and their subfolders
@@ -7014,18 +5353,6 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
   }
 }
 
-class _TorboxFileEntry {
-  final TorboxFile file;
-  final int index;
-  final SeriesInfo seriesInfo;
-
-  _TorboxFileEntry({
-    required this.file,
-    required this.index,
-    required this.seriesInfo,
-  });
-}
-
 class _TorboxEpisodeCandidate {
   final TorboxFile file;
   final SeriesInfo info;
@@ -7038,21 +5365,6 @@ class _TorboxEpisodeCandidate {
   });
 
   int get size => file.size;
-}
-
-class _TorboxMoreOption {
-  const _TorboxMoreOption({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  }) : enabled = true;
-
-  final IconData icon;
-  final String label;
-  final Future<void> Function() onTap;
-  final bool destructive;
-  final bool enabled;
 }
 
 /// Helper class to hold search result with its folder path

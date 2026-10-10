@@ -58,7 +58,6 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
   bool _pikpakEnabled = false;
   bool _showVideosOnly = true;
   bool _ignoreSmallVideos = true;
-  String? _email;
 
   // Add link state
   final TextEditingController _linkController = TextEditingController();
@@ -428,7 +427,6 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
     final enabled = await StorageService.getPikPakEnabled();
     final showVideosOnly = await StorageService.getPikPakShowVideosOnly();
     final ignoreSmallVideos = await StorageService.getPikPakIgnoreSmallVideos();
-    final email = await PikPakApiService.instance.getEmail();
     final restrictedId = await StorageService.getPikPakRestrictedFolderId();
     final restrictedName = await StorageService.getPikPakRestrictedFolderName();
 
@@ -449,7 +447,6 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
       _pikpakEnabled = enabled;
       _showVideosOnly = showVideosOnly;
       _ignoreSmallVideos = ignoreSmallVideos;
-      _email = email;
       _restrictedFolderId = restrictedId;
       _restrictedFolderName = restrictedName;
 
@@ -474,7 +471,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
 
   /// Handle the case when the restricted folder has been deleted externally
   Future<void> _handleRestrictedFolderDeleted() async {
-    print(
+    debugPrint(
       'PikPak: Restricted folder was deleted externally, logging out user...',
     );
 
@@ -551,7 +548,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
       // Focus first item if navigated from sidebar
       _focusFirstItemOrFallback();
     } catch (e) {
-      print('Error loading PikPak files: $e');
+      debugPrint('Error loading PikPak files: $e');
       if (!mounted) return;
 
       // Check if the restricted folder has been deleted externally
@@ -608,7 +605,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
         _isLoadingMore = false;
       });
     } catch (e) {
-      print('Error loading more PikPak files: $e');
+      debugPrint('Error loading more PikPak files: $e');
       if (!mounted) return;
 
       setState(() {
@@ -771,7 +768,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
       // Focus first item after navigation
       _focusFirstItemOrFallback();
     } catch (e) {
-      print('Error navigating into virtual folder: $e');
+      debugPrint('Error navigating into virtual folder: $e');
       _showSnackBar('Failed to open virtual folder: $e', isError: true);
     }
   }
@@ -843,7 +840,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
         ),
       );
     } catch (e) {
-      print('Error playing file: $e');
+      debugPrint('Error playing file: $e');
       _showSnackBar('Failed to play video: $e', isError: true);
     }
   }
@@ -933,7 +930,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
 
       _showSnackBar('Download queued: $fileName', isError: false);
     } catch (e) {
-      print('Error downloading file: $e');
+      debugPrint('Error downloading file: $e');
       // Close loading indicator if still open
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
@@ -1012,7 +1009,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
         ),
       );
     } catch (e) {
-      print('Error downloading folder: $e');
+      debugPrint('Error downloading folder: $e');
       if (mounted) {
         // Close loading dialog if still open
         Navigator.of(context, rootNavigator: true).pop();
@@ -1098,7 +1095,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
 
           successCount++;
         } catch (e) {
-          print('Error queuing file for download: $e');
+          debugPrint('Error queuing file for download: $e');
           failCount++;
         }
       }
@@ -1492,7 +1489,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
           _isLoading = false;
         });
       } catch (e) {
-        print('Error applying Series Arrange view: $e');
+        debugPrint('Error applying Series Arrange view: $e');
         _showFallbackToSorted('Failed to load series view', null);
       }
     } else {
@@ -1741,7 +1738,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
 
       return [...folders, ...seasonFolders, ...nonVideoFiles];
     } catch (e) {
-      print('Series arrangement failed: $e');
+      debugPrint('Series arrangement failed: $e');
       return _applySortedView(items); // Fallback to sorted view
     }
   }
@@ -2757,7 +2754,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
       // Use the same logic as torrent_search_screen.dart
       await _playPikPakVideos(videoFiles, folderName);
     } catch (e) {
-      print('Error playing folder: $e');
+      debugPrint('Error playing folder: $e');
       if (mounted) {
         // Close loading dialog if still open
         Navigator.of(context, rootNavigator: true).pop();
@@ -3095,7 +3092,7 @@ class _PikPakFilesScreenState extends State<PikPakFilesScreen> {
         );
       }
     } catch (e) {
-      print('Error adding folder to playlist: $e');
+      debugPrint('Error adding folder to playlist: $e');
       if (mounted) {
         // Close loading dialog if still open
         Navigator.of(context, rootNavigator: true).pop();

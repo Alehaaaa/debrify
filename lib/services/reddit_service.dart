@@ -55,7 +55,8 @@ class RedditVideoPost {
 
   String? get playableUrl => dashPlaylistUrl ?? fallbackUrl ?? directVideoUrl;
 
-  bool get hasVideo => (playableUrl != null && playableUrl!.isNotEmpty) || isRedgifs;
+  bool get hasVideo =>
+      (playableUrl != null && playableUrl!.isNotEmpty) || isRedgifs;
 
   /// Format score for display (e.g., 1.2k, 15.3k)
   String get formattedScore {
@@ -74,11 +75,7 @@ class RedditListingResult {
   final String? after; // Pagination cursor
   final String? before;
 
-  const RedditListingResult({
-    required this.posts,
-    this.after,
-    this.before,
-  });
+  const RedditListingResult({required this.posts, this.after, this.before});
 
   bool get hasMore => after != null && after!.isNotEmpty;
 }
@@ -87,10 +84,10 @@ class RedditListingResult {
 class RedditService {
   static const String _userAgent = 'Nextup/1.0 (Flutter; Video Player)';
   static const String _baseUrl = 'https://www.reddit.com';
-  static const String _oauthBaseUrl = 'https://oauth.reddit.com';
 
   // OAuth configuration
-  static const String _clientId = 'YOUR_CLIENT_ID'; // TODO: Replace with actual client ID
+  static const String _clientId =
+      'YOUR_CLIENT_ID'; // TODO: Replace with actual client ID
   static const String _redirectUri = 'debrify://reddit/callback';
   static const String _scope = 'read';
 
@@ -101,7 +98,10 @@ class RedditService {
   static const Duration _rateLimitBackoff = Duration(seconds: 5);
 
   static const List<String> _videoExtensions = [
-    '.mp4', '.webm', '.mov', '.m4v',
+    '.mp4',
+    '.webm',
+    '.mov',
+    '.m4v',
   ];
   static const List<String> _videoHostDomains = [
     'streamable.com',
@@ -109,18 +109,18 @@ class RedditService {
   ];
 
   static Future<http.Response> _get(Uri uri) async {
-    final response = await http.get(
-      uri,
-      headers: {'User-Agent': _userAgent},
-    ).timeout(_httpTimeout);
+    final response = await http
+        .get(uri, headers: {'User-Agent': _userAgent})
+        .timeout(_httpTimeout);
 
     if (response.statusCode == 429) {
-      debugPrint('RedditService: Rate limited, backing off ${_rateLimitBackoff.inSeconds}s');
+      debugPrint(
+        'RedditService: Rate limited, backing off ${_rateLimitBackoff.inSeconds}s',
+      );
       await Future.delayed(_rateLimitBackoff);
-      return http.get(
-        uri,
-        headers: {'User-Agent': _userAgent},
-      ).timeout(_httpTimeout);
+      return http
+          .get(uri, headers: {'User-Agent': _userAgent})
+          .timeout(_httpTimeout);
     }
 
     return response;
@@ -215,8 +215,10 @@ class RedditService {
         result = await fetcher(cursor);
       } catch (e) {
         if (allPosts.isEmpty) rethrow;
-        debugPrint('RedditService: Page ${pagesLoaded + 1} failed ($e), '
-            'returning ${allPosts.length} videos collected so far');
+        debugPrint(
+          'RedditService: Page ${pagesLoaded + 1} failed ($e), '
+          'returning ${allPosts.length} videos collected so far',
+        );
         break;
       }
 
@@ -242,11 +244,7 @@ class RedditService {
       }
     }
 
-    return RedditListingResult(
-      posts: allPosts,
-      after: cursor,
-      before: null,
-    );
+    return RedditListingResult(posts: allPosts, after: cursor, before: null);
   }
 
   /// Get subreddit video posts with filters
@@ -283,7 +281,9 @@ class RedditService {
 
     if (response.statusCode != 200) {
       debugPrint('RedditService: HTTP ${response.statusCode}');
-      throw Exception('Failed to fetch subreddit (HTTP ${response.statusCode})');
+      throw Exception(
+        'Failed to fetch subreddit (HTTP ${response.statusCode})',
+      );
     }
 
     final dynamic data = json.decode(response.body);
@@ -426,8 +426,9 @@ class RedditService {
       try {
         if (i > 0) await Future.delayed(_pageDelay);
 
-        final uri = Uri.parse('$_baseUrl/r/$subreddit/random.json')
-            .replace(queryParameters: {'raw_json': '1', 'include_over_18': 'on'});
+        final uri = Uri.parse(
+          '$_baseUrl/r/$subreddit/random.json',
+        ).replace(queryParameters: {'raw_json': '1', 'include_over_18': 'on'});
         final response = await _get(uri);
 
         if (response.statusCode != 200) {
@@ -444,7 +445,9 @@ class RedditService {
         if (data is! List || data.isEmpty) {
           nonPostResponses++;
           if (nonPostResponses >= 3) {
-            debugPrint('RedditService: /random appears unsupported for r/$subreddit');
+            debugPrint(
+              'RedditService: /random appears unsupported for r/$subreddit',
+            );
             break;
           }
           continue;
@@ -481,7 +484,9 @@ class RedditService {
     // Phase 2: Fallback — sample from random depths across different sort views.
     // "new" is chronological, so random depth ≈ random time period.
     // "top" with different time filters covers different popularity strata.
-    debugPrint('RedditService: /random exhausted, falling back to deep page sampling');
+    debugPrint(
+      'RedditService: /random exhausted, falling back to deep page sampling',
+    );
     final fallbackPosts = <RedditVideoPost>[];
 
     // (sort, timeFilter, maxPagesToSkip)
@@ -534,7 +539,7 @@ class RedditService {
         );
 
         debugPrint(
-          'RedditService: Fallback strategy ${sort.name}/${ time.name} '
+          'RedditService: Fallback strategy ${sort.name}/${time.name} '
           'skipped $skipPages pages, got ${result.posts.length} videos',
         );
 
@@ -551,7 +556,9 @@ class RedditService {
     if (fallbackPosts.isEmpty) return null;
 
     final pick = fallbackPosts[_rng.nextInt(fallbackPosts.length)];
-    debugPrint('RedditService: Random fallback picked from ${fallbackPosts.length} videos');
+    debugPrint(
+      'RedditService: Random fallback picked from ${fallbackPosts.length} videos',
+    );
     return pick;
   }
 
@@ -653,7 +660,9 @@ class RedditService {
       }
     }
     thumbnailUrl ??= post['thumbnail']?.toString();
-    if (thumbnailUrl == 'self' || thumbnailUrl == 'default' || thumbnailUrl == 'nsfw') {
+    if (thumbnailUrl == 'self' ||
+        thumbnailUrl == 'default' ||
+        thumbnailUrl == 'nsfw') {
       thumbnailUrl = null;
     }
 
@@ -723,7 +732,10 @@ class RedditService {
       }
     }
 
-    if (dashUrl == null && fallbackUrl == null && redgifsUrl == null && directVideoUrl == null) {
+    if (dashUrl == null &&
+        fallbackUrl == null &&
+        redgifsUrl == null &&
+        directVideoUrl == null) {
       return null;
     }
 
@@ -749,7 +761,9 @@ class RedditService {
   }
 
   static String _buildVideoSearchQuery(String query) {
-    if (query.contains('is_video:') || query.contains('site:') || query.contains('url:')) {
+    if (query.contains('is_video:') ||
+        query.contains('site:') ||
+        query.contains('url:')) {
       return query;
     }
     return '$query self:no';
@@ -857,7 +871,11 @@ class RedditService {
       'duration': 'permanent',
       'scope': _scope,
     };
-    return Uri.https('www.reddit.com', '/api/v1/authorize.compact', params).toString();
+    return Uri.https(
+      'www.reddit.com',
+      '/api/v1/authorize.compact',
+      params,
+    ).toString();
   }
 
   /// Check if user is authenticated

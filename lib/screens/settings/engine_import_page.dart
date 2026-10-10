@@ -1639,7 +1639,13 @@ class _TvFocusableCardState extends State<_TvFocusableCard> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              transform: Matrix4.identity()..scale(_isFocused ? 1.015 : 1.0),
+              transform: Matrix4.identity()
+                ..scaleByDouble(
+                  _isFocused ? 1.015 : 1.0,
+                  _isFocused ? 1.015 : 1.0,
+                  _isFocused ? 1.015 : 1.0,
+                  1.0,
+                ),
               transformAlignment: Alignment.center,
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(

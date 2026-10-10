@@ -753,7 +753,7 @@ class PortableProfilePackage {
       if (decoded['version'] != envelopeVersion) {
         throw const FormatException('Encrypted backup version mismatch');
       }
-      return _decodeMap(
+      return await _decodeMap(
         decoded,
         authenticatedEncryption: true,
         allowMissingPreferences: false,

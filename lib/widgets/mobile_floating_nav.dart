@@ -668,7 +668,13 @@ class _GlassMenuItemState extends State<_GlassMenuItem> {
       child: AnimatedContainer(
         duration: motion.scaled(const Duration(milliseconds: 150)),
         curve: motion.standard,
-        transform: Matrix4.identity()..scale(_isPressed ? 0.97 : 1.0),
+        transform: Matrix4.identity()
+          ..scaleByDouble(
+            _isPressed ? 0.97 : 1.0,
+            _isPressed ? 0.97 : 1.0,
+            _isPressed ? 0.97 : 1.0,
+            1.0,
+          ),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
@@ -834,7 +840,13 @@ class _RemoteControlMenuItemState extends State<_RemoteControlMenuItem> {
       child: AnimatedContainer(
         duration: motion.scaled(const Duration(milliseconds: 150)),
         curve: motion.standard,
-        transform: Matrix4.identity()..scale(_isPressed ? 0.98 : 1.0),
+        transform: Matrix4.identity()
+          ..scaleByDouble(
+            _isPressed ? 0.98 : 1.0,
+            _isPressed ? 0.98 : 1.0,
+            _isPressed ? 0.98 : 1.0,
+            1.0,
+          ),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(

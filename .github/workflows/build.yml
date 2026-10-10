@@ -95,7 +95,7 @@ jobs:
     - name: Build PGS-capable MediaKit Android libraries
       run: dev/scripts/build_android_media_kit_libraries.sh packages/media_kit_libs_android_video_patched/android/libs
 
-    - name: Restore Java 21 for Debrify Android build
+    - name: Restore Java 21 for Nextup Android build
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'

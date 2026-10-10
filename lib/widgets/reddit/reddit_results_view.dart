@@ -40,15 +40,22 @@ class RedditResultsViewState extends State<RedditResultsView> {
   RedditSort _selectedSort = RedditSort.relevance;
   RedditTimeFilter _selectedTimeFilter = RedditTimeFilter.all;
   bool _allowNsfw = false;
-  bool _settingsLoaded = false;
 
   bool _isRandomLoading = false;
 
   // Focus nodes for DPAD
-  final FocusNode _subredditFilterFocusNode = FocusNode(debugLabel: 'reddit-subreddit-filter');
-  final FocusNode _sortFilterFocusNode = FocusNode(debugLabel: 'reddit-sort-filter');
-  final FocusNode _timeFilterFocusNode = FocusNode(debugLabel: 'reddit-time-filter');
-  final FocusNode _randomButtonFocusNode = FocusNode(debugLabel: 'reddit-random-button');
+  final FocusNode _subredditFilterFocusNode = FocusNode(
+    debugLabel: 'reddit-subreddit-filter',
+  );
+  final FocusNode _sortFilterFocusNode = FocusNode(
+    debugLabel: 'reddit-sort-filter',
+  );
+  final FocusNode _timeFilterFocusNode = FocusNode(
+    debugLabel: 'reddit-time-filter',
+  );
+  final FocusNode _randomButtonFocusNode = FocusNode(
+    debugLabel: 'reddit-random-button',
+  );
   final List<FocusNode> _cardFocusNodes = [];
 
   String _lastSearchQuery = '';
@@ -69,7 +76,6 @@ class RedditResultsViewState extends State<RedditResultsView> {
 
     setState(() {
       _allowNsfw = allowNsfw;
-      _settingsLoaded = true;
       if (defaultSubreddit != null && defaultSubreddit.isNotEmpty) {
         _selectedSubreddit = defaultSubreddit;
       }
@@ -116,7 +122,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
   bool get _canLoad => _isSearching || _selectedSubreddit != null;
 
   Future<void> _performSearch() async {
-    debugPrint('RedditResultsView: _performSearch called, _canLoad=$_canLoad, _isSearching=$_isSearching, subreddit=$_selectedSubreddit');
+    debugPrint(
+      'RedditResultsView: _performSearch called, _canLoad=$_canLoad, _isSearching=$_isSearching, subreddit=$_selectedSubreddit',
+    );
 
     final generation = ++_searchGeneration;
 
@@ -163,7 +171,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
       } else {
         result = await RedditService.fetchSubredditVideos(
           subreddit: _selectedSubreddit!,
-          sort: _selectedSort == RedditSort.relevance ? RedditSort.hot : _selectedSort,
+          sort: _selectedSort == RedditSort.relevance
+              ? RedditSort.hot
+              : _selectedSort,
           timeFilter: _selectedTimeFilter,
           allowNsfw: _allowNsfw,
         );
@@ -171,7 +181,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
 
       if (!mounted || generation != _searchGeneration) return;
 
-      debugPrint('RedditResultsView: Got ${result.posts.length} posts, hasMore=${result.hasMore}');
+      debugPrint(
+        'RedditResultsView: Got ${result.posts.length} posts, hasMore=${result.hasMore}',
+      );
 
       // Create focus nodes for cards
       for (int i = 0; i < result.posts.length; i++) {
@@ -224,7 +236,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
       } else {
         result = await RedditService.fetchSubredditVideos(
           subreddit: _selectedSubreddit!,
-          sort: _selectedSort == RedditSort.relevance ? RedditSort.hot : _selectedSort,
+          sort: _selectedSort == RedditSort.relevance
+              ? RedditSort.hot
+              : _selectedSort,
           timeFilter: _selectedTimeFilter,
           after: _afterCursor,
           allowNsfw: _allowNsfw,
@@ -236,7 +250,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
       // Create focus nodes for new cards
       final startIndex = _cardFocusNodes.length;
       for (int i = 0; i < result.posts.length; i++) {
-        _cardFocusNodes.add(FocusNode(debugLabel: 'reddit-card-${startIndex + i}'));
+        _cardFocusNodes.add(
+          FocusNode(debugLabel: 'reddit-card-${startIndex + i}'),
+        );
       }
 
       setState(() {
@@ -255,7 +271,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
     setState(() {
       _selectedSubreddit = subreddit;
       // When browsing subreddit without search, default to Hot
-      if (!_isSearching && subreddit != null && _selectedSort == RedditSort.relevance) {
+      if (!_isSearching &&
+          subreddit != null &&
+          _selectedSort == RedditSort.relevance) {
         _selectedSort = RedditSort.hot;
       }
     });
@@ -296,7 +314,11 @@ class RedditResultsViewState extends State<RedditResultsView> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Random failed: ${e.toString().replaceAll('Exception: ', '')}')),
+        SnackBar(
+          content: Text(
+            'Random failed: ${e.toString().replaceAll('Exception: ', '')}',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isRandomLoading = false);
@@ -328,7 +350,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
         );
       }
 
-      playUrl = await RedditEmbedResolverService.resolveVideoUrl(post.redgifsUrl!);
+      playUrl = await RedditEmbedResolverService.resolveVideoUrl(
+        post.redgifsUrl!,
+      );
 
       if (!mounted) return;
 
@@ -357,7 +381,8 @@ class RedditResultsViewState extends State<RedditResultsView> {
   }
 
   Future<void> _downloadVideo(RedditVideoPost post) async {
-    String? downloadUrl = post.fallbackUrl ?? post.directVideoUrl ?? post.dashPlaylistUrl;
+    String? downloadUrl =
+        post.fallbackUrl ?? post.directVideoUrl ?? post.dashPlaylistUrl;
 
     // Handle Redgifs posts - fetch actual video URL
     if (downloadUrl == null && post.isRedgifs) {
@@ -380,7 +405,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
         );
       }
 
-      downloadUrl = await RedditEmbedResolverService.resolveVideoUrl(post.redgifsUrl!);
+      downloadUrl = await RedditEmbedResolverService.resolveVideoUrl(
+        post.redgifsUrl!,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -410,14 +437,14 @@ class RedditResultsViewState extends State<RedditResultsView> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Added to downloads')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Added to downloads')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Download failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
     }
   }
 
@@ -432,21 +459,21 @@ class RedditResultsViewState extends State<RedditResultsView> {
       children: [
         // Filters bar (always visible when Reddit is selected)
         RedditFiltersBar(
-            selectedSubreddit: _selectedSubreddit,
-            selectedSort: _selectedSort,
-            selectedTimeFilter: _selectedTimeFilter,
-            isSearching: _isSearching,
-            resultCount: _posts.length,
-            onSubredditChanged: _onSubredditChanged,
-            onSortChanged: _onSortChanged,
-            onTimeFilterChanged: _onTimeFilterChanged,
-            onRandomPressed: _playRandomVideo,
-            isRandomLoading: _isRandomLoading,
-            subredditFocusNode: _subredditFilterFocusNode,
-            sortFocusNode: _sortFilterFocusNode,
-            timeFocusNode: _timeFilterFocusNode,
-            randomFocusNode: _randomButtonFocusNode,
-          ),
+          selectedSubreddit: _selectedSubreddit,
+          selectedSort: _selectedSort,
+          selectedTimeFilter: _selectedTimeFilter,
+          isSearching: _isSearching,
+          resultCount: _posts.length,
+          onSubredditChanged: _onSubredditChanged,
+          onSortChanged: _onSortChanged,
+          onTimeFilterChanged: _onTimeFilterChanged,
+          onRandomPressed: _playRandomVideo,
+          isRandomLoading: _isRandomLoading,
+          subredditFocusNode: _subredditFilterFocusNode,
+          sortFocusNode: _sortFilterFocusNode,
+          timeFocusNode: _timeFilterFocusNode,
+          randomFocusNode: _randomButtonFocusNode,
+        ),
 
         // Download hint
         if (_posts.isNotEmpty && !widget.isTelevision)
@@ -461,9 +488,7 @@ class RedditResultsViewState extends State<RedditResultsView> {
           ),
 
         // Content
-        Expanded(
-          child: _buildContent(),
-        ),
+        Expanded(child: _buildContent()),
       ],
     );
   }
@@ -552,7 +577,9 @@ class RedditResultsViewState extends State<RedditResultsView> {
             post: _posts[index],
             onTap: () => _playVideo(_posts[index]),
             onDownload: () => _downloadVideo(_posts[index]),
-            focusNode: index < _cardFocusNodes.length ? _cardFocusNodes[index] : null,
+            focusNode: index < _cardFocusNodes.length
+                ? _cardFocusNodes[index]
+                : null,
           );
         },
       ),

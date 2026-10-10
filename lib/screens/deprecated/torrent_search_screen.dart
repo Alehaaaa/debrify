@@ -6,7 +6,7 @@
 // import 'dart:io';
 // import 'dart:math';
 // import 'dart:ui';
-// 
+//
 // import 'package:cached_network_image/cached_network_image.dart';
 // import 'package:flutter/material.dart';
 // import 'package:flutter/foundation.dart' show kDebugMode;
@@ -94,20 +94,20 @@
 // import '../services/stremio_service.dart';
 // import '../models/stremio_addon.dart';
 // import 'dart:async';
-// 
+//
 // import '../utils/dialog_tap_guard.dart';
 // import '../utils/tv_keys.dart';
-// 
+//
 // // Search mode for torrent search
 // enum SearchMode { keyword, catalog, browse }
-// 
+//
 // class TorrentSearchScreen extends StatefulWidget {
 //   const TorrentSearchScreen({super.key});
-// 
+//
 //   @override
 //   State<TorrentSearchScreen> createState() => _TorrentSearchScreenState();
 // }
-// 
+//
 // /// Preserves search state when navigating away (e.g., to view torrent in debrid tab)
 // /// This allows seamless return to the search screen with results intact
 // class _TorrentSearchPreservedState {
@@ -141,10 +141,10 @@
 //   Map<String, _TorrentMetadata>? torrentMetadata;
 //   bool? showingTorboxCachedOnly;
 //   double? scrollOffset;
-// 
+//
 //   bool get hasState =>
 //       hasSearched == true && (allTorrents?.isNotEmpty ?? false);
-// 
+//
 //   void clear() {
 //     searchQuery = null;
 //     searchMode = null;
@@ -177,10 +177,10 @@
 //     scrollOffset = null;
 //   }
 // }
-// 
+//
 // /// Static preserved state instance
 // final _preservedState = _TorrentSearchPreservedState();
-// 
+//
 // class _TorrentSearchScreenState extends State<TorrentSearchScreen>
 //     with TickerProviderStateMixin, WidgetsBindingObserver {
 //   final TextEditingController _searchController = TextEditingController();
@@ -190,18 +190,18 @@
 //   final FocusNode _providerChipFocusNode = FocusNode(
 //     debugLabel: 'provider_chip',
 //   );
-// 
+//
 //   // Home screen DPAD navigation controller
 //   late final HomeFocusController _homeFocusController;
 //   final GlobalKey<HomeFavoritesSectionState> _homeFavoritesKey = GlobalKey();
 //   final GlobalKey<HomePlaylistSectionState> _homePlaylistKey = GlobalKey();
-// 
+//
 //   final FocusNode _sortDropdownFocusNode = FocusNode();
 //   final FocusNode _sortDirectionFocusNode = FocusNode();
 //   final FocusNode _filterButtonFocusNode = FocusNode();
 //   final FocusNode _clearFiltersButtonFocusNode = FocusNode();
 //   final FocusNode _backButtonFocusNode = FocusNode(debugLabel: 'back_button');
-// 
+//
 //   // IMDB Smart Search Mode focus nodes
 //   final FocusNode _modeSelectorFocusNode = FocusNode();
 //   final FocusNode _selectionChipFocusNode = FocusNode();
@@ -209,38 +209,38 @@
 //   final FocusNode _seasonInputFocusNode = FocusNode();
 //   final FocusNode _episodeInputFocusNode = FocusNode();
 //   Timer? _scrollThrottleTimer; // For throttling ensureVisible calls
-// 
+//
 //   // AggregatedSearchResults keyword card focus node (for direct focus from search field)
 //   FocusNode? _aggregatedKeywordFocusNode;
-// 
+//
 //   // CatalogBrowser GlobalKey (for DPAD navigation from Sources)
 //   final GlobalKey<CatalogBrowserState> _catalogBrowserKey =
 //       GlobalKey<CatalogBrowserState>();
-// 
+//
 //   // AggregatedSearchResults GlobalKey (for DPAD navigation from Sources)
 //   final GlobalKey<AggregatedSearchResultsState> _aggregatedResultsKey =
 //       GlobalKey<AggregatedSearchResultsState>();
-// 
+//
 //   // RedditResultsView GlobalKey (for DPAD navigation)
 //   final GlobalKey<RedditResultsViewState> _redditResultsKey =
 //       GlobalKey<RedditResultsViewState>();
-// 
+//
 //   // LemmyResultsView GlobalKey (for DPAD navigation)
 //   final GlobalKey<LemmyResultsViewState> _lemmyResultsKey =
 //       GlobalKey<LemmyResultsViewState>();
-// 
+//
 //   // YoutubeResultsView GlobalKey (for DPAD navigation)
 //   final GlobalKey<YoutubeResultsViewState> _youtubeResultsKey =
 //       GlobalKey<YoutubeResultsViewState>();
-// 
+//
 //   // IptvResultsView GlobalKey (for DPAD navigation)
 //   final GlobalKey<IptvResultsViewState> _iptvResultsKey =
 //       GlobalKey<IptvResultsViewState>();
-// 
+//
 //   // TraktResultsView GlobalKey (for DPAD navigation)
 //   final GlobalKey<TraktResultsViewState> _traktResultsKey =
 //       GlobalKey<TraktResultsViewState>();
-// 
+//
 //   // Focus states using ValueNotifier to avoid full screen rebuilds
 //   final ValueNotifier<bool> _searchFocused = ValueNotifier<bool>(false);
 //   final ValueNotifier<bool> _providerAccordionFocused = ValueNotifier<bool>(
@@ -257,7 +257,7 @@
 //   final ValueNotifier<bool> _expandControlsFocused = ValueNotifier<bool>(false);
 //   final ValueNotifier<bool> _seasonInputFocused = ValueNotifier<bool>(false);
 //   final ValueNotifier<bool> _episodeInputFocused = ValueNotifier<bool>(false);
-// 
+//
 //   List<Torrent> _torrents = [];
 //   List<Torrent> _allTorrents = [];
 //   Map<String, int> _engineCounts = {};
@@ -265,7 +265,7 @@
 //   Map<String, _TorrentMetadata> _torrentMetadata = {};
 //   String?
 //   _selectedEngineFilter; // null means show all (legacy, kept for compatibility)
-// 
+//
 //   // Multi-select provider filter state (by stream type)
 //   Map<String, int> _directProviderCounts =
 //       {}; // provider -> direct stream count
@@ -279,7 +279,7 @@
 //   final FocusNode _torrentDropdownFocusNode = FocusNode(
 //     debugLabel: 'torrent_dropdown',
 //   );
-// 
+//
 //   bool _isLoading = false;
 //   SearchPhase _searchPhase = SearchPhase.idle;
 //   String _errorMessage = '';
@@ -318,11 +318,11 @@
 //   double _lastKnownScrollOffset = 0.0; // Track scroll position continuously
 //   final List<FocusNode> _cardFocusNodes = [];
 //   int _focusedCardIndex = -1; // -1 means no card is focused
-// 
+//
 //   // Quick Play state - auto-selects best torrent after search
 //   bool _quickPlayPending = false;
 //   AdvancedSearchSelection? _quickPlaySelection;
-// 
+//
 //   // Quick Play mask — Quick Play (a movie, or a specific series episode)
 //   // never needs the episode guide, so cover the torrent-search UI with a
 //   // loading panel from tap until auto-play takes over. Torn down at every
@@ -347,17 +347,17 @@
 //   // the series IMDb metadata probe) can detect it was superseded/cancelled
 //   // and bail before auto-playing. See _handleCatalogItemSelected.
 //   int _quickPlayMaskGeneration = 0;
-// 
+//
 //   // Select Source mode - user is picking a torrent to bind to a series
 //   bool _isSelectSourceMode = false;
 //   StremioMeta? _selectSourceShow;
-// 
+//
 //   // Quick Play retry state - for trying multiple torrents on cache failure
 //   List<Torrent> _quickPlayTorrentsList = [];
 //   int _quickPlayCurrentIndex = 0;
 //   bool _quickPlayTryMultiple = false;
 //   int _quickPlayMaxRetries = 3;
-// 
+//
 //   // Search engine toggles - dynamic engine states
 //   Map<String, bool> _engineStates = {};
 //   List<DynamicEngine> _availableEngines = [];
@@ -367,10 +367,10 @@
 //   final Map<String, bool> _engineTileFocusStates =
 //       {}; // Track focus as simple bools
 //   AdvancedSearchSelection? _activeAdvancedSelection;
-// 
+//
 //   // IMDB Smart Search Mode state
 //   SearchMode _searchMode = SearchMode.keyword;
-// 
+//
 //   // Unified Search Source state
 //   SearchSourceOption _selectedSource = SearchSourceOption.all();
 //   List<SearchSourceOption> _availableSourceOptions = [];
@@ -405,13 +405,13 @@
 //     debugLabel: 'search_toggle',
 //   );
 //   final FocusNode _traktSyncFocusNode = FocusNode(debugLabel: 'trakt_sync');
-// 
+//
 //   ImdbTitleResult? _selectedImdbTitle;
 //   bool _isSeries = false;
 //   bool _imdbControlsCollapsed = false;
 //   bool _seriesControlsExpanded =
 //       false; // Whether to show Movie/Series chips and S/E inputs
-// 
+//
 //   // Back navigation state - track where user came from before searching
 //   bool _cameFromCatalogBrowse = false;
 //   // True when the current results came from an EpisodesScreen episode tap, so
@@ -434,28 +434,28 @@
 //   bool _inEpisodeGuide = false;
 //   final TextEditingController _seasonController = TextEditingController();
 //   final TextEditingController _episodeController = TextEditingController();
-// 
+//
 //   // Season dropdown state (for simplified season selector)
 //   List<int>?
 //   _availableSeasons; // List of season numbers from IMDbbot API, null for movies
 //   int? _selectedSeason; // null means "All Seasons" selected
-// 
+//
 //   // Sorting options
 //   String _sortBy = 'relevance'; // relevance, name, size, seeders, date
 //   bool _sortAscending = false;
 //   TorrentFilterState _filters = const TorrentFilterState.empty();
 //   bool get _hasActiveFilters => !_filters.isEmpty;
-// 
+//
 //   late AnimationController _listAnimationController;
 //   late Animation<double> _listAnimation;
-// 
+//
 //   static const Map<ShortcutActivator, Intent> _activateShortcuts =
 //       <ShortcutActivator, Intent>{
 //         SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
 //         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
 //         SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
 //       };
-// 
+//
 //   /// Safely focus the sources/control area — falls back to dropdown if sources not visible.
 //   void _focusControlRow() {
 //     if (!_showHomeSearchControls && _isIdleHomeSections) {
@@ -471,22 +471,22 @@
 //       _sourceDropdownFocusNode.requestFocus();
 //     }
 //   }
-// 
+//
 //   bool _shouldShowQuickControlsLauncher({required bool isWide}) {
 //     // Quick controls now always include the home continue-watching toggle.
 //     return isWide || (!_isTelevision && !_isSelectionMode);
 //   }
-// 
+//
 //   bool get _shouldShowTraktCalendarButton {
 //     return _traktAuthenticated &&
 //         _selectedSource.type == SearchSourceType.trakt;
 //   }
-// 
+//
 //   bool _isQuickControlsLauncherVisibleForWidth(double width) {
 //     final isWide = width >= 500;
 //     return _shouldShowQuickControlsLauncher(isWide: isWide);
 //   }
-// 
+//
 //   Future<void> _setDefaultProvider(String providerId) async {
 //     await StorageService.setDefaultTorrentProvider(providerId);
 //     if (!mounted) return;
@@ -494,7 +494,7 @@
 //       _defaultTorrentProvider = providerId;
 //     });
 //   }
-// 
+//
 //   Future<void> _showQuickControlsDialog() async {
 //     final providers = _availableProviders;
 //     final providerFocusNode = FocusNode(debugLabel: 'quick-provider-dropdown');
@@ -524,9 +524,9 @@
 //     postActionFocusNode.addListener(() {
 //       postActionFocused.value = postActionFocusNode.hasFocus;
 //     });
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     await showDialog<void>(
 //       context: context,
 //       builder: (dialogContext) {
@@ -1080,7 +1080,7 @@
 //         );
 //       },
 //     );
-// 
+//
 //     providerFocusNode.dispose();
 //     providerFocused.dispose();
 //     postActionFocusNode.dispose();
@@ -1089,7 +1089,7 @@
 //     traktFocusNode.dispose();
 //     closeFocusNode.dispose();
 //   }
-// 
+//
 //   /// Focus the first interactive element below the search/source bar.
 //   /// Used by both the search bar and source dropdown DPAD down handlers.
 //   void _focusBelowSourceBar() {
@@ -1098,54 +1098,54 @@
 //         _searchController.text.isNotEmpty &&
 //         !_hasSearched &&
 //         !_isLoading;
-// 
+//
 //     if (isAggregatedVisible && _aggregatedResultsKey.currentState != null) {
 //       _aggregatedResultsKey.currentState!.requestFocusOnKeywordCard();
 //       return;
 //     }
-// 
+//
 //     final isCatalogBrowserVisible =
 //         _selectedSource.type == SearchSourceType.addon &&
 //         _selectedSource.addon != null &&
 //         _selectedSource.addon!.supportsCatalogs &&
 //         !_hasSearched &&
 //         !_isLoading;
-// 
+//
 //     if (isCatalogBrowserVisible && _catalogBrowserKey.currentState != null) {
 //       _catalogBrowserKey.currentState!.requestFocusOnFirstDropdown();
 //       return;
 //     }
-// 
+//
 //     if (_selectedSource.type == SearchSourceType.trakt &&
 //         _traktResultsKey.currentState != null) {
 //       _traktResultsKey.currentState!.focusFirstFilter();
 //       return;
 //     }
-// 
+//
 //     if (_selectedSource.type == SearchSourceType.iptv &&
 //         _iptvResultsKey.currentState != null) {
 //       _iptvResultsKey.currentState!.focusFirstFilter();
 //       return;
 //     }
-// 
+//
 //     if (_selectedSource.type == SearchSourceType.reddit &&
 //         _redditResultsKey.currentState != null) {
 //       _redditResultsKey.currentState!.focusFirstFilter();
 //       return;
 //     }
-// 
+//
 //     if (_selectedSource.type == SearchSourceType.lemmy &&
 //         _lemmyResultsKey.currentState != null) {
 //       _lemmyResultsKey.currentState!.focusFirstFilter();
 //       return;
 //     }
-// 
+//
 //     if (_selectedSource.type == SearchSourceType.youtube &&
 //         _youtubeResultsKey.currentState != null) {
 //       _youtubeResultsKey.currentState!.focusFirstFilter();
 //       return;
 //     }
-// 
+//
 //     if (_hasSearched) {
 //       if (_cameFromCatalogBrowse) {
 //         _backButtonFocusNode.requestFocus();
@@ -1158,10 +1158,10 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     _homeFocusController.focusFirstHomeSection();
 //   }
-// 
+//
 //   /// Safely focus the search bar, auto-showing it if currently hidden.
 //   void _focusSearchBar() {
 //     final isSearchVisible =
@@ -1177,11 +1177,11 @@
 //       });
 //     }
 //   }
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
-// 
+//
 //     // Observe app lifecycle so a Quick Play mask deferred for an external
 //     // player launch is torn down when the user returns to the app.
 //     WidgetsBinding.instance.addObserver(this);
@@ -1192,18 +1192,18 @@
 //         _maskClearDeferredForExternal = true;
 //       }
 //     };
-// 
+//
 //     // Initialize home screen DPAD navigation controller
 //     _homeFocusController = HomeFocusController();
 //     _homeFocusController.onFocusSources = _focusControlRow;
-// 
+//
 //     // Expose post-torrent action handler via bridge for deep links
 //     MainPageBridge.handleRealDebridResult =
 //         (result, torrentName, apiKey) async {
 //           if (!mounted) return;
 //           await _handlePostTorrentAction(result, torrentName, apiKey, -1);
 //         };
-// 
+//
 //     // Expose Torbox post-action handler via bridge for deep links
 //     MainPageBridge.handleTorboxResult = (torboxTorrent) async {
 //       if (!mounted) return;
@@ -1214,13 +1214,13 @@
 //       );
 //       await _showTorboxPostAddOptions(torboxTorrent, torrent);
 //     };
-// 
+//
 //     // Expose PikPak post-action handler via bridge for deep links
 //     MainPageBridge.handlePikPakResult = (fileId, fileName) async {
 //       if (!mounted) return;
 //       await _showPikPakPostAddOptionsFromExternal(fileId, fileName);
 //     };
-// 
+//
 //     MainPageBridge.watchContinueWatchingItem = (item) async {
 //       if (!mounted) return;
 //       await _handleStartupContinueWatchingItem(item);
@@ -1229,37 +1229,37 @@
 //       if (!mounted) return;
 //       await _handleStartupAdvancedSearchSelection(selection);
 //     };
-// 
+//
 //     _listAnimationController = AnimationController(
 //       duration: const Duration(milliseconds: 600),
 //       vsync: this,
 //     );
-// 
+//
 //     _listAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
 //       CurvedAnimation(
 //         parent: _listAnimationController,
 //         curve: Curves.easeInOut,
 //       ),
 //     );
-// 
+//
 //     // Focus listeners removed - now using onFocusChange callbacks directly in widgets
 //     // Exception: DropdownButton doesn't have onFocusChange, so we use a listener
 //     _sortDropdownFocusNode.addListener(_onSortDropdownFocusChange);
 //     // Add arrow key navigation for sort dropdown (Enter/Select handled by DropdownButton itself)
 //     _sortDropdownFocusNode.onKeyEvent = _handleSortDropdownKeyEvent;
-// 
+//
 //     // Track scroll position continuously so we can preserve it on dispose
 //     _resultsScrollController.addListener(_onScrollChanged);
-// 
+//
 //     _listAnimationController.forward();
 //     _loadDefaultSettings();
 //     _detectTelevision();
 //     MainPageBridge.addIntegrationListener(_handleIntegrationChanged);
 //     MainPageBridge.addHomeSettingsListener(_handleHomeSettingsChanged);
-// 
+//
 //     // Register TV sidebar focus handler (tab index 0 = Home/TorrentSearch)
 //     MainPageBridge.registerTvContentFocusHandler(0, _handleTvContentFocus);
-// 
+//
 //     _loadApiKeys();
 //     _loadSearchSourceOptions();
 //     StremioService.instance.addAddonsChangedListener(_onAddonsChanged);
@@ -1275,7 +1275,7 @@
 //         _premiumizeCacheCheckEnabled = enabled;
 //       });
 //     });
-// 
+//
 //     // Load Trakt sync state
 //     Future.wait([
 //       TraktService.instance.isAuthenticated(),
@@ -1287,10 +1287,10 @@
 //         _traktSyncCatalog = results[1] as bool;
 //       });
 //     });
-// 
+//
 //     // Restore preserved state if available (returning from debrid folder view)
 //     _restorePreservedState();
-// 
+//
 //     WidgetsBinding.instance.addPostFrameCallback((_) {
 //       if (!mounted) return;
 //       final item = MainPageBridge.getAndClearContinueWatchingItemToAutoPlay();
@@ -1304,11 +1304,11 @@
 //       }
 //     });
 //   }
-// 
+//
 //   /// Restores search state if navigating back from debrid folder view
 //   void _restorePreservedState() {
 //     if (!_preservedState.hasState) return;
-// 
+//
 //     // Restore all preserved state
 //     _searchController.text = _preservedState.searchQuery ?? '';
 //     _searchMode = _preservedState.searchMode ?? SearchMode.keyword;
@@ -1338,17 +1338,17 @@
 //     _premiumizeCacheStatus = _preservedState.premiumizeCacheStatus;
 //     _torrentMetadata = _preservedState.torrentMetadata ?? {};
 //     _showingTorboxCachedOnly = _preservedState.showingTorboxCachedOnly ?? false;
-// 
+//
 //     // Ensure focus nodes are created for restored torrents
 //     _ensureFocusNodes();
-// 
+//
 //     // Store scroll offset to restore after build completes
 //     _pendingScrollOffset = _preservedState.scrollOffset;
-// 
+//
 //     // Clear preserved state after restoration (one-time use)
 //     _preservedState.clear();
 //   }
-// 
+//
 //   Future<void> _detectTelevision() async {
 //     final isTv = await AndroidNativeDownloader.isTelevision();
 //     if (mounted) {
@@ -1357,14 +1357,14 @@
 //       });
 //     }
 //   }
-// 
+//
 //   void _onSortDropdownFocusChange() {
 //     _sortDropdownFocused.value = _sortDropdownFocusNode.hasFocus;
 //     if (_sortDropdownFocusNode.hasFocus && _isTelevision) {
 //       _scrollToFocusNode(_sortDropdownFocusNode);
 //     }
 //   }
-// 
+//
 //   KeyEventResult _handleSortDropdownKeyEvent(FocusNode node, KeyEvent event) {
 //     if (event is! KeyDownEvent) return KeyEventResult.ignored;
 //     // Left arrow: go to quick controls launcher (when rendered), or torrent/direct dropdown, or back button
@@ -1406,13 +1406,13 @@
 //     // Let Enter/Select pass through to DropdownButton
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   void _onScrollChanged() {
 //     if (_resultsScrollController.hasClients) {
 //       _lastKnownScrollOffset = _resultsScrollController.offset;
 //     }
 //   }
-// 
+//
 //   /// Scrolls to make the focused widget visible on TV (throttled to prevent overlapping animations)
 //   void _scrollToFocusNode(FocusNode node) {
 //     // Cancel any pending scroll to prevent overlapping animations
@@ -1430,13 +1430,13 @@
 //       }
 //     });
 //   }
-// 
+//
 //   void _ensureFocusNodes() {
 //     // Dispose old focus nodes if list shrunk
 //     while (_cardFocusNodes.length > _torrents.length) {
 //       _cardFocusNodes.removeLast().dispose();
 //     }
-// 
+//
 //     // Add new focus nodes if list grew
 //     while (_cardFocusNodes.length < _torrents.length) {
 //       final index = _cardFocusNodes.length;
@@ -1451,7 +1451,7 @@
 //       _cardFocusNodes.add(node);
 //     }
 //   }
-// 
+//
 //   /// Restore focus to the torrent card at the given index or for the given torrent.
 //   /// Used after dialogs close to prevent focus from jumping to wrong elements on Android TV.
 //   void _restoreFocusToCard(int index, [Torrent? torrent]) {
@@ -1470,7 +1470,7 @@
 //       }
 //     });
 //   }
-// 
+//
 //   bool get _bothServicesEnabled {
 //     return _realDebridIntegrationEnabled &&
 //         _torboxIntegrationEnabled &&
@@ -1479,7 +1479,7 @@
 //         _torboxApiKey != null &&
 //         _torboxApiKey!.isNotEmpty;
 //   }
-// 
+//
 //   int get _enabledServicesCount {
 //     int count = 0;
 //     if (_realDebridIntegrationEnabled &&
@@ -1507,22 +1507,22 @@
 //     }
 //     return count;
 //   }
-// 
+//
 //   bool get _multipleServicesEnabled {
 //     return _enabledServicesCount > 1;
 //   }
-// 
+//
 //   void _handleTorrentCardActivated(Torrent torrent, int index) async {
 //     debugPrint(
 //       '[TorrentSearch] _handleTorrentCardActivated called for index $index: ${torrent.displayTitle}',
 //     );
-// 
+//
 //     // Select Source mode — add to debrid and store as bound source
 //     if (_isSelectSourceMode && _selectSourceShow != null) {
 //       _handleSelectSourceTorrentPicked(torrent, index);
 //       return;
 //     }
-// 
+//
 //     // Check if this is a Quick Play action (to skip dialog if multiple services)
 //     final isQuickPlay = _quickPlayPending;
 //     if (isQuickPlay) {
@@ -1530,18 +1530,18 @@
 //         _quickPlayPending = false;
 //       });
 //     }
-// 
+//
 //     // Handle different stream types
 //     if (torrent.isDirectStream || torrent.isExternalStream) {
 //       // Show action dialog for direct/external streams
 //       _showDirectStreamActionDialog(torrent, index);
 //       return;
 //     }
-// 
+//
 //     // Check if there's a default provider set
 //     final defaultProvider = await StorageService.getDefaultTorrentProvider();
 //     if (!mounted) return;
-// 
+//
 //     // If default provider is set and available, use it directly
 //     if (defaultProvider != 'none') {
 //       if (defaultProvider == 'torbox' &&
@@ -1587,7 +1587,7 @@
 //       }
 //       // If default provider is not available, fall through to show dialog or use available service
 //     }
-// 
+//
 //     // Torrent stream - needs debrid service
 //     if (_multipleServicesEnabled && !isQuickPlay) {
 //       // Show dialog to choose service (skip for Quick Play)
@@ -1631,7 +1631,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Play a direct stream URL without going through debrid
 //   Future<void> _playDirectStream(Torrent torrent) async {
 //     if (torrent.directUrl == null || torrent.directUrl!.isEmpty) {
@@ -1640,7 +1640,7 @@
 //       ).showSnackBar(const SnackBar(content: Text('No stream URL available')));
 //       return;
 //     }
-// 
+//
 //     // Use VideoPlayerLauncher to handle player selection (VLC, MX Player, etc.)
 //     await VideoPlayerLauncher.push(
 //       context,
@@ -1666,7 +1666,7 @@
 //     );
 //     _returnToCatalogIfNeeded();
 //   }
-// 
+//
 //   /// Open an external URL in browser
 //   Future<void> _openExternalStream(Torrent torrent) async {
 //     if (torrent.directUrl == null || torrent.directUrl!.isEmpty) {
@@ -1675,7 +1675,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     final uri = Uri.tryParse(torrent.directUrl!);
 //     if (uri == null) {
 //       ScaffoldMessenger.of(
@@ -1683,7 +1683,7 @@
 //       ).showSnackBar(const SnackBar(content: Text('Invalid URL')));
 //       return;
 //     }
-// 
+//
 //     try {
 //       await launchUrl(uri, mode: LaunchMode.externalApplication);
 //     } catch (e) {
@@ -1694,17 +1694,17 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Resolve redirect chain for a URL to get the final download URL.
 //   /// This is needed for direct stream downloads where the initial URL
 //   /// redirects to the actual file (e.g., MediaFusion playback URLs).
 //   Future<String> _resolveDownloadUrl(String url) async {
 //     debugPrint('[DirectStreamDownload] Resolving URL: $url');
-// 
+//
 //     String currentUrl = url;
 //     int maxRedirects = 10;
 //     int redirectCount = 0;
-// 
+//
 //     while (redirectCount < maxRedirects) {
 //       try {
 //         final uri = Uri.parse(currentUrl);
@@ -1714,15 +1714,15 @@
 //           request.followRedirects = false;
 //           request.headers['User-Agent'] =
 //               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
-// 
+//
 //           final response = await client
 //               .send(request)
 //               .timeout(const Duration(seconds: 10));
-// 
+//
 //           debugPrint(
 //             '[DirectStreamDownload] Response ${response.statusCode} for $currentUrl',
 //           );
-// 
+//
 //           // Check for redirect
 //           if (response.statusCode == 301 ||
 //               response.statusCode == 302 ||
@@ -1739,7 +1739,7 @@
 //               continue;
 //             }
 //           }
-// 
+//
 //           // No redirect or success - return current URL
 //           debugPrint('[DirectStreamDownload] Final URL: $currentUrl');
 //           return currentUrl;
@@ -1751,11 +1751,11 @@
 //         break;
 //       }
 //     }
-// 
+//
 //     // Return best URL we have (might be partially resolved)
 //     return currentUrl;
 //   }
-// 
+//
 //   /// Show action dialog for direct/external streams (Play, Copy, Download)
 //   Future<void> _showDirectStreamActionDialog(Torrent torrent, int index) async {
 //     if (torrent.directUrl == null || torrent.directUrl!.isEmpty) {
@@ -1764,12 +1764,12 @@
 //       ).showSnackBar(const SnackBar(content: Text('No stream URL available')));
 //       return;
 //     }
-// 
+//
 //     final isExternal = torrent.isExternalStream;
 //     final accentColor = isExternal
 //         ? const Color(0xFF6366F1) // Purple for external
 //         : const Color(0xFF10B981); // Green for direct
-// 
+//
 //     await showDialog(
 //       context: context,
 //       builder: (ctx) {
@@ -1920,7 +1920,7 @@
 //                             onTap: () async {
 //                               Navigator.of(ctx).pop();
 //                               _restoreFocusToCard(index);
-// 
+//
 //                               // Show resolving snackbar
 //                               ScaffoldMessenger.of(context).showSnackBar(
 //                                 const SnackBar(
@@ -1941,17 +1941,17 @@
 //                                   duration: Duration(seconds: 10),
 //                                 ),
 //                               );
-// 
+//
 //                               // Resolve redirects to get final download URL
 //                               final resolvedUrl = await _resolveDownloadUrl(
 //                                 torrent.directUrl!,
 //                               );
-// 
+//
 //                               if (!mounted) return;
 //                               ScaffoldMessenger.of(
 //                                 context,
 //                               ).hideCurrentSnackBar();
-// 
+//
 //                               await _downloadFile(
 //                                 resolvedUrl,
 //                                 torrent.displayTitle,
@@ -1971,7 +1971,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Play an IPTV channel from home favorites
 //   Future<void> _playIptvChannelFromHome(IptvChannel channel) async {
 //     await VideoPlayerLauncher.push(
@@ -1984,11 +1984,11 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Future<void> _showServiceSelectionDialog(Torrent torrent, int index) async {
 //     // Build list of available providers
 //     final List<_ProviderOption> providers = [];
-// 
+//
 //     if (_torboxIntegrationEnabled &&
 //         _torboxApiKey != null &&
 //         _torboxApiKey!.isNotEmpty) {
@@ -2001,7 +2001,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     if (_realDebridIntegrationEnabled &&
 //         _apiKey != null &&
 //         _apiKey!.isNotEmpty) {
@@ -2014,7 +2014,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     if (_pikpakEnabled) {
 //       providers.add(
 //         _ProviderOption(
@@ -2025,7 +2025,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     if (_premiumizeIntegrationEnabled &&
 //         _premiumizeApiKey != null &&
 //         _premiumizeApiKey!.isNotEmpty) {
@@ -2038,7 +2038,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     if (_allDebridIntegrationEnabled &&
 //         _allDebridApiKey != null &&
 //         _allDebridApiKey!.isNotEmpty) {
@@ -2051,18 +2051,18 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     final result = await showDialog<_ProviderDialogResult>(
 //       context: context,
 //       builder: (context) => _ProviderSelectionDialog(providers: providers),
 //     );
-// 
+//
 //     if (result != null) {
 //       // Save preference if "Always use this" was checked
 //       if (result.alwaysUse) {
 //         await StorageService.setDefaultTorrentProvider(result.provider);
 //       }
-// 
+//
 //       // Execute the selected action
 //       if (result.provider == 'torbox') {
 //         _addToTorbox(torrent.infohash, torrent.name);
@@ -2077,11 +2077,11 @@
 //       }
 //     }
 //   }
-// 
+//
 //   Future<void> _loadDefaultSettings() async {
 //     // Load available engines based on current search mode
 //     List<DynamicEngine> engines;
-// 
+//
 //     if (_searchMode == SearchMode.catalog) {
 //       // For IMDB mode, get engines that specifically support IMDB search
 //       engines = await TorrentService.getImdbSearchEngines();
@@ -2095,37 +2095,37 @@
 //         'TorrentSearchScreen: Loading keyword engines: ${engines.map((e) => e.name).toList()}',
 //       );
 //     }
-// 
+//
 //     // If no engines available for this mode, try to get any available engines as fallback
 //     if (engines.isEmpty) {
 //       debugPrint(
 //         'TorrentSearchScreen: No engines available for $_searchMode mode',
 //       );
 //       engines = await TorrentService.getAvailableEngines();
-// 
+//
 //       // Filter based on mode even from all engines
 //       if (_searchMode == SearchMode.catalog) {
 //         engines = engines.where((e) => e.supportsImdbSearch).toList();
 //       } else {
 //         engines = engines.where((e) => e.supportsKeywordSearch).toList();
 //       }
-// 
+//
 //       if (engines.isEmpty) {
 //         debugPrint(
 //           'TorrentSearchScreen: Still no engines after fallback filter',
 //         );
 //       }
 //     }
-// 
+//
 //     final Map<String, bool> states = {};
-// 
+//
 //     // Preserve previous enabled states where possible, but only for available engines
 //     final previousStates = Map<String, bool>.from(_engineStates);
-// 
+//
 //     // Load enabled state for each engine from SettingsManager
 //     for (final engine in engines) {
 //       final engineId = engine.name;
-// 
+//
 //       // If we had a previous state for this engine, preserve it
 //       // Otherwise, load from settings
 //       if (previousStates.containsKey(engineId)) {
@@ -2140,43 +2140,43 @@
 //         states[engineId] = isEnabled;
 //       }
 //     }
-// 
+//
 //     // If no engines are enabled after switching mode, enable the first available engine
 //     if (states.isNotEmpty && !states.values.any((enabled) => enabled)) {
 //       final firstEngineId = engines.first.name;
 //       states[firstEngineId] = true;
 //     }
-// 
+//
 //     if (!mounted) return;
 //     setState(() {
 //       _availableEngines = engines;
 //       _engineStates = states;
 //     });
-// 
+//
 //     // Ensure focus nodes exist for all engines
 //     _ensureEngineFocusNodes();
-// 
+//
 //     // Search field starts hidden; user opens it via the search button
-// 
+//
 //     // Load default filters only if no preserved state (not returning from debrid folder)
 //     if (!_preservedState.hasState) {
 //       await _loadDefaultFilters();
 //     }
 //   }
-// 
+//
 //   Future<void> _loadDefaultFilters() async {
 //     try {
 //       final qualities = await StorageService.getDefaultFilterQualities();
 //       final sources = await StorageService.getDefaultFilterRipSources();
 //       final languages = await StorageService.getDefaultFilterLanguages();
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Convert stored strings back to enums
 //       final qualitySet = <QualityTier>{};
 //       final sourceSet = <RipSourceCategory>{};
 //       final languageSet = <AudioLanguage>{};
-// 
+//
 //       for (final q in qualities) {
 //         final tier = QualityTier.values.where((e) => e.name == q).firstOrNull;
 //         if (tier != null) qualitySet.add(tier);
@@ -2191,7 +2191,7 @@
 //         final lang = AudioLanguage.values.where((e) => e.name == l).firstOrNull;
 //         if (lang != null) languageSet.add(lang);
 //       }
-// 
+//
 //       // Only set if any defaults are configured
 //       if (qualitySet.isNotEmpty ||
 //           sourceSet.isNotEmpty ||
@@ -2208,7 +2208,7 @@
 //       debugPrint('TorrentSearchScreen: Failed to load default filters: $e');
 //     }
 //   }
-// 
+//
 //   void _ensureEngineFocusNodes() {
 //     // Remove focus nodes for engines that no longer exist
 //     final engineIds = _availableEngines.map((e) => e.name).toSet();
@@ -2220,7 +2220,7 @@
 //       _engineTileFocusNodes.remove(key);
 //       _engineTileFocusStates.remove(key);
 //     }
-// 
+//
 //     // Add focus nodes for new engines
 //     for (final engine in _availableEngines) {
 //       final engineId = engine.name;
@@ -2231,7 +2231,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Gets or creates a focus node for an engine - avoids creating FocusNode in build path
 //   FocusNode _getOrCreateEngineFocusNode(String engineId) {
 //     var node = _engineTileFocusNodes[engineId];
@@ -2242,7 +2242,7 @@
 //     }
 //     return node;
 //   }
-// 
+//
 //   void _handleIntegrationChanged() {
 //     _loadApiKeys();
 //     _loadSearchSourceOptions(preserveCurrentSelection: true);
@@ -2261,7 +2261,7 @@
 //       _rearmInitialHomeLoadingSections();
 //     });
 //   }
-// 
+//
 //   void _handleHomeSettingsChanged() async {
 //     final continueWatchingEnabled =
 //         await StorageService.getHomeContinueWatchingEnabled();
@@ -2273,7 +2273,7 @@
 //       _rearmInitialHomeLoadingSections();
 //     });
 //   }
-// 
+//
 //   Future<void> _loadApiKeys() async {
 //     final rdKey = await StorageService.getApiKey();
 //     final torboxKey = await StorageService.getTorboxApiKey();
@@ -2304,7 +2304,7 @@
 //       _apiKeysLoaded = true;
 //     });
 //   }
-// 
+//
 //   /// Loads available search source options (All, Keyword, + addon catalogs).
 //   ///
 //   /// When [preserveCurrentSelection] is true and the currently-selected source
@@ -2322,15 +2322,15 @@
 //           _pendingReloadPreserveSelection || preserveCurrentSelection;
 //       return;
 //     }
-// 
+//
 //     setState(() => _isLoadingSourceOptions = true);
-// 
+//
 //     try {
 //       final loader = SearchSourceOptionsLoader();
 //       final options = await loader.loadOptions();
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Try to apply stored default source
 //       final defaultSourceType = await StorageService.getHomeDefaultSourceType();
 //       final defaultAddonUrl = await StorageService.getHomeDefaultAddonUrl();
@@ -2338,7 +2338,7 @@
 //       final hideProviderCards = await StorageService.getHomeHideProviderCards();
 //       final continueWatchingEnabled =
 //           await StorageService.getHomeContinueWatchingEnabled();
-// 
+//
 //       SearchSourceOption? defaultOption;
 //       if (defaultSourceType != null && options.isNotEmpty) {
 //         if (defaultSourceType == 'addon' && defaultAddonUrl != null) {
@@ -2360,13 +2360,13 @@
 //           }
 //         }
 //       }
-// 
+//
 //       // If preserving, try to locate the current selection in the refreshed list.
 //       // SearchSourceOption's operator == matches on type + addon manifestUrl.
 //       final preservedOption = preserveCurrentSelection
 //           ? options.where((o) => o == _selectedSource).firstOrNull
 //           : null;
-// 
+//
 //       setState(() {
 //         _availableSourceOptions = options;
 //         _isLoadingSourceOptions = false;
@@ -2400,7 +2400,7 @@
 //         });
 //       }
 //     }
-// 
+//
 //     // Drain any reload that arrived while we were running.
 //     if (_pendingSourceReload && mounted) {
 //       final preserve = _pendingReloadPreserveSelection;
@@ -2410,7 +2410,7 @@
 //       _loadSearchSourceOptions(preserveCurrentSelection: preserve);
 //     }
 //   }
-// 
+//
 //   /// Listener fired by StremioService when addons are added, removed,
 //   /// enabled/disabled, or reordered (including deep-link installs). Rebuilds
 //   /// the home source dropdown so newly-installed addons show up without
@@ -2419,7 +2419,7 @@
 //     if (!mounted) return;
 //     _loadSearchSourceOptions(preserveCurrentSelection: true);
 //   }
-// 
+//
 //   /// Converts a stored source type string to SearchSourceType enum
 //   SearchSourceType? _sourceTypeFromString(String type) {
 //     switch (type) {
@@ -2443,7 +2443,7 @@
 //         return null;
 //     }
 //   }
-// 
+//
 //   /// Handles selection of a search source from the dropdown
 //   void _onSearchSourceChanged(SearchSourceOption source) {
 //     // Clear episode drill-down return state when source changes
@@ -2453,10 +2453,10 @@
 //       _pendingTraktEpisodeModeExitAction = null;
 //       _pendingCalendarReturnSource = null;
 //     }
-// 
+//
 //     setState(() {
 //       _selectedSource = source;
-// 
+//
 //       // Map source to internal search mode for compatibility
 //       switch (source.type) {
 //         case SearchSourceType.all:
@@ -2492,12 +2492,12 @@
 //           _searchMode = SearchMode.keyword;
 //           break;
 //       }
-// 
+//
 //       // Clear previous state when switching sources
 //       _selectedImdbTitle = null;
 //       _activeAdvancedSelection = null;
 //       _seriesControlsExpanded = false;
-// 
+//
 //       // Reset search results
 //       _hasSearched = false;
 //       _torrents = [];
@@ -2506,11 +2506,11 @@
 //       _selectedInfohashes.clear();
 //     });
 //   }
-// 
+//
 //   // ============================================================================
 //   // Back Navigation Methods
 //   // ============================================================================
-// 
+//
 //   /// Return to catalog browse view after Quick Play playback ends.
 //   /// Only fires for auto-play flows (Quick Play / bound source), not
 //   /// manual torrent selection from Browse Sources results.
@@ -2523,7 +2523,7 @@
 //     );
 //     _goBackAndRefreshSources();
 //   }
-// 
+//
 //   /// Go back to the catalog browse view after viewing search results
 //   /// Go back to catalog view and refresh Trakt bound sources cache.
 //   void _goBackAndRefreshSources() {
@@ -2532,7 +2532,7 @@
 //     _catalogBrowserKey.currentState?.refreshBoundSources();
 //     _aggregatedResultsKey.currentState?.refreshBoundSources();
 //   }
-// 
+//
 //   void _goBackToCatalog() {
 //     // Snapshot re-entry flags before clearing them — we need to know where
 //     // the user came from so we can re-open the right screen after the
@@ -2541,12 +2541,12 @@
 //     final fromDetail = _resultsFromItemDetail;
 //     final int? season = _episodeReturnSeason;
 //     final int? episode = _episodeReturnEpisode;
-// 
+//
 //     _resultsFromEpisodeTap = false;
 //     _resultsFromItemDetail = false;
 //     _episodeReturnSeason = null;
 //     _episodeReturnEpisode = null;
-// 
+//
 //     setState(() {
 //       // Clear search results
 //       _hasSearched = false;
@@ -2558,25 +2558,25 @@
 //       _engineErrors = {};
 //       _isSelectionMode = false;
 //       _selectedInfohashes.clear();
-// 
+//
 //       // Clear selection state
 //       _selectedImdbTitle = null;
 //       _activeAdvancedSelection = null;
 //       _seriesControlsExpanded = false;
-// 
+//
 //       // Clear select source mode
 //       _isSelectSourceMode = false;
 //       _selectSourceShow = null;
-// 
+//
 //       // Restore previous search query (empty for homepage, or the query for aggregated results)
 //       _searchController.text = _previousSearchQuery;
-// 
+//
 //       // Reset the flag
 //       _cameFromCatalogBrowse = false;
 //       _returnToCatalogAfterPlayback = false;
 //       _previousSearchQuery = '';
 //     });
-// 
+//
 //     // Refresh bound sources first so the re-entered detail screen sees the
 //     // newly bound source (shows "Edit Source" instead of "Select Source").
 //     _catalogBrowserKey.currentState?.refreshBoundSources().then((_) {
@@ -2590,7 +2590,7 @@
 //     });
 //     _aggregatedResultsKey.currentState?.refreshBoundSources();
 //   }
-// 
+//
 //   Torrent _findTorrentByInfohash(String infohash, String fallbackName) {
 //     return _torrents.firstWhere(
 //       (t) => t.infohash.toLowerCase() == infohash.toLowerCase(),
@@ -2611,7 +2611,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   @override
 //   void dispose() {
 //     // Preserve state before disposing (for seamless return after viewing debrid folder)
@@ -2655,7 +2655,7 @@
 //     _preservedState.showingTorboxCachedOnly = _showingTorboxCachedOnly;
 //     // Use last known offset since controller may not have clients during dispose
 //     _preservedState.scrollOffset = _lastKnownScrollOffset;
-// 
+//
 //     _sortDropdownFocusNode.removeListener(_onSortDropdownFocusChange);
 //     _resultsScrollController.removeListener(_onScrollChanged);
 //     _searchController.dispose();
@@ -2671,7 +2671,7 @@
 //     _backButtonFocusNode.dispose();
 //     _directDropdownFocusNode.dispose();
 //     _torrentDropdownFocusNode.dispose();
-// 
+//
 //     // Dispose ValueNotifiers
 //     _searchFocused.dispose();
 //     _providerAccordionFocused.dispose();
@@ -2684,14 +2684,14 @@
 //     _expandControlsFocused.dispose();
 //     _seasonInputFocused.dispose();
 //     _episodeInputFocused.dispose();
-// 
+//
 //     // Dispose Unified Search Source resources
 //     _sourceDropdownFocusNode.dispose();
 //     _traktCalendarFocusNode.dispose();
 //     _clearButtonFocusNode.dispose();
 //     _searchToggleFocusNode.dispose();
 //     _traktSyncFocusNode.dispose();
-// 
+//
 //     // Dispose IMDB Smart Search Mode resources
 //     _modeSelectorFocusNode.dispose();
 //     _selectionChipFocusNode.dispose();
@@ -2701,12 +2701,12 @@
 //     _seasonController.dispose();
 //     _episodeController.dispose();
 //     _scrollThrottleTimer?.cancel();
-// 
+//
 //     for (final node in _cardFocusNodes) {
 //       node.dispose();
 //     }
 //     // Card focus states now use index tracking - no disposal needed
-// 
+//
 //     // Dispose dynamic engine focus nodes
 //     for (final node in _engineTileFocusNodes.values) {
 //       node.dispose();
@@ -2728,7 +2728,7 @@
 //     _listAnimationController.dispose();
 //     super.dispose();
 //   }
-// 
+//
 //   /// Handle focus request from TV sidebar - intelligently focuses the right element
 //   void _handleTvContentFocus() {
 //     // When the in-Home search controls are hidden AND Home is showing its idle
@@ -2739,26 +2739,26 @@
 //       _homeFocusController.focusFirstHomeSection();
 //       return;
 //     }
-// 
+//
 //     // Check if AggregatedSearchResults is visible (All mode with query, browsing catalog results)
 //     final isAggregatedVisible =
 //         _selectedSource.type == SearchSourceType.all &&
 //         _searchController.text.isNotEmpty &&
 //         !_hasSearched &&
 //         !_isLoading;
-// 
+//
 //     if (isAggregatedVisible && _aggregatedResultsKey.currentState != null) {
 //       // Try to restore focus to last focused result
 //       if (_aggregatedResultsKey.currentState!.requestFocusOnLastResult()) {
 //         return;
 //       }
 //     }
-// 
+//
 //     // Check if CatalogBrowser is visible (addon browsing mode)
 //     final isCatalogBrowserVisible =
 //         _selectedSource.type == SearchSourceType.addon &&
 //         _searchMode == SearchMode.browse;
-// 
+//
 //     if (isCatalogBrowserVisible && _catalogBrowserKey.currentState != null) {
 //       // Try to restore focus to last focused catalog item
 //       if (_catalogBrowserKey.currentState!.requestFocusOnLastItem()) {
@@ -2768,16 +2768,16 @@
 //       _catalogBrowserKey.currentState!.requestFocusOnFirstDropdown();
 //       return;
 //     }
-// 
+//
 //     // Check if dropdown/Sources row is visible
 //     final isSourcesRowVisible = !_hasSearched || _torrents.isEmpty;
-// 
+//
 //     if (isSourcesRowVisible) {
 //       // Focus the dropdown (leftmost element in the row)
 //       _sourceDropdownFocusNode.requestFocus();
 //       return;
 //     }
-// 
+//
 //     // If we have search results, restore focus to last focused card or first card
 //     if (_cardFocusNodes.isNotEmpty) {
 //       final targetIndex =
@@ -2787,11 +2787,11 @@
 //       _cardFocusNodes[targetIndex].requestFocus();
 //       return;
 //     }
-// 
+//
 //     // Fallback to search bar
 //     _focusSearchBar();
 //   }
-// 
+//
 //   Future<void> _searchTorrents(String query) async {
 //     if (query.trim().isEmpty) {
 //       // No search will run, so the Quick Play completion hook won't fire —
@@ -2799,7 +2799,7 @@
 //       _clearQuickPlayMovieMask();
 //       return;
 //     }
-// 
+//
 //     final int requestId = ++_activeSearchRequestId;
 //     final SearchSourceOption searchSourceSnapshot = _selectedSource;
 //     final bool quickPlayPendingSnapshot = _quickPlayPending;
@@ -2818,10 +2818,10 @@
 //       _selectedDirectProviders = {};
 //       _selectedTorrentProviders = {};
 //     });
-// 
+//
 //     // Hide keyboard
 //     _searchFocusNode.unfocus();
-// 
+//
 //     final results = await Future.wait([
 //       StorageService.getTorboxCacheCheckEnabled(),
 //       StorageService.getTorboxApiKey(),
@@ -2864,11 +2864,11 @@
 //         _allDebridIntegrationEnabled = allDebridEnabled;
 //       });
 //     }
-// 
+//
 //     try {
 //       final Map<String, dynamic> result;
 //       final selection = _activeAdvancedSelection;
-// 
+//
 //       // Use IMDB search when we have an advanced selection, otherwise keyword search
 //       if (selection != null && selection.imdbId.trim().isNotEmpty) {
 //         debugPrint(
@@ -2905,7 +2905,7 @@
 //           engineStates: _engineStates,
 //         );
 //       }
-// 
+//
 //       final combinedTorrents = (result['torrents'] as List<Torrent>).toList(
 //         growable: false,
 //       );
@@ -2930,7 +2930,7 @@
 //             'Failed to load results from $failedEngines. Please try again.';
 //       }
 //       Map<String, bool>? torboxCacheMap;
-// 
+//
 //       final String? torboxKeyValue = torboxKey;
 //       if (cacheCheckPreference &&
 //           torboxEnabled &&
@@ -2947,7 +2947,7 @@
 //             .where((hash) => hash.isNotEmpty)
 //             .toSet()
 //             .toList();
-// 
+//
 //         if (uniqueHashes.isNotEmpty) {
 //           try {
 //             final cachedHashes = await TorboxService.checkCachedTorrents(
@@ -2965,7 +2965,7 @@
 //           }
 //         }
 //       }
-// 
+//
 //       Map<String, bool>? premiumizeCacheMap;
 //       final String? premiumizeKeyValue = premiumizeKey;
 //       if (premiumizeCachePreference &&
@@ -2982,7 +2982,7 @@
 //             .where((hash) => hash.isNotEmpty)
 //             .toSet()
 //             .toList();
-// 
+//
 //         if (uniqueHashes.isNotEmpty) {
 //           try {
 //             // cache/check accepts bare infohashes; one call (chunked internally).
@@ -3002,12 +3002,12 @@
 //           }
 //         }
 //       }
-// 
+//
 //       // Update phase to filtering
 //       if (mounted && requestId == _activeSearchRequestId) {
 //         setState(() => _searchPhase = SearchPhase.filtering);
 //       }
-// 
+//
 //       final bool torboxActive =
 //           torboxEnabled && torboxKeyValue != null && torboxKeyValue.isNotEmpty;
 //       final bool realDebridActive =
@@ -3029,7 +3029,7 @@
 //             .toList(growable: false);
 //         showOnlyCached = true;
 //       }
-// 
+//
 //       // Filter out direct links for series when no specific episode is selected
 //       // Direct links are individual episode streams that can't be added as a season/series pack
 //       // Movies are fine since they're single files anyway
@@ -3037,11 +3037,11 @@
 //           selection.isSeries &&
 //           selection.episode == null) {
 //         final beforeFilterCount = filteredTorrents.length;
-// 
+//
 //         filteredTorrents = filteredTorrents
 //             .where((torrent) => torrent.streamType == StreamType.torrent)
 //             .toList(growable: false);
-// 
+//
 //         final filteredOutCount = beforeFilterCount - filteredTorrents.length;
 //         if (filteredOutCount > 0) {
 //           debugPrint(
@@ -3049,7 +3049,7 @@
 //           );
 //         }
 //       }
-// 
+//
 //       // Filter by season when season is specified but episode is not
 //       // This ensures we only show torrents that include the requested season
 //       if (selection != null &&
@@ -3058,7 +3058,7 @@
 //           selection.episode == null) {
 //         final beforeFilterCount = filteredTorrents.length;
 //         final requestedSeason = selection.season!;
-// 
+//
 //         // Keep only torrents that include the requested season
 //         filteredTorrents = filteredTorrents
 //             .where((torrent) {
@@ -3066,7 +3066,7 @@
 //                 case 'completeSeries':
 //                   // Always include complete series (they include all seasons)
 //                   return true;
-// 
+//
 //                 case 'multiSeasonPack':
 //                   // Include if the requested season is within the range
 //                   if (torrent.startSeason != null &&
@@ -3076,16 +3076,16 @@
 //                   }
 //                   // If season range data is missing, exclude to be safe
 //                   return false;
-// 
+//
 //                 case 'seasonPack':
 //                   // Include only if it matches the requested season exactly
 //                   return torrent.seasonNumber == requestedSeason;
-// 
+//
 //                 case 'singleEpisode':
 //                   // For single episodes, check if they belong to the requested season
 //                   // Parse the episode pattern from the name
 //                   final name = torrent.name.toUpperCase();
-// 
+//
 //                   // Check various season formats: S04, Season 4, etc.
 //                   final seasonPadded = requestedSeason.toString().padLeft(
 //                     2,
@@ -3098,38 +3098,38 @@
 //                     'SEASON$requestedSeason', // Season4
 //                     '${requestedSeason}X', // 4x (for 4x01 format)
 //                   ];
-// 
+//
 //                   // Check if any pattern matches
 //                   for (final pattern in seasonPatterns) {
 //                     if (name.contains(pattern)) {
 //                       return true;
 //                     }
 //                   }
-// 
+//
 //                   // If we can't determine the season, exclude the single episode
 //                   return false;
-// 
+//
 //                 default:
 //                   // Unknown coverage type - keep it to avoid over-filtering
 //                   return true;
 //               }
 //             })
 //             .toList(growable: false);
-// 
+//
 //         final afterFilterCount = filteredTorrents.length;
 //         debugPrint(
 //           'TorrentSearchScreen: Season filter applied for Season $requestedSeason - '
 //           'filtered from $beforeFilterCount to $afterFilterCount torrents '
 //           '(removed ${beforeFilterCount - afterFilterCount} torrents from other seasons)',
 //         );
-// 
+//
 //         // Show helpful message if all results were filtered out
 //         if (filteredTorrents.isEmpty && beforeFilterCount > 0) {
 //           nextErrorMessage =
 //               'No torrents found for Season $requestedSeason. Found $beforeFilterCount torrents from other seasons that were filtered out.';
 //         }
 //       }
-// 
+//
 //       // When a specific episode is requested, filter and sort results:
 //       // - Keep single episodes matching the exact episode pattern
 //       // - Keep season packs that contain the requested season
@@ -3141,7 +3141,7 @@
 //         final beforeFilterCount = filteredTorrents.length;
 //         final requestedSeason = selection.season!;
 //         final requestedEpisode = selection.episode!;
-// 
+//
 //         // Build the expected episode pattern (e.g., "S05E01" or "5x1")
 //         final expectedS =
 //             'S${requestedSeason.toString().padLeft(2, '0')}E${requestedEpisode.toString().padLeft(2, '0')}';
@@ -3149,7 +3149,7 @@
 //         final expectedX =
 //             '${requestedSeason}x${requestedEpisode.toString().padLeft(2, '0')}';
 //         final expectedXNoZero = '${requestedSeason}x${requestedEpisode}';
-// 
+//
 //         // Helper to check if torrent name contains the exact episode pattern
 //         bool hasExactEpisodeMatch(String name) {
 //           final upperName = name.toUpperCase();
@@ -3158,7 +3158,7 @@
 //               upperName.contains(expectedX.toUpperCase()) ||
 //               upperName.contains(expectedXNoZero.toUpperCase());
 //         }
-// 
+//
 //         // Helper to check if pack contains the requested season
 //         bool packContainsSeason(Torrent torrent) {
 //           switch (torrent.coverageType) {
@@ -3176,7 +3176,7 @@
 //               return false;
 //           }
 //         }
-// 
+//
 //         // Filter: keep exact episode matches OR packs containing the season
 //         filteredTorrents = filteredTorrents.where((torrent) {
 //           // Single episodes: must match the exact episode pattern
@@ -3187,7 +3187,7 @@
 //           // Packs: must contain the requested season
 //           return packContainsSeason(torrent);
 //         }).toList();
-// 
+//
 //         // Sort: exact episode matches first (priority 0), then packs by coverage type
 //         filteredTorrents.sort((a, b) {
 //           int getPriority(Torrent t) {
@@ -3205,26 +3205,26 @@
 //                 return 4;
 //             }
 //           }
-// 
+//
 //           final priorityDiff = getPriority(a) - getPriority(b);
 //           if (priorityDiff != 0) return priorityDiff;
 //           // Within same priority, sort by seeders descending
 //           return b.seeders - a.seeders;
 //         });
-// 
+//
 //         final afterFilterCount = filteredTorrents.length;
 //         debugPrint(
 //           'TorrentSearchScreen: Episode filter applied for S${requestedSeason.toString().padLeft(2, '0')}E${requestedEpisode.toString().padLeft(2, '0')} - '
 //           'kept $afterFilterCount torrents from $beforeFilterCount (exact matches + packs containing season)',
 //         );
 //       }
-// 
+//
 //       if (!mounted || requestId != _activeSearchRequestId) {
 //         return;
 //       }
-// 
+//
 //       final metadata = _buildTorrentMetadataMap(filteredTorrents);
-// 
+//
 //       // Always recalculate engine counts from filtered results
 //       // This ensures counts match actual visible results after all filters
 //       final Map<String, int> finalEngineCounts = {};
@@ -3232,10 +3232,10 @@
 //         final source = torrent.source.isNotEmpty ? torrent.source : 'unknown';
 //         finalEngineCounts[source] = (finalEngineCounts[source] ?? 0) + 1;
 //       }
-// 
+//
 //       // Calculate stream type provider counts for multi-select dropdowns
 //       _calculateStreamTypeCounts(filteredTorrents);
-// 
+//
 //       setState(() {
 //         _engineCounts = finalEngineCounts;
 //         _engineErrors = engineErrors;
@@ -3246,7 +3246,7 @@
 //         _showingTorboxCachedOnly = showOnlyCached;
 //         _errorMessage = nextErrorMessage;
 //       });
-// 
+//
 //       // Apply sorting + filters to the new dataset
 //       _sortTorrents(nextBase: filteredTorrents, metadataOverride: metadata);
 //       _listAnimationController.forward();
@@ -3281,17 +3281,17 @@
 //       });
 //     }
 //   }
-// 
+//
 //   /// Derives a friendly display name from an engine ID.
 //   String _friendlyEngineName(String name) {
 //     if (name.isEmpty) return name;
 //     if (IndexerManagerConfig.isIndexerManagerEngine(name)) {
 //       return IndexerManagerConfig.displayNameFromEngineId(name);
 //     }
-// 
+//
 //     // Common acronyms that should stay uppercase
 //     const acronyms = {'csv', 'yts', 'api', 'url', 'id', 'tv', 'hd'};
-// 
+//
 //     final parts = name.split('_');
 //     return parts
 //         .map((part) {
@@ -3304,7 +3304,7 @@
 //         })
 //         .join(' ');
 //   }
-// 
+//
 //   /// Returns a short label for the source tag.
 //   /// Uses the same derivation logic as engine status chips.
 //   String? _sourceTagLabel(String rawSource) {
@@ -3312,11 +3312,11 @@
 //     if (trimmed.isEmpty) return null;
 //     return _deriveEngineShortName(trimmed.toLowerCase());
 //   }
-// 
+//
 //   Widget? _buildSourceTag(String rawSource) {
 //     final label = _sourceTagLabel(rawSource);
 //     if (label == null) return null;
-// 
+//
 //     return Container(
 //       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
 //       decoration: BoxDecoration(
@@ -3360,7 +3360,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Palette of distinct, vibrant colors for engine sources.
 //   static const _sourceColorPalette = [
 //     Color(0xFF10B981), // Emerald 500
@@ -3374,7 +3374,7 @@
 //     Color(0xFF84CC16), // Lime 500
 //     Color(0xFF6366F1), // Indigo 500
 //   ];
-// 
+//
 //   /// Returns a consistent color for an engine based on its ID.
 //   /// Same ID always returns the same color.
 //   Color _getEngineColor(String engineId) {
@@ -3382,7 +3382,7 @@
 //     final hash = engineId.hashCode.abs();
 //     return _sourceColorPalette[hash % _sourceColorPalette.length];
 //   }
-// 
+//
 //   // Build source chip for stats row - compact version matching StatChip style
 //   Widget _buildSourceStatChip(String rawSource) {
 //     final label = _sourceTagLabel(rawSource);
@@ -3393,14 +3393,14 @@
 //         color: const Color(0xFF6B7280), // Gray 500
 //       );
 //     }
-// 
+//
 //     return StatChip(
 //       icon: Icons.source_rounded,
 //       text: label,
 //       color: _getEngineColor(rawSource.trim().toLowerCase()),
 //     );
 //   }
-// 
+//
 //   String _directStreamSourceLabel(String rawSource) {
 //     var source = rawSource.trim();
 //     if (source.isEmpty) return 'Unknown Source';
@@ -3408,13 +3408,13 @@
 //       source = source.substring(8).trim();
 //     }
 //     if (source.isEmpty) return 'Unknown Source';
-// 
+//
 //     final normalized = source
 //         .replaceAll(RegExp(r'[_\-]+'), ' ')
 //         .replaceAll(RegExp(r'\s+'), ' ')
 //         .trim();
 //     const acronyms = {'rd', 'tb', 'pm', 'ad', 'api', 'url', 'id', 'tv', 'hd'};
-// 
+//
 //     return normalized
 //         .split(' ')
 //         .map((part) {
@@ -3428,12 +3428,12 @@
 //         })
 //         .join(' ');
 //   }
-// 
+//
 //   Widget _buildDirectStreamSourceChip(String rawSource, double maxWidth) {
 //     final source = rawSource.trim().toLowerCase();
 //     final label = _directStreamSourceLabel(rawSource);
 //     final color = _getEngineColor(source);
-// 
+//
 //     return ConstrainedBox(
 //       constraints: BoxConstraints(maxWidth: maxWidth),
 //       child: Container(
@@ -3466,13 +3466,13 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   // Build stream type chip for non-torrent streams (direct/external)
 //   Widget? _buildStreamTypeChip(Torrent torrent) {
 //     if (torrent.streamType == StreamType.torrent) {
 //       return null; // No chip needed for torrents
 //     }
-// 
+//
 //     if (torrent.isDirectStream) {
 //       return StatChip(
 //         icon: Icons.play_circle_outline_rounded,
@@ -3488,10 +3488,10 @@
 //         ), // Indigo 500 - indicates opens externally
 //       );
 //     }
-// 
+//
 //     return null;
 //   }
-// 
+//
 //   void _setEngineEnabled(String engineId, bool value) {
 //     if (_engineStates[engineId] == value) return;
 //     setState(() {
@@ -3503,7 +3503,7 @@
 //       _searchTorrents(_searchController.text);
 //     }
 //   }
-// 
+//
 //   void _handleSearchFieldChanged(String value) {
 //     // "All" mode: Update UI to show aggregated results as user types
 //     if (_selectedSource.type == SearchSourceType.all) {
@@ -3535,37 +3535,37 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Addon mode: Trigger rebuild so CatalogBrowser gets updated searchQuery
 //     if (_selectedSource.type == SearchSourceType.addon) {
 //       setState(() {});
 //       return;
 //     }
-// 
+//
 //     // IPTV mode: Trigger rebuild so IptvResultsView gets updated searchQuery
 //     if (_selectedSource.type == SearchSourceType.iptv) {
 //       setState(() {});
 //       return;
 //     }
-// 
+//
 //     // Trakt mode: Trigger rebuild so TraktResultsView gets updated searchQuery
 //     if (_selectedSource.type == SearchSourceType.trakt) {
 //       setState(() {});
 //       return;
 //     }
-// 
+//
 //     // Lemmy mode: Trigger rebuild so LemmyResultsView gets updated searchQuery
 //     if (_selectedSource.type == SearchSourceType.lemmy) {
 //       setState(() {});
 //       return;
 //     }
-// 
+//
 //     // YouTube mode: Trigger rebuild so YoutubeResultsView gets updated searchQuery
 //     if (_selectedSource.type == SearchSourceType.youtube) {
 //       setState(() {});
 //       return;
 //     }
-// 
+//
 //     // In catalog mode, clear the active selection if user manually edits
 //     if (_searchMode == SearchMode.catalog) {
 //       final trimmed = value.trim();
@@ -3584,7 +3584,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Keyword mode: clear advanced selection if user manually edits
 //     final trimmed = value.trim();
 //     if (_activeAdvancedSelection != null &&
@@ -3594,7 +3594,7 @@
 //       });
 //     }
 //   }
-// 
+//
 //   /// Build the unified search source selector dropdown
 //   Widget _buildSearchSourceSelector() {
 //     if (_availableSourceOptions.isEmpty) {
@@ -3608,7 +3608,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     return SearchSourceDropdown(
 //       selectedOption: _selectedSource,
 //       options: _availableSourceOptions,
@@ -3639,22 +3639,22 @@
 //       onDownArrowPressed: _focusBelowSourceBar,
 //     );
 //   }
-// 
+//
 //   void _createAdvancedSelectionAndSearch() {
 //     if (_selectedImdbTitle == null) return;
-// 
+//
 //     int? season;
 //     int? episode;
-// 
+//
 //     if (_isSeries) {
 //       final bool hasSeasonData =
 //           _availableSeasons != null && _availableSeasons!.isNotEmpty;
-// 
+//
 //       // Use dropdown value if available, otherwise fall back to text input
 //       if (hasSeasonData) {
 //         // Dropdown mode: use _selectedSeason (null means "All Seasons")
 //         season = _selectedSeason;
-// 
+//
 //         // Only parse episode if a specific season is selected
 //         if (season != null) {
 //           final episodeText = _episodeController.text.trim();
@@ -3670,11 +3670,11 @@
 //         // Text input mode (fallback when API didn't provide season data)
 //         final seasonText = _seasonController.text.trim();
 //         final episodeText = _episodeController.text.trim();
-// 
+//
 //         if (seasonText.isNotEmpty) {
 //           season = int.tryParse(seasonText);
 //         }
-// 
+//
 //         if (episodeText.isNotEmpty) {
 //           episode = int.tryParse(episodeText);
 //         }
@@ -3682,10 +3682,10 @@
 //         // This allows searching entire season packs when only season is specified
 //       }
 //     }
-// 
+//
 //     final preserveTraktContext =
 //         _activeAdvancedSelection?.imdbId == _selectedImdbTitle!.imdbId;
-// 
+//
 //     final selection = AdvancedSearchSelection(
 //       imdbId: _selectedImdbTitle!.imdbId,
 //       isSeries: _isSeries,
@@ -3702,22 +3702,22 @@
 //           ? _activeAdvancedSelection?.traktSource ?? false
 //           : false,
 //     );
-// 
+//
 //     debugPrint(
 //       'TorrentSearchScreen: Creating AdvancedSearchSelection - isSeries=${selection.isSeries}, title=${selection.title}, imdbId=${selection.imdbId}, season=$season, episode=$episode, contentType=${selection.contentType}, traktSource=${selection.traktSource}',
 //     );
-// 
+//
 //     setState(() {
 //       _activeAdvancedSelection = selection;
 //       _searchController.text = selection.displayQuery;
 //       // Auto-collapse controls after search
 //       _imdbControlsCollapsed = true;
 //     });
-// 
+//
 //     // Trigger torrent search
 //     _searchTorrents(selection.displayQuery);
 //   }
-// 
+//
 //   /// Handle catalog item selection (from AggregatedSearchResults or CatalogBrowser)
 //   /// For series, fetches season metadata before searching to enable parallel season search
 //   Future<void> _handleCatalogItemSelected(
@@ -3732,17 +3732,17 @@
 //     _episodeReturnSeason = selection.season;
 //     _episodeReturnEpisode = selection.episode;
 //     _previousSearchQuery = _searchController.text;
-// 
+//
 //     // Snapshot the Quick Play epoch before any pre-search await below
 //     // (notably the series IMDb metadata probe). If it changes before we
 //     // kick off the search, this attempt was cancelled or superseded.
 //     final int maskGenAtEntry = _quickPlayMaskGeneration;
-// 
+//
 //     // Clear any stale season/episode UI state before applying the new
 //     // selection. Explicit episode flows re-populate these immediately below.
 //     _seasonController.clear();
 //     _episodeController.clear();
-// 
+//
 //     setState(() {
 //       // Leaving the episode guide for a catalog/direct-search selection
 //       // (incl. CatalogBrowser's _fallbackToDirectSearch) — always restore
@@ -3765,7 +3765,7 @@
 //       _availableSeasons = null; // Reset before fetching
 //       _selectedSeason = null;
 //     });
-// 
+//
 //     // For series, fetch season metadata before searching
 //     if (selection.isSeries) {
 //       // If season+episode already specified (e.g. from Trakt episode browser),
@@ -3786,7 +3786,7 @@
 //           _searchPhase = SearchPhase.fetchingMetadata;
 //           _hasSearched = true;
 //         });
-// 
+//
 //         try {
 //           debugPrint(
 //             'TorrentSearchScreen: Fetching season metadata for series: ${selection.imdbId}',
@@ -3794,9 +3794,9 @@
 //           final details = await ImdbLookupService.getTitleDetails(
 //             selection.imdbId,
 //           );
-// 
+//
 //           if (!mounted) return;
-// 
+//
 //           // Extract available seasons from IMDbbot API
 //           List<int>? availableSeasons;
 //           try {
@@ -3823,7 +3823,7 @@
 //             );
 //             availableSeasons = null;
 //           }
-// 
+//
 //           if (mounted) {
 //             setState(() {
 //               _availableSeasons = availableSeasons;
@@ -3837,7 +3837,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     // Now search with season data available (if fetched)
 //     if (!mounted) return;
 //     // Cancelled/superseded during the pre-search phase (e.g. user hit
@@ -3847,7 +3847,7 @@
 //     if (_quickPlayMaskGeneration != maskGenAtEntry) return;
 //     _createAdvancedSelectionAndSearch();
 //   }
-// 
+//
 //   /// Handle "Select Source" — triggers search in select-source mode.
 //   /// User picks a torrent → stored as bound source → plays immediately.
 //   /// "Select Source → Torrent/Keyword search" can be chosen from inside the
@@ -3866,16 +3866,16 @@
 //     );
 //     _sourceBeforeEpisodeDrillDown = null;
 //   }
-// 
+//
 //   void _handleSelectSource(StremioMeta show) {
 //     debugPrint('TorrentSearchScreen: Select Source triggered for ${show.name}');
 //     _leaveEpisodeDrillDownForSelectSource();
-// 
+//
 //     setState(() {
 //       _isSelectSourceMode = true;
 //       _selectSourceShow = show;
 //     });
-// 
+//
 //     // Create a search (no season/episode for series → gets packs; movies search normally)
 //     final selection = AdvancedSearchSelection(
 //       imdbId: show.effectiveImdbId ?? show.id,
@@ -3886,10 +3886,10 @@
 //       posterUrl: show.poster,
 //       fromCatalogItemDetail: true,
 //     );
-// 
+//
 //     _handleCatalogItemSelected(selection, updateSearchText: true);
 //   }
-// 
+//
 //   /// Keyword-mode select-source. Drops the IMDb advanced selection so the
 //   /// search engine layer falls back to free-text scrapers (Nyaa, Knaben,
 //   /// Torrents CSV). Pre-fills the query with the title for movies and
@@ -3899,14 +3899,14 @@
 //       'TorrentSearchScreen: Keyword Select Source triggered for ${show.name}',
 //     );
 //     _leaveEpisodeDrillDownForSelectSource();
-// 
+//
 //     final bool isSeries = show.type == 'series';
 //     final String seedQuery = isSeries
 //         ? '${show.name} complete'
 //         : (show.year != null && show.year!.isNotEmpty
 //               ? '${show.name} ${show.year}'
 //               : show.name);
-// 
+//
 //     setState(() {
 //       _isSelectSourceMode = true;
 //       _selectSourceShow = show;
@@ -3924,14 +3924,14 @@
 //       _episodeController.clear();
 //       _searchController.text = seedQuery;
 //     });
-// 
+//
 //     _searchTorrents(seedQuery);
 //   }
-// 
+//
 //   /// Search season packs for a series with full post-torrent actions (not source binding).
 //   void _handleSearchPacks(StremioMeta show) {
 //     debugPrint('TorrentSearchScreen: Search Packs triggered for ${show.name}');
-// 
+//
 //     // Ensure we are NOT in select-source mode — packs use normal post-torrent actions
 //     if (_isSelectSourceMode) {
 //       setState(() {
@@ -3939,7 +3939,7 @@
 //         _selectSourceShow = null;
 //       });
 //     }
-// 
+//
 //     final selection = AdvancedSearchSelection(
 //       imdbId: show.effectiveImdbId ?? show.id,
 //       isSeries: show.type == 'series',
@@ -3948,10 +3948,10 @@
 //       contentType: show.type,
 //       posterUrl: show.poster,
 //     );
-// 
+//
 //     _handleCatalogItemSelected(selection, updateSearchText: true);
 //   }
-// 
+//
 //   /// Switch from aggregated search to a specific addon's CatalogBrowser with episode drill-down.
 //   void _handleBrowseSeriesEpisodes(
 //     StremioMeta show,
@@ -3968,22 +3968,22 @@
 //               opt?.addon?.baseUrl == addon.baseUrl,
 //           orElse: () => null,
 //         );
-// 
+//
 //     if (addonOption == null) {
 //       // Addon not in source options — fall back to direct search
 //       _onItemSelected(show);
 //       return;
 //     }
-// 
+//
 //     // Save current source so we can return to it when exiting episode mode
 //     final previousSource = _selectedSource;
-// 
+//
 //     // Switch to that addon's CatalogBrowser
 //     _onSearchSourceChanged(addonOption);
-// 
+//
 //     // Set after _onSearchSourceChanged (which clears it to prevent loops)
 //     _sourceBeforeEpisodeDrillDown = previousSource;
-// 
+//
 //     // Enter episode mode after the CatalogBrowser rebuilds
 //     WidgetsBinding.instance.addPostFrameCallback((_) {
 //       _catalogBrowserKey.currentState?.enterEpisodeModeForShow(
@@ -3993,7 +3993,7 @@
 //       );
 //     });
 //   }
-// 
+//
 //   /// Called when the user enters the Trakt inline episode guide — hides the
 //   /// host control row. (The catalog drill-down is now a separate route and
 //   /// no longer drives this flag.)
@@ -4002,13 +4002,13 @@
 //       setState(() => _inEpisodeGuide = true);
 //     }
 //   }
-// 
+//
 //   void _onEpisodeGuideExited() {
 //     if (mounted && _inEpisodeGuide) {
 //       setState(() => _inEpisodeGuide = false);
 //     }
 //   }
-// 
+//
 //   void _handleEpisodeModeExited() {
 //     // Now invoked from EpisodesScreen.dispose() via a post-frame callback
 //     // (was synchronous in the old inline mode). Clear the return-source
@@ -4022,7 +4022,7 @@
 //     if (previousSource == null) return;
 //     _onSearchSourceChanged(previousSource);
 //   }
-// 
+//
 //   void _onItemSelected(StremioMeta item) {
 //     final selection = AdvancedSearchSelection(
 //       imdbId: item.effectiveImdbId ?? item.id,
@@ -4034,7 +4034,7 @@
 //     );
 //     _handleCatalogItemSelected(selection, updateSearchText: true);
 //   }
-// 
+//
 //   /// Exit select-source mode without selecting anything.
 //   void _exitSelectSourceMode() {
 //     setState(() {
@@ -4042,7 +4042,7 @@
 //       _selectSourceShow = null;
 //     });
 //   }
-// 
+//
 //   /// Save a bound source — movies override (single source), series append.
 //   Future<void> _saveSource(
 //     String imdbId,
@@ -4055,7 +4055,7 @@
 //       await SeriesSourceService.addSource(imdbId, source);
 //     }
 //   }
-// 
+//
 //   /// Handle torrent picked in select-source mode.
 //   /// Adds to debrid, stores as bound source, then plays.
 //   Future<void> _handleSelectSourceTorrentPicked(
@@ -4066,11 +4066,11 @@
 //     final imdbId = show.effectiveImdbId ?? show.id;
 //     final infohash = torrent.infohash;
 //     final torrentName = torrent.name;
-// 
+//
 //     // Determine which debrid service to use
 //     final defaultProvider = await StorageService.getDefaultTorrentProvider();
 //     if (!mounted) return;
-// 
+//
 //     String debridService;
 //     if (defaultProvider == 'debrid' &&
 //         _realDebridIntegrationEnabled &&
@@ -4120,11 +4120,11 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     if (debridService == 'rd') {
 //       // Show loading dialog
 //       _showSelectSourceLoadingDialog(torrentName);
-// 
+//
 //       try {
 //         final apiKey = _apiKey!;
 //         final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
@@ -4134,9 +4134,9 @@
 //         );
 //         if (!mounted) return;
 //         Navigator.of(context).pop(); // close loading
-// 
+//
 //         final torrentId = result['torrentId']?.toString() ?? '';
-// 
+//
 //         // Store as bound source
 //         await _saveSource(
 //           imdbId,
@@ -4149,7 +4149,7 @@
 //           ),
 //           isMovie: show.type == 'movie',
 //         );
-// 
+//
 //         if (!mounted) return;
 //         _exitSelectSourceMode();
 //         ScaffoldMessenger.of(context).showSnackBar(
@@ -4159,7 +4159,7 @@
 //             duration: const Duration(seconds: 2),
 //           ),
 //         );
-// 
+//
 //         // Go back to Trakt view (clear search state so catalog/Trakt view reappears)
 //         _goBackAndRefreshSources();
 //       } on TorrentNotCachedException catch (e) {
@@ -4205,7 +4205,7 @@
 //       await _addToPikPakAndBindSource(infohash, torrentName, imdbId);
 //     }
 //   }
-// 
+//
 //   /// Show loading dialog for select source operation.
 //   void _showSelectSourceLoadingDialog(String torrentName) {
 //     showGeneralDialog(
@@ -4277,7 +4277,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Add torrent to TorBox and store as bound source.
 //   /// Uses addOnlyIfCached first; if not cached, asks the user before adding.
 //   Future<void> _addToTorboxAndBindSource(
@@ -4288,7 +4288,7 @@
 //     if (!mounted) return;
 //     final apiKey = _torboxApiKey!;
 //     final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
-// 
+//
 //     _showSelectSourceLoadingDialog(torrentName);
 //     try {
 //       // Try cache-only first
@@ -4301,7 +4301,7 @@
 //       );
 //       if (!mounted) return;
 //       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-// 
+//
 //       final success = response['success'] as bool? ?? false;
 //       if (!success) {
 //         final error = (response['error'] ?? '').toString();
@@ -4330,7 +4330,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       // Cached and successful — store binding
 //       final torrentId = response['data']?['torrent_id']?.toString() ?? '';
 //       await _saveSource(
@@ -4367,7 +4367,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Add torrent to Premiumize and store as bound source.
 //   /// Only binds when the torrent is cached (free check). Premiumize is stateless
 //   /// by magnet, so we store just the infohash and re-resolve via directdl later.
@@ -4379,13 +4379,13 @@
 //     if (!mounted) return;
 //     final apiKey = _premiumizeApiKey!;
 //     final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
-// 
+//
 //     _showSelectSourceLoadingDialog(torrentName);
 //     try {
 //       final cached = await PremiumizeService.isCached(apiKey, magnetLink);
 //       if (!mounted) return;
 //       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-// 
+//
 //       if (!cached) {
 //         // Don't bind uncached sources — they can't be played immediately.
 //         if (!mounted) return;
@@ -4400,7 +4400,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       await _saveSource(
 //         imdbId,
 //         SeriesSource(
@@ -4436,7 +4436,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Add torrent to PikPak and store as bound source.
 //   /// Uses the same subfolder pattern as _sendToPikPak.
 //   /// PikPak doesn't have a cache-check API, so the download starts immediately.
@@ -4451,7 +4451,7 @@
 //     try {
 //       final magnet = await _pikPakMagnet(infohash, torrentName);
 //       final pikpak = PikPakApiService.instance;
-// 
+//
 //       // Use same subfolder logic as _sendToPikPak
 //       final parentFolderId = await StorageService.getPikPakRestrictedFolderId();
 //       String? subFolderId;
@@ -4471,14 +4471,14 @@
 //         }
 //         subFolderId = parentFolderId;
 //       }
-// 
+//
 //       final result = await pikpak.addOfflineDownload(
 //         magnet,
 //         parentFolderId: subFolderId,
 //       );
 //       if (!mounted) return;
 //       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-// 
+//
 //       // Extract file/folder ID (needed for listFilesRecursive)
 //       final fileId =
 //           (result['file']?['id'] ??
@@ -4498,7 +4498,7 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       await _saveSource(
 //         imdbId,
 //         SeriesSource(
@@ -4533,7 +4533,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Handle Quick Play - searches and auto-selects best torrent
 //   /// Priority:
 //   /// - Movies: prefer direct links, then first torrent
@@ -4543,14 +4543,14 @@
 //     debugPrint(
 //       'TorrentSearchScreen: Quick Play triggered for ${selection.title}',
 //     );
-// 
+//
 //     // Episode Quick Play pops the episodes+detail routes before entering
 //     // here (_popToHost), so we must set the return flag early — the bound-
 //     // source path returns before the block below that normally sets it.
 //     if (selection.fromCatalogEpisodeDrillDown) {
 //       _returnToCatalogAfterPlayback = true;
 //     }
-// 
+//
 //     // Check if a bound source exists for this item (series or movie)
 //     // Show loading overlay while resolving bound source
 //     final prefetchedSources = await SeriesSourceService.getSources(
@@ -4575,7 +4575,7 @@
 //         return;
 //       }
 //     }
-// 
+//
 //     // No bound source — falling through to search-and-play.
 //     if (selection.fromCatalogItemDetail ||
 //         selection.fromCatalogEpisodeDrillDown) {
@@ -4595,7 +4595,7 @@
 //         _resultsFromItemDetail = false;
 //       }
 //     }
-// 
+//
 //     // Set quick play pending state.
 //     // Quick Play (a movie OR a specific series episode) never needs the
 //     // episode guide, so mask the search UI until auto-play takes over.
@@ -4615,13 +4615,13 @@
 //       _quickPlayMovieMaskTitle = selection.title;
 //       _quickPlayMovieMaskPoster = selection.posterUrl;
 //     });
-// 
+//
 //     // Trigger the same flow as regular catalog selection
 //     await _handleCatalogItemSelected(selection);
-// 
+//
 //     // The search completion handler will check _quickPlayPending and auto-play
 //   }
-// 
+//
 //   Future<void> _handleStartupContinueWatchingItem(
 //     Map<String, dynamic> item,
 //   ) async {
@@ -4630,13 +4630,13 @@
 //       unavailableReason: 'Continue Watching item unavailable',
 //     );
 //   }
-// 
+//
 //   Future<void> _handleStartupAdvancedSearchSelection(
 //     AdvancedSearchSelection selection,
 //   ) async {
 //     await _handleStartupQuickPlaySelection(() async => selection);
 //   }
-// 
+//
 //   Future<void> _handleStartupQuickPlaySelection(
 //     Future<AdvancedSearchSelection?> Function() resolveSelection, {
 //     String unavailableReason = 'Continue Watching item unavailable',
@@ -4644,20 +4644,20 @@
 //     if (_startupContinueWatchingInProgress) return;
 //     _startupContinueWatchingInProgress = true;
 //     _startupContinueWatchingAutoLaunchActive = true;
-// 
+//
 //     try {
 //       await _waitForStartupContinueWatchingReadiness();
 //       if (!mounted) {
 //         _failStartupContinueWatchingAutoLaunch('Continue Watching unavailable');
 //         return;
 //       }
-// 
+//
 //       final selection = await resolveSelection();
 //       if (selection == null) {
 //         _failStartupContinueWatchingAutoLaunch(unavailableReason);
 //         return;
 //       }
-// 
+//
 //       await _handleQuickPlay(selection);
 //       if (_startupContinueWatchingAutoLaunchActive && !_quickPlayPending) {
 //         _failStartupContinueWatchingAutoLaunch('Quick Play could not start');
@@ -4669,19 +4669,19 @@
 //       _startupContinueWatchingInProgress = false;
 //     }
 //   }
-// 
+//
 //   void _completeStartupContinueWatchingAutoLaunch() {
 //     if (!_startupContinueWatchingAutoLaunchActive) return;
 //     _startupContinueWatchingAutoLaunchActive = false;
 //     MainPageBridge.notifyPlayerLaunching();
 //   }
-// 
+//
 //   void _failStartupContinueWatchingAutoLaunch(String reason) {
 //     if (!_startupContinueWatchingAutoLaunchActive) return;
 //     _startupContinueWatchingAutoLaunchActive = false;
 //     MainPageBridge.notifyAutoLaunchFailed(reason);
 //   }
-// 
+//
 //   Future<void> _waitForStartupContinueWatchingReadiness() async {
 //     var attempts = 0;
 //     while (mounted && attempts < 50) {
@@ -4694,20 +4694,20 @@
 //       attempts++;
 //     }
 //   }
-// 
+//
 //   Future<AdvancedSearchSelection?> _selectionFromStartupContinueWatchingItem(
 //     Map<String, dynamic> item,
 //   ) async {
 //     final imdbId = item['imdbId'] as String?;
 //     if (imdbId == null || imdbId.isEmpty) return null;
-// 
+//
 //     final contentType = item['contentType'] as String? ?? 'movie';
 //     final title = item['title'] as String? ?? '';
 //     final isSeries = contentType == 'series';
 //     int? season;
 //     int? episode;
 //     var progress = 0.0;
-// 
+//
 //     if (isSeries) {
 //       final lastEpisode = await StorageService.getLastPlayedEpisodeByImdbId(
 //         imdbId,
@@ -4724,7 +4724,7 @@
 //               : (positionMs / durationMs * 100).clamp(0.0, 100.0).toDouble();
 //         }
 //       }
-// 
+//
 //       if (season == null || episode == null) {
 //         final titleEpisode = await StorageService.getLastPlayedEpisode(
 //           seriesTitle: title,
@@ -4732,7 +4732,7 @@
 //         season = titleEpisode?['season'] as int? ?? 1;
 //         episode = titleEpisode?['episode'] as int? ?? 1;
 //       }
-// 
+//
 //       if (progress >= 90) {
 //         final nextEpisode = await NextEpisodeService.findNextEpisode(
 //           imdbId,
@@ -4745,7 +4745,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     return AdvancedSearchSelection(
 //       imdbId: imdbId,
 //       isSeries: isSeries,
@@ -4757,7 +4757,7 @@
 //       episode: episode,
 //     );
 //   }
-// 
+//
 //   /// Handle Quick Play next episode result from video player.
 //   /// Called when the player pops with a 'quickPlayNext' result.
 //   /// Deferred by one frame so the previous Quick Play's cleanup (_resetQuickPlayState)
@@ -4772,9 +4772,9 @@
 //     final posterUrl =
 //         result['posterUrl'] as String? ?? _activeAdvancedSelection?.posterUrl;
 //     final year = result['year'] as String? ?? _activeAdvancedSelection?.year;
-// 
+//
 //     if (imdbId == null || season == null || episode == null) return;
-// 
+//
 //     debugPrint(
 //       'TorrentSearchScreen: Quick Play next episode S${season}E$episode for $title',
 //     );
@@ -4799,14 +4799,14 @@
 //       _handleQuickPlay(selection);
 //     });
 //   }
-// 
+//
 //   /// Callback for VideoPlayerLauncher to handle Quick Play next episode.
 //   Future<void> Function(Map<String, dynamic>)? get _quickPlayNextCallback {
 //     // Only provide callback for series content
 //     if (_activeAdvancedSelection?.isSeries != true) return null;
 //     return _handleQuickPlayNextEpisode;
 //   }
-// 
+//
 //   void _showQuickPlayLoading(String title, {VoidCallback? onDismissed}) {
 //     _showLoadingDialog(
 //       title,
@@ -4815,7 +4815,7 @@
 //       onDismissed: onDismissed,
 //     );
 //   }
-// 
+//
 //   void _showLoadingDialog(
 //     String title, {
 //     required String subtitle,
@@ -4878,7 +4878,7 @@
 //       ),
 //     ).whenComplete(() => onDismissed?.call());
 //   }
-// 
+//
 //   Future<void> _handleLocalContinueWatchingRandomEpisode(
 //     AdvancedSearchSelection selection,
 //     String? addonId, {
@@ -4889,7 +4889,7 @@
 //       await _handleQuickPlay(selection);
 //       return;
 //     }
-// 
+//
 //     bool dialogOpen = true;
 //     _showLoadingDialog(
 //       selection.title,
@@ -4897,7 +4897,7 @@
 //       accentColor: const Color(0xFFF59E0B),
 //       onDismissed: () => dialogOpen = false,
 //     );
-// 
+//
 //     try {
 //       final chosen = await _resolveRandomEpisodeForLocalSeries(
 //         selection.imdbId,
@@ -4905,12 +4905,12 @@
 //         currentSeason: currentSeason,
 //         currentEpisode: currentEpisode,
 //       );
-// 
+//
 //       if (dialogOpen && mounted) {
 //         Navigator.of(context, rootNavigator: true).pop();
 //       }
 //       if (!mounted) return;
-// 
+//
 //       if (chosen == null) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           const SnackBar(
@@ -4920,7 +4920,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       await _handleQuickPlay(
 //         AdvancedSearchSelection(
 //           imdbId: selection.imdbId,
@@ -4950,7 +4950,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<({int season, int episode})?> _lastPlayedEpisodeForMeta(
 //     StremioMeta item,
 //   ) async {
@@ -4967,7 +4967,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     final byTitle = await StorageService.getLastPlayedEpisode(
 //       seriesTitle: item.name,
 //     );
@@ -4978,10 +4978,10 @@
 //         return (season: season, episode: episode);
 //       }
 //     }
-// 
+//
 //     return null;
 //   }
-// 
+//
 //   Future<void> _handleCatalogPlayRandomEpisode(
 //     StremioMeta item,
 //     StremioAddon? addon,
@@ -4998,7 +4998,7 @@
 //       await _handleQuickPlay(selection);
 //       return;
 //     }
-// 
+//
 //     bool dialogOpen = true;
 //     _showLoadingDialog(
 //       item.name,
@@ -5006,23 +5006,23 @@
 //       accentColor: const Color(0xFFF59E0B),
 //       onDismissed: () => dialogOpen = false,
 //     );
-// 
+//
 //     try {
 //       final current = await _lastPlayedEpisodeForMeta(item);
 //       if (!mounted) return;
-// 
+//
 //       final chosen = await _resolveRandomEpisodeForLocalSeries(
 //         item.effectiveImdbId ?? item.id,
 //         addon?.id,
 //         currentSeason: current?.season,
 //         currentEpisode: current?.episode,
 //       );
-// 
+//
 //       if (dialogOpen && mounted) {
 //         Navigator.of(context, rootNavigator: true).pop();
 //       }
 //       if (!mounted) return;
-// 
+//
 //       if (chosen == null) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           const SnackBar(
@@ -5032,7 +5032,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       await _handleQuickPlay(
 //         AdvancedSearchSelection(
 //           imdbId: item.effectiveImdbId ?? item.id,
@@ -5062,7 +5062,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<({int season, int episode})?> _resolveRandomEpisodeForLocalSeries(
 //     String imdbId,
 //     String? addonId, {
@@ -5084,7 +5084,7 @@
 //         return pickedFromAddon;
 //       }
 //     }
-// 
+//
 //     final rawSeasons = await TraktService.instance.fetchShowSeasons(imdbId);
 //     return _pickRandomEpisodeFromTraktSeasons(
 //       rawSeasons,
@@ -5092,18 +5092,18 @@
 //       currentEpisode: currentEpisode,
 //     );
 //   }
-// 
+//
 //   Future<StremioAddon?> _preferredMetaAddonFor(
 //     String imdbId,
 //     String? addonId,
 //   ) async {
 //     final addons = await StremioService.instance.getEnabledAddons();
-// 
+//
 //     bool supportsEpisodeMeta(StremioAddon addon) =>
 //         addon.supportsMeta &&
 //         addon.supportsSeries &&
 //         addon.supportsContentId(imdbId);
-// 
+//
 //     if (addonId != null) {
 //       final exact = addons.cast<StremioAddon?>().firstWhere(
 //         (addon) =>
@@ -5114,23 +5114,23 @@
 //         return exact;
 //       }
 //     }
-// 
+//
 //     return addons.cast<StremioAddon?>().firstWhere(
 //       (addon) => addon != null && supportsEpisodeMeta(addon),
 //       orElse: () => null,
 //     );
 //   }
-// 
+//
 //   ({int season, int episode})? _pickRandomEpisodeFromAddonVideos(
 //     List<Map<String, dynamic>>? videos, {
 //     int? currentSeason,
 //     int? currentEpisode,
 //   }) {
 //     if (videos == null || videos.isEmpty) return null;
-// 
+//
 //     final episodes = <({int season, int episode, DateTime? firstAired})>[];
 //     final seen = <String>{};
-// 
+//
 //     for (final video in videos) {
 //       final seasonRaw = video['season'];
 //       final season = seasonRaw is int
@@ -5141,36 +5141,36 @@
 //           ? episodeRaw
 //           : (episodeRaw is num ? episodeRaw.toInt() : null);
 //       if (season == null || episode == null || episode <= 0) continue;
-// 
+//
 //       final key = '$season-$episode';
 //       if (!seen.add(key)) continue;
-// 
+//
 //       episodes.add((
 //         season: season,
 //         episode: episode,
 //         firstAired: _tryParseEpisodeDate(video['released'] as String?),
 //       ));
 //     }
-// 
+//
 //     return _pickRandomEpisodeFromCandidates(
 //       episodes,
 //       currentSeason: currentSeason,
 //       currentEpisode: currentEpisode,
 //     );
 //   }
-// 
+//
 //   ({int season, int episode})? _pickRandomEpisodeFromTraktSeasons(
 //     List<Map<String, dynamic>> rawSeasons, {
 //     int? currentSeason,
 //     int? currentEpisode,
 //   }) {
 //     if (rawSeasons.isEmpty) return null;
-// 
+//
 //     final episodes = <({int season, int episode, DateTime? firstAired})>[];
 //     final seasons = rawSeasons
 //         .map(TraktSeason.fromJson)
 //         .where((season) => season.episodes.isNotEmpty);
-// 
+//
 //     for (final season in seasons) {
 //       for (final episode in season.episodes) {
 //         if (episode.number <= 0) continue;
@@ -5181,30 +5181,30 @@
 //         ));
 //       }
 //     }
-// 
+//
 //     return _pickRandomEpisodeFromCandidates(
 //       episodes,
 //       currentSeason: currentSeason,
 //       currentEpisode: currentEpisode,
 //     );
 //   }
-// 
+//
 //   ({int season, int episode})? _pickRandomEpisodeFromCandidates(
 //     List<({int season, int episode, DateTime? firstAired})> episodes, {
 //     int? currentSeason,
 //     int? currentEpisode,
 //   }) {
 //     if (episodes.isEmpty) return null;
-// 
+//
 //     final nowUtc = DateTime.now().toUtc();
 //     final random = Random();
-// 
+//
 //     bool isAired(({int season, int episode, DateTime? firstAired}) episode) {
 //       final firstAired = episode.firstAired;
 //       if (firstAired == null) return true;
 //       return !firstAired.toUtc().isAfter(nowUtc);
 //     }
-// 
+//
 //     List<({int season, int episode, DateTime? firstAired})>
 //     excludeCurrentIfPossible(
 //       List<({int season, int episode, DateTime? firstAired})> candidates,
@@ -5214,7 +5214,7 @@
 //           currentEpisode == null) {
 //         return candidates;
 //       }
-// 
+//
 //       final filtered = candidates
 //           .where(
 //             (episode) =>
@@ -5224,7 +5224,7 @@
 //           .toList();
 //       return filtered.isNotEmpty ? filtered : candidates;
 //     }
-// 
+//
 //     var candidates = episodes
 //         .where((episode) => episode.season > 0 && isAired(episode))
 //         .toList();
@@ -5233,22 +5233,22 @@
 //       final picked = candidates[random.nextInt(candidates.length)];
 //       return (season: picked.season, episode: picked.episode);
 //     }
-// 
+//
 //     candidates = episodes.where(isAired).toList();
 //     candidates = excludeCurrentIfPossible(candidates);
 //     if (candidates.isNotEmpty) {
 //       final picked = candidates[random.nextInt(candidates.length)];
 //       return (season: picked.season, episode: picked.episode);
 //     }
-// 
+//
 //     return null;
 //   }
-// 
+//
 //   DateTime? _tryParseEpisodeDate(String? value) {
 //     if (value == null || value.isEmpty) return null;
 //     return DateTime.tryParse(value);
 //   }
-// 
+//
 //   /// Try to play from bound sources (series: finds the right episode; movies: picks the largest file).
 //   /// Returns true if playback was initiated, false if should fall back to normal search.
 //   /// When [silent] is true, the UI is not switched to the search screen during resolution.
@@ -5261,17 +5261,17 @@
 //         prefetchedSources ??
 //         await SeriesSourceService.getSources(selection.imdbId);
 //     if (sources.isEmpty) return false;
-// 
+//
 //     debugPrint(
 //       'TorrentSearchScreen: Found ${sources.length} bound source(s) for ${selection.title}',
 //     );
-// 
+//
 //     // For series, need season+episode to find the right file in the pack
 //     if (selection.isSeries &&
 //         (selection.season == null || selection.episode == null)) {
 //       return false; // Fall back to normal search silently
 //     }
-// 
+//
 //     try {
 //       // Show loading indicator (skip in silent mode to keep home screen visible)
 //       if (!silent) {
@@ -5282,14 +5282,14 @@
 //           _activeAdvancedSelection = selection;
 //         });
 //       }
-// 
+//
 //       // Try each source in priority order until one has the episode
 //       for (int i = 0; i < sources.length; i++) {
 //         final source = sources[i];
 //         debugPrint(
 //           'TorrentSearchScreen: Trying source ${i + 1}/${sources.length}: ${source.torrentName} (${source.debridService})',
 //         );
-// 
+//
 //         // Suppress the "not found" snackbar for intermediate sources
 //         final isLastSource = i == sources.length - 1;
 //         bool result;
@@ -5343,11 +5343,11 @@
 //           debugPrint('TorrentSearchScreen: Source ${i + 1} failed: $e');
 //           result = false;
 //         }
-// 
+//
 //         if (result) return true;
 //         if (!mounted) return false;
 //       }
-// 
+//
 //       // None of the sources had the episode
 //       if (mounted && !silent) {
 //         setState(() {
@@ -5368,7 +5368,7 @@
 //       return false; // Fall back to normal search
 //     }
 //   }
-// 
+//
 //   /// Find the target episode index from a list of filenames using SeriesParser.
 //   /// Returns null if not found. Shows a hint snackbar only if [showHint] is true.
 //   int? _findEpisodeInFilenames(
@@ -5399,7 +5399,7 @@
 //     }
 //     return null;
 //   }
-// 
+//
 //   /// Launch the video player with a series playlist and clean up after.
 //   Future<void> _launchBoundSourcePlayer({
 //     required String videoUrl,
@@ -5415,12 +5415,12 @@
 //       _isLoading = false;
 //       _searchPhase = SearchPhase.idle;
 //     });
-// 
+//
 //     // Trakt watched → local seeding now runs inside VideoPlayerLauncher.push for
 //     // every series launch, so no per-call sync is needed here.
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     if (selection.isSeries) {
 //       debugPrint(
 //         'TorrentSearchScreen: Playing S${selection.season}E${selection.episode} from bound source ($title)',
@@ -5430,7 +5430,7 @@
 //         'TorrentSearchScreen: Playing movie from bound source ($title)',
 //       );
 //     }
-// 
+//
 //     await VideoPlayerLauncher.push(
 //       context,
 //       VideoPlayerLaunchArgs(
@@ -5457,16 +5457,16 @@
 //       ),
 //       onQuickPlayNextEpisode: _quickPlayNextCallback,
 //     );
-// 
+//
 //     _returnToCatalogIfNeeded();
 //     if (mounted) {
 //       _catalogBrowserKey.currentState?.refreshBoundSources();
 //       _aggregatedResultsKey.currentState?.refreshBoundSources();
 //     }
 //   }
-// 
+//
 //   // ── Local bound source playback ───────────────────────────────────────────
-// 
+//
 //   Future<bool> _tryPlayFromLocalBoundSource(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source, {
@@ -5476,7 +5476,7 @@
 //         ? source.localPath!.trim()
 //         : source.debridTorrentId.trim();
 //     if (localPath.isEmpty) return false;
-// 
+//
 //     if (selection.isSeries || source.isLocalSeriesFolder) {
 //       return _tryPlayFromLocalSeriesFolder(
 //         selection,
@@ -5485,7 +5485,7 @@
 //         showUnavailableHint: showUnavailableHint,
 //       );
 //     }
-// 
+//
 //     final file = File(localPath);
 //     final exists = await file.exists();
 //     final fileName = FileUtils.getFileName(localPath);
@@ -5508,7 +5508,7 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     final stat = await file.stat();
 //     final videoUrl = source.localUri?.trim().isNotEmpty == true
 //         ? source.localUri!.trim()
@@ -5524,7 +5524,7 @@
 //         sizeBytes: stat.size,
 //       ),
 //     ];
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: title,
@@ -5534,7 +5534,7 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   Future<bool> _tryPlayFromLocalSeriesFolder(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source,
@@ -5546,7 +5546,7 @@
 //         selection.episode == null) {
 //       return false;
 //     }
-// 
+//
 //     final folder = Directory(folderPath);
 //     if (!await folder.exists()) {
 //       await SeriesSourceService.removeSourceByHash(
@@ -5567,10 +5567,10 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     final episodes = await LocalBoundSourceService.scanSeriesFolder(folderPath);
 //     if (!mounted) return false;
-// 
+//
 //     if (episodes.isEmpty) {
 //       await SeriesSourceService.removeSourceByHash(
 //         selection.imdbId,
@@ -5590,7 +5590,7 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     final targetIndex = episodes.indexWhere(
 //       (episode) =>
 //           episode.season == selection.season &&
@@ -5610,7 +5610,7 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     final playlist = episodes.map((episode) {
 //       return PlaylistEntry(
 //         url: Uri.file(episode.file.path).toString(),
@@ -5620,7 +5620,7 @@
 //         sizeBytes: episode.sizeBytes,
 //       );
 //     }).toList();
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: playlist[targetIndex].url,
 //       title: source.torrentName,
@@ -5630,9 +5630,9 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   // ── Real-Debrid bound source playback ─────────────────────────────────────
-// 
+//
 //   Future<bool> _tryPlayFromBoundSourceRD(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source, {
@@ -5641,17 +5641,17 @@
 //   }) async {
 //     final apiKey = _apiKey;
 //     if (apiKey == null || apiKey.isEmpty) return false;
-// 
+//
 //     final torrentInfo = await DebridService.getTorrentInfo(
 //       apiKey,
 //       source.debridTorrentId,
 //     );
 //     if (!mounted) return false;
-// 
+//
 //     final links = torrentInfo['links'] as List<dynamic>? ?? [];
 //     final files = torrentInfo['files'] as List<dynamic>? ?? [];
 //     final status = torrentInfo['status']?.toString() ?? '';
-// 
+//
 //     if (links.isEmpty || status == 'magnet_error' || status == 'dead') {
 //       await SeriesSourceService.removeSourceByHash(
 //         selection.imdbId,
@@ -5671,7 +5671,7 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     // Collect selected video files and their corresponding links
 //     final videoFiles = <Map<String, dynamic>>[];
 //     final videoLinks = <String>[];
@@ -5690,14 +5690,14 @@
 //         linkIdx++;
 //       }
 //     }
-// 
+//
 //     if (videoFiles.isEmpty) return false;
-// 
+//
 //     final filenames = videoFiles.map((f) {
 //       final path = (f['path'] as String?) ?? (f['name'] as String?) ?? '';
 //       return path.split('/').last;
 //     }).toList();
-// 
+//
 //     int? targetIndex;
 //     if (selection.isSeries) {
 //       targetIndex = _findEpisodeInFilenames(
@@ -5720,17 +5720,17 @@
 //       targetIndex = largestIdx;
 //     }
 //     if (targetIndex == null) return false;
-// 
+//
 //     // Unrestrict the target link
 //     final unrestrictResult = await DebridService.unrestrictLink(
 //       apiKey,
 //       videoLinks[targetIndex],
 //     );
 //     if (!mounted) return false;
-// 
+//
 //     final videoUrl = unrestrictResult['download']?.toString() ?? '';
 //     if (videoUrl.isEmpty) return false;
-// 
+//
 //     // Build playlist (target eagerly resolved, rest lazy)
 //     final playlist = <PlaylistEntry>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -5745,7 +5745,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: source.torrentName,
@@ -5756,9 +5756,9 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   // ── TorBox bound source playback ──────────────────────────────────────────
-// 
+//
 //   Future<bool> _tryPlayFromBoundSourceTorbox(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source, {
@@ -5767,14 +5767,14 @@
 //   }) async {
 //     final apiKey = _torboxApiKey;
 //     if (apiKey == null || apiKey.isEmpty) return false;
-// 
+//
 //     final torrentId = int.tryParse(source.debridTorrentId);
 //     if (torrentId == null) return false;
-// 
+//
 //     // Fetch torrent with file list
 //     final torrent = await TorboxService.getTorrentById(apiKey, torrentId);
 //     if (!mounted) return false;
-// 
+//
 //     if (torrent == null) {
 //       await SeriesSourceService.removeSourceByHash(
 //         selection.imdbId,
@@ -5794,7 +5794,7 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     // Filter to video files
 //     final videoFiles = torrent.files.where((f) {
 //       if (f.zipped) return false;
@@ -5804,15 +5804,15 @@
 //       return FileUtils.isVideoFile(name) ||
 //           (f.mimetype?.toLowerCase().startsWith('video/') ?? false);
 //     }).toList();
-// 
+//
 //     if (videoFiles.isEmpty) return false;
-// 
+//
 //     final filenames = videoFiles.map((f) {
 //       return f.shortName.isNotEmpty
 //           ? f.shortName
 //           : FileUtils.getFileName(f.name);
 //     }).toList();
-// 
+//
 //     int? targetIndex;
 //     if (selection.isSeries) {
 //       targetIndex = _findEpisodeInFilenames(
@@ -5834,7 +5834,7 @@
 //       targetIndex = largestIdx;
 //     }
 //     if (targetIndex == null) return false;
-// 
+//
 //     // Get download link for target file
 //     final videoUrl = await TorboxService.requestFileDownloadLink(
 //       apiKey: apiKey,
@@ -5843,7 +5843,7 @@
 //     );
 //     if (!mounted) return false;
 //     if (videoUrl.isEmpty) return false;
-// 
+//
 //     // Build playlist (target eagerly resolved, rest lazy via torboxFileId)
 //     final playlist = <PlaylistEntry>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -5858,7 +5858,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: source.torrentName,
@@ -5869,9 +5869,9 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   // ── Premiumize bound source playback ──────────────────────────────────────
-// 
+//
 //   Future<bool> _tryPlayFromBoundSourcePremiumize(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source, {
@@ -5880,11 +5880,11 @@
 //   }) async {
 //     final apiKey = _premiumizeApiKey;
 //     if (apiKey == null || apiKey.isEmpty) return false;
-// 
+//
 //     // Premiumize is stateless by magnet — rebuild it from the stored infohash
 //     // and re-resolve direct links.
 //     final magnet = _torrentAcquisitionUrl(source.torrentHash, source.torrentName);
-// 
+//
 //     final List<PremiumizeFile> files;
 //     try {
 //       files = await PremiumizeService.directDownload(apiKey, magnet);
@@ -5894,7 +5894,7 @@
 //       return false;
 //     }
 //     if (!mounted) return false;
-// 
+//
 //     // Empty content from a successful call means the source is no longer
 //     // cached/available — safe to drop the binding.
 //     if (files.isEmpty) {
@@ -5916,12 +5916,12 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     final videoFiles = files.where(_premiumizeFileLooksLikeVideo).toList();
 //     if (videoFiles.isEmpty) return false;
-// 
+//
 //     final filenames = videoFiles.map((f) => f.fileName).toList();
-// 
+//
 //     int? targetIndex;
 //     if (selection.isSeries) {
 //       targetIndex = _findEpisodeInFilenames(
@@ -5943,10 +5943,10 @@
 //       targetIndex = largestIdx;
 //     }
 //     if (targetIndex == null) return false;
-// 
+//
 //     final videoUrl = videoFiles[targetIndex].link;
 //     if (videoUrl.isEmpty) return false;
-// 
+//
 //     // Premiumize hands back direct links for every file, so populate them all.
 //     final playlist = <PlaylistEntry>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -5967,7 +5967,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: source.torrentName,
@@ -5977,9 +5977,9 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   // ── PikPak bound source playback ──────────────────────────────────────────
-// 
+//
 //   Future<bool> _tryPlayFromBoundSourcePikPak(
 //     AdvancedSearchSelection selection,
 //     SeriesSource source, {
@@ -5987,15 +5987,15 @@
 //     bool showUnavailableHint = true,
 //   }) async {
 //     final pikpak = PikPakApiService.instance;
-// 
+//
 //     // The debridTorrentId for PikPak is the task/file ID of the folder
 //     final folderId = source.debridTorrentId;
 //     if (folderId.isEmpty) return false;
-// 
+//
 //     // List all files recursively in the folder
 //     final allFiles = await pikpak.listFilesRecursive(folderId: folderId);
 //     if (!mounted) return false;
-// 
+//
 //     if (allFiles.isEmpty) {
 //       await SeriesSourceService.removeSourceByHash(
 //         selection.imdbId,
@@ -6015,20 +6015,20 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     // Filter to video files
 //     final videoFiles = allFiles.where((f) {
 //       final name = (f['name'] as String?) ?? '';
 //       final mime = (f['mime_type'] as String?) ?? '';
 //       return FileUtils.isVideoFile(name) || mime.startsWith('video/');
 //     }).toList();
-// 
+//
 //     if (videoFiles.isEmpty) return false;
-// 
+//
 //     final filenames = videoFiles
 //         .map((f) => (f['name'] as String?) ?? '')
 //         .toList();
-// 
+//
 //     int? targetIndex;
 //     if (selection.isSeries) {
 //       targetIndex = _findEpisodeInFilenames(
@@ -6051,15 +6051,15 @@
 //       targetIndex = largestIdx;
 //     }
 //     if (targetIndex == null) return false;
-// 
+//
 //     // Get streaming URL for target file
 //     final targetFileId = videoFiles[targetIndex]['id'] as String;
 //     final fileData = await pikpak.getFileDetails(targetFileId);
 //     if (!mounted) return false;
-// 
+//
 //     final videoUrl = pikpak.getStreamingUrl(fileData) ?? '';
 //     if (videoUrl.isEmpty) return false;
-// 
+//
 //     // Build playlist (target eagerly resolved, rest lazy via pikpakFileId)
 //     final playlist = <PlaylistEntry>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -6075,7 +6075,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: source.torrentName,
@@ -6086,19 +6086,19 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   /// Called after search completes to check if Quick Play should auto-select
 //   Future<void> _checkQuickPlayAfterSearch() async {
 //     if (!_quickPlayPending || _quickPlaySelection == null) return;
-// 
+//
 //     // Save title for filtering before clearing selection
 //     final searchTitle = _quickPlaySelection!.title;
-// 
+//
 //     // Note: Keep _quickPlayPending = true so _handleTorrentCardActivated knows to skip dialog
 //     setState(() {
 //       _quickPlaySelection = null;
 //     });
-// 
+//
 //     if (_torrents.isEmpty) {
 //       debugPrint('TorrentSearchScreen: Quick Play - no torrents found');
 //       // Reset quick play state
@@ -6118,16 +6118,16 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Find the best source based on availability and provider configuration
 //     Torrent? selectedTorrent;
-// 
+//
 //     // Filter sources by type
 //     final torrentsOnly = _torrents
 //         .where((t) => !t.isDirectStream && !t.isExternalStream)
 //         .toList();
 //     final directStreams = _torrents.where((t) => t.isDirectStream).toList();
-// 
+//
 //     // Check if a debrid provider is configured (needed for torrents)
 //     final hasDebridProvider =
 //         (_realDebridIntegrationEnabled &&
@@ -6142,13 +6142,13 @@
 //         (_allDebridIntegrationEnabled &&
 //             _allDebridApiKey != null &&
 //             _allDebridApiKey!.isNotEmpty);
-// 
+//
 //     // Decide which source type to use:
 //     // - If debrid configured and torrents available → use torrents
 //     // - If no debrid OR no torrents → use direct streams if available
 //     final useTorrents = hasDebridProvider && torrentsOnly.isNotEmpty;
 //     final useDirectStreams = !useTorrents && directStreams.isNotEmpty;
-// 
+//
 //     if (!useTorrents && !useDirectStreams) {
 //       // No playable sources
 //       final reason = torrentsOnly.isNotEmpty && !hasDebridProvider
@@ -6174,7 +6174,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Use direct stream if that's what we decided
 //     if (useDirectStreams) {
 //       debugPrint(
@@ -6185,14 +6185,14 @@
 //       debugPrint(
 //         'TorrentSearchScreen: Quick Play - playing direct stream: ${selectedTorrent.displayTitle}',
 //       );
-// 
+//
 //       // Reset quick play state before playing direct stream (no retry logic for direct)
 //       setState(() {
 //         _quickPlayPending = false;
 //       });
 //       // Player launches next and covers the screen; drop the mask now.
 //       _clearQuickPlayMovieMask();
-// 
+//
 //       _completeStartupContinueWatchingAutoLaunch();
 //       _restoreFocusToCard(index >= 0 ? index : 0);
 //       if (selectedTorrent.isExternalStream) {
@@ -6202,25 +6202,25 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Load Quick Play retry settings (only applies to torrents)
 //     _quickPlayTryMultiple =
 //         await StorageService.getQuickPlayTryMultipleTorrents();
 //     _quickPlayMaxRetries = await StorageService.getQuickPlayMaxRetries();
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     // Filter torrents by title match to avoid collections/packs
 //     // Uses word-based matching to handle dots, underscores, etc.
 //     final titleMatched = torrentsOnly.where((t) {
 //       return _torrentMatchesTitle(t.name, searchTitle);
 //     }).toList();
-// 
+//
 //     // Use title-matched torrents if available, otherwise fall back to all
 //     var torrentsForQuickPlay = titleMatched.isNotEmpty
 //         ? titleMatched
 //         : torrentsOnly;
-// 
+//
 //     // For Torbox: ensure cache status is available and filter to cached-only
 //     if (_defaultTorrentProvider == 'torbox' ||
 //         (!hasDebridProvider &&
@@ -6272,7 +6272,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     // For Premiumize: batch cache-check the candidates and filter to cached-only
 //     // so Quick Play picks a known-cached source on the first try (instead of
 //     // probing torrents one at a time). Only when Premiumize is the provider
@@ -6335,7 +6335,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     // For Real-Debrid: filter out torrents with keywords known to be blocked
 //     final bool willUseRd = _defaultTorrentProvider == 'debrid' ||
 //         (_defaultTorrentProvider == 'none' &&
@@ -6353,11 +6353,11 @@
 //         torrentsForQuickPlay = filtered;
 //       }
 //     }
-// 
+//
 //     // Store the full list of torrents for potential retries
 //     _quickPlayTorrentsList = torrentsForQuickPlay;
 //     _quickPlayCurrentIndex = 0;
-// 
+//
 //     // Pick the first torrent (sorted by relevance)
 //     selectedTorrent = torrentsForQuickPlay.first;
 //     debugPrint(
@@ -6366,7 +6366,7 @@
 //     debugPrint(
 //       'TorrentSearchScreen: Quick Play - try multiple: $_quickPlayTryMultiple, max retries: $_quickPlayMaxRetries',
 //     );
-// 
+//
 //     // Auto-play the selected torrent
 //     // Note: _quickPlayPending is still true, will be reset in _handleTorrentCardActivated
 //     if (selectedTorrent != null) {
@@ -6384,15 +6384,15 @@
 //       _handleTorrentCardActivated(selectedTorrent, index >= 0 ? index : 0);
 //     }
 //   }
-// 
+//
 //   // Clear IMDB selection
 //   // Handle D-pad navigation for season dropdown
 //   KeyEventResult _handleSeasonDropdownKeyEvent(KeyEvent event) {
 //     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-// 
+//
 //     final hasSeasonData =
 //         _availableSeasons != null && _availableSeasons!.isNotEmpty;
-// 
+//
 //     // Open custom season picker dialog on Select/Enter/Space
 //     if (isActivateKey(event.logicalKey) ||
 //         event.logicalKey == LogicalKeyboardKey.space) {
@@ -6400,7 +6400,7 @@
 //       _showSeasonPickerDialog();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Arrow Right -> Episode field (if visible/season selected)
 //     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
 //       if (_selectedSeason != null && hasSeasonData) {
@@ -6408,7 +6408,7 @@
 //         return KeyEventResult.handled;
 //       }
 //     }
-// 
+//
 //     // Arrow Down -> Episode field (if visible) or filter row
 //     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
 //       // If episode input is visible, navigate to it
@@ -6428,7 +6428,7 @@
 //       }
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Arrow Up or Escape/Back -> Search field
 //     if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
 //         event.logicalKey == LogicalKeyboardKey.escape ||
@@ -6436,14 +6436,14 @@
 //       _focusSearchBar();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   // Show custom season picker dialog (TV-compatible)
 //   void _showSeasonPickerDialog() {
 //     if (_availableSeasons == null || _availableSeasons!.isEmpty) return;
-// 
+//
 //     showDialog<int?>(
 //       context: context,
 //       builder: (BuildContext context) {
@@ -6509,17 +6509,17 @@
 //       }
 //     });
 //   }
-// 
+//
 //   KeyEventResult _handleSeasonInputKeyEvent(KeyEvent event) {
 //     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-// 
+//
 //     // Arrow Right or Arrow Down -> Episode field
 //     if (event.logicalKey == LogicalKeyboardKey.arrowRight ||
 //         event.logicalKey == LogicalKeyboardKey.arrowDown) {
 //       _episodeInputFocusNode.requestFocus();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Arrow Up or Escape/Back -> Search field
 //     if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
 //         event.logicalKey == LogicalKeyboardKey.escape ||
@@ -6527,25 +6527,25 @@
 //       _focusSearchBar();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   KeyEventResult _handleEpisodeInputKeyEvent(KeyEvent event) {
 //     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-// 
+//
 //     // Arrow Left -> Season field
 //     if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
 //       _seasonInputFocusNode.requestFocus();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Arrow Up -> Search field
 //     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
 //       _focusSearchBar();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Arrow Down -> Navigate to filter row
 //     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
 //       // Navigate to filter row: back button > direct dropdown > torrent dropdown > sort dropdown
@@ -6560,29 +6560,29 @@
 //       }
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     // Escape/Back -> Search field
 //     if (event.logicalKey == LogicalKeyboardKey.escape ||
 //         event.logicalKey == LogicalKeyboardKey.goBack) {
 //       _focusSearchBar();
 //       return KeyEventResult.handled;
 //     }
-// 
+//
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   // Build active IMDB selection chip
 //   Widget _buildImdbSelectionChip() {
 //     // Removed - chip takes up too much space
 //     return const SizedBox.shrink();
 //   }
-// 
+//
 //   // Build movie/series type selector and S/E inputs
 //   Widget _buildImdbTypeAndEpisodeControls() {
 //     if (_selectedImdbTitle == null) {
 //       return const SizedBox.shrink();
 //     }
-// 
+//
 //     // For movies: hide when collapsed
 //     // For series: never hide (we show either the expandable button or full controls)
 //     if (_imdbControlsCollapsed && !_isSeries) {
@@ -6592,12 +6592,12 @@
 //     if (!_isSeries) {
 //       return const SizedBox.shrink();
 //     }
-// 
+//
 //     // For series, show season dropdown and conditional episode input
 //     // If we don't have season data from API, fall back to text inputs
 //     final bool hasSeasonData =
 //         _availableSeasons != null && _availableSeasons!.isNotEmpty;
-// 
+//
 //     return Container(
 //       margin: const EdgeInsets.only(top: 8, bottom: 8),
 //       child: Column(
@@ -6788,7 +6788,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Compact sources icon button for the OTT control bar.
 //   Widget _buildCompactSourcesButton(BuildContext context) {
 //     final keywordCount = _availableEngines
@@ -6799,7 +6799,7 @@
 //     final imdbCount = _availableEngines
 //         .where((e) => e.supportsImdbSearch && (_engineStates[e.name] ?? false))
 //         .length;
-// 
+//
 //     return Focus(
 //       focusNode: _providerAccordionFocusNode,
 //       onFocusChange: (focused) {
@@ -6876,7 +6876,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildQuickControlsLauncher({required bool isFab}) {
 //     final activeProvider = _activeProviderOption;
 //     final isFocused = _traktSyncFocusNode.hasFocus;
@@ -6891,7 +6891,7 @@
 //     final providerLabel = _defaultTorrentProvider == 'none'
 //         ? 'Let me choose'
 //         : activeProvider?.name ?? 'Auto';
-// 
+//
 //     return Focus(
 //       focusNode: _traktSyncFocusNode,
 //       onFocusChange: (focused) => setState(() {}),
@@ -7039,7 +7039,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Future<void> _openTraktCalendar({
 //     bool returnToCalendarOnEpisodeExit = false,
 //   }) async {
@@ -7054,11 +7054,11 @@
 //       returnToCalendarOnEpisodeExit: returnToCalendarOnEpisodeExit,
 //     );
 //   }
-// 
+//
 //   Widget _buildTraktCalendarButton() {
 //     final isSearchActive =
 //         _showSearchField || _hasSearched || _searchController.text.isNotEmpty;
-// 
+//
 //     return Focus(
 //       focusNode: _traktCalendarFocusNode,
 //       onFocusChange: (focused) => setState(() {}),
@@ -7129,7 +7129,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   void _toggleTraktSync() {
 //     setState(() {
 //       _traktSyncCatalog = !_traktSyncCatalog;
@@ -7146,7 +7146,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   _ProviderOption? get _activeProviderOption {
 //     final p = _defaultTorrentProvider;
 //     if (p == 'torbox' &&
@@ -7252,7 +7252,7 @@
 //     }
 //     return null;
 //   }
-// 
+//
 //   List<_ProviderOption> get _availableProviders {
 //     final list = <_ProviderOption>[];
 //     if (_realDebridIntegrationEnabled &&
@@ -7315,7 +7315,7 @@
 //     }
 //     return list;
 //   }
-// 
+//
 //   Future<String> _getPostTorrentActionForProvider(String providerId) {
 //     switch (providerId) {
 //       case 'torbox':
@@ -7331,7 +7331,7 @@
 //         return StorageService.getPostTorrentAction();
 //     }
 //   }
-// 
+//
 //   Future<void> _savePostTorrentActionForProvider(
 //     String providerId,
 //     String action,
@@ -7350,7 +7350,7 @@
 //         return StorageService.savePostTorrentAction(action);
 //     }
 //   }
-// 
+//
 //   List<String> _postTorrentActionOptionsForProvider(String providerId) {
 //     if (providerId == 'premiumize') {
 //       return const ['none', 'choose', 'open', 'play', 'download', 'playlist', 'channel'];
@@ -7370,7 +7370,7 @@
 //       'channel',
 //     ];
 //   }
-// 
+//
 //   String _postTorrentActionLabel(String action, {required String providerId}) {
 //     switch (action) {
 //       case 'none':
@@ -7391,7 +7391,7 @@
 //         return action;
 //     }
 //   }
-// 
+//
 //   String _providerDisplayName(String providerId) {
 //     switch (providerId) {
 //       case 'torbox':
@@ -7407,7 +7407,7 @@
 //         return 'Real-Debrid';
 //     }
 //   }
-// 
+//
 //   void _showProviderSwitchMenu() async {
 //     final providers = _availableProviders;
 //     final active = _activeProviderOption;
@@ -7415,7 +7415,7 @@
 //       providers.length,
 //       (i) => FocusNode(debugLabel: 'prov-menu-$i'),
 //     );
-// 
+//
 //     // Auto-focus active provider after dialog opens (one-time)
 //     WidgetsBinding.instance.addPostFrameCallback((_) {
 //       if (focusNodes.isNotEmpty) {
@@ -7425,7 +7425,7 @@
 //         focusNodes[activeIdx.clamp(0, focusNodes.length - 1)].requestFocus();
 //       }
 //     });
-// 
+//
 //     final result = await showDialog<String>(
 //       context: context,
 //       builder: (context) {
@@ -7543,11 +7543,11 @@
 //         );
 //       },
 //     );
-// 
+//
 //     for (final n in focusNodes) {
 //       n.dispose();
 //     }
-// 
+//
 //     if (result != null && result != active?.id) {
 //       await StorageService.setDefaultTorrentProvider(result);
 //       if (mounted) {
@@ -7557,11 +7557,11 @@
 //       }
 //     }
 //   }
-// 
+//
 //   Widget _buildProviderChip() {
 //     final active = _activeProviderOption;
 //     if (active == null) return const SizedBox.shrink();
-// 
+//
 //     return Focus(
 //       focusNode: _providerChipFocusNode,
 //       onFocusChange: (focused) => setState(() {}),
@@ -7652,7 +7652,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildProvidersAccordion(BuildContext context) {
 //     // Count enabled engines by capability
 //     final keywordEngineCount = _availableEngines
@@ -7663,7 +7663,7 @@
 //     final imdbEngineCount = _availableEngines
 //         .where((e) => e.supportsImdbSearch && (_engineStates[e.name] ?? false))
 //         .length;
-// 
+//
 //     return ValueListenableBuilder<bool>(
 //       valueListenable: _providerAccordionFocused,
 //       builder: (context, isFocused, child) => Container(
@@ -7682,19 +7682,19 @@
 //       child: Focus(
 //         onKeyEvent: (node, event) {
 //           if (event is! KeyDownEvent) return KeyEventResult.ignored;
-// 
+//
 //           // Handle Up arrow to go back to search bar
 //           if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
 //             _focusSearchBar();
 //             return KeyEventResult.handled;
 //           }
-// 
+//
 //           // Handle Left arrow to navigate to dropdown selector
 //           if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
 //             _sourceDropdownFocusNode.requestFocus();
 //             return KeyEventResult.handled;
 //           }
-// 
+//
 //           // Handle Down arrow to navigate to aggregated results, catalog browser, or home sections
 //           if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
 //             // Check if AggregatedSearchResults is visible (All mode with query, not doing torrent search)
@@ -7703,7 +7703,7 @@
 //                 _searchController.text.isNotEmpty &&
 //                 !_hasSearched &&
 //                 !_isLoading;
-// 
+//
 //             if (isAggregatedVisible &&
 //                 _aggregatedResultsKey.currentState != null) {
 //               // Try to focus first result, fall back to keyword card
@@ -7713,7 +7713,7 @@
 //               }
 //               return KeyEventResult.handled;
 //             }
-// 
+//
 //             // Check if CatalogBrowser is visible (addon mode with catalogs, not searched)
 //             final isCatalogBrowserVisible =
 //                 _selectedSource.type == SearchSourceType.addon &&
@@ -7721,7 +7721,7 @@
 //                 _selectedSource.addon!.supportsCatalogs &&
 //                 !_hasSearched &&
 //                 !_isLoading;
-// 
+//
 //             if (isCatalogBrowserVisible &&
 //                 _catalogBrowserKey.currentState != null) {
 //               _catalogBrowserKey.currentState!.requestFocusOnFirstDropdown();
@@ -7860,7 +7860,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Shows a dialog with all sources (engines + Stremio addons) for configuration
 //   /// Sources shown are filtered based on the currently selected search source
 //   Future<void> _showSourcesDialog(BuildContext context) async {
@@ -7874,9 +7874,9 @@
 //           (a) => a.supportsStreams && (a.supportsMovies || a.supportsSeries),
 //         )
 //         .toList();
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     await showDialog<void>(
 //       context: context,
 //       builder: (dialogContext) => _SourcesDialog(
@@ -7893,15 +7893,15 @@
 //         selectedSource: _selectedSource,
 //       ),
 //     );
-// 
+//
 //     // Refresh state after dialog closes
 //     if (mounted) setState(() {});
 //   }
-// 
+//
 //   void _copyMagnetLink(String infohash) {
 //     final magnetLink = _torrentAcquisitionUrl(infohash, '');
 //     Clipboard.setData(ClipboardData(text: magnetLink));
-// 
+//
 //     ScaffoldMessenger.of(context).showSnackBar(
 //       SnackBar(
 //         content: Row(
@@ -7935,7 +7935,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   String _torrentAcquisitionUrl(String infohash, String torrentName) {
 //     final lowerHash = infohash.toLowerCase();
 //     final hashMatch = _torrents.cast<Torrent?>().firstWhere(
@@ -7943,43 +7943,43 @@
 //       orElse: () => null,
 //     );
 //     if (hashMatch != null) return _torrentAcquisitionUrlForTorrent(hashMatch);
-// 
+//
 //     final nameMatch = _torrents.cast<Torrent?>().firstWhere(
 //       (torrent) => torrentName.isNotEmpty && torrent?.name == torrentName,
 //       orElse: () => null,
 //     );
 //     if (nameMatch != null) return _torrentAcquisitionUrlForTorrent(nameMatch);
-// 
+//
 //     final nameParam = torrentName.isNotEmpty
 //         ? '&dn=${Uri.encodeComponent(torrentName)}'
 //         : '';
 //     return 'magnet:?xt=urn:btih:$infohash$nameParam';
 //   }
-// 
+//
 //   String _torrentAcquisitionUrlForTorrent(Torrent torrent) {
 //     final magnetUrl = torrent.magnetUrl?.trim();
 //     if (magnetUrl != null && magnetUrl.toLowerCase().startsWith('magnet:')) {
 //       return magnetUrl;
 //     }
-// 
+//
 //     final torrentUrl = torrent.torrentUrl?.trim();
 //     if (torrentUrl != null && torrentUrl.isNotEmpty) {
 //       return torrentUrl;
 //     }
-// 
+//
 //     final infohash = torrent.infohash;
 //     final nameParam = torrent.name.isNotEmpty
 //         ? '&dn=${Uri.encodeComponent(torrent.name)}'
 //         : '';
 //     return 'magnet:?xt=urn:btih:$infohash$nameParam';
 //   }
-// 
+//
 //   Future<String> _pikPakMagnetForTorrent(Torrent torrent) async {
 //     final magnetUrl = torrent.magnetUrl?.trim();
 //     if (magnetUrl != null && magnetUrl.toLowerCase().startsWith('magnet:')) {
 //       return magnetUrl;
 //     }
-// 
+//
 //     final torrentUrl = torrent.torrentUrl?.trim();
 //     if (torrentUrl != null && torrentUrl.isNotEmpty) {
 //       return TorrentFileService.magnetFromTorrentUrl(
@@ -7987,18 +7987,18 @@
 //         fallbackName: torrent.name,
 //       );
 //     }
-// 
+//
 //     final nameParam = torrent.name.isNotEmpty
 //         ? '&dn=${Uri.encodeComponent(torrent.name)}'
 //         : '';
 //     return 'magnet:?xt=urn:btih:${torrent.infohash}$nameParam';
 //   }
-// 
+//
 //   Future<String> _pikPakMagnet(String infohash, String torrentName) async {
 //     final torrent = _findTorrentByInfohash(infohash, torrentName);
 //     return _pikPakMagnetForTorrent(torrent);
 //   }
-// 
+//
 //   void _sortTorrents({
 //     List<Torrent>? nextBase,
 //     Map<String, _TorrentMetadata>? metadataOverride,
@@ -8013,9 +8013,9 @@
 //             : (nextBase != null
 //                   ? _buildTorrentMetadataMap(baseList)
 //                   : _torrentMetadata));
-// 
+//
 //     final List<Torrent> sortedTorrents = List<Torrent>.from(baseList);
-// 
+//
 //     // Determine if we should apply season pack prioritization
 //     // Only apply for TV series searches when episode is NOT specified
 //     // When episode IS specified, we prioritize single episodes instead
@@ -8023,7 +8023,7 @@
 //     final bool hasEpisode = _activeAdvancedSelection?.episode != null;
 //     final bool shouldApplyCoveragePriority = isSeries && !hasEpisode;
 //     final bool shouldPrioritizeSingleEpisode = isSeries && hasEpisode;
-// 
+//
 //     switch (_sortBy) {
 //       case 'name':
 //         sortedTorrents.sort((a, b) {
@@ -8041,7 +8041,7 @@
 //             );
 //             if (coverageComp != 0) return coverageComp;
 //           }
-// 
+//
 //           // Secondary: name
 //           final comparison = a.displayTitle.toLowerCase().compareTo(
 //             b.displayTitle.toLowerCase(),
@@ -8065,7 +8065,7 @@
 //             );
 //             if (coverageComp != 0) return coverageComp;
 //           }
-// 
+//
 //           // Secondary: size
 //           final comparison = a.sizeBytes.compareTo(b.sizeBytes);
 //           return _sortAscending ? comparison : -comparison;
@@ -8087,7 +8087,7 @@
 //             );
 //             if (coverageComp != 0) return coverageComp;
 //           }
-// 
+//
 //           // Secondary: seeders
 //           final comparison = a.seeders.compareTo(b.seeders);
 //           return _sortAscending ? comparison : -comparison;
@@ -8109,7 +8109,7 @@
 //             );
 //             if (coverageComp != 0) return coverageComp;
 //           }
-// 
+//
 //           // Secondary: date
 //           final comparison = a.createdUnix.compareTo(b.createdUnix);
 //           return _sortAscending ? comparison : -comparison;
@@ -8126,7 +8126,7 @@
 //               b.coveragePriority,
 //             );
 //             if (coverageComp != 0) return coverageComp;
-// 
+//
 //             // Secondary: season count (more seasons = higher rank)
 //             final seasonComp = b.seasonCount.compareTo(a.seasonCount);
 //             if (seasonComp != 0) return seasonComp;
@@ -8137,15 +8137,15 @@
 //             );
 //             if (coverageComp != 0) return coverageComp;
 //           }
-// 
+//
 //           // Tertiary: seeders (best quality indicator for relevance)
 //           return b.seeders.compareTo(a.seeders);
 //         });
 //         break;
 //     }
-// 
+//
 //     final filtered = _applyFiltersToList(sortedTorrents, metadataMap: metadata);
-// 
+//
 //     setState(() {
 //       _allTorrents = sortedTorrents;
 //       _torrentMetadata = metadata;
@@ -8154,7 +8154,7 @@
 //       _selectedInfohashes.clear();
 //       _ensureFocusNodes();
 //     });
-// 
+//
 //     // Auto-focus first result after search (for DPAD/keyboard navigation)
 //     if (_cardFocusNodes.isNotEmpty) {
 //       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8170,7 +8170,7 @@
 //         }
 //       });
 //     }
-// 
+//
 //     // Check if Quick Play is pending and auto-select
 //     if (_quickPlayPending) {
 //       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -8180,14 +8180,14 @@
 //       });
 //     }
 //   }
-// 
+//
 //   List<Torrent> _applyFiltersToList(
 //     List<Torrent> source, {
 //     TorrentFilterState? filtersOverride,
 //     Map<String, _TorrentMetadata>? metadataMap,
 //   }) {
 //     final TorrentFilterState activeFilters = filtersOverride ?? _filters;
-// 
+//
 //     // First apply multi-select provider filter by stream type
 //     List<Torrent> providerFiltered = source;
 //     if (_selectedDirectProviders.isNotEmpty ||
@@ -8210,19 +8210,19 @@
 //         }
 //       }).toList();
 //     }
-// 
+//
 //     // Legacy: Apply single engine filter if active (for compatibility)
 //     if (_selectedEngineFilter != null) {
 //       providerFiltered = providerFiltered
 //           .where((torrent) => torrent.source == _selectedEngineFilter)
 //           .toList();
 //     }
-// 
+//
 //     // Then apply other filters
 //     if (activeFilters.isEmpty) {
 //       return List<Torrent>.from(providerFiltered);
 //     }
-// 
+//
 //     final meta = metadataMap ?? _torrentMetadata;
 //     return providerFiltered
 //         .where((torrent) {
@@ -8249,7 +8249,7 @@
 //         })
 //         .toList(growable: false);
 //   }
-// 
+//
 //   void _applyEngineFilter() {
 //     // Re-apply filters and sorting with the new engine filter
 //     final filtered = _applyFiltersToList(
@@ -8265,7 +8265,7 @@
 //       _ensureFocusNodes();
 //     });
 //   }
-// 
+//
 //   /// Re-apply filters after provider selection changes
 //   void _applyProviderFilter() {
 //     final filtered = _applyFiltersToList(
@@ -8281,7 +8281,7 @@
 //       _ensureFocusNodes();
 //     });
 //   }
-// 
+//
 //   /// Toggle a single direct provider's selection
 //   void _toggleDirectProvider(String provider) {
 //     setState(() {
@@ -8293,7 +8293,7 @@
 //     });
 //     _applyProviderFilter();
 //   }
-// 
+//
 //   /// Toggle a single torrent provider's selection
 //   void _toggleTorrentProvider(String provider) {
 //     setState(() {
@@ -8305,7 +8305,7 @@
 //     });
 //     _applyProviderFilter();
 //   }
-// 
+//
 //   /// Toggle all direct providers (select all or deselect all)
 //   void _toggleAllDirectProviders() {
 //     setState(() {
@@ -8319,7 +8319,7 @@
 //     });
 //     _applyProviderFilter();
 //   }
-// 
+//
 //   /// Toggle all torrent providers (select all or deselect all)
 //   void _toggleAllTorrentProviders() {
 //     setState(() {
@@ -8333,7 +8333,7 @@
 //     });
 //     _applyProviderFilter();
 //   }
-// 
+//
 //   /// Builds metadata map, reusing cached entries when available
 //   Map<String, _TorrentMetadata> _buildTorrentMetadataMap(
 //     List<Torrent> torrents,
@@ -8356,16 +8356,16 @@
 //     }
 //     return map;
 //   }
-// 
+//
 //   /// Calculates provider counts by stream type (direct vs torrent)
 //   /// and initializes selections to include all providers by default
 //   void _calculateStreamTypeCounts(List<Torrent> torrents) {
 //     final directCounts = <String, int>{};
 //     final torrentCounts = <String, int>{};
-// 
+//
 //     for (final torrent in torrents) {
 //       final source = torrent.source.isNotEmpty ? torrent.source : 'unknown';
-// 
+//
 //       // directUrl and externalUrl both count as "direct"
 //       if (torrent.streamType == StreamType.directUrl ||
 //           torrent.streamType == StreamType.externalUrl) {
@@ -8375,14 +8375,14 @@
 //         torrentCounts[source] = (torrentCounts[source] ?? 0) + 1;
 //       }
 //     }
-// 
+//
 //     // Initialize selections to all providers (default all selected)
 //     _directProviderCounts = directCounts;
 //     _torrentProviderCounts = torrentCounts;
 //     _selectedDirectProviders = directCounts.keys.toSet();
 //     _selectedTorrentProviders = torrentCounts.keys.toSet();
 //   }
-// 
+//
 //   QualityTier? _detectQualityTier(String? parsedQuality, String rawName) {
 //     final normalized = '$rawName ${parsedQuality ?? ''}'.toLowerCase();
 //     if (normalized.contains('2160') ||
@@ -8404,7 +8404,7 @@
 //     }
 //     return null;
 //   }
-// 
+//
 //   RipSourceCategory _detectRipSource(String rawName) {
 //     final lower = rawName.toLowerCase();
 //     if (_matchesAny(lower, ['bluray', 'blu-ray', 'bdrip', 'brrip', 'remux'])) {
@@ -8434,7 +8434,7 @@
 //     }
 //     return RipSourceCategory.other;
 //   }
-// 
+//
 //   AudioLanguage? _detectAudioLanguage(String rawName) {
 //     final lower = rawName.toLowerCase();
 //     // Multi-audio detection first (takes priority)
@@ -8491,7 +8491,7 @@
 //     }
 //     return null; // Unknown/not specified
 //   }
-// 
+//
 //   bool _matchesAny(String source, List<String> needles) {
 //     for (final needle in needles) {
 //       if (source.contains(needle)) {
@@ -8500,10 +8500,10 @@
 //     }
 //     return false;
 //   }
-// 
+//
 //   Future<void> _openFiltersSheet() async {
 //     if (_allTorrents.isEmpty && !_hasActiveFilters) return;
-// 
+//
 //     final result = await showDialog<TorrentFilterState>(
 //       context: context,
 //       builder: (_) => Dialog(
@@ -8511,9 +8511,9 @@
 //         child: TorrentFiltersSheet(initialState: _filters),
 //       ),
 //     );
-// 
+//
 //     if (result == null || result == _filters) return;
-// 
+//
 //     setState(() {
 //       _filters = result;
 //       _torrents = _applyFiltersToList(
@@ -8528,7 +8528,7 @@
 //       _ensureFocusNodes();
 //     });
 //   }
-// 
+//
 //   void _clearAllFilters() {
 //     if (!_hasActiveFilters) return;
 //     setState(() {
@@ -8541,7 +8541,7 @@
 //       _ensureFocusNodes();
 //     });
 //   }
-// 
+//
 //   List<String> _buildActiveFilterBadges() {
 //     final badges = <String>[];
 //     for (final tier in _filters.qualities) {
@@ -8555,7 +8555,7 @@
 //     }
 //     return badges;
 //   }
-// 
+//
 //   String _qualityLabel(QualityTier tier) {
 //     switch (tier) {
 //       case QualityTier.ultraHd:
@@ -8568,7 +8568,7 @@
 //         return '480p & below';
 //     }
 //   }
-// 
+//
 //   String _ripLabel(RipSourceCategory category) {
 //     switch (category) {
 //       case RipSourceCategory.web:
@@ -8585,7 +8585,7 @@
 //         return 'Other';
 //     }
 //   }
-// 
+//
 //   String _languageLabel(AudioLanguage language) {
 //     switch (language) {
 //       case AudioLanguage.english:
@@ -8616,7 +8616,7 @@
 //         return 'Multi-Audio';
 //     }
 //   }
-// 
+//
 //   Future<void> _sendToPikPak(
 //     String infohash,
 //     String torrentName, {
@@ -8629,17 +8629,17 @@
 //     _clearQuickPlayMovieMask();
 //     try {
 //       final magnet = await _pikPakMagnet(infohash, torrentName);
-// 
+//
 //       final pikpak = PikPakApiService.instance;
-// 
+//
 //       String? fileId;
 //       String? taskId;
 //       bool cancelled = false;
 //       final startTime = DateTime.now();
-// 
+//
 //       // Get parent folder ID (restricted folder or root)
 //       final parentFolderId = await StorageService.getPikPakRestrictedFolderId();
-// 
+//
 //       // Find or create "debrify-torrents" subfolder
 //       String? subFolderId;
 //       try {
@@ -8660,14 +8660,14 @@
 //         print('PikPak: Failed to create subfolder, using parent folder: $e');
 //         subFolderId = parentFolderId;
 //       }
-// 
+//
 //       // Add to PikPak first
 //       final addResult = await pikpak.addOfflineDownload(
 //         magnet,
 //         parentFolderId: subFolderId,
 //       );
 //       print('PikPak: addOfflineDownload response: $addResult');
-// 
+//
 //       // Extract file ID and task ID
 //       if (addResult['file'] != null) {
 //         fileId = addResult['file']['id'];
@@ -8676,19 +8676,19 @@
 //       } else if (addResult['id'] != null) {
 //         fileId = addResult['id'];
 //       }
-// 
+//
 //       // Extract task ID for tracking download progress
 //       if (addResult['task'] != null) {
 //         taskId = addResult['task']['id'];
 //         print('PikPak: Extracted task_id: $taskId');
 //       }
-// 
+//
 //       if (fileId == null) {
 //         throw Exception('Could not get file ID from PikPak');
 //       }
-// 
+//
 //       print('PikPak: Extracted file_id: $fileId, task_id: $taskId');
-// 
+//
 //       // Auto-save movie source for quick reuse (overrides any previous source)
 //       final sel = _activeAdvancedSelection;
 //       if (sel != null &&
@@ -8705,11 +8705,11 @@
 //           ),
 //         ]);
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       final torrent = _findTorrentByInfohash(infohash, torrentName);
-// 
+//
 //       // Show loading overlay and start polling
 //       late final PikPakOverlayHandle handle;
 //       handle = DebridLoadingOverlay.showPikPak(
@@ -8730,7 +8730,7 @@
 //           handle.dispose();
 //         },
 //       );
-// 
+//
 //       // Start polling (non-blocking) — polling calls Navigator.pop on completion/error
 //       _pollPikPakStatus(
 //         fileId!,
@@ -8751,7 +8751,7 @@
 //     } catch (e) {
 //       print('Error sending to PikPak: $e');
 //       if (!mounted) return;
-// 
+//
 //       // Check if the error is because the restricted folder was deleted
 //       final folderExists = await PikPakApiService.instance
 //           .verifyRestrictedFolderExists();
@@ -8760,43 +8760,43 @@
 //         await _handlePikPakRestrictedFolderDeleted();
 //         return;
 //       }
-// 
+//
 //       _showPikPakSnack('Failed: ${e.toString()}', isError: true);
 //     }
 //   }
-// 
+//
 //   /// Handle the case when PikPak restricted folder has been deleted externally
 //   Future<void> _handlePikPakRestrictedFolderDeleted() async {
 //     print(
 //       'PikPak: Restricted folder was deleted externally, logging out user...',
 //     );
-// 
+//
 //     // Logout from PikPak
 //     await PikPakApiService.instance.logout();
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     // Show error message
 //     _showPikPakSnack(
 //       'Restricted folder was deleted. You have been logged out.',
 //       isError: true,
 //     );
 //   }
-// 
+//
 //   void _enterSelectionMode() {
 //     setState(() {
 //       _isSelectionMode = true;
 //       _selectedInfohashes.clear();
 //     });
 //   }
-// 
+//
 //   void _exitSelectionMode() {
 //     setState(() {
 //       _isSelectionMode = false;
 //       _selectedInfohashes.clear();
 //     });
 //   }
-// 
+//
 //   void _toggleTorrentSelection(Torrent torrent) {
 //     setState(() {
 //       if (_selectedInfohashes.contains(torrent.infohash)) {
@@ -8806,7 +8806,7 @@
 //       }
 //     });
 //   }
-// 
+//
 //   void _selectAllTorrents() {
 //     setState(() {
 //       _selectedInfohashes
@@ -8818,24 +8818,24 @@
 //         );
 //     });
 //   }
-// 
+//
 //   void _deselectAllTorrents() {
 //     setState(() {
 //       _selectedInfohashes.clear();
 //     });
 //   }
-// 
+//
 //   Widget _buildSelectionModeBar() {
 //     final count = _selectedInfohashes.length;
 //     final selectableCount = _torrents
 //         .where((t) => !t.isDirectStream && !t.isExternalStream)
 //         .length;
 //     final bottomPadding = MediaQuery.of(context).padding.bottom;
-// 
+//
 //     // Right inset to avoid overlap with MobileFloatingNav FAB on mobile
 //     final isNarrow = MediaQuery.of(context).size.width < 600;
 //     final rightInset = isNarrow ? 108.0 : 12.0;
-// 
+//
 //     return Positioned(
 //       left: 12,
 //       right: rightInset,
@@ -8953,7 +8953,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildBulkOptionTile({
 //     required IconData icon,
 //     required Color color,
@@ -9035,7 +9035,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Awareness dialog shown before a Premiumize bulk add, explaining that adds
 //   /// consume fair-use points. Returns true if the user chooses to continue.
 //   /// D-pad friendly and responsive across screen sizes.
@@ -9163,13 +9163,13 @@
 //     );
 //     return result ?? false;
 //   }
-// 
+//
 //   /// Show bulk add provider selection dialog
 //   Future<void> _showBulkAddDialog() async {
 //     final selectedCount = _isSelectionMode
 //         ? _selectedInfohashes.length
 //         : _torrents.length;
-// 
+//
 //     final torboxEnabled = _torboxIntegrationEnabled && _torboxApiKey != null;
 //     final rdEnabled = _realDebridIntegrationEnabled && _apiKey != null;
 //     final premiumizeEnabled =
@@ -9180,7 +9180,7 @@
 //         _allDebridIntegrationEnabled &&
 //         _allDebridApiKey != null &&
 //         _allDebridApiKey!.isNotEmpty;
-// 
+//
 //     final result = await showDialog<String>(
 //       context: context,
 //       builder: (context) => AlertDialog(
@@ -9333,7 +9333,7 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     if (result == 'pikpak') {
 //       _bulkAddToPikPak();
 //     } else if (result == 'torbox') {
@@ -9350,7 +9350,7 @@
 //       _createChannelFromSelection();
 //     }
 //   }
-// 
+//
 //   /// Bulk add torrents to PikPak with batching and progress tracking
 //   Future<void> _bulkAddToPikPak() async {
 //     final torrentsToAdd = _isSelectionMode
@@ -9358,31 +9358,31 @@
 //               .where((t) => _selectedInfohashes.contains(t.infohash))
 //               .toList()
 //         : List<Torrent>.from(_torrents);
-// 
+//
 //     if (torrentsToAdd.isEmpty) return;
-// 
+//
 //     setState(() {
 //       _isBulkAdding = true;
 //     });
-// 
+//
 //     final pikpak = PikPakApiService.instance;
 //     final totalTorrents = torrentsToAdd.length;
 //     int successCount = 0;
 //     int failureCount = 0;
 //     int currentIndex = 0;
 //     bool cancelled = false;
-// 
+//
 //     // Track status of each torrent
 //     final Map<String, String> torrentStatus = {};
 //     for (final torrent in torrentsToAdd) {
 //       torrentStatus[torrent.infohash] = 'pending';
 //     }
-// 
+//
 //     try {
 //       // Get or create the debrify-torrents subfolder once
 //       final parentFolderId = await StorageService.getPikPakRestrictedFolderId();
 //       String? subFolderId;
-// 
+//
 //       try {
 //         subFolderId = await pikpak.findOrCreateSubfolder(
 //           folderName: 'debrify-torrents',
@@ -9404,12 +9404,12 @@
 //         );
 //         subFolderId = parentFolderId;
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Capture the dialog state setter for use in async operations
 //       StateSetter? dialogSetState;
-// 
+//
 //       // Show progress dialog
 //       showDialog(
 //         context: context,
@@ -9419,7 +9419,7 @@
 //             builder: (context, setDialogState) {
 //               // Capture the setDialogState for async operations
 //               dialogSetState = setDialogState;
-// 
+//
 //               return AlertDialog(
 //                 backgroundColor: const Color(0xFF0F172A),
 //                 shape: RoundedRectangleBorder(
@@ -9555,10 +9555,10 @@
 //                             final torrent = torrentsToAdd[index];
 //                             final status =
 //                                 torrentStatus[torrent.infohash] ?? 'pending';
-// 
+//
 //                             IconData icon;
 //                             Color iconColor;
-// 
+//
 //                             if (status == 'success') {
 //                               icon = Icons.check_circle;
 //                               iconColor = const Color(0xFF10B981);
@@ -9572,7 +9572,7 @@
 //                               icon = Icons.circle_outlined;
 //                               iconColor = Colors.white54;
 //                             }
-// 
+//
 //                             return Padding(
 //                               padding: const EdgeInsets.symmetric(vertical: 4),
 //                               child: Row(
@@ -9616,19 +9616,19 @@
 //           );
 //         },
 //       );
-// 
+//
 //       // Process torrents in batches of 3 concurrent requests
 //       const batchSize = 3;
-// 
+//
 //       for (int i = 0; i < torrentsToAdd.length && !cancelled; i += batchSize) {
 //         final batchEnd = (i + batchSize).clamp(0, torrentsToAdd.length);
 //         final batch = torrentsToAdd.sublist(i, batchEnd);
-// 
+//
 //         // Process batch concurrently
 //         await Future.wait(
 //           batch.map((torrent) async {
 //             if (cancelled) return;
-// 
+//
 //             try {
 //               // Update status to processing
 //               if (mounted) {
@@ -9637,14 +9637,14 @@
 //                   currentIndex++;
 //                 });
 //               }
-// 
+//
 //               final magnet = await _pikPakMagnetForTorrent(torrent);
-// 
+//
 //               await pikpak.addOfflineDownload(
 //                 magnet,
 //                 parentFolderId: subFolderId,
 //               );
-// 
+//
 //               // Update status to success
 //               if (mounted) {
 //                 dialogSetState?.call(() {
@@ -9652,7 +9652,7 @@
 //                   successCount++;
 //                 });
 //               }
-// 
+//
 //               print('PikPak Bulk: Successfully added ${torrent.name}');
 //             } catch (e) {
 //               // Update status to error
@@ -9662,23 +9662,23 @@
 //                   failureCount++;
 //                 });
 //               }
-// 
+//
 //               print('PikPak Bulk: Failed to add ${torrent.name}: $e');
 //             }
 //           }),
 //         );
-// 
+//
 //         // Small delay between batches to avoid overwhelming the API
 //         if (i + batchSize < torrentsToAdd.length && !cancelled) {
 //           await Future.delayed(const Duration(milliseconds: 500));
 //         }
 //       }
-// 
+//
 //       // Close progress dialog
 //       if (mounted) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       // Show summary
 //       if (!cancelled && mounted) {
 //         if (successCount > 0 && failureCount == 0) {
@@ -9696,10 +9696,10 @@
 //       }
 //     } catch (e) {
 //       print('Error in bulk add to PikPak: $e');
-// 
+//
 //       if (mounted) {
 //         Navigator.of(context).pop();
-// 
+//
 //         // Check if the error is because the restricted folder was deleted
 //         final folderExists = await PikPakApiService.instance
 //             .verifyRestrictedFolderExists();
@@ -9707,7 +9707,7 @@
 //           await _handlePikPakRestrictedFolderDeleted();
 //           return;
 //         }
-// 
+//
 //         _showPikPakSnack('Bulk add failed: ${e.toString()}', isError: true);
 //       }
 //     } finally {
@@ -9721,7 +9721,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Bulk add torrents to TorBox with cache check
 //   Future<void> _bulkAddToTorbox() async {
 //     final torrentsToAdd = _isSelectionMode
@@ -9729,25 +9729,25 @@
 //               .where((t) => _selectedInfohashes.contains(t.infohash))
 //               .toList()
 //         : List<Torrent>.from(_torrents);
-// 
+//
 //     if (torrentsToAdd.isEmpty) return;
-// 
+//
 //     setState(() {
 //       _isBulkAdding = true;
 //     });
-// 
+//
 //     int successCount = 0;
 //     int failureCount = 0;
 //     int skippedCount = 0;
 //     int currentIndex = 0;
 //     bool cancelled = false;
-// 
+//
 //     // Track status of each torrent
 //     final Map<String, String> torrentStatus = {};
 //     for (final torrent in torrentsToAdd) {
 //       torrentStatus[torrent.infohash] = 'pending';
 //     }
-// 
+//
 //     try {
 //       // Phase 1: Cache check
 //       final allHashes = torrentsToAdd.map((t) => t.infohash).toList();
@@ -9755,27 +9755,27 @@
 //         apiKey: _torboxApiKey!,
 //         infoHashes: allHashes,
 //       );
-// 
+//
 //       final cachedTorrents = torrentsToAdd
 //           .where((t) => cachedHashes.contains(t.infohash.toLowerCase()))
 //           .toList();
 //       final uncachedTorrents = torrentsToAdd
 //           .where((t) => !cachedHashes.contains(t.infohash.toLowerCase()))
 //           .toList();
-// 
+//
 //       // Pre-mark uncached torrents
 //       for (final torrent in uncachedTorrents) {
 //         torrentStatus[torrent.infohash] = 'not_cached';
 //       }
 //       skippedCount = uncachedTorrents.length;
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       final totalCached = cachedTorrents.length;
-// 
+//
 //       // Capture the dialog state setter for use in async operations
 //       StateSetter? dialogSetState;
-// 
+//
 //       // Phase 2: Show progress dialog
 //       showDialog(
 //         context: context,
@@ -9784,7 +9784,7 @@
 //           return StatefulBuilder(
 //             builder: (context, setDialogState) {
 //               dialogSetState = setDialogState;
-// 
+//
 //               return AlertDialog(
 //                 backgroundColor: const Color(0xFF0F172A),
 //                 shape: RoundedRectangleBorder(
@@ -9951,11 +9951,11 @@
 //                             final torrent = torrentsToAdd[index];
 //                             final status =
 //                                 torrentStatus[torrent.infohash] ?? 'pending';
-// 
+//
 //                             IconData icon;
 //                             Color iconColor;
 //                             String? subtitle;
-// 
+//
 //                             if (status == 'success') {
 //                               icon = Icons.check_circle;
 //                               iconColor = const Color(0xFF10B981);
@@ -9973,7 +9973,7 @@
 //                               icon = Icons.circle_outlined;
 //                               iconColor = Colors.white54;
 //                             }
-// 
+//
 //                             return Padding(
 //                               padding: const EdgeInsets.symmetric(vertical: 4),
 //                               child: Row(
@@ -10033,13 +10033,13 @@
 //           );
 //         },
 //       );
-// 
+//
 //       // Process cached torrents one at a time to avoid rate limits (60/hr)
 //       bool rateLimited = false;
-// 
+//
 //       for (final torrent in cachedTorrents) {
 //         if (cancelled || rateLimited) break;
-// 
+//
 //         try {
 //           if (mounted) {
 //             dialogSetState?.call(() {
@@ -10047,36 +10047,36 @@
 //               currentIndex++;
 //             });
 //           }
-// 
+//
 //           final magnet = _torrentAcquisitionUrlForTorrent(torrent);
-// 
+//
 //           await TorboxService.createTorrent(
 //             apiKey: _torboxApiKey!,
 //             magnet: magnet,
 //             addOnlyIfCached: true,
 //           );
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'success';
 //               successCount++;
 //             });
 //           }
-// 
+//
 //           print('TorBox Bulk: Successfully added ${torrent.name}');
 //         } catch (e) {
 //           final errLower = e.toString().toLowerCase();
 //           final isRateLimit =
 //               errLower.contains('rate limit') ||
 //               errLower.contains('too many requests');
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'error';
 //               failureCount++;
 //             });
 //           }
-// 
+//
 //           if (isRateLimit) {
 //             rateLimited = true;
 //             // Mark remaining unprocessed torrents as error
@@ -10092,21 +10092,21 @@
 //               });
 //             }
 //           }
-// 
+//
 //           print('TorBox Bulk: Failed to add ${torrent.name}: $e');
 //         }
-// 
+//
 //         // Small delay between requests
 //         if (!cancelled && !rateLimited) {
 //           await Future.delayed(const Duration(milliseconds: 300));
 //         }
 //       }
-// 
+//
 //       // Close progress dialog (guard against double-pop if user cancelled)
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       // Show summary
 //       if (!cancelled && mounted) {
 //         final parts = <String>[];
@@ -10115,7 +10115,7 @@
 //         if (failureCount > 0) parts.add('$failureCount failed');
 //         if (rateLimited) parts.add('Rate limited (60/hr)');
 //         final message = parts.join(', ');
-// 
+//
 //         if (failureCount > 0 || (successCount == 0 && skippedCount > 0)) {
 //           _showTorboxSnack(
 //             message.isEmpty ? 'No torrents added to TorBox' : message,
@@ -10127,7 +10127,7 @@
 //       }
 //     } catch (e) {
 //       print('Error in bulk add to TorBox: $e');
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //         _showTorboxSnack('Bulk add failed: ${e.toString()}', isError: true);
@@ -10143,7 +10143,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Bulk add torrents to Real-Debrid with smart mode (uncached auto-deleted)
 //   Future<void> _bulkAddToRealDebrid() async {
 //     final torrentsToAdd = _isSelectionMode
@@ -10151,31 +10151,31 @@
 //               .where((t) => _selectedInfohashes.contains(t.infohash))
 //               .toList()
 //         : List<Torrent>.from(_torrents);
-// 
+//
 //     if (torrentsToAdd.isEmpty) return;
-// 
+//
 //     setState(() {
 //       _isBulkAdding = true;
 //     });
-// 
+//
 //     final totalTorrents = torrentsToAdd.length;
 //     int successCount = 0;
 //     int failureCount = 0;
 //     int skippedCount = 0;
 //     int currentIndex = 0;
 //     bool cancelled = false;
-// 
+//
 //     // Track status of each torrent
 //     final Map<String, String> torrentStatus = {};
 //     for (final torrent in torrentsToAdd) {
 //       torrentStatus[torrent.infohash] = 'pending';
 //     }
-// 
+//
 //     try {
 //       if (!mounted) return;
-// 
+//
 //       StateSetter? dialogSetState;
-// 
+//
 //       // Show progress dialog
 //       showDialog(
 //         context: context,
@@ -10184,7 +10184,7 @@
 //           return StatefulBuilder(
 //             builder: (context, setDialogState) {
 //               dialogSetState = setDialogState;
-// 
+//
 //               return AlertDialog(
 //                 backgroundColor: const Color(0xFF0F172A),
 //                 shape: RoundedRectangleBorder(
@@ -10351,11 +10351,11 @@
 //                             final torrent = torrentsToAdd[index];
 //                             final status =
 //                                 torrentStatus[torrent.infohash] ?? 'pending';
-// 
+//
 //                             IconData icon;
 //                             Color iconColor;
 //                             String? subtitle;
-// 
+//
 //                             if (status == 'success') {
 //                               icon = Icons.check_circle;
 //                               iconColor = const Color(0xFF10B981);
@@ -10373,7 +10373,7 @@
 //                               icon = Icons.circle_outlined;
 //                               iconColor = Colors.white54;
 //                             }
-// 
+//
 //                             return Padding(
 //                               padding: const EdgeInsets.symmetric(vertical: 4),
 //                               child: Row(
@@ -10433,11 +10433,11 @@
 //           );
 //         },
 //       );
-// 
+//
 //       // Process torrents one at a time (RD has no cache check API)
 //       for (final torrent in torrentsToAdd) {
 //         if (cancelled) break;
-// 
+//
 //         try {
 //           if (mounted) {
 //             dialogSetState?.call(() {
@@ -10445,32 +10445,32 @@
 //               currentIndex++;
 //             });
 //           }
-// 
+//
 //           final magnetLink = _torrentAcquisitionUrlForTorrent(torrent);
-// 
+//
 //           await DebridService.addTorrentToDebrid(_apiKey!, magnetLink);
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'success';
 //               successCount++;
 //             });
 //           }
-// 
+//
 //           print('RD Bulk: Successfully added ${torrent.name}');
 //         } on TorrentNotCachedException catch (e) {
 //           // Not cached — delete the torrent from RD
 //           try {
 //             await DebridService.deleteTorrent(e.apiKey, e.torrentId);
 //           } catch (_) {}
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'not_cached';
 //               skippedCount++;
 //             });
 //           }
-// 
+//
 //           print('RD Bulk: Not cached, removed ${torrent.name}');
 //         } catch (e) {
 //           if (mounted) {
@@ -10479,21 +10479,21 @@
 //               failureCount++;
 //             });
 //           }
-// 
+//
 //           print('RD Bulk: Failed to add ${torrent.name}: $e');
 //         }
-// 
+//
 //         // Small delay between requests
 //         if (!cancelled) {
 //           await Future.delayed(const Duration(milliseconds: 300));
 //         }
 //       }
-// 
+//
 //       // Close progress dialog (guard against double-pop if user cancelled)
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       // Show summary
 //       if (!cancelled && mounted) {
 //         final parts = <String>[];
@@ -10503,7 +10503,7 @@
 //         final message = parts.join(', ');
 //         final isError =
 //             failureCount > 0 || (successCount == 0 && skippedCount > 0);
-// 
+//
 //         if (mounted) {
 //           ScaffoldMessenger.of(context).showSnackBar(
 //             SnackBar(
@@ -10523,7 +10523,7 @@
 //       }
 //     } catch (e) {
 //       print('Error in bulk add to Real-Debrid: $e');
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //         ScaffoldMessenger.of(context).showSnackBar(
@@ -10549,7 +10549,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Bulk-add selected torrents to Premiumize. Uses transfer/create for each,
 //   /// which instantly completes for cached content and queues a cloud download
 //   /// for the rest (so, unlike RD/Torbox, nothing is skipped for being uncached).
@@ -10559,30 +10559,30 @@
 //               .where((t) => _selectedInfohashes.contains(t.infohash))
 //               .toList()
 //         : List<Torrent>.from(_torrents);
-// 
+//
 //     if (torrentsToAdd.isEmpty) return;
-// 
+//
 //     final apiKey = _premiumizeApiKey;
 //     if (apiKey == null || apiKey.isEmpty) {
 //       _showPremiumizeApiKeyMissingMessage();
 //       return;
 //     }
-// 
+//
 //     setState(() {
 //       _isBulkAdding = true;
 //     });
-// 
+//
 //     final totalTorrents = torrentsToAdd.length;
 //     int successCount = 0;
 //     int failureCount = 0;
 //     int skippedCount = 0;
 //     int currentIndex = 0;
 //     bool cancelled = false;
-// 
+//
 //     final Map<String, String> torrentStatus = {
 //       for (final t in torrentsToAdd) t.infohash: 'pending',
 //     };
-// 
+//
 //     // Cache-check up front (free) so only cached torrents are added; uncached
 //     // ones are skipped rather than queued as cloud downloads.
 //     Set<String> cachedHashes = {};
@@ -10600,13 +10600,13 @@
 //       debugPrint('Premiumize Bulk: cache check failed: $e');
 //     }
 //     if (!mounted) return;
-// 
+//
 //     bool isCached(Torrent t) =>
 //         cachedHashes.contains(t.infohash.trim().toLowerCase());
-// 
+//
 //     try {
 //       if (!mounted) return;
-// 
+//
 //       StateSetter? dialogSetState;
 //       showDialog(
 //         context: context,
@@ -10781,7 +10781,7 @@
 //                             final torrent = torrentsToAdd[index];
 //                             final status =
 //                                 torrentStatus[torrent.infohash] ?? 'pending';
-// 
+//
 //                             IconData icon;
 //                             Color iconColor;
 //                             String? subtitle;
@@ -10802,7 +10802,7 @@
 //                               icon = Icons.circle_outlined;
 //                               iconColor = Colors.white54;
 //                             }
-// 
+//
 //                             return Padding(
 //                               padding: const EdgeInsets.symmetric(vertical: 4),
 //                               child: Row(
@@ -10862,10 +10862,10 @@
 //           );
 //         },
 //       );
-// 
+//
 //       for (final torrent in torrentsToAdd) {
 //         if (cancelled) break;
-// 
+//
 //         // Skip uncached torrents — don't queue cloud downloads in bulk.
 //         if (!isCached(torrent)) {
 //           if (mounted) {
@@ -10877,7 +10877,7 @@
 //           }
 //           continue;
 //         }
-// 
+//
 //         try {
 //           if (mounted) {
 //             dialogSetState?.call(() {
@@ -10885,10 +10885,10 @@
 //               currentIndex++;
 //             });
 //           }
-// 
+//
 //           final magnetLink = _torrentAcquisitionUrlForTorrent(torrent);
 //           await PremiumizeService.createTransfer(apiKey, magnetLink);
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'success';
@@ -10904,16 +10904,16 @@
 //           }
 //           debugPrint('Premiumize Bulk: Failed to add ${torrent.name}: $e');
 //         }
-// 
+//
 //         if (!cancelled) {
 //           await Future.delayed(const Duration(milliseconds: 300));
 //         }
 //       }
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       if (!cancelled && mounted) {
 //         final parts = <String>[];
 //         if (successCount > 0) parts.add('Added $successCount');
@@ -10947,7 +10947,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Create a Debrify TV channel from selected torrents
 //   Future<void> _createChannelFromSelection() async {
 //     final torrentsToAdd =
@@ -10957,21 +10957,21 @@
 //                   )
 //                 : _torrents)
 //             .toList();
-// 
+//
 //     if (torrentsToAdd.isEmpty || !mounted) return;
-// 
+//
 //     final keyword = _searchController.text.trim();
 //     await _addTorrentsToChannel(
 //       torrentsToAdd,
 //       keyword,
 //       showShareDialogOnCreate: true,
 //     );
-// 
+//
 //     if (mounted && _isSelectionMode) {
 //       _exitSelectionMode();
 //     }
 //   }
-// 
+//
 //   Future<void> _pollPikPakStatus(
 //     String fileId,
 //     String? taskId,
@@ -10989,28 +10989,28 @@
 //     const pollInterval = Duration(seconds: 2);
 //     const timeoutShowOptions = Duration(seconds: 60);
 //     const extraTimeFor100Percent = Duration(seconds: 10);
-// 
+//
 //     // Phase 1: Poll TASK status until progress >= 90% (if taskId available)
 //     if (taskId != null) {
 //       print('PikPak: Starting task-based polling for taskId: $taskId');
 //       DateTime? reached90PercentTime;
-// 
+//
 //       while (!isCancelled()) {
 //         await Future.delayed(pollInterval);
 //         if (isCancelled() || !mounted) return;
-// 
+//
 //         // Check if we should show timeout options
 //         final elapsed = DateTime.now().difference(startTime);
 //         if (elapsed > timeoutShowOptions) {
 //           setShowTimeoutOptions(true);
 //           return;
 //         }
-// 
+//
 //         try {
 //           final taskData = await pikpak.getTaskStatus(taskId);
 //           final taskPhase = taskData['phase'];
 //           final taskProgress = taskData['progress'];
-// 
+//
 //           // Update progress from task
 //           if (taskProgress != null) {
 //             try {
@@ -11019,7 +11019,7 @@
 //                   : int.parse(taskProgress.toString());
 //               print('PikPak: Task progress: $p%, phase: $taskPhase');
 //               onProgress(p);
-// 
+//
 //               // Check if task is complete
 //               if (taskPhase == 'PHASE_TYPE_COMPLETE') {
 //                 print(
@@ -11027,7 +11027,7 @@
 //                 );
 //                 break;
 //               }
-// 
+//
 //               // Check if task failed
 //               if (taskPhase == 'PHASE_TYPE_ERROR') {
 //                 if (!mounted) return;
@@ -11035,7 +11035,7 @@
 //                 _showPikPakSnack('Download failed on PikPak', isError: true);
 //                 return;
 //               }
-// 
+//
 //               // Track when we first reach 90%
 //               if (p >= 90 && reached90PercentTime == null) {
 //                 print(
@@ -11043,7 +11043,7 @@
 //                 );
 //                 reached90PercentTime = DateTime.now();
 //               }
-// 
+//
 //               // If at 90%+, check if extra time has elapsed
 //               if (reached90PercentTime != null) {
 //                 final timeSince90 = DateTime.now().difference(
@@ -11067,32 +11067,32 @@
 //           break;
 //         }
 //       }
-// 
+//
 //       if (isCancelled() || !mounted) return;
 //     } else {
 //       print('PikPak: No taskId available, using file-based polling');
 //     }
-// 
+//
 //     // Phase 2: Now check file status and extract videos
 //     // (Either task reached 90%+ or we fell back to file-based polling)
 //     print('PikPak: Starting file status check for fileId: $fileId');
-// 
+//
 //     while (!isCancelled()) {
 //       await Future.delayed(pollInterval);
 //       if (isCancelled() || !mounted) return;
-// 
+//
 //       // Check if we should show timeout options
 //       final elapsed = DateTime.now().difference(startTime);
 //       if (elapsed > timeoutShowOptions) {
 //         setShowTimeoutOptions(true);
 //         return;
 //       }
-// 
+//
 //       try {
 //         final fileData = await pikpak.getFileDetails(fileId);
 //         final phase = fileData['phase'];
 //         final kind = fileData['kind'];
-// 
+//
 //         // Update progress from file (fallback if task polling didn't work)
 //         final progressValue = fileData['progress'];
 //         if (progressValue != null) {
@@ -11103,17 +11103,17 @@
 //             onProgress(p);
 //           } catch (_) {}
 //         }
-// 
+//
 //         // Check if complete
 //         if (phase == 'PHASE_TYPE_COMPLETE') {
 //           if (!mounted) return;
 //           Navigator.of(dialogContext).pop();
-// 
+//
 //           // Get all video files (recursively from all folders)
 //           List<Map<String, dynamic>> videoFiles = [];
-// 
+//
 //           print('PikPak: Download complete. kind=$kind, fileId=$fileId');
-// 
+//
 //           if (kind == 'drive#folder') {
 //             // It's a folder (torrent pack), recursively extract all videos
 //             print('PikPak: It is a folder, starting recursive extraction...');
@@ -11129,10 +11129,10 @@
 //               videoFiles = [fileData];
 //             }
 //           }
-// 
+//
 //           print('PikPak: Final video count: ${videoFiles.length}');
 //           if (!mounted) return;
-// 
+//
 //           // If no videos found, PikPak might still be processing the torrent files
 //           if (videoFiles.isEmpty && kind == 'drive#folder') {
 //             _showPikPakSnack(
@@ -11140,7 +11140,7 @@
 //             );
 //             return;
 //           }
-// 
+//
 //           await _showPikPakPostAddOptions(
 //             torrentName,
 //             fileId,
@@ -11150,7 +11150,7 @@
 //           );
 //           return;
 //         }
-// 
+//
 //         // Check if failed
 //         if (phase == 'PHASE_TYPE_ERROR') {
 //           if (!mounted) return;
@@ -11164,7 +11164,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   Future<void> _showPikPakPostAddOptions(
 //     String torrentName,
 //     String fileId,
@@ -11173,18 +11173,18 @@
 //     bool forcePlay = false,
 //   }) async {
 //     if (!mounted) return;
-// 
+//
 //     final hasVideo = videoFiles.isNotEmpty;
 //     // Override to 'play' for Quick Play
 //     final postAction = forcePlay
 //         ? 'play'
 //         : await StorageService.getPikPakPostTorrentAction();
 //     final pikpakHidden = await StorageService.getPikPakHiddenFromNav();
-// 
+//
 //     // For PikPak, we only extract video files, so if we have videos, we can enable video-only actions
 //     // Note: PikPak filtering already ensures only video files are in videoFiles list
 //     final isVideoOnly = videoFiles.isNotEmpty;
-// 
+//
 //     // Handle automatic actions based on preference
 //     switch (postAction) {
 //       case 'none':
@@ -11265,7 +11265,7 @@
 //         // Show the dialog
 //         break;
 //     }
-// 
+//
 //     await showDialog(
 //       context: context,
 //       builder: (ctx) {
@@ -11462,17 +11462,17 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Handle PikPak post-action for external magnet links
 //   Future<void> _showPikPakPostAddOptionsFromExternal(
 //     String fileId,
 //     String fileName,
 //   ) async {
 //     if (!mounted) return;
-// 
+//
 //     final postAction = await StorageService.getPikPakPostTorrentAction();
 //     final pikpakHidden = await StorageService.getPikPakHiddenFromNav();
-// 
+//
 //     // For 'none' action, just show success
 //     if (postAction == 'none') {
 //       ScaffoldMessenger.of(context).showSnackBar(
@@ -11507,13 +11507,13 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     // For 'open' action, open PikPak folder directly
 //     if (postAction == 'open') {
 //       MainPageBridge.openPikPakFolder?.call(fileId, fileName);
 //       return;
 //     }
-// 
+//
 //     // For video-related actions (playlist, play, download, choose), fetch folder contents
 //     List<Map<String, dynamic>> videoFiles = [];
 //     try {
@@ -11530,9 +11530,9 @@
 //     } catch (e) {
 //       debugPrint('PikPak: Failed to list files for post-action: $e');
 //     }
-// 
+//
 //     final hasVideo = videoFiles.isNotEmpty;
-// 
+//
 //     // Handle specific actions
 //     switch (postAction) {
 //       case 'playlist':
@@ -11561,7 +11561,7 @@
 //         // Show dialog with options
 //         break;
 //     }
-// 
+//
 //     // Show choose dialog
 //     await showDialog(
 //       context: context,
@@ -11700,7 +11700,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   void _showPikPakNoVideosSnack() {
 //     ScaffoldMessenger.of(context).showSnackBar(
 //       SnackBar(
@@ -11712,16 +11712,16 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Future<void> _playPikPakVideos(
 //     List<Map<String, dynamic>> videoFiles,
 //     String torrentName, {
 //     String? infohash,
 //   }) async {
 //     if (videoFiles.isEmpty) return;
-// 
+//
 //     final pikpak = PikPakApiService.instance;
-// 
+//
 //     // Single video - play with playlist entry for consistent resume key
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
@@ -11732,7 +11732,7 @@
 //           // Launch player immediately - retry logic will handle cold storage
 //           final sizeBytes = int.tryParse(file['size']?.toString() ?? '0') ?? 0;
 //           final title = file['name'] ?? torrentName;
-// 
+//
 //           // Check if VR playback should be used
 //           final useDeoVR = await _shouldUseDeoVR(title);
 //           if (useDeoVR) {
@@ -11740,7 +11740,7 @@
 //             _returnToCatalogIfNeeded();
 //             return;
 //           }
-// 
+//
 //           await VideoPlayerLauncher.push(
 //             context,
 //             VideoPlayerLaunchArgs(
@@ -11785,7 +11785,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Multiple videos - build playlist like Torbox
 //     final entries = <_PikPakPlaylistItem>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -11801,12 +11801,12 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     // Detect if it's a series collection
 //     final filenames = entries.map((e) => e.displayName).toList();
 //     final bool isSeriesCollection =
 //         entries.length > 1 && SeriesParser.isSeriesPlaylist(filenames);
-// 
+//
 //     // Sort entries
 //     final sortedEntries = [...entries];
 //     if (isSeriesCollection) {
@@ -11829,7 +11829,7 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     // Find first episode to start from
 //     final seriesInfos = sortedEntries.map((e) => e.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
@@ -11838,7 +11838,7 @@
 //     if (startIndex < 0 || startIndex >= sortedEntries.length) {
 //       startIndex = 0;
 //     }
-// 
+//
 //     // Resolve only the first video URL (lazy loading for rest)
 //     String initialUrl = '';
 //     try {
@@ -11852,12 +11852,12 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     if (initialUrl.isEmpty) {
 //       _showPikPakSnack('Could not get streaming URL', isError: true);
 //       return;
 //     }
-// 
+//
 //     // Launch player immediately - retry logic will handle cold storage for all videos
 //     // Build playlist entries
 //     final playlistEntries = <PlaylistEntry>[];
@@ -11886,7 +11886,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     // Calculate subtitle
 //     final totalBytes = sortedEntries.fold<int>(
 //       0,
@@ -11894,7 +11894,7 @@
 //     );
 //     final subtitle =
 //         '${playlistEntries.length} ${isSeriesCollection ? 'episodes' : 'files'} • ${Formatters.formatFileSize(totalBytes)}';
-// 
+//
 //     if (!mounted) return;
 //     await VideoPlayerLauncher.push(
 //       context,
@@ -11927,7 +11927,7 @@
 //     );
 //     _returnToCatalogIfNeeded();
 //   }
-// 
+//
 //   String _pikpakDisplayName(Map<String, dynamic> file) {
 //     final name = file['name']?.toString() ?? '';
 //     if (name.isNotEmpty) {
@@ -11935,7 +11935,7 @@
 //     }
 //     return 'File ${file['id']}';
 //   }
-// 
+//
 //   String _formatPikPakPlaylistTitle({
 //     required SeriesInfo info,
 //     required String fallback,
@@ -11944,7 +11944,7 @@
 //     if (!isSeriesCollection) {
 //       return fallback;
 //     }
-// 
+//
 //     final season = info.season;
 //     final episode = info.episode;
 //     if (info.isSeries && season != null && episode != null) {
@@ -11957,10 +11957,10 @@
 //           : fallback;
 //       return 'S${seasonLabel}E$episodeLabel · $description';
 //     }
-// 
+//
 //     return fallback;
 //   }
-// 
+//
 //   Future<void> _addPikPakToPlaylist(
 //     List<Map<String, dynamic>> videoFiles,
 //     String torrentName,
@@ -11970,7 +11970,7 @@
 //       _showPikPakSnack('No video files to add', isError: true);
 //       return;
 //     }
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       final added = await StorageService.addPlaylistItemRaw({
@@ -12011,7 +12011,7 @@
 //             },
 //           )
 //           .toList();
-// 
+//
 //       final added = await StorageService.addPlaylistItemRaw({
 //         'provider': 'pikpak',
 //         'title': FileUtils.cleanPlaylistTitle(torrentName),
@@ -12038,13 +12038,13 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _downloadPikPakFiles(String fileId, String torrentName) async {
 //     // Show selection dialog for downloading files
 //     if (!mounted) return;
-// 
+//
 //     final pikpak = PikPakApiService.instance;
-// 
+//
 //     // Show loading dialog while we fetch the file structure
 //     showDialog(
 //       context: context,
@@ -12060,13 +12060,13 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     try {
 //       // Get all files from the folder (recursively)
 //       final fileData = await pikpak.getFileDetails(fileId);
 //       final kind = fileData['kind'];
 //       List<Map<String, dynamic>> allFiles = [];
-// 
+//
 //       if (kind == 'drive#folder') {
 //         // Extract all files recursively
 //         allFiles = await _extractAllPikPakFiles(pikpak, fileId);
@@ -12074,17 +12074,17 @@
 //         // Single file
 //         allFiles = [fileData];
 //       }
-// 
+//
 //       // Close loading dialog
 //       if (mounted) {
 //         Navigator.of(context, rootNavigator: true).pop();
 //       }
-// 
+//
 //       if (allFiles.isEmpty) {
 //         _showPikPakSnack('No files found to download', isError: true);
 //         return;
 //       }
-// 
+//
 //       // Show file selection dialog
 //       if (!mounted) return;
 //       await showDialog(
@@ -12108,18 +12108,18 @@
 //       _showPikPakSnack('Failed to fetch files: $e', isError: true);
 //     }
 //   }
-// 
+//
 //   /// Downloads selected files from PikPak with folder grouping (similar to Real-Debrid)
 //   Future<void> _downloadSelectedPikPakFiles(
 //     List<Map<String, dynamic>> files,
 //     String torrentName,
 //   ) async {
 //     if (files.isEmpty) return;
-// 
+//
 //     int successCount = 0;
 //     int failCount = 0;
 //     final pikpak = PikPakApiService.instance;
-// 
+//
 //     // Show loading dialog
 //     if (!mounted) return;
 //     showDialog(
@@ -12139,21 +12139,21 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     for (final file in files) {
 //       try {
 //         final fileId = file['id'] as String?;
 //         if (fileId == null) continue;
-// 
+//
 //         // Get fresh file details with download URL
 //         final freshFileData = await pikpak.getFileDetails(fileId);
 //         final downloadUrl = freshFileData['web_content_link'] as String?;
-// 
+//
 //         if (downloadUrl == null || downloadUrl.isEmpty) {
 //           failCount++;
 //           continue;
 //         }
-// 
+//
 //         // Extract file path and name - use the full path if available (from folder navigation)
 //         final fullPath =
 //             file['_fullPath'] as String? ??
@@ -12163,7 +12163,7 @@
 //             file['_displayName'] as String? ??
 //             file['name'] as String? ??
 //             'download';
-// 
+//
 //         // Create metadata with folder structure info (similar to Real-Debrid pattern)
 //         final meta = jsonEncode({
 //           'pikpakDownload': true,
@@ -12171,7 +12171,7 @@
 //           'pikpakFileName': fullPath, // Store full path for folder structure
 //           'pikpakDisplayName': displayName, // Display name for UI
 //         });
-// 
+//
 //         // Enqueue download with torrentName for grouping (like Real-Debrid does)
 //         // This groups all files under the same torrent name in the downloads screen
 //         await DownloadService.instance.enqueueDownload(
@@ -12189,12 +12189,12 @@
 //         failCount++;
 //       }
 //     }
-// 
+//
 //     // Close loading dialog
 //     if (mounted) {
 //       Navigator.of(context, rootNavigator: true).pop();
 //     }
-// 
+//
 //     if (successCount > 0) {
 //       _showPikPakSnack(
 //         'Queued $successCount file${successCount > 1 ? 's' : ''} for download',
@@ -12207,7 +12207,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Recursively extract all files (not just videos) from a PikPak folder
 //   /// Preserves folder structure by prefixing file names with their relative path
 //   Future<List<Map<String, dynamic>>> _extractAllPikPakFiles(
@@ -12220,23 +12220,23 @@
 //     if (currentDepth >= maxDepth) {
 //       return [];
 //     }
-// 
+//
 //     final List<Map<String, dynamic>> files = [];
-// 
+//
 //     try {
 //       final result = await pikpak.listFiles(parentId: folderId);
 //       final items = result.files;
-// 
+//
 //       for (final item in items) {
 //         final kind = item['kind'] ?? '';
 //         final itemName = item['name'] ?? 'unknown';
-// 
+//
 //         if (kind == 'drive#folder') {
 //           // Build the path for this subfolder
 //           final subPath = currentPath.isEmpty
 //               ? itemName
 //               : '$currentPath/$itemName';
-// 
+//
 //           // Recursively scan subfolder with updated path
 //           final subFiles = await _extractAllPikPakFiles(
 //             pikpak,
@@ -12259,10 +12259,10 @@
 //     } catch (e) {
 //       print('Error extracting PikPak files: $e');
 //     }
-// 
+//
 //     return files;
 //   }
-// 
+//
 //   void _showPikPakSnack(String message, {bool isError = false}) {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -12300,7 +12300,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Add a single torrent to a Debrify TV channel
 //   Future<void> _addTorrentToChannel(
 //     Torrent torrent,
@@ -12308,7 +12308,7 @@
 //   ) async {
 //     await _addTorrentsToChannel([torrent], searchKeyword);
 //   }
-// 
+//
 //   /// Add multiple torrents to a Debrify TV channel via the picker dialog
 //   Future<void> _addTorrentsToChannel(
 //     List<Torrent> torrents,
@@ -12321,9 +12321,9 @@
 //         torrents: torrents,
 //         searchKeyword: searchKeyword,
 //       );
-// 
+//
 //       if (result == null || !mounted) return;
-// 
+//
 //       ScaffoldMessenger.of(context).showSnackBar(
 //         SnackBar(
 //           content: Text(result.successMessage),
@@ -12331,7 +12331,7 @@
 //           duration: const Duration(seconds: 2),
 //         ),
 //       );
-// 
+//
 //       if (result.isNewChannel && showShareDialogOnCreate) {
 //         try {
 //           await _showChannelCreatedDialog(result.channelId);
@@ -12359,7 +12359,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _showChannelCreatedDialog(String channelId) async {
 //     final repo = DebrifyTvRepository.instance;
 //     final channels = await repo.fetchAllChannels();
@@ -12373,7 +12373,7 @@
 //     }
 //     if (found == null) return;
 //     final channel = found;
-// 
+//
 //     String? debrifyLink;
 //     String? encodeError;
 //     try {
@@ -12390,9 +12390,9 @@
 //     } catch (e) {
 //       encodeError = e.toString();
 //     }
-// 
+//
 //     if (!mounted) return;
-// 
+//
 //     await showDialog(
 //       context: context,
 //       builder: (context) {
@@ -12462,7 +12462,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Recursively extract all video files from a PikPak folder and its subfolders
 //   /// Preserves folder structure by prefixing file names with their relative path
 //   Future<List<Map<String, dynamic>>> _extractAllPikPakVideos(
@@ -12476,28 +12476,28 @@
 //       print('PikPak: Max depth reached at $currentDepth');
 //       return [];
 //     }
-// 
+//
 //     final List<Map<String, dynamic>> videos = [];
-// 
+//
 //     try {
 //       print('PikPak: Scanning folder $folderId (depth: $currentDepth)');
 //       final result = await pikpak.listFiles(parentId: folderId);
 //       final files = result.files;
 //       print('PikPak: Found ${files.length} items in folder');
-// 
+//
 //       for (final file in files) {
 //         final kind = file['kind'] ?? '';
 //         final mimeType = file['mime_type'] ?? '';
 //         final itemName = file['name'] ?? 'unknown';
-// 
+//
 //         print('PikPak: Item: $itemName, kind: $kind, mime: $mimeType');
-// 
+//
 //         if (kind == 'drive#folder') {
 //           // Build the path for this subfolder
 //           final subPath = currentPath.isEmpty
 //               ? itemName
 //               : '$currentPath/$itemName';
-// 
+//
 //           // Recursively scan subfolder with updated path
 //           print('PikPak: Entering subfolder: $itemName');
 //           final subVideos = await _extractAllPikPakVideos(
@@ -12525,20 +12525,20 @@
 //     } catch (e) {
 //       print('Error extracting PikPak videos from folder $folderId: $e');
 //     }
-// 
+//
 //     // Sort videos by name for consistent ordering
 //     videos.sort((a, b) {
 //       final nameA = (a['name'] ?? '').toString().toLowerCase();
 //       final nameB = (b['name'] ?? '').toString().toLowerCase();
 //       return nameA.compareTo(nameB);
 //     });
-// 
+//
 //     print(
 //       'PikPak: Total videos found at depth $currentDepth: ${videos.length}',
 //     );
 //     return videos;
 //   }
-// 
+//
 //   Future<void> _addToRealDebrid(
 //     String infohash,
 //     String torrentName,
@@ -12580,7 +12580,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     // Show loading overlay. During a movie Quick Play the screen already
 //     // shows a continuous loading mask, so render this one invisibly (route
 //     // lifecycle unchanged) to avoid a jarring second overlay.
@@ -12589,14 +12589,14 @@
 //       torrentName,
 //       suppressVisual: _quickPlayMovieMasking,
 //     );
-// 
+//
 //     try {
 //       final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
 //       final result = await DebridService.addTorrentToDebrid(apiKey, magnetLink);
-// 
+//
 //       // Close loading dialog
 //       Navigator.of(context).pop();
-// 
+//
 //       // Auto-save movie source for quick reuse (overrides any previous source)
 //       final sel = _activeAdvancedSelection;
 //       if (sel != null && !sel.isSeries && sel.contentType == 'movie') {
@@ -12613,7 +12613,7 @@
 //           ]);
 //         }
 //       }
-// 
+//
 //       // Handle post-torrent action
 //       await _handlePostTorrentAction(
 //         result,
@@ -12628,7 +12628,7 @@
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       // For Quick Play, delete and try next torrent
 //       if (forcePlay) {
 //         await DebridService.deleteTorrent(e.apiKey, e.torrentId);
@@ -12636,7 +12636,7 @@
 //         _resetQuickPlayState();
 //         return;
 //       }
-// 
+//
 //       if (!mounted) return;
 //       final addAnyway = await _showNotCachedDialog('debrid');
 //       _restoreFocusToCard(index);
@@ -12664,16 +12664,16 @@
 //     } catch (e) {
 //       // Close loading dialog
 //       Navigator.of(context).pop();
-// 
+//
 //       // Quick Play retry — any error means this torrent can't be played, try next
 //       if (forcePlay && _tryNextQuickPlayTorrent(provider: 'debrid')) {
 //         return; // Next torrent is being tried
 //       }
-// 
+//
 //       if (forcePlay) {
 //         _resetQuickPlayState();
 //       }
-// 
+//
 //       // Show error message
 //       ScaffoldMessenger.of(context).showSnackBar(
 //         SnackBar(
@@ -12707,7 +12707,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Shows a dialog when a torrent is not cached, asking the user if they want
 //   /// to add it anyway. Returns true if the user wants to add it.
 //   Future<bool> _showNotCachedDialog(String provider) async {
@@ -12838,7 +12838,7 @@
 //     );
 //     return result == true;
 //   }
-// 
+//
 //   Future<void> _showFileSelectionDialog(
 //     String infohash,
 //     String torrentName,
@@ -12879,7 +12879,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     showDialog(
 //       context: context,
 //       builder: (BuildContext context) {
@@ -12977,7 +12977,7 @@
 //                     ],
 //                   ),
 //                 ),
-// 
+//
 //                 // Content (scrollable to avoid overflow)
 //                 Flexible(
 //                   child: SingleChildScrollView(
@@ -13081,7 +13081,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _addToRealDebridWithSelection(
 //     String infohash,
 //     String torrentName,
@@ -13123,7 +13123,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     // Show loading dialog
 //     showDialog(
 //       context: context,
@@ -13181,7 +13181,7 @@
 //         );
 //       },
 //     );
-// 
+//
 //     try {
 //       final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
 //       final result = await DebridService.addTorrentToDebrid(
@@ -13189,10 +13189,10 @@
 //         magnetLink,
 //         tempFileSelection: fileSelection,
 //       );
-// 
+//
 //       // Close loading dialog
 //       Navigator.of(context).pop();
-// 
+//
 //       // Handle post-torrent action
 //       await _handlePostTorrentAction(
 //         result,
@@ -13206,7 +13206,7 @@
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       if (!mounted) return;
 //       final addAnyway = await _showNotCachedDialog('debrid');
 //       _restoreFocusToCard(index);
@@ -13232,7 +13232,7 @@
 //     } catch (e) {
 //       // Close loading dialog
 //       Navigator.of(context).pop();
-// 
+//
 //       // Show error message
 //       ScaffoldMessenger.of(context).showSnackBar(
 //         SnackBar(
@@ -13266,15 +13266,15 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Tries the next torrent in Quick Play mode when current one fails cache check.
 //   /// Returns true if there's a next torrent to try, false if exhausted.
 //   bool _tryNextQuickPlayTorrent({required String provider}) {
 //     if (!_quickPlayTryMultiple) return false;
 //     if (_quickPlayTorrentsList.isEmpty) return false;
-// 
+//
 //     _quickPlayCurrentIndex++;
-// 
+//
 //     // Check if we've exhausted retries
 //     if (_quickPlayCurrentIndex >= _quickPlayMaxRetries ||
 //         _quickPlayCurrentIndex >= _quickPlayTorrentsList.length) {
@@ -13295,14 +13295,14 @@
 //       }
 //       return false;
 //     }
-// 
+//
 //     // Get next torrent
 //     final nextTorrent = _quickPlayTorrentsList[_quickPlayCurrentIndex];
 //     final nextIndex = _torrents.indexOf(nextTorrent);
 //     debugPrint(
 //       'TorrentSearchScreen: Quick Play - trying torrent ${_quickPlayCurrentIndex + 1}/$_quickPlayMaxRetries: ${nextTorrent.displayTitle}',
 //     );
-// 
+//
 //     // Show brief feedback
 //     if (mounted) {
 //       ScaffoldMessenger.of(context).showSnackBar(
@@ -13314,13 +13314,13 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     // Set quickPlayPending back to true so forcePlay works for the next torrent
 //     if (!mounted) return false;
 //     setState(() {
 //       _quickPlayPending = true;
 //     });
-// 
+//
 //     // Trigger the next torrent based on provider
 //     if (provider == 'torbox') {
 //       _addToTorbox(nextTorrent.infohash, nextTorrent.name, forcePlay: true);
@@ -13336,10 +13336,10 @@
 //     } else if (provider == 'alldebrid') {
 //       _addToAllDebrid(nextTorrent.infohash, nextTorrent.name, forcePlay: true);
 //     }
-// 
+//
 //     return true;
 //   }
-// 
+//
 //   /// Tears down the movie Quick Play mask, revealing the underlying
 //   /// search UI as a graceful fallback. Idempotent and safe on any path
 //   /// (including when unmounted).
@@ -13375,7 +13375,7 @@
 //       _quickPlayMovieMaskPoster = null;
 //     });
 //   }
-// 
+//
 //   @override
 //   void didChangeAppLifecycleState(AppLifecycleState state) {
 //     super.didChangeAppLifecycleState(state);
@@ -13392,7 +13392,7 @@
 //       });
 //     }
 //   }
-// 
+//
 //   /// User backed out of / cancelled a movie Quick Play before it resolved.
 //   /// Abandons the in-flight search (bumping the request id makes its result
 //   /// a no-op via the existing stale-request guards) and resets Quick Play +
@@ -13425,7 +13425,7 @@
 //       _searchPhase = SearchPhase.idle;
 //     });
 //   }
-// 
+//
 //   /// Resets Quick Play state after completion or failure
 //   void _resetQuickPlayState() {
 //     setState(() {
@@ -13438,14 +13438,14 @@
 //     // before the player activity is on screen (cleared on resume instead).
 //     _clearQuickPlayMovieMask();
 //   }
-// 
+//
 //   /// Checks if a torrent name matches the search title using word-based matching.
 //   /// This is more robust than substring matching as it handles dots, underscores,
 //   /// and other separators commonly used in torrent names.
 //   bool _torrentMatchesTitle(String torrentName, String searchTitle) {
 //     // Common articles/words to skip when matching
 //     const skipWords = {'the', 'a', 'an', 'and', 'of', 'in', 'to', 'for'};
-// 
+//
 //     // Normalize: replace common separators with spaces, lowercase
 //     String normalize(String s) {
 //       return s
@@ -13457,24 +13457,24 @@
 //           .replaceAll(RegExp(r'\s+'), ' ') // Collapse multiple spaces
 //           .trim();
 //     }
-// 
+//
 //     // Use only the first line of torrent name (the actual title)
 //     // Some sources include filename and metadata on subsequent lines
 //     final firstLine = torrentName.split('\n').first;
 //     final normalizedName = normalize(firstLine);
 //     final normalizedTitle = normalize(searchTitle);
-// 
+//
 //     // Extract significant words from the title (skip articles and very short words)
 //     final titleWords = normalizedTitle
 //         .split(' ')
 //         .where((w) => w.length > 1 && !skipWords.contains(w))
 //         .toList();
-// 
+//
 //     // If no significant words, fall back to simple contains check
 //     if (titleWords.isEmpty) {
 //       return normalizedName.contains(normalizedTitle);
 //     }
-// 
+//
 //     // Check if all significant title words appear in the torrent name
 //     for (final word in titleWords) {
 //       // Use word boundary check to avoid partial matches
@@ -13484,10 +13484,10 @@
 //         return false;
 //       }
 //     }
-// 
+//
 //     return true;
 //   }
-// 
+//
 //   Future<void> _addToTorbox(
 //     String infohash,
 //     String torrentName, {
@@ -13499,9 +13499,9 @@
 //       _clearQuickPlayMovieMask();
 //       return;
 //     }
-// 
+//
 //     _showTorboxLoadingDialog(torrentName);
-// 
+//
 //     try {
 //       final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
 //       final response = await TorboxService.createTorrent(
@@ -13511,11 +13511,11 @@
 //         allowZip: true,
 //         addOnlyIfCached: true,
 //       );
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       final success = response['success'] as bool? ?? false;
 //       if (!success) {
 //         final error = (response['error'] ?? '').toString();
@@ -13621,7 +13621,7 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       final data = response['data'];
 //       final torrentId = _asIntMapValue(data, 'torrent_id');
 //       if (torrentId == null) {
@@ -13631,7 +13631,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       final torboxTorrent = await _fetchTorboxTorrentById(apiKey, torrentId);
 //       if (torboxTorrent == null) {
 //         if (forcePlay && _tryNextQuickPlayTorrent(provider: 'torbox')) return;
@@ -13641,9 +13641,9 @@
 //         if (forcePlay) _resetQuickPlayState();
 //         return;
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Auto-save movie source for quick reuse (overrides any previous source)
 //       final sel = _activeAdvancedSelection;
 //       if (sel != null && !sel.isSeries && sel.contentType == 'movie') {
@@ -13657,7 +13657,7 @@
 //           ),
 //         ]);
 //       }
-// 
+//
 //       final torrent = _findTorrentByInfohash(infohash, torrentName);
 //       await _showTorboxPostAddOptions(
 //         torboxTorrent,
@@ -13681,7 +13681,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   void _showTorboxApiKeyMissingMessage() {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -13713,7 +13713,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   // ===========================================================================
 //   // Premiumize: Add / Play / Download
 //   //
@@ -13721,7 +13721,7 @@
 //   // file in one call (no per-file unrestrict step), so playlists carry real URLs
 //   // and downloads enqueue those URLs directly.
 //   // ===========================================================================
-// 
+//
 //   void _showPremiumizeApiKeyMissingMessage() {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -13733,7 +13733,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   void _showPremiumizeSnack(String message, {bool isError = false}) {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -13747,7 +13747,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   String _formatPremiumizeError(Object error) {
 //     var message = error.toString();
 //     // Strip nested "Exception:" prefixes for a cleaner message.
@@ -13755,11 +13755,11 @@
 //     if (message.isEmpty) return 'Something went wrong.';
 //     return message;
 //   }
-// 
+//
 //   bool _premiumizeFileLooksLikeVideo(PremiumizeFile file) {
 //     return FileUtils.isVideoFile(file.fileName);
 //   }
-// 
+//
 //   Future<void> _addToPremiumize(
 //     String infohash,
 //     String torrentName, {
@@ -13771,19 +13771,19 @@
 //       _clearQuickPlayMovieMask();
 //       return;
 //     }
-// 
+//
 //     DebridLoadingOverlay.showPremiumize(
 //       context,
 //       torrentName,
 //       suppressVisual: _quickPlayMovieMasking,
 //     );
-// 
+//
 //     try {
 //       final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
-// 
+//
 //       // Cache check first — free, no fair-use cost.
 //       final cached = await PremiumizeService.isCached(apiKey, magnetLink);
-// 
+//
 //       if (!cached) {
 //         if (mounted && Navigator.of(context).canPop()) {
 //           Navigator.of(context).pop();
@@ -13821,14 +13821,14 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       // Cached — resolve direct links for every file at once.
 //       final files = await PremiumizeService.directDownload(apiKey, magnetLink);
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       if (files.isEmpty) {
 //         if (forcePlay && _tryNextQuickPlayTorrent(provider: 'premiumize')) {
 //           return;
@@ -13840,9 +13840,9 @@
 //         if (forcePlay) _resetQuickPlayState();
 //         return;
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Auto-save movie source for quick reuse (overrides any previous source).
 //       // Premiumize is stateless by magnet, so we only need the infohash to
 //       // re-resolve later — no persistent transfer id required.
@@ -13858,7 +13858,7 @@
 //           ),
 //         ]);
 //       }
-// 
+//
 //       final torrent = _findTorrentByInfohash(infohash, torrentName);
 //       await _showPremiumizePostAddOptions(
 //         files,
@@ -13881,7 +13881,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //     }
 //   }
-// 
+//
 //   Future<void> _showPremiumizePostAddOptions(
 //     List<PremiumizeFile> files,
 //     Torrent torrent,
@@ -13894,12 +13894,12 @@
 //     final hasVideo = videoFiles.isNotEmpty;
 //     final isVideoOnly =
 //         files.isNotEmpty && files.every(_premiumizeFileLooksLikeVideo);
-// 
+//
 //     // Quick Play always plays; otherwise honour the user's preference.
 //     final postAction = forcePlay
 //         ? 'play'
 //         : await StorageService.getPremiumizePostTorrentAction();
-// 
+//
 //     switch (postAction) {
 //       case 'none':
 //         _showPremiumizeSnack('Torrent added to Premiumize successfully');
@@ -13952,7 +13952,7 @@
 //       default:
 //         break;
 //     }
-// 
+//
 //     if (!mounted) return;
 //     await showDialog(
 //       context: context,
@@ -14250,7 +14250,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _playPremiumizeFiles(
 //     List<PremiumizeFile> files,
 //     String torrentName,
@@ -14268,9 +14268,9 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     final int sourceIndex = infohash != null ? _findTorrentIndex(infohash) : 0;
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       try {
@@ -14321,7 +14321,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Multi-file: build a sorted playlist (series-aware) of direct links.
 //     final items = List<_PremiumizePlaylistItem>.generate(videoFiles.length, (
 //       index,
@@ -14334,11 +14334,11 @@
 //         displayName: displayName,
 //       );
 //     });
-// 
+//
 //     final filenames = items.map((e) => e.displayName).toList();
 //     final bool isSeriesCollection =
 //         items.length > 1 && SeriesParser.isSeriesPlaylist(filenames);
-// 
+//
 //     final sortedEntries = [...items];
 //     if (isSeriesCollection) {
 //       sortedEntries.sort((a, b) {
@@ -14360,7 +14360,7 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     final seriesInfos = sortedEntries.map((entry) => entry.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
 //         ? _findFirstEpisodeIndex(seriesInfos)
@@ -14368,7 +14368,7 @@
 //     if (startIndex < 0 || startIndex >= sortedEntries.length) {
 //       startIndex = 0;
 //     }
-// 
+//
 //     final playlistEntries = <PlaylistEntry>[];
 //     for (int i = 0; i < sortedEntries.length; i++) {
 //       final entry = sortedEntries[i];
@@ -14384,14 +14384,14 @@
 //         isSeriesCollection: isSeriesCollection,
 //         fallback: entry.displayName,
 //       );
-// 
+//
 //       // Strip the first folder level (torrent name) from path.
 //       String relativePath = entry.file.path;
 //       final firstSlash = relativePath.indexOf('/');
 //       if (firstSlash > 0) {
 //         relativePath = relativePath.substring(firstSlash + 1);
 //       }
-// 
+//
 //       playlistEntries.add(
 //         PlaylistEntry(
 //           url: entry.file.link, // direct link, ready to play
@@ -14404,19 +14404,19 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     final totalBytes = sortedEntries.fold<int>(
 //       0,
 //       (sum, entry) => sum + entry.file.size,
 //     );
 //     final subtitle =
 //         '${playlistEntries.length} ${isSeriesCollection ? 'episodes' : 'files'} • ${Formatters.formatFileSize(totalBytes)}';
-// 
+//
 //     debugPrint(
 //       'Premiumize PLAY (multi): ${playlistEntries.length} files, '
 //       'startIndex=$startIndex isSeries=$isSeriesCollection',
 //     );
-// 
+//
 //     if (!mounted) return;
 //     await VideoPlayerLauncher.push(
 //       context,
@@ -14448,7 +14448,7 @@
 //     if (forcePlay) _resetQuickPlayState();
 //     _returnToCatalogIfNeeded();
 //   }
-// 
+//
 //   Future<void> _showPremiumizeDownloadOptions(
 //     List<PremiumizeFile> files,
 //     String torrentName,
@@ -14457,7 +14457,7 @@
 //       _showPremiumizeSnack('No files available to download.', isError: true);
 //       return;
 //     }
-// 
+//
 //     final formattedFiles = <Map<String, dynamic>>[];
 //     for (int i = 0; i < files.length; i++) {
 //       formattedFiles.add({
@@ -14467,7 +14467,7 @@
 //         '_premiumizeIndex': i,
 //       });
 //     }
-// 
+//
 //     if (!mounted) return;
 //     await showDialog(
 //       context: context,
@@ -14487,14 +14487,14 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _downloadSelectedPremiumizeFiles(
 //     List<Map<String, dynamic>> selectedFiles,
 //     List<PremiumizeFile> allFiles,
 //     String torrentName,
 //   ) async {
 //     if (selectedFiles.isEmpty) return;
-// 
+//
 //     int successCount = 0;
 //     int failCount = 0;
 //     for (final file in selectedFiles) {
@@ -14517,7 +14517,7 @@
 //         failCount++;
 //       }
 //     }
-// 
+//
 //     if (!mounted) return;
 //     if (successCount > 0 && failCount == 0) {
 //       _showPremiumizeSnack(
@@ -14535,7 +14535,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _addPremiumizeToPlaylist(
 //     List<PremiumizeFile> files,
 //     String torrentName, {
@@ -14556,7 +14556,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       final added = await StorageService.addPlaylistItemRaw({
@@ -14580,7 +14580,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     final added = await StorageService.addPlaylistItemRaw({
 //       'provider': 'premiumize',
 //       'title': FileUtils.cleanPlaylistTitle(torrentName),
@@ -14600,12 +14600,12 @@
 //       isError: !added,
 //     );
 //   }
-// 
+//
 //   // ── AllDebrid ──────────────────────────────────────────────────────────────
 //   // AllDebrid is Real-Debrid-like: no cache-check endpoint, so we upload the
 //   // magnet and poll its status. Resolved files carry *locked* links that must
 //   // be unlocked via /link/unlock before playback/download.
-// 
+//
 //   void _showAllDebridApiKeyMissingMessage() {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -14617,7 +14617,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   void _showAllDebridSnack(String message, {bool isError = false}) {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -14631,18 +14631,18 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   String _formatAllDebridError(Object error) {
 //     var message = error.toString();
 //     message = message.replaceAll('Exception:', '').trim();
 //     if (message.isEmpty) return 'Something went wrong.';
 //     return message;
 //   }
-// 
+//
 //   bool _allDebridFileLooksLikeVideo(AllDebridFile file) {
 //     return FileUtils.isVideoFile(file.fileName);
 //   }
-// 
+//
 //   /// Unlocks a single AllDebrid locked link into a ready-to-use direct URL,
 //   /// returning '' on failure. Used to resolve only the starting episode up
 //   /// front; the rest of a playlist is unlocked lazily by the player.
@@ -14653,7 +14653,7 @@
 //       return '';
 //     }
 //   }
-// 
+//
 //   Future<void> _addToAllDebrid(
 //     String infohash,
 //     String torrentName, {
@@ -14665,27 +14665,27 @@
 //       _clearQuickPlayMovieMask();
 //       return;
 //     }
-// 
+//
 //     DebridLoadingOverlay.showAllDebrid(
 //       context,
 //       torrentName,
 //       suppressVisual: _quickPlayMovieMasking,
 //     );
-// 
+//
 //     try {
 //       final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
-// 
+//
 //       // No cache check on AllDebrid — the upload `ready` flag tells us instantly
 //       // whether it's cached; not-cached throws AllDebridTorrentNotReadyException.
 //       final result = await AllDebridService.addMagnetAndResolveFiles(
 //         apiKey,
 //         magnetLink,
 //       );
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       if (result.files.isEmpty) {
 //         if (forcePlay && _tryNextQuickPlayTorrent(provider: 'alldebrid')) {
 //           return;
@@ -14697,9 +14697,9 @@
 //         if (forcePlay) _resetQuickPlayState();
 //         return;
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Auto-save movie source for quick reuse (overrides any previous source).
 //       // Replay re-resolves by hash, so the stored magnet id is informational.
 //       final sel = _activeAdvancedSelection;
@@ -14714,7 +14714,7 @@
 //           ),
 //         ]);
 //       }
-// 
+//
 //       final torrent = _findTorrentByInfohash(infohash, torrentName);
 //       await _showAllDebridPostAddOptions(
 //         result.files,
@@ -14772,7 +14772,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //     }
 //   }
-// 
+//
 //   /// Saves AllDebrid video files to the playlist. Follows the Real-Debrid
 //   /// model: keyed by infohash, with the locked link stored for single items
 //   /// (lazy unlock) and the magnet re-resolved by hash for collections.
@@ -14789,7 +14789,7 @@
 //       _showAllDebridSnack('Missing torrent info', isError: true);
 //       return;
 //     }
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       final added = await StorageService.addPlaylistItemRaw({
@@ -14832,7 +14832,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _showAllDebridPostAddOptions(
 //     List<AllDebridFile> files,
 //     Torrent torrent,
@@ -14845,12 +14845,12 @@
 //     final hasVideo = videoFiles.isNotEmpty;
 //     final isVideoOnly =
 //         files.isNotEmpty && files.every(_allDebridFileLooksLikeVideo);
-// 
+//
 //     // Quick Play always plays; otherwise honour the user's preference.
 //     final postAction = forcePlay
 //         ? 'play'
 //         : await StorageService.getAllDebridPostTorrentAction();
-// 
+//
 //     switch (postAction) {
 //       case 'none':
 //         _showAllDebridSnack('Torrent added to AllDebrid successfully');
@@ -14886,7 +14886,7 @@
 //       default:
 //         break;
 //     }
-// 
+//
 //     if (!mounted) return;
 //     await showDialog(
 //       context: context,
@@ -15068,7 +15068,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _playAllDebridFiles(
 //     List<AllDebridFile> files,
 //     String torrentName,
@@ -15082,7 +15082,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     final videoFiles = files.where(_allDebridFileLooksLikeVideo).toList();
 //     if (videoFiles.isEmpty) {
 //       if (forcePlay && _tryNextQuickPlayTorrent(provider: 'alldebrid')) return;
@@ -15093,9 +15093,9 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     final int sourceIndex = infohash != null ? _findTorrentIndex(infohash) : 0;
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       try {
@@ -15151,7 +15151,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Multi-file: build a sorted playlist (series-aware) of unlocked links.
 //     final items = List<_AllDebridPlaylistItem>.generate(videoFiles.length, (
 //       index,
@@ -15164,11 +15164,11 @@
 //         displayName: displayName,
 //       );
 //     });
-// 
+//
 //     final filenames = items.map((e) => e.displayName).toList();
 //     final bool isSeriesCollection =
 //         items.length > 1 && SeriesParser.isSeriesPlaylist(filenames);
-// 
+//
 //     final sortedEntries = [...items];
 //     if (isSeriesCollection) {
 //       sortedEntries.sort((a, b) {
@@ -15190,7 +15190,7 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     final seriesInfos = sortedEntries.map((entry) => entry.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
 //         ? _findFirstEpisodeIndex(seriesInfos)
@@ -15198,7 +15198,7 @@
 //     if (startIndex < 0 || startIndex >= sortedEntries.length) {
 //       startIndex = 0;
 //     }
-// 
+//
 //     // AllDebrid links are locked. Unlock ONLY the starting episode so playback
 //     // begins immediately; the rest carry their (stable) locked link and are
 //     // unlocked on demand by the player's lazy resolver — exactly like
@@ -15232,7 +15232,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     final playlistEntries = <PlaylistEntry>[];
 //     for (int i = 0; i < sortedEntries.length; i++) {
 //       final entry = sortedEntries[i];
@@ -15248,14 +15248,14 @@
 //         isSeriesCollection: isSeriesCollection,
 //         fallback: entry.displayName,
 //       );
-// 
+//
 //       // Strip the first folder level (torrent name) from path.
 //       String relativePath = entry.file.path;
 //       final firstSlash = relativePath.indexOf('/');
 //       if (firstSlash > 0) {
 //         relativePath = relativePath.substring(firstSlash + 1);
 //       }
-// 
+//
 //       playlistEntries.add(
 //         PlaylistEntry(
 //           // Start entry gets the unlocked URL; the rest resolve lazily.
@@ -15271,19 +15271,19 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     final totalBytes = sortedEntries.fold<int>(
 //       0,
 //       (sum, entry) => sum + entry.file.size,
 //     );
 //     final subtitle =
 //         '${playlistEntries.length} ${isSeriesCollection ? 'episodes' : 'files'} • ${Formatters.formatFileSize(totalBytes)}';
-// 
+//
 //     debugPrint(
 //       'AllDebrid PLAY (multi): ${playlistEntries.length} files, '
 //       'startIndex=$startIndex isSeries=$isSeriesCollection',
 //     );
-// 
+//
 //     if (!mounted) return;
 //     await VideoPlayerLauncher.push(
 //       context,
@@ -15315,7 +15315,7 @@
 //     if (forcePlay) _resetQuickPlayState();
 //     _returnToCatalogIfNeeded();
 //   }
-// 
+//
 //   Future<void> _showAllDebridDownloadOptions(
 //     List<AllDebridFile> files,
 //     String torrentName,
@@ -15324,7 +15324,7 @@
 //       _showAllDebridSnack('No files available to download.', isError: true);
 //       return;
 //     }
-// 
+//
 //     final formattedFiles = <Map<String, dynamic>>[];
 //     for (int i = 0; i < files.length; i++) {
 //       formattedFiles.add({
@@ -15334,7 +15334,7 @@
 //         '_allDebridIndex': i,
 //       });
 //     }
-// 
+//
 //     if (!mounted) return;
 //     await showDialog(
 //       context: context,
@@ -15354,7 +15354,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _downloadSelectedAllDebridFiles(
 //     List<Map<String, dynamic>> selectedFiles,
 //     List<AllDebridFile> allFiles,
@@ -15366,7 +15366,7 @@
 //       _showAllDebridApiKeyMissingMessage();
 //       return;
 //     }
-// 
+//
 //     int successCount = 0;
 //     int failCount = 0;
 //     for (final file in selectedFiles) {
@@ -15390,7 +15390,7 @@
 //         failCount++;
 //       }
 //     }
-// 
+//
 //     if (!mounted) return;
 //     if (successCount > 0 && failCount == 0) {
 //       _showAllDebridSnack(
@@ -15408,7 +15408,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Select-source mode: add to AllDebrid and store as a bound source.
 //   Future<void> _addToAllDebridAndBindSource(
 //     String infohash,
@@ -15418,7 +15418,7 @@
 //     if (!mounted) return;
 //     final apiKey = _allDebridApiKey!;
 //     final magnetLink = _torrentAcquisitionUrl(infohash, torrentName);
-// 
+//
 //     _showSelectSourceLoadingDialog(torrentName);
 //     try {
 //       final result = await AllDebridService.addMagnetAndResolveFiles(
@@ -15427,7 +15427,7 @@
 //       );
 //       if (!mounted) return;
 //       if (Navigator.of(context).canPop()) Navigator.of(context).pop();
-// 
+//
 //       await _saveSource(
 //         imdbId,
 //         SeriesSource(
@@ -15478,7 +15478,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Replays a bound AllDebrid source: re-uploads by hash, polls until ready,
 //   /// then unlocks the matching episode/movie and builds the playlist.
 //   Future<bool> _tryPlayFromBoundSourceAllDebrid(
@@ -15489,10 +15489,10 @@
 //   }) async {
 //     final apiKey = _allDebridApiKey;
 //     if (apiKey == null || apiKey.isEmpty) return false;
-// 
+//
 //     final magnet =
 //         _torrentAcquisitionUrl(source.torrentHash, source.torrentName);
-// 
+//
 //     final AllDebridAddResult result;
 //     try {
 //       result = await AllDebridService.addMagnetAndResolveFiles(
@@ -15519,13 +15519,13 @@
 //       return false;
 //     }
 //     if (!mounted) return false;
-// 
+//
 //     final videoFiles =
 //         result.files.where(_allDebridFileLooksLikeVideo).toList();
 //     if (videoFiles.isEmpty) return false;
-// 
+//
 //     final filenames = videoFiles.map((f) => f.fileName).toList();
-// 
+//
 //     int? targetIndex;
 //     if (selection.isSeries) {
 //       targetIndex = _findEpisodeInFilenames(
@@ -15546,7 +15546,7 @@
 //       targetIndex = largestIdx;
 //     }
 //     if (targetIndex == null) return false;
-// 
+//
 //     // Unlock only the target episode/file up front; the rest are unlocked
 //     // lazily by the player from their stored locked link.
 //     final videoUrl = await _unlockAllDebridStart(
@@ -15557,7 +15557,7 @@
 //     // For a series we must play the matched episode — don't silently substitute
 //     // a different file. For a movie, the largest file failing is a hard error.
 //     if (videoUrl.isEmpty) return false;
-// 
+//
 //     final playlist = <PlaylistEntry>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
 //       String relativePath = videoFiles[i].path;
@@ -15578,7 +15578,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     await _launchBoundSourcePlayer(
 //       videoUrl: videoUrl,
 //       title: source.torrentName,
@@ -15588,7 +15588,7 @@
 //     );
 //     return true;
 //   }
-// 
+//
 //   /// In-player source switching: resolve an AllDebrid torrent to playlist
 //   /// entries. Returns null if it can't be made ready/unlocked.
 //   Future<List<PlaylistEntry>?> _resolveSourceViaAllDebrid(
@@ -15610,7 +15610,7 @@
 //       final videoFiles =
 //           result.files.where(_allDebridFileLooksLikeVideo).toList();
 //       if (videoFiles.isEmpty) return null;
-// 
+//
 //       final items = videoFiles
 //           .map(
 //             (f) => _AllDebridPlaylistItem(
@@ -15645,7 +15645,7 @@
 //           ),
 //         );
 //       }
-// 
+//
 //       // Lazy: carry each file's locked link; the player unlocks on demand when
 //       // it switches to / advances through an entry.
 //       final entries = <PlaylistEntry>[];
@@ -15684,7 +15684,7 @@
 //       return null;
 //     }
 //   }
-// 
+//
 //   /// Bulk-add selected torrents to AllDebrid. AllDebrid has no cache-check API,
 //   /// so each magnet is uploaded and polled; ones that don't become ready are
 //   /// deleted (mirrors the Real-Debrid bulk-add semantics — nothing uncached
@@ -15695,36 +15695,36 @@
 //       _showAllDebridApiKeyMissingMessage();
 //       return;
 //     }
-// 
+//
 //     final torrentsToAdd = _isSelectionMode
 //         ? _torrents
 //               .where((t) => _selectedInfohashes.contains(t.infohash))
 //               .toList()
 //         : List<Torrent>.from(_torrents);
-// 
+//
 //     if (torrentsToAdd.isEmpty) return;
-// 
+//
 //     setState(() {
 //       _isBulkAdding = true;
 //     });
-// 
+//
 //     final totalTorrents = torrentsToAdd.length;
 //     int successCount = 0;
 //     int failureCount = 0;
 //     int skippedCount = 0;
 //     int currentIndex = 0;
 //     bool cancelled = false;
-// 
+//
 //     final Map<String, String> torrentStatus = {};
 //     for (final torrent in torrentsToAdd) {
 //       torrentStatus[torrent.infohash] = 'pending';
 //     }
-// 
+//
 //     try {
 //       if (!mounted) return;
-// 
+//
 //       StateSetter? dialogSetState;
-// 
+//
 //       showDialog(
 //         context: context,
 //         barrierDismissible: false,
@@ -15732,7 +15732,7 @@
 //           return StatefulBuilder(
 //             builder: (context, setDialogState) {
 //               dialogSetState = setDialogState;
-// 
+//
 //               return AlertDialog(
 //                 backgroundColor: const Color(0xFF0F172A),
 //                 shape: RoundedRectangleBorder(
@@ -15821,11 +15821,11 @@
 //                             final torrent = torrentsToAdd[index];
 //                             final status =
 //                                 torrentStatus[torrent.infohash] ?? 'pending';
-// 
+//
 //                             IconData icon;
 //                             Color iconColor;
 //                             String? subtitle;
-// 
+//
 //                             if (status == 'success') {
 //                               icon = Icons.check_circle;
 //                               iconColor = const Color(0xFF10B981);
@@ -15843,7 +15843,7 @@
 //                               icon = Icons.circle_outlined;
 //                               iconColor = Colors.white54;
 //                             }
-// 
+//
 //                             return Padding(
 //                               padding: const EdgeInsets.symmetric(vertical: 4),
 //                               child: Row(
@@ -15903,11 +15903,11 @@
 //           );
 //         },
 //       );
-// 
+//
 //       // Process torrents one at a time (AllDebrid has no cache check API).
 //       for (final torrent in torrentsToAdd) {
 //         if (cancelled) break;
-// 
+//
 //         try {
 //           if (mounted) {
 //             dialogSetState?.call(() {
@@ -15915,14 +15915,14 @@
 //               currentIndex++;
 //             });
 //           }
-// 
+//
 //           final magnetLink = _torrentAcquisitionUrlForTorrent(torrent);
-// 
+//
 //           await AllDebridService.addMagnetAndResolveFiles(
 //             apiKey,
 //             magnetLink,
 //           );
-// 
+//
 //           if (mounted) {
 //             dialogSetState?.call(() {
 //               torrentStatus[torrent.infohash] = 'success';
@@ -15946,16 +15946,16 @@
 //             });
 //           }
 //         }
-// 
+//
 //         if (!cancelled) {
 //           await Future.delayed(const Duration(milliseconds: 300));
 //         }
 //       }
-// 
+//
 //       if (mounted && Navigator.of(context).canPop()) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       if (!cancelled && mounted) {
 //         final parts = <String>[];
 //         if (successCount > 0) parts.add('Added $successCount');
@@ -15964,7 +15964,7 @@
 //         final message = parts.join(', ');
 //         final isError =
 //             failureCount > 0 || (successCount == 0 && skippedCount > 0);
-// 
+//
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           SnackBar(
 //             content: Text(message.isEmpty ? 'No torrents added' : message),
@@ -16006,7 +16006,7 @@
 //       }
 //     }
 //   }
-// 
+//
 //   Widget _bulkStatusChip(IconData icon, Color color, String label) {
 //     return Container(
 //       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -16031,7 +16031,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   void _showTorboxLoadingDialog(String torrentName) {
 //     // Invisible (but lifecycle-intact) during a movie Quick Play — see
 //     // the matching note in _addToRealDebrid.
@@ -16041,14 +16041,14 @@
 //       suppressVisual: _quickPlayMovieMasking,
 //     );
 //   }
-// 
+//
 //   Future<TorboxTorrent?> _fetchTorboxTorrentById(
 //     String apiKey,
 //     int torrentId,
 //   ) async {
 //     return TorboxService.getTorrentById(apiKey, torrentId, attempts: 5);
 //   }
-// 
+//
 //   Future<void> _showTorboxPostAddOptions(
 //     TorboxTorrent torboxTorrent,
 //     Torrent torrent, {
@@ -16059,19 +16059,19 @@
 //         .where(_torboxFileLooksLikeVideo)
 //         .toList();
 //     final hasVideo = videoFiles.isNotEmpty;
-// 
+//
 //     // Get the post-torrent action preference (override to 'play' for Quick Play)
 //     final postAction = forcePlay
 //         ? 'play'
 //         : await StorageService.getTorboxPostTorrentAction();
 //     final torboxHidden = await StorageService.getTorboxHiddenFromNav();
 //     final apiKey = await StorageService.getTorboxApiKey();
-// 
+//
 //     // Check if torrent is video-only for auto-download handling
 //     final isVideoOnly =
 //         torboxTorrent.files.isNotEmpty &&
 //         torboxTorrent.files.every((file) => _torboxFileLooksLikeVideo(file));
-// 
+//
 //     // Handle automatic actions based on preference
 //     switch (postAction) {
 //       case 'none':
@@ -16153,7 +16153,7 @@
 //         // Show the dialog
 //         break;
 //     }
-// 
+//
 //     await showDialog(
 //       context: context,
 //       builder: (ctx) {
@@ -16356,14 +16356,14 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _addTorboxTorrentToPlaylist(TorboxTorrent torrent) async {
 //     final videoFiles = torrent.files.where(_torboxFileLooksLikeVideo).toList();
 //     if (videoFiles.isEmpty) {
 //       _showTorboxSnack('No playable Torbox video files found.', isError: true);
 //       return;
 //     }
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       final displayName = _torboxDisplayName(file);
@@ -16391,7 +16391,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     final fileIds = videoFiles.map((file) => file.id).toList();
 //     final added = await StorageService.addPlaylistItemRaw({
 //       'provider': 'torbox',
@@ -16414,14 +16414,14 @@
 //       isError: !added,
 //     );
 //   }
-// 
+//
 //   Future<void> _showTorboxDownloadOptions(TorboxTorrent torrent) async {
 //     final apiKey = await StorageService.getTorboxApiKey();
 //     if (apiKey == null || apiKey.isEmpty) {
 //       _showTorboxApiKeyMissingMessage();
 //       return;
 //     }
-// 
+//
 //     if (!mounted) return;
 //     await showGeneralDialog<void>(
 //       context: context,
@@ -16569,7 +16569,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Widget _buildGlassOptionCard({
 //     required IconData icon,
 //     required Color iconColor,
@@ -16587,23 +16587,23 @@
 //       autofocus: autofocus,
 //     );
 //   }
-// 
+//
 //   /// Enqueue a ZIP download for a Torbox torrent
 //   Future<void> _enqueueTorboxZipDownload({
 //     required TorboxTorrent torrent,
 //     required String apiKey,
 //   }) async {
 //     _showTorboxSnack('Preparing ZIP download...');
-// 
+//
 //     try {
 //       // Generate ZIP permalink
 //       final zipUrl = TorboxService.createZipPermalink(apiKey, torrent.id);
-// 
+//
 //       if (zipUrl.isEmpty) {
 //         _showTorboxSnack('Failed to generate ZIP download link', isError: true);
 //         return;
 //       }
-// 
+//
 //       // Create meta JSON with Torbox-specific fields for ZIP
 //       final meta = jsonEncode({
 //         'torboxTorrentId': torrent.id,
@@ -16611,7 +16611,7 @@
 //         'torboxDownload': true,
 //         'torboxZip': true,
 //       });
-// 
+//
 //       // Enqueue ZIP download
 //       final zipFileName = '${torrent.name}.zip';
 //       await DownloadService.instance.enqueueDownload(
@@ -16621,13 +16621,13 @@
 //         torrentName: torrent.name,
 //         context: mounted ? context : null,
 //       );
-// 
+//
 //       _showTorboxSnack('ZIP download queued successfully');
 //     } catch (e) {
 //       _showTorboxSnack('Failed to queue ZIP download: $e', isError: true);
 //     }
 //   }
-// 
+//
 //   /// Show file selection dialog for Torbox torrents
 //   Future<void> _showTorboxFileSelection({
 //     required TorboxTorrent torrent,
@@ -16637,7 +16637,7 @@
 //       _showTorboxSnack('No files found in torrent', isError: true);
 //       return;
 //     }
-// 
+//
 //     // Format files for FileSelectionDialog
 //     // Map Torbox file structure to the format expected by FileSelectionDialog
 //     final formattedFiles = <Map<String, dynamic>>[];
@@ -16650,7 +16650,7 @@
 //         '_torboxFileId': file.id, // Store the file ID for later use
 //       });
 //     }
-// 
+//
 //     // Show file selection dialog
 //     if (!mounted) return;
 //     await showDialog(
@@ -16671,7 +16671,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Download selected files from Torbox
 //   /// Follows the pattern from torbox_downloads_screen.dart _downloadMultipleFiles
 //   Future<void> _downloadSelectedTorboxFiles({
@@ -16680,13 +16680,13 @@
 //     required String apiKey,
 //   }) async {
 //     if (selectedFiles.isEmpty) return;
-// 
+//
 //     // Show confirmation dialog
 //     final totalSize = selectedFiles.fold<int>(
 //       0,
 //       (sum, file) => sum + (int.tryParse(file['size']?.toString() ?? '0') ?? 0),
 //     );
-// 
+//
 //     final confirmed =
 //         await showDialog<bool>(
 //           context: context,
@@ -16728,9 +16728,9 @@
 //           ),
 //         ) ??
 //         false;
-// 
+//
 //     if (!confirmed || !mounted) return;
-// 
+//
 //     // Show progress
 //     showDialog(
 //       context: context,
@@ -16749,30 +16749,30 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     // Queue downloads for each file
 //     // CRITICAL: Following the SAME pattern as Real-Debrid
 //     // We DON'T request download URLs upfront - we queue with metadata for lazy fetching
 //     // The DownloadService will request the URL when it's ready to download (lazy loading)
 //     int successCount = 0;
 //     int failCount = 0;
-// 
+//
 //     for (final selectedFile in selectedFiles) {
 //       try {
 //         final fileId = selectedFile['_torboxFileId'] as int;
 //         final fileName = (selectedFile['_fullPath'] as String?) ?? 'Unknown';
-// 
+//
 //         // Find the corresponding TorboxFile object
 //         final torboxFile = torrent.files.firstWhere(
 //           (f) => f.id == fileId,
 //           orElse: () => throw Exception('File not found in torrent'),
 //         );
-// 
+//
 //         // Use shortName if available, otherwise extract from name
 //         final displayName = torboxFile.shortName.isNotEmpty
 //             ? torboxFile.shortName
 //             : FileUtils.getFileName(fileName);
-// 
+//
 //         // Pass metadata for lazy URL fetching (no API call - instant!)
 //         // The download service will request the URL when ready
 //         final meta = jsonEncode({
@@ -16781,7 +16781,7 @@
 //           'apiKey': apiKey,
 //           'torboxDownload': true,
 //         });
-// 
+//
 //         // Queue download instantly (download service will fetch URL when ready)
 //         await DownloadService.instance.enqueueDownload(
 //           url: '', // Empty URL - will be fetched by download service
@@ -16790,16 +16790,16 @@
 //           torrentName: torrent.name,
 //           context: mounted ? context : null,
 //         );
-// 
+//
 //         successCount++;
 //       } catch (e) {
 //         failCount++;
 //       }
 //     }
-// 
+//
 //     // Close progress dialog
 //     if (mounted) Navigator.of(context).pop();
-// 
+//
 //     // Show result
 //     if (successCount > 0 && failCount == 0) {
 //       _showTorboxSnack(
@@ -16815,7 +16815,7 @@
 //       _showTorboxSnack('Failed to queue any files for download', isError: true);
 //     }
 //   }
-// 
+//
 //   Future<String> _requestTorboxStreamUrl({
 //     required String apiKey,
 //     required TorboxTorrent torrent,
@@ -16831,12 +16831,12 @@
 //     }
 //     return url;
 //   }
-// 
+//
 //   int _findFirstEpisodeIndex(List<SeriesInfo> infos) {
 //     int startIndex = 0;
 //     int? bestSeason;
 //     int? bestEpisode;
-// 
+//
 //     for (int i = 0; i < infos.length; i++) {
 //       final info = infos[i];
 //       final season = info.season;
@@ -16844,23 +16844,23 @@
 //       if (!info.isSeries || season == null || episode == null) {
 //         continue;
 //       }
-// 
+//
 //       final bool isBetterSeason = bestSeason == null || season < bestSeason;
 //       final bool isBetterEpisode =
 //           bestSeason != null &&
 //           season == bestSeason &&
 //           (bestEpisode == null || episode < bestEpisode);
-// 
+//
 //       if (isBetterSeason || isBetterEpisode) {
 //         bestSeason = season;
 //         bestEpisode = episode;
 //         startIndex = i;
 //       }
 //     }
-// 
+//
 //     return startIndex;
 //   }
-// 
+//
 //   String _torboxDisplayName(TorboxFile file) {
 //     if (file.shortName.isNotEmpty) {
 //       return file.shortName;
@@ -16870,7 +16870,7 @@
 //     }
 //     return 'File ${file.id}';
 //   }
-// 
+//
 //   String _formatTorboxPlaylistTitle({
 //     required SeriesInfo info,
 //     required String fallback,
@@ -16879,7 +16879,7 @@
 //     if (!isSeriesCollection) {
 //       return fallback;
 //     }
-// 
+//
 //     final season = info.season;
 //     final episode = info.episode;
 //     if (info.isSeries && season != null && episode != null) {
@@ -16892,10 +16892,10 @@
 //           : fallback;
 //       return 'S${seasonLabel}E$episodeLabel · $description';
 //     }
-// 
+//
 //     return fallback;
 //   }
-// 
+//
 //   String _combineSeriesAndEpisodeTitle({
 //     required String? seriesTitle,
 //     required String episodeLabel,
@@ -16905,17 +16905,17 @@
 //     if (!isSeriesCollection) {
 //       return fallback;
 //     }
-// 
+//
 //     final cleanSeriesTitle = seriesTitle
 //         ?.replaceAll(RegExp(r'[._\-]+$'), '')
 //         .trim();
 //     if (cleanSeriesTitle != null && cleanSeriesTitle.isNotEmpty) {
 //       return '$cleanSeriesTitle $episodeLabel';
 //     }
-// 
+//
 //     return fallback;
 //   }
-// 
+//
 //   Future<void> _playTorboxTorrent(
 //     TorboxTorrent torrent, {
 //     bool forcePlay = false,
@@ -16925,12 +16925,12 @@
 //       _showTorboxApiKeyMissingMessage();
 //       return;
 //     }
-// 
+//
 //     final videoFiles = torrent.files.where((file) {
 //       if (file.zipped) return false;
 //       return _torboxFileLooksLikeVideo(file);
 //     }).toList();
-// 
+//
 //     if (videoFiles.isEmpty) {
 //       if (forcePlay && _tryNextQuickPlayTorrent(provider: 'torbox')) return;
 //       _showTorboxSnack(
@@ -16940,7 +16940,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
 //       try {
@@ -16950,7 +16950,7 @@
 //           file: file,
 //         );
 //         if (!mounted) return;
-// 
+//
 //         // Check if VR playback should be used
 //         final useDeoVR = await _shouldUseDeoVR(torrent.name);
 //         if (useDeoVR) {
@@ -16959,7 +16959,7 @@
 //           _returnToCatalogIfNeeded();
 //           return;
 //         }
-// 
+//
 //         await VideoPlayerLauncher.push(
 //           context,
 //           VideoPlayerLaunchArgs(
@@ -16996,7 +16996,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     final entries = List<_TorboxPlaylistItem>.generate(videoFiles.length, (
 //       index,
 //     ) {
@@ -17009,13 +17009,13 @@
 //         displayName: displayName,
 //       );
 //     });
-// 
+//
 //     final filenames = entries
 //         .map((entry) => _torboxDisplayName(entry.file))
 //         .toList();
 //     final bool isSeriesCollection =
 //         entries.length > 1 && SeriesParser.isSeriesPlaylist(filenames);
-// 
+//
 //     final sortedEntries = [...entries];
 //     if (isSeriesCollection) {
 //       sortedEntries.sort((a, b) {
@@ -17037,7 +17037,7 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     final seriesInfos = sortedEntries.map((entry) => entry.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
 //         ? _findFirstEpisodeIndex(seriesInfos)
@@ -17045,7 +17045,7 @@
 //     if (startIndex < 0 || startIndex >= sortedEntries.length) {
 //       startIndex = 0;
 //     }
-// 
+//
 //     String initialUrl = '';
 //     try {
 //       initialUrl = await _requestTorboxStreamUrl(
@@ -17062,7 +17062,7 @@
 //       if (forcePlay) _resetQuickPlayState();
 //       return;
 //     }
-// 
+//
 //     final playlistEntries = <PlaylistEntry>[];
 //     for (int i = 0; i < sortedEntries.length; i++) {
 //       final entry = sortedEntries[i];
@@ -17079,14 +17079,14 @@
 //         isSeriesCollection: isSeriesCollection,
 //         fallback: displayName,
 //       );
-// 
+//
 //       // Strip first folder level (torrent name) from path for relativePath
 //       String relativePath = entry.file.name;
 //       final firstSlash = relativePath.indexOf('/');
 //       if (firstSlash > 0) {
 //         relativePath = relativePath.substring(firstSlash + 1);
 //       }
-// 
+//
 //       playlistEntries.add(
 //         PlaylistEntry(
 //           url: i == startIndex ? initialUrl : '',
@@ -17100,14 +17100,14 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     final totalBytes = sortedEntries.fold<int>(
 //       0,
 //       (sum, entry) => sum + entry.file.size,
 //     );
 //     final subtitle =
 //         '${playlistEntries.length} ${isSeriesCollection ? 'episodes' : 'files'} • ${Formatters.formatFileSize(totalBytes)}';
-// 
+//
 //     if (!mounted) return;
 //     await VideoPlayerLauncher.push(
 //       context,
@@ -17139,7 +17139,7 @@
 //     if (forcePlay) _resetQuickPlayState();
 //     _returnToCatalogIfNeeded();
 //   }
-// 
+//
 //   void _openTorboxFiles(TorboxTorrent torrent) {
 //     if (MainPageBridge.openTorboxFolder != null) {
 //       MainPageBridge.openTorboxFolder!(torrent);
@@ -17151,7 +17151,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   void _showTorboxSnack(String message, {bool isError = false}) {
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
@@ -17167,11 +17167,11 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   void _copyTorboxZipLink(TorboxTorrent torrent, String apiKey) {
 //     final zipLink = TorboxService.createZipPermalink(apiKey, torrent.id);
 //     Clipboard.setData(ClipboardData(text: zipLink));
-// 
+//
 //     if (!mounted) return;
 //     ScaffoldMessenger.of(context).showSnackBar(
 //       SnackBar(
@@ -17202,7 +17202,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   bool _torboxFileLooksLikeVideo(TorboxFile file) {
 //     final name = file.shortName.isNotEmpty
 //         ? file.shortName
@@ -17210,7 +17210,7 @@
 //     return FileUtils.isVideoFile(name) ||
 //         (file.mimetype?.toLowerCase().startsWith('video/') ?? false);
 //   }
-// 
+//
 //   bool _torboxResultIsCached(Torrent torrent) {
 //     if (!_torboxCacheCheckEnabled) return true;
 //     final status = _torboxCacheStatus;
@@ -17221,7 +17221,7 @@
 //     if (sanitized.isEmpty) return true;
 //     return status[sanitized] ?? false;
 //   }
-// 
+//
 //   bool _torboxResultCanBeAdded(Torrent torrent) {
 //     if (!_torboxCacheCheckEnabled) return true;
 //     if (!_torboxResultIsCached(torrent) && torrent.torrentUrl == null) {
@@ -17229,7 +17229,7 @@
 //     }
 //     return true;
 //   }
-// 
+//
 //   /// Short provider labels for which [torrent] is *confirmed* cached, for the
 //   /// search-result badge (e.g. ['TB'], ['PM'], or ['TB', 'PM']). Only includes
 //   /// a provider when its cache check ran and reported a hit.
@@ -17250,16 +17250,16 @@
 //     }
 //     return labels;
 //   }
-// 
+//
 //   String _formatTorboxError(Object error) {
 //     final raw = error.toString();
-// 
+//
 //     // Strip common prefixes
 //     String cleaned = raw
 //         .replaceFirst('Exception: ', '')
 //         .replaceFirst('Error: ', '')
 //         .trim();
-// 
+//
 //     // Handle common API error patterns
 //     if (cleaned.contains('SocketException') ||
 //         cleaned.contains('Failed host lookup')) {
@@ -17285,27 +17285,27 @@
 //         cleaned.contains('503')) {
 //       return 'Torbox service is temporarily unavailable. Please try again later.';
 //     }
-// 
+//
 //     // If it's too technical or long, provide a generic message
 //     if (cleaned.length > 100 ||
 //         cleaned.contains('dart:') ||
 //         cleaned.contains('at Object')) {
 //       return 'An unexpected error occurred. Please try again.';
 //     }
-// 
+//
 //     return cleaned.isEmpty ? 'An error occurred' : cleaned;
 //   }
-// 
+//
 //   String _formatRealDebridError(Object error) {
 //     final raw = error.toString();
-// 
+//
 //     // Strip common prefixes
 //     String cleaned = raw
 //         .replaceFirst('Exception: ', '')
 //         .replaceFirst('Error: ', '')
 //         .replaceFirst('Failed to add torrent to Real Debrid: ', '')
 //         .trim();
-// 
+//
 //     // Handle common network errors
 //     if (cleaned.contains('SocketException') ||
 //         cleaned.contains('Failed host lookup')) {
@@ -17314,7 +17314,7 @@
 //     if (cleaned.contains('TimeoutException') || cleaned.contains('timed out')) {
 //       return 'Request timed out. Please try again.';
 //     }
-// 
+//
 //     // Handle Real-Debrid specific errors
 //     if (cleaned.contains('Invalid API key') ||
 //         cleaned.contains('401') ||
@@ -17357,17 +17357,17 @@
 //         cleaned.contains('service_unavailable')) {
 //       return 'Real-Debrid service is temporarily unavailable. Please try again later.';
 //     }
-// 
+//
 //     // If it's too technical or long, provide a generic message
 //     if (cleaned.length > 100 ||
 //         cleaned.contains('dart:') ||
 //         cleaned.contains('at Object')) {
 //       return 'An unexpected error occurred. Please try again.';
 //     }
-// 
+//
 //     return cleaned.isEmpty ? 'Failed to add torrent to Real-Debrid' : cleaned;
 //   }
-// 
+//
 //   int? _asIntMapValue(dynamic data, String key) {
 //     if (data is Map<String, dynamic>) {
 //       final value = data[key];
@@ -17377,7 +17377,7 @@
 //     }
 //     return null;
 //   }
-// 
+//
 //   Widget _buildOptionCard({
 //     required BuildContext context,
 //     required String title,
@@ -17389,7 +17389,7 @@
 //     required LinearGradient gradient,
 //   }) {
 //     final isSelected = selectedOption == value;
-// 
+//
 //     return Container(
 //       decoration: BoxDecoration(
 //         gradient: isSelected
@@ -17451,7 +17451,7 @@
 //                   ),
 //                 ),
 //                 const SizedBox(width: 16),
-// 
+//
 //                 // Text content
 //                 Expanded(
 //                   child: Column(
@@ -17479,7 +17479,7 @@
 //                     ],
 //                   ),
 //                 ),
-// 
+//
 //                 // Selection indicator
 //                 Container(
 //                   width: 24,
@@ -17509,7 +17509,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Future<void> _handlePostTorrentAction(
 //     Map<String, dynamic> result,
 //     String torrentName,
@@ -17528,7 +17528,7 @@
 //     final links = result['links'] as List<dynamic>;
 //     final files = result['files'] as List<dynamic>?;
 //     final updatedInfo = result['updatedInfo'] as Map<String, dynamic>?;
-// 
+//
 //     // Check if this is a RAR archive (multiple files but only 1 link)
 //     final isRarArchive = (files != null && files.isNotEmpty)
 //         ? RDFolderTreeBuilder.isRarArchive(
@@ -17536,7 +17536,7 @@
 //             links,
 //           )
 //         : false;
-// 
+//
 //     // Special case: if user prefers auto-download and torrent is media-only, download all immediately
 //     final hasAnyVideo = (files ?? []).any((f) {
 //       final name =
@@ -17558,13 +17558,13 @@
 //           final base = name.startsWith('/') ? name.split('/').last : name;
 //           return base.isNotEmpty && FileUtils.isVideoFile(base);
 //         });
-// 
+//
 //     if (postAction == 'download' && isMediaOnly) {
 //       // Auto-download all videos without dialog
 //       _showDownloadSelectionDialog(links, torrentName);
 //       return;
 //     }
-// 
+//
 //     switch (postAction) {
 //       case 'none':
 //         // Show confirmation that torrent was added
@@ -17635,7 +17635,7 @@
 //                 }
 //               }
 //             } catch (_) {}
-// 
+//
 //             final added = await StorageService.addPlaylistItemRaw({
 //               'title': FileUtils.cleanPlaylistTitle(finalTitle),
 //               'url': '',
@@ -17883,7 +17883,7 @@
 //                                 }
 //                               }
 //                             } catch (_) {}
-// 
+//
 //                             final added = await StorageService.addPlaylistItemRaw(
 //                               {
 //                                 'title': FileUtils.cleanPlaylistTitle(
@@ -18056,9 +18056,9 @@
 //         break;
 //     }
 //   }
-// 
+//
 //   // Compact action button widget for the chooser dialog
-// 
+//
 //   /// Launch video in DeoVR player with VR format settings.
 //   ///
 //   /// This method checks user's Quick Play VR settings to determine:
@@ -18069,16 +18069,16 @@
 //     required String filename,
 //   }) async {
 //     if (!Platform.isAndroid) return;
-// 
+//
 //     // Load VR settings
 //     final autoDetectFormat =
 //         await StorageService.getQuickPlayVrAutoDetectFormat();
 //     final showFormatDialog = await StorageService.getQuickPlayVrShowDialog();
-// 
+//
 //     // Determine format
 //     String screenType;
 //     String stereoMode;
-// 
+//
 //     if (autoDetectFormat) {
 //       // Auto-detect from filename
 //       final detected = deovr.detectVRFormat(filename);
@@ -18089,12 +18089,12 @@
 //       screenType = await StorageService.getQuickPlayVrDefaultScreenType();
 //       stereoMode = await StorageService.getQuickPlayVrDefaultStereoMode();
 //     }
-// 
+//
 //     // Show format selection dialog if enabled
 //     if (showFormatDialog && mounted) {
 //       String selectedScreenType = screenType;
 //       String selectedStereoMode = stereoMode;
-// 
+//
 //       final result = await showDialog<bool>(
 //         context: context,
 //         builder: (context) => StatefulBuilder(
@@ -18193,12 +18193,12 @@
 //           ),
 //         ),
 //       );
-// 
+//
 //       if (result != true || !mounted) return;
 //       screenType = selectedScreenType;
 //       stereoMode = selectedStereoMode;
 //     }
-// 
+//
 //     // Launch DeoVR
 //     try {
 //       // Show loading indicator
@@ -18210,7 +18210,7 @@
 //               const Center(child: CircularProgressIndicator()),
 //         );
 //       }
-// 
+//
 //       // Generate DeoVR JSON
 //       final json = deovr.generateDeoVRJson(
 //         videoUrl: videoUrl,
@@ -18219,40 +18219,40 @@
 //         stereoMode: stereoMode,
 //       );
 //       final jsonString = jsonEncode(json);
-// 
+//
 //       debugPrint('DeoVR JSON content: $jsonString');
-// 
+//
 //       // Upload JSON to jsonblob.com
 //       final response = await http.post(
 //         Uri.parse('https://jsonblob.com/api/jsonBlob'),
 //         headers: {'Content-Type': 'application/json'},
 //         body: jsonString,
 //       );
-// 
+//
 //       if (response.statusCode != 201) {
 //         throw Exception('Failed to upload JSON: ${response.statusCode}');
 //       }
-// 
+//
 //       final location = response.headers['location'];
 //       if (location == null) {
 //         throw Exception('No location header in response');
 //       }
-// 
+//
 //       final jsonUrl = 'https://jsonblob.com$location';
 //       debugPrint('DeoVR JSON uploaded to: $jsonUrl');
-// 
+//
 //       // Close loading indicator
 //       if (mounted) {
 //         Navigator.of(context).pop();
 //       }
-// 
+//
 //       // Launch DeoVR with the public URL
 //       final deoVrUri = 'deovr://$jsonUrl';
 //       debugPrint('Launching DeoVR with URI: $deoVrUri');
-// 
+//
 //       final intent = AndroidIntent(action: 'action_view', data: deoVrUri);
 //       await intent.launch();
-// 
+//
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           const SnackBar(
@@ -18274,14 +18274,14 @@
 //       }
 //     }
 //   }
-// 
+//
 //   /// Check if VR playback should be used based on settings and content.
 //   /// Returns true if DeoVR should be launched instead of regular player.
 //   Future<bool> _shouldUseDeoVR(String filename) async {
 //     if (!Platform.isAndroid) return false;
-// 
+//
 //     final vrMode = await StorageService.getQuickPlayVrMode();
-// 
+//
 //     switch (vrMode) {
 //       case 'disabled':
 //         return false;
@@ -18294,7 +18294,7 @@
 //         return false;
 //     }
 //   }
-// 
+//
 //   Future<void> _playFromResult({
 //     required List<dynamic> links,
 //     required List<dynamic>? files,
@@ -18331,7 +18331,7 @@
 //       final mimeType = unrestrictResult['mimeType']?.toString() ?? '';
 //       if (FileUtils.isVideoMimeType(mimeType)) {
 //         if (!mounted) return;
-// 
+//
 //         // Fetch actual torrent filename for resume key parity with Debrid screen
 //         String finalTitle = torrentName;
 //         try {
@@ -18348,7 +18348,7 @@
 //         } catch (_) {
 //           // Fallback to torrentName if fetch fails
 //         }
-// 
+//
 //         // Check if VR playback should be used
 //         final useDeoVR = await _shouldUseDeoVR(finalTitle);
 //         if (useDeoVR) {
@@ -18357,7 +18357,7 @@
 //           _returnToCatalogIfNeeded();
 //           return;
 //         }
-// 
+//
 //         await VideoPlayerLauncher.push(
 //           context,
 //           VideoPlayerLaunchArgs(
@@ -18454,7 +18454,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _handlePlayMultiFileTorrentWithInfo(
 //     List<dynamic> links,
 //     List<dynamic>? files,
@@ -18484,7 +18484,7 @@
 //           ),
 //         ),
 //       );
-// 
+//
 //       // Use file information from torrent info for true lazy loading
 //       if (files == null || updatedInfo == null) {
 //         if (mounted) Navigator.of(context).pop(); // close loading
@@ -18526,36 +18526,36 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       // Get selected files from the torrent info
 //       final selectedFiles = files
 //           .where((file) => file['selected'] == 1)
 //           .toList();
-// 
+//
 //       // If no selected files, use all files (they might all be selected by default)
 //       final allFilesToUse = selectedFiles.isNotEmpty ? selectedFiles : files;
-// 
+//
 //       // Filter to only video files
 //       final filesToUse = allFilesToUse.where((file) {
 //         String? filename =
 //             file['name']?.toString() ??
 //             file['filename']?.toString() ??
 //             file['path']?.toString();
-// 
+//
 //         // If we got a path, extract just the filename
 //         if (filename != null && filename.startsWith('/')) {
 //           filename = filename.split('/').last;
 //         }
-// 
+//
 //         return filename != null && FileUtils.isVideoFile(filename);
 //       }).toList();
-// 
+//
 //       // Check if this is an archive (multiple files, single link)
 //       bool isArchive = false;
 //       if (filesToUse.length > 1 && links.length == 1) {
 //         isArchive = true;
 //       }
-// 
+//
 //       if (isArchive) {
 //         if (mounted) Navigator.of(context).pop(); // close loading
 //         if (mounted) {
@@ -18596,37 +18596,37 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       // Multiple individual files - create playlist with true lazy loading
 //       final List<PlaylistEntry> entries = [];
-// 
+//
 //       // Get filenames from files with null safety
 //       final filenames = filesToUse.map((file) {
 //         String? name =
 //             file['name']?.toString() ??
 //             file['filename']?.toString() ??
 //             file['path']?.toString();
-// 
+//
 //         // If we got a path, extract just the filename
 //         if (name != null && name.startsWith('/')) {
 //           name = name.split('/').last;
 //         }
-// 
+//
 //         return name ?? 'Unknown File';
 //       }).toList();
-// 
+//
 //       // Check if this is a series
 //       final isSeries = SeriesParser.isSeriesPlaylist(filenames);
-// 
+//
 //       if (isSeries) {
 //         // For series: find the first episode and unrestrict only that one
 //         final seriesInfos = SeriesParser.parsePlaylist(filenames);
-// 
+//
 //         // Find the first episode (lowest season, lowest episode)
 //         int firstEpisodeIndex = 0;
 //         int lowestSeason = 999;
 //         int lowestEpisode = 999;
-// 
+//
 //         for (int i = 0; i < seriesInfos.length; i++) {
 //           final info = seriesInfos[i];
 //           if (info.isSeries && info.season != null && info.episode != null) {
@@ -18639,7 +18639,7 @@
 //             }
 //           }
 //         }
-// 
+//
 //         // Create playlist entries with true lazy loading
 //         for (int i = 0; i < filesToUse.length; i++) {
 //           final file = filesToUse[i];
@@ -18647,27 +18647,27 @@
 //               file['name']?.toString() ??
 //               file['filename']?.toString() ??
 //               file['path']?.toString();
-// 
+//
 //           // Save full path for relativePath before stripping to filename
 //           String? relativePath = filename;
 //           if (relativePath != null && relativePath.startsWith('/')) {
 //             relativePath = relativePath.substring(1); // Remove leading slash
 //           }
-// 
+//
 //           // If we got a path, extract just the filename
 //           if (filename != null && filename.startsWith('/')) {
 //             filename = filename.split('/').last;
 //           }
-// 
+//
 //           final finalFilename = filename ?? 'Unknown File';
 //           final int? sizeBytes = (file is Map) ? (file['bytes'] as int?) : null;
-// 
+//
 //           // Check if we have a corresponding link
 //           if (i >= links.length) {
 //             // Skip if no corresponding link
 //             continue;
 //           }
-// 
+//
 //           if (i == firstEpisodeIndex) {
 //             // First episode: try to unrestrict for immediate playback
 //             try {
@@ -18730,27 +18730,27 @@
 //               file['name']?.toString() ??
 //               file['filename']?.toString() ??
 //               file['path']?.toString();
-// 
+//
 //           // Save full path for relativePath before stripping to filename
 //           String? relativePath = filename;
 //           if (relativePath != null && relativePath.startsWith('/')) {
 //             relativePath = relativePath.substring(1); // Remove leading slash
 //           }
-// 
+//
 //           // If we got a path, extract just the filename
 //           if (filename != null && filename.startsWith('/')) {
 //             filename = filename.split('/').last;
 //           }
-// 
+//
 //           final finalFilename = filename ?? 'Unknown File';
 //           final int? sizeBytes = (file is Map) ? (file['bytes'] as int?) : null;
-// 
+//
 //           // Check if we have a corresponding link
 //           if (i >= links.length) {
 //             // Skip if no corresponding link
 //             continue;
 //           }
-// 
+//
 //           if (i == 0) {
 //             // First video: try to unrestrict for immediate playback
 //             try {
@@ -18806,9 +18806,9 @@
 //           }
 //         }
 //       }
-// 
+//
 //       if (mounted) Navigator.of(context).pop(); // close loading
-// 
+//
 //       if (entries.isEmpty) {
 //         if (mounted) {
 //           ScaffoldMessenger.of(context).showSnackBar(
@@ -18848,15 +18848,15 @@
 //         }
 //         return;
 //       }
-// 
+//
 //       if (!mounted) return;
-// 
+//
 //       // Determine the initial video URL - use the first unrestricted URL or empty string
 //       String initialVideoUrl = '';
 //       if (entries.isNotEmpty && entries.first.url.isNotEmpty) {
 //         initialVideoUrl = entries.first.url;
 //       }
-// 
+//
 //       // Fetch actual torrent filename for resume key parity with Debrid screen
 //       String finalTitle = torrentName;
 //       try {
@@ -18873,7 +18873,7 @@
 //       } catch (_) {
 //         // Fallback to torrentName if fetch fails
 //       }
-// 
+//
 //       await VideoPlayerLauncher.push(
 //         context,
 //         VideoPlayerLaunchArgs(
@@ -18942,9 +18942,9 @@
 //       }
 //     }
 //   }
-// 
+//
 //   // ── Extracted playlist builders (no UI) for source switching ──
-// 
+//
 //   /// Build RD playlist entries from links + files (pure logic, no dialogs).
 //   /// Returns null on failure (archive, no video files, etc.)
 //   Future<List<PlaylistEntry>?> _buildRdPlaylistEntries({
@@ -18954,7 +18954,7 @@
 //   }) async {
 //     final selectedFiles = files.where((file) => file['selected'] == 1).toList();
 //     final allFilesToUse = selectedFiles.isNotEmpty ? selectedFiles : files;
-// 
+//
 //     final filesToUse = allFilesToUse.where((file) {
 //       String? filename =
 //           file['name']?.toString() ??
@@ -18964,11 +18964,11 @@
 //         filename = filename.split('/').last;
 //       return filename != null && FileUtils.isVideoFile(filename);
 //     }).toList();
-// 
+//
 //     // Archive check
 //     if (filesToUse.length > 1 && links.length == 1) return null;
 //     if (filesToUse.isEmpty) return null;
-// 
+//
 //     final entries = <PlaylistEntry>[];
 //     final filenames = filesToUse.map((file) {
 //       String? name =
@@ -18978,10 +18978,10 @@
 //       if (name != null && name.startsWith('/')) name = name.split('/').last;
 //       return name ?? 'Unknown File';
 //     }).toList();
-// 
+//
 //     final isSeries = SeriesParser.isSeriesPlaylist(filenames);
 //     final seriesInfos = isSeries ? SeriesParser.parsePlaylist(filenames) : null;
-// 
+//
 //     // Find first episode index for series
 //     int firstIndex = 0;
 //     if (isSeries && seriesInfos != null) {
@@ -18998,7 +18998,7 @@
 //         }
 //       }
 //     }
-// 
+//
 //     for (int i = 0; i < filesToUse.length; i++) {
 //       final file = filesToUse[i];
 //       String? filename =
@@ -19013,7 +19013,7 @@
 //       final finalFilename = filename ?? 'Unknown File';
 //       final int? sizeBytes = (file is Map) ? (file['bytes'] as int?) : null;
 //       if (i >= links.length) continue;
-// 
+//
 //       if (i == firstIndex) {
 //         try {
 //           final unrestrictResult = await DebridService.unrestrictLink(
@@ -19055,7 +19055,7 @@
 //     }
 //     return entries.isEmpty ? null : entries;
 //   }
-// 
+//
 //   /// Build Torbox playlist entries from a TorboxTorrent (pure logic, no dialogs).
 //   Future<List<PlaylistEntry>?> _buildTorboxPlaylistEntries({
 //     required TorboxTorrent torrent,
@@ -19065,7 +19065,7 @@
 //         .where((f) => !f.zipped && _torboxFileLooksLikeVideo(f))
 //         .toList();
 //     if (videoFiles.isEmpty) return null;
-// 
+//
 //     // Single file
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
@@ -19090,7 +19090,7 @@
 //         return null;
 //       }
 //     }
-// 
+//
 //     // Multi-file
 //     final items = List<_TorboxPlaylistItem>.generate(videoFiles.length, (i) {
 //       final displayName = _torboxDisplayName(videoFiles[i]);
@@ -19104,7 +19104,7 @@
 //     final fnames = items.map((e) => e.displayName).toList();
 //     final bool isSeriesCollection =
 //         items.length > 1 && SeriesParser.isSeriesPlaylist(fnames);
-// 
+//
 //     final sorted = [...items];
 //     if (isSeriesCollection) {
 //       sorted.sort((a, b) {
@@ -19126,13 +19126,13 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     final seriesInfos = sorted.map((e) => e.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
 //         ? _findFirstEpisodeIndex(seriesInfos)
 //         : 0;
 //     if (startIndex < 0 || startIndex >= sorted.length) startIndex = 0;
-// 
+//
 //     String initialUrl = '';
 //     try {
 //       initialUrl = await _requestTorboxStreamUrl(
@@ -19143,7 +19143,7 @@
 //     } catch (_) {
 //       return null;
 //     }
-// 
+//
 //     final playlistEntries = <PlaylistEntry>[];
 //     for (int i = 0; i < sorted.length; i++) {
 //       final entry = sorted[i];
@@ -19176,7 +19176,7 @@
 //     }
 //     return playlistEntries.isEmpty ? null : playlistEntries;
 //   }
-// 
+//
 //   /// Build PikPak playlist entries from video files (pure logic, no dialogs).
 //   Future<List<PlaylistEntry>?> _buildPikPakPlaylistEntries({
 //     required String torrentName,
@@ -19184,7 +19184,7 @@
 //   }) async {
 //     if (videoFiles.isEmpty) return null;
 //     final pikpak = PikPakApiService.instance;
-// 
+//
 //     // Single file
 //     if (videoFiles.length == 1) {
 //       final file = videoFiles.first;
@@ -19208,7 +19208,7 @@
 //         return null;
 //       }
 //     }
-// 
+//
 //     // Multi-file
 //     final items = <_PikPakPlaylistItem>[];
 //     for (int i = 0; i < videoFiles.length; i++) {
@@ -19226,7 +19226,7 @@
 //     final fnames = items.map((e) => e.displayName).toList();
 //     final bool isSeriesCollection =
 //         items.length > 1 && SeriesParser.isSeriesPlaylist(fnames);
-// 
+//
 //     final sorted = [...items];
 //     if (isSeriesCollection) {
 //       sorted.sort((a, b) {
@@ -19248,13 +19248,13 @@
 //             a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
 //       );
 //     }
-// 
+//
 //     final seriesInfos = sorted.map((e) => e.seriesInfo).toList();
 //     int startIndex = isSeriesCollection
 //         ? _findFirstEpisodeIndex(seriesInfos)
 //         : 0;
 //     if (startIndex < 0 || startIndex >= sorted.length) startIndex = 0;
-// 
+//
 //     String initialUrl = '';
 //     try {
 //       final firstFile = sorted[startIndex].file;
@@ -19264,7 +19264,7 @@
 //       return null;
 //     }
 //     if (initialUrl.isEmpty) return null;
-// 
+//
 //     final playlistEntries = <PlaylistEntry>[];
 //     for (int i = 0; i < sorted.length; i++) {
 //       final entry = sorted[i];
@@ -19292,13 +19292,13 @@
 //     }
 //     return playlistEntries.isEmpty ? null : playlistEntries;
 //   }
-// 
+//
 //   // ── Source switching resolver ──
-// 
+//
 //   int _findTorrentIndex(String infohash) {
 //     return _torrents.indexWhere((t) => t.infohash == infohash);
 //   }
-// 
+//
 //   Future<List<PlaylistEntry>?> Function(Torrent)
 //   _createSourcePlaylistResolver() {
 //     return (Torrent torrent) async {
@@ -19309,12 +19309,12 @@
 //         ];
 //       }
 //       if (torrent.streamType != StreamType.torrent) return null;
-// 
+//
 //       final magnet = _torrentAcquisitionUrlForTorrent(torrent);
-// 
+//
 //       // Respect the user's selected provider from Settings → Provider Settings
 //       final defaultProvider = await StorageService.getDefaultTorrentProvider();
-// 
+//
 //       if (defaultProvider == 'debrid' &&
 //           _realDebridIntegrationEnabled &&
 //           _apiKey != null &&
@@ -19338,7 +19338,7 @@
 //           _allDebridApiKey!.isNotEmpty) {
 //         return _resolveSourceViaAllDebrid(torrent, magnet);
 //       }
-// 
+//
 //       // Fallback: no default set or selected provider unavailable → first available
 //       if (_realDebridIntegrationEnabled &&
 //           _apiKey != null &&
@@ -19362,7 +19362,7 @@
 //       return null;
 //     };
 //   }
-// 
+//
 //   Future<List<PlaylistEntry>?> _resolveSourceViaRealDebrid(
 //     Torrent torrent,
 //     String magnet,
@@ -19373,7 +19373,7 @@
 //       final result = await DebridService.addTorrentToDebrid(apiKey, magnet);
 //       final links = result['links'] as List<dynamic>;
 //       final files = result['files'] as List<dynamic>?;
-// 
+//
 //       // Single link → unrestrict to get mime type and verify it's a video
 //       if (links.length == 1) {
 //         final unrestrictResult = await DebridService.unrestrictLink(
@@ -19386,7 +19386,7 @@
 //         if (videoUrl.isEmpty) return null;
 //         return [PlaylistEntry(url: videoUrl, title: torrent.displayTitle)];
 //       }
-// 
+//
 //       // Multi-link → build full playlist
 //       if (files == null) return null;
 //       return _buildRdPlaylistEntries(
@@ -19398,7 +19398,7 @@
 //       return null;
 //     }
 //   }
-// 
+//
 //   Future<List<PlaylistEntry>?> _resolveSourceViaTorbox(
 //     Torrent torrent,
 //     String magnet,
@@ -19417,14 +19417,14 @@
 //       final error = (response['error'] ?? '').toString();
 //       // Accept success OR ALREADY_ADDED (torrent is already on the account)
 //       if (!success && !error.contains('ALREADY_ADDED')) return null;
-// 
+//
 //       final data = response['data'];
 //       final torrentId = _asIntMapValue(data, 'torrent_id');
 //       if (torrentId == null) return null;
-// 
+//
 //       final torboxTorrent = await _fetchTorboxTorrentById(apiKey, torrentId);
 //       if (torboxTorrent == null) return null;
-// 
+//
 //       return _buildTorboxPlaylistEntries(
 //         torrent: torboxTorrent,
 //         apiKey: apiKey,
@@ -19433,7 +19433,7 @@
 //       return null;
 //     }
 //   }
-// 
+//
 //   Future<List<PlaylistEntry>?> _resolveSourceViaPremiumize(
 //     Torrent torrent,
 //     String magnet,
@@ -19447,7 +19447,7 @@
 //       final files = await PremiumizeService.directDownload(apiKey, magnet);
 //       final videoFiles = files.where(_premiumizeFileLooksLikeVideo).toList();
 //       if (videoFiles.isEmpty) return null;
-// 
+//
 //       final items = videoFiles
 //           .map(
 //             (f) => _PremiumizePlaylistItem(
@@ -19483,7 +19483,7 @@
 //           ),
 //         );
 //       }
-// 
+//
 //       final entries = <PlaylistEntry>[];
 //       for (final entry in items) {
 //         final episodeLabel = _formatTorboxPlaylistTitle(
@@ -19517,7 +19517,7 @@
 //       return null;
 //     }
 //   }
-// 
+//
 //   Future<List<PlaylistEntry>?> _resolveSourceViaPikPak(
 //     Torrent torrent,
 //     String _,
@@ -19537,7 +19537,7 @@
 //       } catch (_) {
 //         subFolderId = parentFolderId;
 //       }
-// 
+//
 //       final addResult = await pikpak.addOfflineDownload(
 //         pikpakMagnet,
 //         parentFolderId: subFolderId,
@@ -19553,9 +19553,9 @@
 //         fileId = addResult['id'];
 //       }
 //       if (fileId == null) return null;
-// 
+//
 //       const pollInterval = Duration(seconds: 2);
-// 
+//
 //       // Phase 1: poll task status until complete (mirrors _pollPikPakStatus Phase 1)
 //       // Capped at 7 attempts (~15 s) so a stalled task never hangs indefinitely.
 //       // Breaks early at >=90% progress so a near-complete task doesn't burn the full budget.
@@ -19587,7 +19587,7 @@
 //           }
 //         }
 //       }
-// 
+//
 //       // Phase 2: poll file status until complete (max ~10 seconds).
 //       // Skip the first delay when Phase 1 already confirmed the task is done.
 //       for (int attempt = 0; attempt < 5; attempt++) {
@@ -19618,7 +19618,7 @@
 //       return null;
 //     }
 //   }
-// 
+//
 //   Future<void> _showDownloadSelectionDialog(
 //     List<dynamic> links,
 //     String torrentName,
@@ -19626,7 +19626,7 @@
 //     // Show file selection dialog immediately (no upfront unrestriction)
 //     final apiKey = await StorageService.getApiKey();
 //     if (apiKey == null) return;
-// 
+//
 //     // Create file list with restricted links (unrestriction happens on-demand)
 //     final List<Map<String, dynamic>> fileList = [];
 //     for (int i = 0; i < links.length; i++) {
@@ -19641,14 +19641,14 @@
 //       } catch (_) {
 //         // Use default filename
 //       }
-// 
+//
 //       fileList.add({
 //         'restrictedLink': link,
 //         'filename': fileName,
 //         'fileIndex': i,
 //       });
 //     }
-// 
+//
 //     if (fileList.isEmpty) {
 //       if (mounted) {
 //         ScaffoldMessenger.of(context).showSnackBar(
@@ -19684,7 +19684,7 @@
 //       }
 //       return;
 //     }
-// 
+//
 //     // Show the download selection dialog with unrestricted links
 //     if (!mounted) return;
 //     showDialog(
@@ -19794,7 +19794,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   Future<void> _downloadAllFiles(
 //     List<Map<String, dynamic>> files,
 //     String torrentName,
@@ -19819,7 +19819,7 @@
 //           meta: meta,
 //         );
 //       }
-// 
+//
 //       ScaffoldMessenger.of(context).showSnackBar(
 //         SnackBar(
 //           content: Row(
@@ -19887,7 +19887,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Show file selection dialog for Real-Debrid torrents
 //   Future<void> _showRealDebridFileSelection({
 //     required Map<String, dynamic> result,
@@ -19904,7 +19904,7 @@
 //       );
 //       return;
 //     }
-// 
+//
 //     // Show loading dialog
 //     showDialog(
 //       context: context,
@@ -19923,20 +19923,20 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     try {
 //       // Get torrent info to get file list
 //       final torrentInfo = await DebridService.getTorrentInfo(apiKey, torrentId);
 //       final allFiles =
 //           (torrentInfo['files'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 //       final links = (torrentInfo['links'] as List?)?.cast<String>() ?? [];
-// 
+//
 //       // Filter to only selected files (files that were selected when adding to RD)
 //       // Only selected files have corresponding links and can be downloaded
 //       final files = allFiles.where((file) => file['selected'] == 1).toList();
-// 
+//
 //       if (mounted) Navigator.of(context).pop();
-// 
+//
 //       if (files.isEmpty) {
 //         ScaffoldMessenger.of(context).showSnackBar(
 //           const SnackBar(
@@ -19946,7 +19946,7 @@
 //         );
 //         return;
 //       }
-// 
+//
 //       // Format files for FileSelectionDialog
 //       // Map RD file structure to the format expected by FileSelectionDialog
 //       final formattedFiles = <Map<String, dynamic>>[];
@@ -19954,7 +19954,7 @@
 //         final file = files[i];
 //         final path = (file['path'] as String?) ?? '';
 //         final bytes = file['bytes'] as int? ?? 0;
-// 
+//
 //         formattedFiles.add({
 //           '_fullPath': path, // Use path field for full path
 //           'name': path,
@@ -19962,7 +19962,7 @@
 //           '_linkIndex': i, // Store the link index for later use
 //         });
 //       }
-// 
+//
 //       // Show file selection dialog
 //       if (!mounted) return;
 //       await showDialog(
@@ -19995,7 +19995,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Download selected files from Real-Debrid
 //   /// Follows the SAME pattern as folder downloads in debrid_downloads_screen.dart
 //   Future<void> _downloadSelectedRealDebridFiles({
@@ -20007,13 +20007,13 @@
 //     required String torrentHash,
 //   }) async {
 //     if (selectedFiles.isEmpty) return;
-// 
+//
 //     // Show confirmation dialog
 //     final totalSize = selectedFiles.fold<int>(
 //       0,
 //       (sum, file) => sum + (int.tryParse(file['size']?.toString() ?? '0') ?? 0),
 //     );
-// 
+//
 //     final confirmed =
 //         await showDialog<bool>(
 //           context: context,
@@ -20055,9 +20055,9 @@
 //           ),
 //         ) ??
 //         false;
-// 
+//
 //     if (!confirmed || !mounted) return;
-// 
+//
 //     // Show progress
 //     showDialog(
 //       context: context,
@@ -20076,27 +20076,27 @@
 //         ),
 //       ),
 //     );
-// 
+//
 //     // Queue downloads for each file
 //     // CRITICAL: Following the SAME pattern as debrid_downloads_screen.dart
 //     // We DON'T unrestrict everything upfront - we queue with metadata for lazy unrestriction
 //     int successCount = 0;
 //     int failCount = 0;
-// 
+//
 //     for (final file in selectedFiles) {
 //       try {
 //         final linkIndex = file['_linkIndex'] as int? ?? -1;
-// 
+//
 //         // Validate linkIndex
 //         if (linkIndex < 0 || linkIndex >= links.length) {
 //           failCount++;
 //           continue;
 //         }
-// 
+//
 //         // Get restricted link (no API call - instant!)
 //         final restrictedLink = links[linkIndex];
 //         final fileName = (file['_fullPath'] as String?) ?? 'Unknown';
-// 
+//
 //         // Pass metadata for lazy unrestriction
 //         // The download service will unrestrict when ready
 //         final meta = jsonEncode({
@@ -20105,7 +20105,7 @@
 //           'torrentHash': torrentHash,
 //           'fileIndex': linkIndex,
 //         });
-// 
+//
 //         // Queue download instantly (download service will unrestrict when ready)
 //         await DownloadService.instance.enqueueDownload(
 //           url:
@@ -20115,17 +20115,17 @@
 //           torrentName: torrentName,
 //           context: mounted ? context : null,
 //         );
-// 
+//
 //         successCount++;
 //       } catch (e) {
 //         // Silently handle individual file failures during batch operations
 //         failCount++;
 //       }
 //     }
-// 
+//
 //     // Close progress dialog
 //     if (mounted) Navigator.of(context).pop();
-// 
+//
 //     // Show result
 //     if (successCount > 0 && failCount == 0) {
 //       ScaffoldMessenger.of(context).showSnackBar(
@@ -20154,7 +20154,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   Future<void> _downloadFile(
 //     String downloadLink,
 //     String fileName, {
@@ -20176,7 +20176,7 @@
 //             fileName, // Use provided torrent name or fileName as fallback
 //         meta: meta,
 //       );
-// 
+//
 //       ScaffoldMessenger.of(context).showSnackBar(
 //         SnackBar(
 //           content: Row(
@@ -20244,21 +20244,21 @@
 //       );
 //     }
 //   }
-// 
+//
 //   /// Builds the stream type filter dropdowns (Direct and Torrent)
 //   Widget _buildStreamTypeFilters(BuildContext context) {
 //     final theme = Theme.of(context);
 //     final colorScheme = theme.colorScheme;
 //     final screenWidth = MediaQuery.of(context).size.width;
-// 
+//
 //     // Check if we have any providers
 //     final hasDirectProviders = _directProviderCounts.isNotEmpty;
 //     final hasTorrentProviders = _torrentProviderCounts.isNotEmpty;
-// 
+//
 //     // Use compact mode on narrow screens or when both dropdowns are shown
 //     final bool useCompact =
 //         screenWidth < 500 || (hasDirectProviders && hasTorrentProviders);
-// 
+//
 //     if (!hasDirectProviders && !hasTorrentProviders) {
 //       return Text(
 //         'No results',
@@ -20267,7 +20267,7 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     return Row(
 //       mainAxisSize: MainAxisSize.min,
 //       children: [
@@ -20353,7 +20353,7 @@
 //       ],
 //     );
 //   }
-// 
+//
 //   /// Derives a short name (2-4 chars) from an engine ID.
 //   ///
 //   /// Logic:
@@ -20373,7 +20373,7 @@
 //         name,
 //       ).toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
 //     }
-// 
+//
 //     if (name.contains('_')) {
 //       // Multi-word: short parts kept whole, long parts abbreviated
 //       final parts = name.split('_');
@@ -20395,26 +20395,26 @@
 //       return (name[0] + name.substring(name.length - 2)).toUpperCase();
 //     }
 //   }
-// 
+//
 //   Widget _buildEngineStatusChips(BuildContext context) {
 //     final List<Widget> chips = [];
-// 
+//
 //     // Get all unique engine keys from counts and errors (dynamic, not hardcoded)
 //     final allEngineKeys = <String>{
 //       ..._engineCounts.keys,
 //       ..._engineErrors.keys,
 //     }.toList()..sort(); // Sort for consistent ordering
-// 
+//
 //     for (final key in allEngineKeys) {
 //       final short = _deriveEngineShortName(key);
 //       final count = _engineCounts[key] ?? 0;
 //       final hasError = _engineErrors.containsKey(key);
-// 
+//
 //       if (count > 0 || hasError) {
 //         final isSelected = _selectedEngineFilter == key;
 //         final focusNode = _getOrCreateEngineFocusNode(key);
 //         final isFocused = _engineTileFocusStates[key] ?? false;
-// 
+//
 //         void toggleFilter() {
 //           if (hasError) return;
 //           setState(() {
@@ -20424,7 +20424,7 @@
 //             _applyEngineFilter();
 //           });
 //         }
-// 
+//
 //         chips.add(
 //           Focus(
 //             focusNode: focusNode,
@@ -20544,7 +20544,7 @@
 //         );
 //       }
 //     }
-// 
+//
 //     if (chips.isEmpty) {
 //       return Text(
 //         'No results',
@@ -20555,10 +20555,10 @@
 //         ),
 //       );
 //     }
-// 
+//
 //     return Wrap(spacing: 6, runSpacing: 4, children: chips);
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return PopScope(
@@ -20904,7 +20904,7 @@
 //                       ],
 //                     ),
 //                   ),
-// 
+//
 //                   // Content Section
 //                   Expanded(
 //                     child: Stack(
@@ -20954,7 +20954,7 @@
 //                                   _handleBrowseSeriesEpisodes,
 //                             ),
 //                           ),
-// 
+//
 //                         // Addon mode - catalog browser (kept alive with Offstage)
 //                         if (_selectedSource.type == SearchSourceType.addon &&
 //                             _selectedSource.addon != null &&
@@ -20993,7 +20993,7 @@
 //                               onEpisodeModeExited: _handleEpisodeModeExited,
 //                             ),
 //                           ),
-// 
+//
 //                         // Addon has search capability but no catalogs - show search prompt
 //                         if (_selectedSource.type == SearchSourceType.addon &&
 //                             _selectedSource.addon != null &&
@@ -21038,7 +21038,7 @@
 //                               ),
 //                             ),
 //                           ),
-// 
+//
 //                         // Trakt mode - Trakt list results (kept alive with Offstage like CatalogBrowser)
 //                         if (_selectedSource.type == SearchSourceType.trakt)
 //                           Offstage(
@@ -21088,7 +21088,7 @@
 //                               onEpisodeModeEntered: _onEpisodeGuideEntered,
 //                             ),
 //                           ),
-// 
+//
 //                         // Reddit mode - Reddit video results
 //                         if (_selectedSource.type == SearchSourceType.reddit)
 //                           RedditResultsView(
@@ -21096,7 +21096,7 @@
 //                             searchQuery: _searchController.text,
 //                             isTelevision: _isTelevision,
 //                           ),
-// 
+//
 //                         // Lemmy mode - Lemmy video results
 //                         if (_selectedSource.type == SearchSourceType.lemmy)
 //                           LemmyResultsView(
@@ -21104,7 +21104,7 @@
 //                             searchQuery: _searchController.text,
 //                             isTelevision: _isTelevision,
 //                           ),
-// 
+//
 //                         // YouTube mode - video results
 //                         if (_selectedSource.type == SearchSourceType.youtube)
 //                           YoutubeResultsView(
@@ -21112,7 +21112,7 @@
 //                             searchQuery: _searchController.text,
 //                             isTelevision: _isTelevision,
 //                           ),
-// 
+//
 //                         // IPTV mode - IPTV M3U channels
 //                         if (_selectedSource.type == SearchSourceType.iptv)
 //                           IptvResultsView(
@@ -21122,7 +21122,7 @@
 //                             onUpArrowFromFilters: () =>
 //                                 _sourceDropdownFocusNode.requestFocus(),
 //                           ),
-// 
+//
 //                         // Results and other views (not shown in Reddit/Lemmy/YouTube/IPTV mode - they handle their own content)
 //                         if (_selectedSource.type != SearchSourceType.reddit &&
 //                             _selectedSource.type != SearchSourceType.lemmy &&
@@ -21138,7 +21138,7 @@
 //                                   isTelevision: _isTelevision,
 //                                 );
 //                               }
-// 
+//
 //                               if (_errorMessage.isNotEmpty) {
 //                                 return ListView(
 //                                   padding: const EdgeInsets.only(bottom: 16),
@@ -21232,7 +21232,7 @@
 //                                   ],
 //                                 );
 //                               }
-// 
+//
 //                               if (!_hasSearched) {
 //                                 // Check if a catalog view is visible - if so, don't show history overlay
 //                                 final bool catalogVisible =
@@ -21258,7 +21258,7 @@
 //                                 }
 //                                 return _buildHomeSection();
 //                               }
-// 
+//
 //                               if (_torrents.isEmpty) {
 //                                 final bool hasRawResults =
 //                                     _allTorrents.isNotEmpty;
@@ -21343,7 +21343,7 @@
 //                               final int metadataRows = showCachedOnlyBanner
 //                                   ? 2
 //                                   : 1;
-// 
+//
 //                               // Restore scroll position if pending
 //                               if (_pendingScrollOffset != null) {
 //                                 final offset = _pendingScrollOffset!;
@@ -21367,7 +21367,7 @@
 //                                   }
 //                                 });
 //                               }
-// 
+//
 //                               final selectSourceBannerRows = _isSelectSourceMode
 //                                   ? 1
 //                                   : 0;
@@ -21443,11 +21443,11 @@
 //                                       ),
 //                                     );
 //                                   }
-// 
+//
 //                                   // Adjust index for select-source banner
 //                                   final adjustedIndex =
 //                                       index - selectSourceBannerRows;
-// 
+//
 //                                   // Combined Results + Sort row
 //                                   if (adjustedIndex == 0) {
 //                                     return FadeTransition(
@@ -22161,12 +22161,12 @@
 //                                       ),
 //                                     );
 //                                   }
-// 
+//
 //                                   if (showCachedOnlyBanner &&
 //                                       adjustedIndex == 1) {
 //                                     return _buildTorboxCachedOnlyNotice();
 //                                   }
-// 
+//
 //                                   final torrent =
 //                                       _torrents[adjustedIndex - metadataRows];
 //                                   return RepaintBoundary(
@@ -22245,9 +22245,9 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   static final _amazonResizeRe = RegExp(r'\._V1_.*\.jpg', caseSensitive: false);
-// 
+//
 //   static String? _upgradeToHiResPoster(String? url) {
 //     if (url == null || url.isEmpty) return url;
 //     // MetaHub: swap small/medium to large
@@ -22267,7 +22267,7 @@
 //     debugPrint('[QuickPlayMask] Poster URL unchanged: $url');
 //     return url;
 //   }
-// 
+//
 //   /// Full-screen opaque loading panel shown over the search UI during a
 //   /// movie Quick Play, so the search screen is never visible to the user.
 //   Widget _buildQuickPlayMovieMask() {
@@ -22403,7 +22403,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildTorboxCachedOnlyNotice() {
 //     return Container(
 //       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -22437,7 +22437,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   /// Build size chip or pack type chip based on coverage type
 //   Widget _buildSizeOrPackChip(Torrent torrent) {
 //     // For single episodes or unknown coverage: show actual size
@@ -22449,7 +22449,7 @@
 //         color: const Color(0xFF0EA5E9), // Sky 500 - Premium blue
 //       );
 //     }
-// 
+//
 //     // For packs: show pack type label instead of misleading individual file size
 //     switch (torrent.coverageType) {
 //       case 'completeSeries':
@@ -22458,21 +22458,21 @@
 //           text: 'Complete Series',
 //           color: const Color(0xFF8B5CF6), // Violet 500 - Rich purple
 //         );
-// 
+//
 //       case 'multiSeasonPack':
 //         return StatChip(
 //           icon: Icons.video_collection_rounded,
 //           text: 'Multi-Season',
 //           color: const Color(0xFFF59E0B), // Amber 500 - Warm amber
 //         );
-// 
+//
 //       case 'seasonPack':
 //         return StatChip(
 //           icon: Icons.folder_rounded,
 //           text: 'Season Pack',
 //           color: const Color(0xFF22C55E), // Green 500 - Fresh green
 //         );
-// 
+//
 //       default:
 //         // Fallback for unknown pack types
 //         return StatChip(
@@ -22482,11 +22482,11 @@
 //         );
 //     }
 //   }
-// 
+//
 //   // ============================================================================
 //   // Home Section UI (Favorites & Providers)
 //   // ============================================================================
-// 
+//
 //   /// Switch to Trakt source and open episode browser for a show.
 //   void _browseTraktShow(
 //     StremioMeta show, {
@@ -22515,17 +22515,17 @@
 //       _handleCatalogItemSelected(selection, updateSearchText: true);
 //       return;
 //     }
-// 
+//
 //     _pendingTraktEpisodeModeExitAction = returnToCalendarOnEpisodeExit
 //         ? _reopenTraktCalendar
 //         : null;
 //     _pendingCalendarReturnSource = returnToCalendarOnEpisodeExit
 //         ? (_pendingCalendarReturnSource ?? _selectedSource)
 //         : null;
-// 
+//
 //     // Switch source to Trakt
 //     _onSearchSourceChanged(traktOption);
-// 
+//
 //     // Enter episode mode after the TraktResultsView has mounted
 //     WidgetsBinding.instance.addPostFrameCallback((_) {
 //       _traktResultsKey.currentState?.enterEpisodeMode(
@@ -22535,13 +22535,13 @@
 //       );
 //     });
 //   }
-// 
+//
 //   void _handleCalendarEntrySelected(
 //     TraktCalendarEntry entry, {
 //     bool returnToCalendarOnEpisodeExit = false,
 //   }) {
 //     if (entry.showImdbId == null) return;
-// 
+//
 //     final show = StremioMeta.fromJson({
 //       'id': entry.showImdbId,
 //       'name': entry.showTitle,
@@ -22549,7 +22549,7 @@
 //       'year': entry.showYear?.toString(),
 //       'poster': entry.posterUrl,
 //     });
-// 
+//
 //     _browseTraktShow(
 //       show,
 //       season: entry.seasonNumber,
@@ -22557,11 +22557,11 @@
 //       returnToCalendarOnEpisodeExit: returnToCalendarOnEpisodeExit,
 //     );
 //   }
-// 
+//
 //   void _handleHomeCalendarEntrySelected(TraktCalendarEntry entry) {
 //     _handleCalendarEntrySelected(entry, returnToCalendarOnEpisodeExit: true);
 //   }
-// 
+//
 //   Future<void> _reopenTraktCalendar() async {
 //     if (!mounted) return;
 //     final returnSource = _pendingCalendarReturnSource;
@@ -22577,7 +22577,7 @@
 //     }
 //     _handleHomeCalendarEntrySelected(result);
 //   }
-// 
+//
 //   void _handleTraktEpisodeModeExited() {
 //     _onEpisodeGuideExited();
 //     final pendingAction = _pendingTraktEpisodeModeExitAction;
@@ -22589,7 +22589,7 @@
 //       unawaited(pendingAction());
 //     }
 //   }
-// 
+//
 //   SearchSourceOption? _firstCatalogSourceOption() {
 //     return _availableSourceOptions.cast<SearchSourceOption?>().firstWhere(
 //       (option) =>
@@ -22598,12 +22598,12 @@
 //       orElse: () => null,
 //     );
 //   }
-// 
+//
 //   bool get _hasVisibleHomeContent {
 //     if (HomeTraktNowPlayingCard.isScrobbleActive.value) {
 //       return true;
 //     }
-// 
+//
 //     const contentSections = <HomeSection>[
 //       HomeSection.todayCalendar,
 //       HomeSection.traktNowPlaying,
@@ -22616,10 +22616,10 @@
 //       HomeSection.tvFavorites,
 //       HomeSection.stremioTvFavorites,
 //     ];
-// 
+//
 //     return contentSections.any(_homeFocusController.sectionHasItems);
 //   }
-// 
+//
 //   /// True only when Home is showing its idle content sections (favorites /
 //   /// continue-watching / etc), i.e. exactly the states where `_buildHomeSection`
 //   /// renders (see the build gate ~21345). The in-Home search controls are hidden
@@ -22635,10 +22635,10 @@
 //             (_selectedSource.addon?.supportsCatalogs ?? false));
 //     return !catalogVisible;
 //   }
-// 
+//
 //   bool get _isResolvingInitialHomeContent =>
 //       _homeInitialLoadingSections.isNotEmpty;
-// 
+//
 //   Set<HomeSection> _expectedInitialHomeLoadingSections() {
 //     return <HomeSection>{
 //       HomeSection.todayCalendar,
@@ -22648,12 +22648,12 @@
 //       HomeSection.traktContinueWatchingShows,
 //     };
 //   }
-// 
+//
 //   void _rearmInitialHomeLoadingSections() {
 //     _homeInitialLoadingSections = _expectedInitialHomeLoadingSections();
 //     _homeTraktRefreshNonce++;
 //   }
-// 
+//
 //   void _setHomeSectionInitialLoading(HomeSection section, bool isLoading) {
 //     final changed = isLoading
 //         ? _homeInitialLoadingSections.add(section)
@@ -22661,14 +22661,14 @@
 //     if (!changed || !mounted) return;
 //     setState(() {});
 //   }
-// 
+//
 //   Widget _buildHomeSection() {
 //     return ListView(
 //       padding: const EdgeInsets.only(top: 4, bottom: 32),
 //       // Pre-render one adjacent row so D-pad up/down doesn't blink loading
 //       // shimmers, without keeping ~3 offscreen rails (and all their decoded
 //       // posters) alive — that memory footprint OOMs 2GB TV boxes.
-//       cacheExtent: 700,
+//       scrollCacheExtent: ScrollCacheExtent.pixels(700),
 //       physics: const BouncingScrollPhysics(
 //         parent: AlwaysScrollableScrollPhysics(),
 //       ),
@@ -23202,18 +23202,18 @@
 //       ],
 //     );
 //   }
-// 
+//
 //   Widget _buildTorrentCard(Torrent torrent, int index) {
 //     // For direct/external streams, use legacy card (they don't need debrid buttons)
 //     if (torrent.isDirectStream || torrent.isExternalStream) {
 //       return _buildDirectStreamCard(torrent, index);
 //     }
-// 
+//
 //     // Use new compact row for regular torrent results
 //     final focusNode = index < _cardFocusNodes.length
 //         ? _cardFocusNodes[index]
 //         : FocusNode();
-// 
+//
 //     return TorrentResultRow(
 //       key: ValueKey(
 //         '${torrent.infohash}_${_isSelectionMode}_${_selectedInfohashes.contains(torrent.infohash)}',
@@ -23268,7 +23268,7 @@
 //       },
 //     );
 //   }
-// 
+//
 //   /// Build card for direct/external streams (no debrid needed)
 //   /// Uses same visual style as TorrentResultRow for consistency
 //   Widget _buildDirectStreamCard(Torrent torrent, int index) {
@@ -23276,22 +23276,22 @@
 //     const cardBg = Color(0xFF1E293B); // Slate 800
 //     const textPrimary = Colors.white;
 //     const textSecondary = Color(0xFF94A3B8); // Slate 400
-// 
+//
 //     // Accent color based on stream type
 //     final accentColor = torrent.isDirectStream
 //         ? const Color(0xFF10B981) // Green for direct
 //         : const Color(0xFF6366F1); // Purple for external
 //     final screenWidth = MediaQuery.sizeOf(context).width;
 //     final showTrailingSourceChip = screenWidth >= 900;
-// 
+//
 //     // Get focus node for DPAD navigation
 //     final focusNode = index < _cardFocusNodes.length
 //         ? _cardFocusNodes[index]
 //         : FocusNode();
-// 
+//
 //     // Key for scroll-to-visible (stable across rebuilds)
 //     final cardKey = GlobalObjectKey('direct_stream_${torrent.infohash}_$index');
-// 
+//
 //     return Focus(
 //       focusNode: focusNode,
 //       onFocusChange: (focused) {
@@ -23514,7 +23514,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   String _formatSizeCompact(int bytes) {
 //     if (bytes <= 0) return 'N/A';
 //     const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -23526,7 +23526,7 @@
 //     }
 //     return '${size.toStringAsFixed(size < 10 ? 1 : 0)} ${suffixes[i]}';
 //   }
-// 
+//
 //   Widget _buildNonTVCardContent(Torrent torrent) {
 //     return Container(
 //       margin: const EdgeInsets.only(bottom: 12),
@@ -23587,7 +23587,7 @@
 //               ],
 //             ),
 //             const SizedBox(height: 12),
-// 
+//
 //             // Stats Grid
 //             Wrap(
 //               spacing: 6,
@@ -23614,7 +23614,7 @@
 //               ],
 //             ),
 //             const SizedBox(height: 10),
-// 
+//
 //             // Date
 //             Row(
 //               children: [
@@ -23634,7 +23634,7 @@
 //               ],
 //             ),
 //             const SizedBox(height: 12),
-// 
+//
 //             // Action Buttons - Get the index for this torrent
 //             _buildNonTVActionButtons(torrent, _torrents.indexOf(torrent)),
 //           ],
@@ -23642,12 +23642,12 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildNonTVActionButtons(Torrent torrent, int index) {
 //     return LayoutBuilder(
 //       builder: (context, constraints) {
 //         final isCompactLayout = constraints.maxWidth < 360;
-// 
+//
 //         // For direct/external streams, show Play button and Copy URL button
 //         if (torrent.isDirectStream || torrent.isExternalStream) {
 //           return Row(
@@ -23754,7 +23754,7 @@
 //             ],
 //           );
 //         }
-// 
+//
 //         Widget buildTorboxButton() {
 //           final bool isCached = _torboxResultIsCached(torrent);
 //           final bool canAdd = _torboxResultCanBeAdded(torrent);
@@ -23765,7 +23765,7 @@
 //               ? const Color(0xFF7C3AED).withValues(alpha: 0.35)
 //               : const Color(0xFF1F2937).withValues(alpha: 0.25);
 //           final textColor = isCached ? Colors.white : Colors.white70;
-// 
+//
 //           return Opacity(
 //             opacity: canAdd ? 1.0 : 0.55,
 //             child: Material(
@@ -23829,7 +23829,7 @@
 //             ),
 //           );
 //         }
-// 
+//
 //         Widget buildRealDebridButton() {
 //           return Material(
 //             color: Colors.transparent,
@@ -23899,7 +23899,7 @@
 //             ),
 //           );
 //         }
-// 
+//
 //         Widget buildPikPakButton() {
 //           return Material(
 //             color: Colors.transparent,
@@ -23959,7 +23959,7 @@
 //             ),
 //           );
 //         }
-// 
+//
 //         Widget buildPremiumizeButton() {
 //           return Material(
 //             color: Colors.transparent,
@@ -24023,7 +24023,7 @@
 //             ),
 //           );
 //         }
-// 
+//
 //         Widget buildAllDebridButton() {
 //           return Material(
 //             color: Colors.transparent,
@@ -24087,7 +24087,7 @@
 //             ),
 //           );
 //         }
-// 
+//
 //         final Widget? torboxButton =
 //             (_torboxIntegrationEnabled &&
 //                 _torboxApiKey != null &&
@@ -24115,7 +24115,7 @@
 //                 _allDebridApiKey!.isNotEmpty)
 //             ? buildAllDebridButton()
 //             : null;
-// 
+//
 //         final List<Widget> providerButtons = [
 //           torboxButton,
 //           realDebridButton,
@@ -24123,11 +24123,11 @@
 //           premiumizeButton,
 //           allDebridButton,
 //         ].whereType<Widget>().toList();
-// 
+//
 //         if (providerButtons.isEmpty) {
 //           return const SizedBox.shrink();
 //         }
-// 
+//
 //         if (isCompactLayout) {
 //           final List<Widget> children = [];
 //           for (int i = 0; i < providerButtons.length; i++) {
@@ -24139,11 +24139,11 @@
 //             children: children,
 //           );
 //         }
-// 
+//
 //         if (providerButtons.length == 1) {
 //           return SizedBox(width: double.infinity, child: providerButtons.first);
 //         }
-// 
+//
 //         final List<Widget> rowChildren = [];
 //         for (int i = 0; i < providerButtons.length; i++) {
 //           if (i > 0) rowChildren.add(const SizedBox(width: 8));
@@ -24154,13 +24154,13 @@
 //     );
 //   }
 // }
-// 
+//
 // class _TorrentMetadata {
 //   final SeriesInfo seriesInfo;
 //   final QualityTier? qualityTier;
 //   final RipSourceCategory ripSource;
 //   final AudioLanguage? audioLanguage;
-// 
+//
 //   const _TorrentMetadata({
 //     required this.seriesInfo,
 //     this.qualityTier,
@@ -24168,13 +24168,13 @@
 //     this.audioLanguage,
 //   }) : ripSource = ripSource ?? RipSourceCategory.other;
 // }
-// 
+//
 // class _TorboxPlaylistItem {
 //   final TorboxFile file;
 //   final int originalIndex;
 //   final SeriesInfo seriesInfo;
 //   final String displayName;
-// 
+//
 //   const _TorboxPlaylistItem({
 //     required this.file,
 //     required this.originalIndex,
@@ -24182,37 +24182,37 @@
 //     required this.displayName,
 //   });
 // }
-// 
+//
 // class _PremiumizePlaylistItem {
 //   final PremiumizeFile file;
 //   final SeriesInfo seriesInfo;
 //   final String displayName;
-// 
+//
 //   const _PremiumizePlaylistItem({
 //     required this.file,
 //     required this.seriesInfo,
 //     required this.displayName,
 //   });
 // }
-// 
+//
 // class _AllDebridPlaylistItem {
 //   final AllDebridFile file;
 //   final SeriesInfo seriesInfo;
 //   final String displayName;
-// 
+//
 //   const _AllDebridPlaylistItem({
 //     required this.file,
 //     required this.seriesInfo,
 //     required this.displayName,
 //   });
 // }
-// 
+//
 // class _PikPakPlaylistItem {
 //   final Map<String, dynamic> file;
 //   final int originalIndex;
 //   final SeriesInfo seriesInfo;
 //   final String displayName;
-// 
+//
 //   const _PikPakPlaylistItem({
 //     required this.file,
 //     required this.originalIndex,
@@ -24220,7 +24220,7 @@
 //     required this.displayName,
 //   });
 // }
-// 
+//
 // /// Glass-style option card for Torbox download dialog with D-pad support.
 // class _GlassOptionCard extends StatefulWidget {
 //   final IconData icon;
@@ -24229,7 +24229,7 @@
 //   final String subtitle;
 //   final VoidCallback onTap;
 //   final bool autofocus;
-// 
+//
 //   const _GlassOptionCard({
 //     required this.icon,
 //     required this.iconColor,
@@ -24238,14 +24238,14 @@
 //     required this.onTap,
 //     this.autofocus = false,
 //   });
-// 
+//
 //   @override
 //   State<_GlassOptionCard> createState() => _GlassOptionCardState();
 // }
-// 
+//
 // class _GlassOptionCardState extends State<_GlassOptionCard> {
 //   bool _focused = false;
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return Focus(
@@ -24338,7 +24338,7 @@
 //     );
 //   }
 // }
-// 
+//
 // class _DebridActionTile extends StatefulWidget {
 //   final IconData icon;
 //   final Color color;
@@ -24347,7 +24347,7 @@
 //   final VoidCallback onTap;
 //   final bool enabled;
 //   final bool autofocus;
-// 
+//
 //   const _DebridActionTile({
 //     required this.icon,
 //     required this.color,
@@ -24357,14 +24357,14 @@
 //     required this.enabled,
 //     this.autofocus = false,
 //   });
-// 
+//
 //   @override
 //   State<_DebridActionTile> createState() => _DebridActionTileState();
 // }
-// 
+//
 // class _DebridActionTileState extends State<_DebridActionTile> {
 //   bool _focused = false;
-// 
+//
 //   /// Consume Select/Enter on both KeyDown and KeyUp so they don't propagate
 //   /// to the underlying torrent row (which would otherwise re-open this dialog).
 //   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
@@ -24379,7 +24379,7 @@
 //     }
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return Opacity(
@@ -24443,7 +24443,7 @@
 //     );
 //   }
 // }
-// 
+//
 // /// DPAD-safe button replacement for Flutter's stock TextButton/FilledButton.
 // /// Stock Flutter buttons use internal Shortcuts that intercept Select/Enter keys
 // /// on KeyDown, causing the paired KeyUp to leak through to underlying widgets
@@ -24458,7 +24458,7 @@
 //   final bool autofocus;
 //   final Color? color;
 //   final String? semanticLabel;
-// 
+//
 //   const _DpadSafeButton({
 //     required this.onPressed,
 //     required this.child,
@@ -24467,14 +24467,14 @@
 //     this.color,
 //     this.semanticLabel,
 //   });
-// 
+//
 //   @override
 //   State<_DpadSafeButton> createState() => _DpadSafeButtonState();
 // }
-// 
+//
 // class _DpadSafeButtonState extends State<_DpadSafeButton> {
 //   bool _focused = false;
-// 
+//
 //   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
 //     final isSelect = isActivateKey(event.logicalKey);
 //     if (!isSelect) return KeyEventResult.ignored;
@@ -24488,7 +24488,7 @@
 //     }
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     final theme = Theme.of(context);
@@ -24543,7 +24543,7 @@
 //     );
 //   }
 // }
-// 
+//
 // // Optimized search TextField widget - extracted to prevent unnecessary parent rebuilds
 // class _SearchTextField extends StatefulWidget {
 //   final TextEditingController controller;
@@ -24560,16 +24560,16 @@
 //   final ValueChanged<bool> onFocusChange;
 //   final bool enabled;
 //   final String? disabledTooltip;
-// 
+//
 //   /// Callback when down arrow is pressed (for direct focus navigation in "All" mode)
 //   final VoidCallback? onDownArrowPressed;
-// 
+//
 //   /// Focus node for the clear button (for DPAD navigation)
 //   final FocusNode? clearButtonFocusNode;
-// 
+//
 //   /// Callback when right arrow is pressed from clear button (to move to dropdown)
 //   final VoidCallback? onRightArrowFromClearButton;
-// 
+//
 //   const _SearchTextField({
 //     required this.controller,
 //     required this.focusNode,
@@ -24589,14 +24589,14 @@
 //     this.clearButtonFocusNode,
 //     this.onRightArrowFromClearButton,
 //   });
-// 
+//
 //   @override
 //   State<_SearchTextField> createState() => _SearchTextFieldState();
 // }
-// 
+//
 // class _SearchTextFieldState extends State<_SearchTextField> {
 //   bool _isFocused = false;
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
@@ -24604,7 +24604,7 @@
 //     // Set up key handler directly on the focusNode so it intercepts before TextField
 //     widget.focusNode.onKeyEvent = _handleKeyEvent;
 //   }
-// 
+//
 //   @override
 //   void didUpdateWidget(covariant _SearchTextField oldWidget) {
 //     super.didUpdateWidget(oldWidget);
@@ -24615,14 +24615,14 @@
 //       widget.focusNode.onKeyEvent = _handleKeyEvent;
 //     }
 //   }
-// 
+//
 //   @override
 //   void dispose() {
 //     widget.focusNode.removeListener(_onFocusChanged);
 //     widget.focusNode.onKeyEvent = null;
 //     super.dispose();
 //   }
-// 
+//
 //   void _onFocusChanged() {
 //     final focused = widget.focusNode.hasFocus;
 //     if (_isFocused != focused) {
@@ -24632,15 +24632,15 @@
 //       widget.onFocusChange(focused);
 //     }
 //   }
-// 
+//
 //   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
 //     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-// 
+//
 //     final text = widget.controller.text;
 //     final selection = widget.controller.selection;
 //     final textLength = text.length;
 //     final isTextEmpty = textLength == 0;
-// 
+//
 //     // Check cursor position
 //     final isSelectionValid = selection.isValid && selection.baseOffset >= 0;
 //     final isAtStart =
@@ -24650,7 +24650,7 @@
 //         !isSelectionValid ||
 //         (selection.baseOffset == textLength &&
 //             selection.extentOffset == textLength);
-// 
+//
 //     // On TV, handle Escape/Back to clear search when there's text
 //     if (widget.isTelevision &&
 //         (event.logicalKey == LogicalKeyboardKey.escape ||
@@ -24660,7 +24660,7 @@
 //         return KeyEventResult.handled;
 //       }
 //     }
-// 
+//
 //     // Handle arrow down - navigate to next element when at end of text
 //     if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
 //       if (isTextEmpty || isAtEnd) {
@@ -24682,7 +24682,7 @@
 //         return KeyEventResult.handled;
 //       }
 //     }
-// 
+//
 //     // Handle arrow up - move to previous focus when at start
 //     if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
 //       if (isTextEmpty || isAtStart) {
@@ -24693,7 +24693,7 @@
 //         return KeyEventResult.handled;
 //       }
 //     }
-// 
+//
 //     // Handle arrow right at end of text - focus clear button or dropdown
 //     if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
 //       if (isTextEmpty || isAtEnd) {
@@ -24707,10 +24707,10 @@
 //         return KeyEventResult.handled;
 //       }
 //     }
-// 
+//
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     // Use regular Container instead of AnimatedContainer to avoid animation overhead on every rebuild
@@ -24842,7 +24842,7 @@
 //     );
 //   }
 // }
-// 
+//
 // /// Dialog for managing search sources (engines + Stremio addons)
 // class _SourcesDialog extends StatefulWidget {
 //   final List<DynamicEngine> availableEngines;
@@ -24852,7 +24852,7 @@
 //   final Future<void> Function(String manifestUrl, bool enabled) onAddonToggle;
 //   final SearchMode searchMode;
 //   final SearchSourceOption selectedSource;
-// 
+//
 //   const _SourcesDialog({
 //     required this.availableEngines,
 //     required this.engineStates,
@@ -24862,15 +24862,15 @@
 //     required this.searchMode,
 //     required this.selectedSource,
 //   });
-// 
+//
 //   @override
 //   State<_SourcesDialog> createState() => _SourcesDialogState();
 // }
-// 
+//
 // class _SourcesDialogState extends State<_SourcesDialog> {
 //   late Map<String, bool> _localEngineStates;
 //   late Map<String, bool> _localAddonStates;
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
@@ -24879,25 +24879,25 @@
 //       for (final addon in widget.streamAddons) addon.manifestUrl: addon.enabled,
 //     };
 //   }
-// 
+//
 //   /// Get engines relevant to the selected search source
 //   List<DynamicEngine> get _relevantEngines {
 //     final source = widget.selectedSource;
-// 
+//
 //     if (source.type == SearchSourceType.keyword) {
 //       // Keyword mode: show all keyword-capable engines
 //       return widget.availableEngines
 //           .where((e) => e.supportsKeywordSearch)
 //           .toList();
 //     }
-// 
+//
 //     if (source.type == SearchSourceType.all) {
 //       // All mode: show all engines
 //       return widget.availableEngines
 //           .where((e) => e.supportsKeywordSearch)
 //           .toList();
 //     }
-// 
+//
 //     // Specific addon mode: check what ID types the addon uses
 //     final addon = source.addon;
 //     if (addon != null && addon.handlesImdbIds) {
@@ -24906,36 +24906,36 @@
 //           .where((e) => e.supportsImdbSearch)
 //           .toList();
 //     }
-// 
+//
 //     // Non-IMDB addon (Kitsu, etc): no keyword engines support this
 //     return [];
 //   }
-// 
+//
 //   /// Get addons relevant to the selected search source
 //   List<StremioAddon> get _relevantAddons {
 //     final source = widget.selectedSource;
-// 
+//
 //     if (source.type == SearchSourceType.keyword) {
 //       // Keyword mode: no addons needed for pure keyword search
 //       return [];
 //     }
-// 
+//
 //     if (source.type == SearchSourceType.all) {
 //       // All mode: show all addons
 //       return widget.streamAddons;
 //     }
-// 
+//
 //     // Specific addon mode: filter by compatible idPrefixes
 //     final sourceAddon = source.addon;
 //     if (sourceAddon == null) return [];
-// 
+//
 //     final sourcePrefixes = sourceAddon.idPrefixes ?? [];
 //     if (sourcePrefixes.isEmpty) {
 //       // No restriction on source addon, show all that handle same ID types
 //       // Default to IMDB-compatible addons
 //       return widget.streamAddons.where((a) => a.handlesImdbIds).toList();
 //     }
-// 
+//
 //     // Filter addons that share at least one idPrefix with the source
 //     return widget.streamAddons.where((addon) {
 //       final addonPrefixes = addon.idPrefixes;
@@ -24947,7 +24947,7 @@
 //       return addonPrefixes.any((p) => sourcePrefixes.contains(p));
 //     }).toList();
 //   }
-// 
+//
 //   /// Get the section title for engines based on context
 //   String get _enginesSectionTitle {
 //     final source = widget.selectedSource;
@@ -24962,7 +24962,7 @@
 //     }
 //     return 'Torrent Engines';
 //   }
-// 
+//
 //   /// Get the section subtitle for addons based on context
 //   String get _addonsSectionSubtitle {
 //     final source = widget.selectedSource;
@@ -24984,7 +24984,7 @@
 //     }
 //     return 'Used for catalog searches';
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return Dialog(
@@ -25023,7 +25023,7 @@
 //                 ],
 //               ),
 //             ),
-// 
+//
 //             // Content
 //             Flexible(
 //               child: SingleChildScrollView(
@@ -25067,7 +25067,7 @@
 //                         );
 //                       }),
 //                     ],
-// 
+//
 //                     // Stream Addons Section (only show if relevant)
 //                     if (_relevantAddons.isNotEmpty) ...[
 //                       if (_relevantEngines.isNotEmpty)
@@ -25149,7 +25149,7 @@
 //                         );
 //                       }),
 //                     ],
-// 
+//
 //                     // No sources hint (when both sections empty)
 //                     if (_relevantEngines.isEmpty &&
 //                         _relevantAddons.isEmpty) ...[
@@ -25187,7 +25187,7 @@
 //                         ),
 //                       ),
 //                     ],
-// 
+//
 //                     // Hint to add more addons (when in addon mode but no addons available)
 //                     if (_relevantEngines.isNotEmpty &&
 //                         _relevantAddons.isEmpty &&
@@ -25232,7 +25232,7 @@
 //                 ),
 //               ),
 //             ),
-// 
+//
 //             // Footer
 //             Container(
 //               padding: const EdgeInsets.all(16),
@@ -25265,7 +25265,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   Widget _buildSectionHeader(
 //     BuildContext context,
 //     String title,
@@ -25298,7 +25298,7 @@
 //       ],
 //     );
 //   }
-// 
+//
 //   Widget _buildSourceTile(
 //     BuildContext context, {
 //     required String name,
@@ -25382,14 +25382,14 @@
 //     );
 //   }
 // }
-// 
+//
 // /// Small badge showing a capability
 // class _CapabilityBadge extends StatelessWidget {
 //   final String label;
 //   final Color color;
-// 
+//
 //   const _CapabilityBadge({required this.label, required this.color});
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return Container(
@@ -25410,14 +25410,14 @@
 //     );
 //   }
 // }
-// 
+//
 // /// Provider option for the selection dialog
 // class _ProviderOption {
 //   final String id;
 //   final String name;
 //   final IconData icon;
 //   final Color color;
-// 
+//
 //   const _ProviderOption({
 //     required this.id,
 //     required this.name,
@@ -25425,7 +25425,7 @@
 //     required this.color,
 //   });
 // }
-// 
+//
 // class _QuickControlTile extends StatefulWidget {
 //   final FocusNode focusNode;
 //   final IconData icon;
@@ -25434,7 +25434,7 @@
 //   final String subtitle;
 //   final Widget trailing;
 //   final VoidCallback? onPressed;
-// 
+//
 //   const _QuickControlTile({
 //     required this.focusNode,
 //     required this.icon,
@@ -25444,14 +25444,14 @@
 //     required this.trailing,
 //     this.onPressed,
 //   });
-// 
+//
 //   @override
 //   State<_QuickControlTile> createState() => _QuickControlTileState();
 // }
-// 
+//
 // class _QuickControlTileState extends State<_QuickControlTile> {
 //   bool _isFocused = false;
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     final isEnabled = widget.onPressed != null;
@@ -25535,40 +25535,40 @@
 //     );
 //   }
 // }
-// 
+//
 // /// Result from the provider selection dialog
 // class _ProviderDialogResult {
 //   final String provider;
 //   final bool alwaysUse;
-// 
+//
 //   const _ProviderDialogResult({
 //     required this.provider,
 //     required this.alwaysUse,
 //   });
 // }
-// 
+//
 // /// Provider selection dialog with improved UI and DPAD support
 // class _ProviderSelectionDialog extends StatefulWidget {
 //   final List<_ProviderOption> providers;
-// 
+//
 //   const _ProviderSelectionDialog({required this.providers});
-// 
+//
 //   @override
 //   State<_ProviderSelectionDialog> createState() =>
 //       _ProviderSelectionDialogState();
 // }
-// 
+//
 // class _ProviderSelectionDialogState extends State<_ProviderSelectionDialog> {
 //   bool _alwaysUseThis = false;
 //   int _focusedIndex = -1;
 //   bool _checkboxFocused = false;
-// 
+//
 //   // Focus nodes for DPAD navigation
 //   final List<FocusNode> _providerFocusNodes = [];
 //   final FocusNode _checkboxFocusNode = FocusNode(
 //     debugLabel: 'always-use-checkbox',
 //   );
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
@@ -25579,7 +25579,7 @@
 //       _providerFocusNodes.add(node);
 //     }
 //     _checkboxFocusNode.addListener(_onCheckboxFocusChange);
-// 
+//
 //     // Auto-focus first provider after dialog opens
 //     WidgetsBinding.instance.addPostFrameCallback((_) {
 //       if (_providerFocusNodes.isNotEmpty) {
@@ -25587,7 +25587,7 @@
 //       }
 //     });
 //   }
-// 
+//
 //   @override
 //   void dispose() {
 //     for (final node in _providerFocusNodes) {
@@ -25596,7 +25596,7 @@
 //     _checkboxFocusNode.dispose();
 //     super.dispose();
 //   }
-// 
+//
 //   void _onProviderFocusChange(int index) {
 //     if (mounted) {
 //       setState(() {
@@ -25606,7 +25606,7 @@
 //       });
 //     }
 //   }
-// 
+//
 //   void _onCheckboxFocusChange() {
 //     if (mounted) {
 //       setState(() {
@@ -25614,13 +25614,13 @@
 //       });
 //     }
 //   }
-// 
+//
 //   void _selectProvider(String providerId) {
 //     Navigator.of(context).pop(
 //       _ProviderDialogResult(provider: providerId, alwaysUse: _alwaysUseThis),
 //     );
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     return Center(
@@ -25678,13 +25678,13 @@
 //                   ),
 //                 ),
 //                 Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-// 
+//
 //                 // Provider options
 //                 ...widget.providers.asMap().entries.map((entry) {
 //                   final index = entry.key;
 //                   final provider = entry.value;
 //                   final isFocused = _focusedIndex == index;
-// 
+//
 //                   return Focus(
 //                     focusNode: _providerFocusNodes[index],
 //                     onKeyEvent: (node, event) {
@@ -25750,9 +25750,9 @@
 //                     ),
 //                   );
 //                 }),
-// 
+//
 //                 Divider(height: 1, color: Colors.white.withValues(alpha: 0.06)),
-// 
+//
 //                 // "Remember my choice" toggle
 //                 Focus(
 //                   focusNode: _checkboxFocusNode,
@@ -25832,7 +25832,7 @@
 //     );
 //   }
 // }
-// 
+//
 // /// A TV-optimized dropdown for filtering by stream type providers
 // ///
 // /// Supports:
@@ -25854,7 +25854,7 @@
 //   final VoidCallback? onRightArrowPressed;
 //   final VoidCallback? onUpArrowPressed;
 //   final VoidCallback? onDownArrowPressed;
-// 
+//
 //   const _StreamTypeDropdown({
 //     required this.label,
 //     required this.icon,
@@ -25871,30 +25871,30 @@
 //     this.onUpArrowPressed,
 //     this.onDownArrowPressed,
 //   });
-// 
+//
 //   @override
 //   State<_StreamTypeDropdown> createState() => _StreamTypeDropdownState();
 // }
-// 
+//
 // class _StreamTypeDropdownState extends State<_StreamTypeDropdown> {
 //   bool _isFocused = false;
 //   bool _isExpanded = false;
 //   final LayerLink _layerLink = LayerLink();
 //   OverlayEntry? _overlayEntry;
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
 //     widget.focusNode.addListener(_onFocusChange);
 //   }
-// 
+//
 //   @override
 //   void dispose() {
 //     _removeOverlay();
 //     widget.focusNode.removeListener(_onFocusChange);
 //     super.dispose();
 //   }
-// 
+//
 //   @override
 //   void didUpdateWidget(_StreamTypeDropdown oldWidget) {
 //     super.didUpdateWidget(oldWidget);
@@ -25905,13 +25905,13 @@
 //       });
 //     }
 //   }
-// 
+//
 //   void _onFocusChange() {
 //     setState(() {
 //       _isFocused = widget.focusNode.hasFocus;
 //     });
 //   }
-// 
+//
 //   void _toggleDropdown() {
 //     if (_isExpanded) {
 //       _removeOverlay();
@@ -25921,17 +25921,17 @@
 //       setState(() => _isExpanded = true);
 //     }
 //   }
-// 
+//
 //   void _showOverlay() {
 //     _overlayEntry = _createOverlayEntry();
 //     Overlay.of(context).insert(_overlayEntry!);
 //   }
-// 
+//
 //   void _removeOverlay() {
 //     _overlayEntry?.remove();
 //     _overlayEntry = null;
 //   }
-// 
+//
 //   OverlayEntry _createOverlayEntry() {
 //     final renderBox = context.findRenderObject() as RenderBox;
 //     final size = renderBox.size;
@@ -25941,14 +25941,14 @@
 //     final dropdownWidth = size.width < minDropdownWidth
 //         ? minDropdownWidth
 //         : size.width;
-// 
+//
 //     // Calculate horizontal offset - align left edge by default
 //     double horizontalOffset = 0;
 //     // If dropdown would extend beyond right edge, shift it left
 //     if (buttonPosition.dx + dropdownWidth > screenWidth - 8) {
 //       horizontalOffset = screenWidth - 8 - buttonPosition.dx - dropdownWidth;
 //     }
-// 
+//
 //     return OverlayEntry(
 //       builder: (context) => Stack(
 //         children: [
@@ -25995,7 +25995,7 @@
 //       ),
 //     );
 //   }
-// 
+//
 //   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
 //     if (event is KeyDownEvent) {
 //       if (isActivateKey(event.logicalKey)) {
@@ -26037,7 +26037,7 @@
 //     }
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     final theme = Theme.of(context);
@@ -26048,7 +26048,7 @@
 //       0,
 //       (sum, count) => sum + count,
 //     );
-// 
+//
 //     return CompositedTransformTarget(
 //       link: _layerLink,
 //       child: Focus(
@@ -26118,7 +26118,7 @@
 //     );
 //   }
 // }
-// 
+//
 // /// The dropdown menu for stream type provider selection
 // class _StreamTypeDropdownMenu extends StatefulWidget {
 //   final Map<String, int> providerCounts;
@@ -26128,7 +26128,7 @@
 //   final ValueChanged<String> onToggleProvider;
 //   final VoidCallback onToggleAll;
 //   final VoidCallback onClose;
-// 
+//
 //   const _StreamTypeDropdownMenu({
 //     required this.providerCounts,
 //     required this.selectedProviders,
@@ -26138,17 +26138,17 @@
 //     required this.onToggleAll,
 //     required this.onClose,
 //   });
-// 
+//
 //   @override
 //   State<_StreamTypeDropdownMenu> createState() =>
 //       _StreamTypeDropdownMenuState();
 // }
-// 
+//
 // class _StreamTypeDropdownMenuState extends State<_StreamTypeDropdownMenu> {
 //   late List<FocusNode> _itemFocusNodes;
 //   late List<GlobalKey> _itemKeys;
 //   int _focusedIndex = -1;
-// 
+//
 //   @override
 //   void initState() {
 //     super.initState();
@@ -26167,7 +26167,7 @@
 //       }
 //     });
 //   }
-// 
+//
 //   void _scrollToItem(int index) {
 //     if (index < 0 || index >= _itemKeys.length) return;
 //     final key = _itemKeys[index];
@@ -26180,7 +26180,7 @@
 //       );
 //     }
 //   }
-// 
+//
 //   @override
 //   void dispose() {
 //     for (final node in _itemFocusNodes) {
@@ -26188,7 +26188,7 @@
 //     }
 //     super.dispose();
 //   }
-// 
+//
 //   KeyEventResult _handleItemKeyEvent(
 //     FocusNode node,
 //     KeyEvent event,
@@ -26242,7 +26242,7 @@
 //     }
 //     return KeyEventResult.ignored;
 //   }
-// 
+//
 //   @override
 //   Widget build(BuildContext context) {
 //     final theme = Theme.of(context);
@@ -26250,7 +26250,7 @@
 //     final providers = widget.providerCounts.keys.toList()..sort();
 //     final allSelected =
 //         widget.selectedProviders.length == widget.providerCounts.length;
-// 
+//
 //     // Use FocusScope to trap focus within the dropdown
 //     return FocusScope(
 //       autofocus: true,
@@ -26264,7 +26264,7 @@
 //             itemCount: providers.length + 1, // +1 for "Select All"
 //             itemBuilder: (context, index) {
 //               final isFocused = _focusedIndex == index;
-// 
+//
 //               if (index == 0) {
 //                 // "Select All" item
 //                 return Focus(
@@ -26317,13 +26317,13 @@
 //                   ),
 //                 );
 //               }
-// 
+//
 //               // Provider item
 //               final provider = providers[index - 1];
 //               final count = widget.providerCounts[provider] ?? 0;
 //               final isSelected = widget.selectedProviders.contains(provider);
 //               final friendlyName = widget.friendlyNameResolver(provider);
-// 
+//
 //               return Focus(
 //                 key: _itemKeys[index],
 //                 focusNode: _itemFocusNodes[index],
@@ -26387,4 +26387,4 @@
 //     );
 //   }
 // }
-// 
+//

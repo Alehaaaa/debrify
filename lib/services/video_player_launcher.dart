@@ -696,11 +696,7 @@ class VideoPlayerLauncher {
     final imdbId = args.contentImdbId ?? payload['imdbId'] as String?;
     final season = args.contentSeason;
     final episode = args.contentEpisode;
-    if (!PlaybackRestartTicket.take(
-      imdbId,
-      season: season,
-      episode: episode,
-    )) {
+    if (!PlaybackRestartTicket.take(imdbId, season: season, episode: episode)) {
       return;
     }
     payload.remove('traktProgressPercent');
@@ -789,8 +785,10 @@ class VideoPlayerLauncher {
   ) {
     policy = policy.forContent(args.contentImdbId);
     return args.copyWith(
-      traktScrobble: args.traktScrobble && policy.scrobbles(TrackingSource.trakt),
-      simklScrobble: args.simklScrobble && policy.scrobbles(TrackingSource.simkl),
+      traktScrobble:
+          args.traktScrobble && policy.scrobbles(TrackingSource.trakt),
+      simklScrobble:
+          args.simklScrobble && policy.scrobbles(TrackingSource.simkl),
       mdblistScrobble:
           args.mdblistScrobble && policy.scrobbles(TrackingSource.mdblist),
     );
@@ -809,7 +807,8 @@ class VideoPlayerLauncher {
         (defaultPlayerMode == 'deovr' && Platform.isAndroid);
     final carriesAuthorization =
         args.httpHeaders?.keys.any(
-          (key) => key.toLowerCase() == 'authorization' ||
+          (key) =>
+              key.toLowerCase() == 'authorization' ||
               key.toLowerCase() == 'x-emby-token',
         ) ??
         false;
@@ -897,9 +896,9 @@ class VideoPlayerLauncher {
       if (!isTrailer) MainPageBridge.notifyContentPlaybackStopped();
       handoffNow();
       if (context.mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text(error.message.toString())),
-        );
+        ScaffoldMessenger.maybeOf(
+          context,
+        )?.showSnackBar(SnackBar(content: Text(error.message.toString())));
       }
     } finally {
       handoffNow();
@@ -916,7 +915,9 @@ class VideoPlayerLauncher {
   }) async {
     // Apply the tracker master switches to catalog content with stable IDs.
     var args = originalArgs;
-    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(args.contentImdbId);
+    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
+      args.contentImdbId,
+    );
     final defaultPlayerMode = await StorageService.getDefaultPlayerMode();
     if (!context.mounted) return;
     if (shouldExplainExternalPlayerFallback(args, defaultPlayerMode)) {
@@ -1254,6 +1255,7 @@ class VideoPlayerLauncher {
     // ever being pushed, so RouteAware can't tell those screens when playback
     // actually ended. See [_notifyOnReturnFromExternalActivity].
     if (!args.disableExternalPlayer && defaultPlayerMode == 'external') {
+      if (!context.mounted) return;
       int? chosenSeason;
       int? chosenEpisode;
       final launched = await _launchWithExternalPlayer(
@@ -1282,6 +1284,7 @@ class VideoPlayerLauncher {
     } else if (!args.disableExternalPlayer &&
         defaultPlayerMode == 'deovr' &&
         Platform.isAndroid) {
+      if (!context.mounted) return;
       final launched = await _launchWithDeoVR(context, args);
       if (launched) {
         await _commitExternalLaunchSource(args);
@@ -1317,6 +1320,7 @@ class VideoPlayerLauncher {
     // push serves every launcher call site — the route's LegacyThemeBoundary
     // keeps it (and every dialog/sheet it opens) on today's look under any
     // app theme.
+    if (!context.mounted) return;
     final result = await Navigator.of(context).push<Map<String, dynamic>?>(
       videoPlayerRoute(builder: (_) => args.toWidget()),
     );
@@ -1671,6 +1675,7 @@ class VideoPlayerLauncher {
       }
     }
 
+    if (!context.mounted) return false;
     if (_mayDiscloseCredential(url) &&
         !await _confirmExternalDisclosure(context)) {
       return false;
@@ -1844,6 +1849,7 @@ class VideoPlayerLauncher {
     if (!await ProfilePolicyGuard.allows(ProfileFeature.externalPlayers)) {
       return false;
     }
+    if (!context.mounted) return false;
     if (_mayDiscloseCredential(url) &&
         !await _confirmExternalDisclosure(context)) {
       return false;
@@ -2203,7 +2209,9 @@ class VideoPlayerLauncher {
     if (args.iptvChannels != null && args.iptvChannels!.isNotEmpty) {
       return _launchIptvOnAndroidTv(args);
     }
-    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(args.contentImdbId);
+    final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
+      args.contentImdbId,
+    );
 
     // Reset Trakt scrobble state for clean session
     _traktHeartbeatTimer?.cancel();
@@ -3656,7 +3664,9 @@ class VideoPlayerLauncher {
     // Run in background - don't await
     () async {
       try {
-        final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(contentImdbId);
+        final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
+          contentImdbId,
+        );
         // Determine forceSeries: prefer viewMode, then use contentType from catalog
         bool? forceSeries = viewMode?.toForceSeries();
         if (forceSeries == null && contentType != null) {
@@ -4120,11 +4130,12 @@ class VideoPlayerLauncher {
     // Session creation then stays synchronous and bound to this playback account.
     final capability = await service.capturePlaybackCapability();
     final playbackService = service;
-    payload.mdblistSessionFactory = (target) => MdblistScrobbleSession.forService(
-      service: playbackService,
-      target: target,
-      capability: capability,
-    );
+    payload.mdblistSessionFactory = (target) =>
+        MdblistScrobbleSession.forService(
+          service: playbackService,
+          target: target,
+          capability: capability,
+        );
     final index = payload.startIndex.clamp(0, payload.items.length - 1);
     final item = payload.items[index];
     final target = _nativeMdblistTarget(
@@ -4591,9 +4602,7 @@ class VideoPlayerLauncher {
             orElse: () => payload.items[fallbackIndex],
           );
           final persistedUrl =
-              progressUrl ??
-              (_resolvedStreamCache[resumeId]) ??
-              item.url;
+              progressUrl ?? (_resolvedStreamCache[resumeId]) ?? item.url;
 
           await StorageService.saveVideoPlaybackState(
             videoTitle: resumeId,
@@ -5297,7 +5306,7 @@ class _AndroidTvPlaylistResolver {
         index < entries.length) {
       target = entries[index];
       debugPrint(
-        'AndroidTvPlaylistResolver: found by index: ${target != null}, entry: ${target.entry.title}',
+        'AndroidTvPlaylistResolver: found by index: true, entry: ${target.entry.title}',
       );
     }
     if (target == null) {
@@ -5944,9 +5953,12 @@ class _AndroidTvPlaybackPayloadBuilder {
         continue;
       }
       final resumeId = _resumeIdForEntry(entry);
-      result.add((CustomSeriesIdentity.isCustom(args.contentImdbId) ||
-              (args.contentImdbId?.startsWith('medialibrary:') ?? false))
-          ? const _PerItemState() : await _readVideoState(resumeId));
+      result.add(
+        (CustomSeriesIdentity.isCustom(args.contentImdbId) ||
+                (args.contentImdbId?.startsWith('medialibrary:') ?? false))
+            ? const _PerItemState()
+            : await _readVideoState(resumeId),
+      );
     }
     return result;
   }

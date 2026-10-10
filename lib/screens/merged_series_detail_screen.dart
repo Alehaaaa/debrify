@@ -2106,7 +2106,7 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       // While the trailer is fullscreen, Back closes it instead of leaving the
       // page — the same player stays alive and settles back into the backdrop.
       canPop: !_trailerForeground,
-      onPopInvoked: (didPop) {
+      onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _exitTrailerForeground();
       },
       child: Scaffold(
@@ -6151,10 +6151,8 @@ class _AmbientStill extends StatelessWidget {
       duration: const Duration(milliseconds: 260),
       // The default layout centres children under LOOSE constraints, so a
       // BoxFit.cover image would size itself to its own aspect and letterbox.
-      layoutBuilder: (current, previous) => Stack(
-        fit: StackFit.expand,
-        children: [...previous, ?current],
-      ),
+      layoutBuilder: (current, previous) =>
+          Stack(fit: StackFit.expand, children: [...previous, ?current]),
       child: image,
     );
   }

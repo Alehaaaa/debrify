@@ -87,90 +87,178 @@ final List<_Section> _sections = [
     _Knob('callout', 'Callout', 'Badges and highlights.'),
   ]),
   _Section('Ground', [
-    _Knob('ground', 'Background', 'The page behind everything.', null,
-        ThemePalette.grounds),
+    _Knob(
+      'ground',
+      'Background',
+      'The page behind everything.',
+      null,
+      ThemePalette.grounds,
+    ),
     // Pane, fill and rail are NOT separately editable. Polarity is one
     // decision — see `DetailTheme.withTokens`. Offering four independent
     // surfaces produced combinations no single ink could read on.
-    _Knob('ink', 'Text',
-        'Everything written on top. Kept readable against the background.',
-        null, ThemePalette.inks),
+    _Knob(
+      'ink',
+      'Text',
+      'Everything written on top. Kept readable against the background.',
+      null,
+      ThemePalette.inks,
+    ),
   ]),
   _Section('Shape', [
-    _Knob('radius', 'Corners', 'How round a card is. 0 squares everything.',
-        _scaleOptions([0, 2, 4, 6, 8, 12, 16, 20, 28])),
-    _Knob('pillRadius', 'Buttons', 'Pill-shaped at the top, squared at 0.',
-        _scaleOptions([0, 4, 8, 12, 20, 999])),
+    _Knob(
+      'radius',
+      'Corners',
+      'How round a card is. 0 squares everything.',
+      _scaleOptions([0, 2, 4, 6, 8, 12, 16, 20, 28]),
+    ),
+    _Knob(
+      'pillRadius',
+      'Buttons',
+      'Pill-shaped at the top, squared at 0.',
+      _scaleOptions([0, 4, 8, 12, 20, 999]),
+    ),
   ]),
   _Section('Type', [
-    _Knob('displayFont', 'Titles', 'The face titles are set in.',
-        _enumOptions(DetailFontRole.values, (e) => e.name)),
-    _Knob('bodyFont', 'Body', 'Everything else.',
-        _enumOptions(DetailFontRole.values, (e) => e.name)),
+    _Knob(
+      'displayFont',
+      'Titles',
+      'The face titles are set in.',
+      _enumOptions(DetailFontRole.values, (e) => e.name),
+    ),
+    _Knob(
+      'bodyFont',
+      'Body',
+      'Everything else.',
+      _enumOptions(DetailFontRole.values, (e) => e.name),
+    ),
   ]),
   _Section('Focus', [
-    _Knob('focusExpression', 'Cursor', 'How the focused thing shows it.',
-        _enumOptions(FocusExpression.values, (e) => e.name, const {
-          'ring': 'A drawn outline.',
-          'scale': 'It grows.',
-          'lift': 'It rises, with a shadow.',
-          'invert': 'It swaps ink and ground.',
-          'flood': 'It fills with the focus colour.',
-          'parallax': 'It lifts and tilts, tvOS style.',
-        })),
+    _Knob(
+      'focusExpression',
+      'Cursor',
+      'How the focused thing shows it.',
+      _enumOptions(FocusExpression.values, (e) => e.name, const {
+        'ring': 'A drawn outline.',
+        'scale': 'It grows.',
+        'lift': 'It rises, with a shadow.',
+        'invert': 'It swaps ink and ground.',
+        'flood': 'It fills with the focus colour.',
+        'parallax': 'It lifts and tilts, tvOS style.',
+      }),
+    ),
   ]),
   _Section('Motion', [
-    _Knob('motion', 'Character', 'The tempo everything moves at.',
-        _enumOptions(MotionCharacter.values, (e) => e.name, const {
-          'standard': 'The shipped feel.',
-          'snap': 'Instant. Instruments do not glide.',
-          'glide': 'Long, soft decelerations.',
-        })),
-    _Knob('entrance', 'Entrances', 'How new content arrives.',
-        _enumOptions(EntranceStyle.values, (e) => e.name)),
-    _Knob('idle', 'When idle', 'What happens when you stop touching it.',
-        _enumOptions(IdlePolicy.values, (e) => e.name)),
+    _Knob(
+      'motion',
+      'Character',
+      'The tempo everything moves at.',
+      _enumOptions(MotionCharacter.values, (e) => e.name, const {
+        'standard': 'The shipped feel.',
+        'snap': 'Instant. Instruments do not glide.',
+        'glide': 'Long, soft decelerations.',
+      }),
+    ),
+    _Knob(
+      'entrance',
+      'Entrances',
+      'How new content arrives.',
+      _enumOptions(EntranceStyle.values, (e) => e.name),
+    ),
+    _Knob(
+      'idle',
+      'When idle',
+      'What happens when you stop touching it.',
+      _enumOptions(IdlePolicy.values, (e) => e.name),
+    ),
   ]),
   _Section('Surfaces', [
-    _Knob('separation', 'Separation', 'How one surface is told from another.',
-        _enumOptions(SeparationModel.values, (e) => e.name, const {
-          'space': 'Nothing drawn. Space does the work.',
-          'rule': 'Hairlines.',
-          'glass': 'Translucent, blurred panels.',
-          'fill': 'Solid tinted boxes.',
-        })),
-    _Knob('scrim', 'Scrims', 'The fade behind text on artwork.',
-        _enumOptions(ScrimStyle.values, (e) => e.name)),
+    _Knob(
+      'separation',
+      'Separation',
+      'How one surface is told from another.',
+      _enumOptions(SeparationModel.values, (e) => e.name, const {
+        'space': 'Nothing drawn. Space does the work.',
+        'rule': 'Hairlines.',
+        'glass': 'Translucent, blurred panels.',
+        'fill': 'Solid tinted boxes.',
+      }),
+    ),
+    _Knob(
+      'scrim',
+      'Scrims',
+      'The fade behind text on artwork.',
+      _enumOptions(ScrimStyle.values, (e) => e.name),
+    ),
   ]),
   _Section('Artwork', [
-    _Knob('frame', 'Frames', 'How posters are edged.',
-        _enumOptions(ArtFrame.values, (e) => e.name)),
-    _Knob('grade', 'Grade', 'A colour treatment over artwork.',
-        _enumOptions(ArtGrade.values, (e) => e.name)),
-    _Knob('reactiveRoom', 'Room colour',
-        'How far the page takes its colour from what you are looking at.',
-        _scaleOptions([0, 0.1, 0.2, 0.35, 0.5, 0.75, 1])),
-    _Knob('artworkAccent', 'Accent from artwork',
-        'Let a poster\'s own colour replace the accent.', const [
-      SettingsSelectOption('false', 'Off'),
-      SettingsSelectOption('true', 'On'),
-    ]),
+    _Knob(
+      'frame',
+      'Frames',
+      'How posters are edged.',
+      _enumOptions(ArtFrame.values, (e) => e.name),
+    ),
+    _Knob(
+      'grade',
+      'Grade',
+      'A colour treatment over artwork.',
+      _enumOptions(ArtGrade.values, (e) => e.name),
+    ),
+    _Knob(
+      'reactiveRoom',
+      'Room colour',
+      'How far the page takes its colour from what you are looking at.',
+      _scaleOptions([0, 0.1, 0.2, 0.35, 0.5, 0.75, 1]),
+    ),
+    _Knob(
+      'artworkAccent',
+      'Accent from artwork',
+      'Let a poster\'s own colour replace the accent.',
+      const [
+        SettingsSelectOption('false', 'Off'),
+        SettingsSelectOption('true', 'On'),
+      ],
+    ),
   ]),
   _Section('Texture', [
-    _Knob('grain', 'Film grain', 'Off on TV regardless.',
-        _scaleOptions([0, 0.1, 0.2, 0.35, 0.5])),
-    _Knob('sheen', 'Sheen', 'A highlight along the top of a surface.',
-        _scaleOptions([0, 0.1, 0.2, 0.35, 0.5])),
-    _Knob('vignette', 'Vignette', 'Darkening toward the edges.',
-        _scaleOptions([0, 0.1, 0.2, 0.35, 0.5])),
-    _Knob('bloom', 'Focus glow', 'A halo around the cursor, in pixels.',
-        _scaleOptions([0, 8, 14, 18, 22, 26, 34])),
+    _Knob(
+      'grain',
+      'Film grain',
+      'Off on TV regardless.',
+      _scaleOptions([0, 0.1, 0.2, 0.35, 0.5]),
+    ),
+    _Knob(
+      'sheen',
+      'Sheen',
+      'A highlight along the top of a surface.',
+      _scaleOptions([0, 0.1, 0.2, 0.35, 0.5]),
+    ),
+    _Knob(
+      'vignette',
+      'Vignette',
+      'Darkening toward the edges.',
+      _scaleOptions([0, 0.1, 0.2, 0.35, 0.5]),
+    ),
+    _Knob(
+      'bloom',
+      'Focus glow',
+      'A halo around the cursor, in pixels.',
+      _scaleOptions([0, 8, 14, 18, 22, 26, 34]),
+    ),
   ]),
   _Section('Feedback', [
-    _Knob('feedback', 'Sound and haptics', 'What a press feels like.',
-        _enumOptions(FeedbackCharacter.values, (e) => e.name)),
-    _Knob('skeleton', 'While loading', 'What a not-yet-arrived thing looks like.',
-        _enumOptions(SkeletonStyle.values, (e) => e.name)),
+    _Knob(
+      'feedback',
+      'Sound and haptics',
+      'What a press feels like.',
+      _enumOptions(FeedbackCharacter.values, (e) => e.name),
+    ),
+    _Knob(
+      'skeleton',
+      'While loading',
+      'What a not-yet-arrived thing looks like.',
+      _enumOptions(SkeletonStyle.values, (e) => e.name),
+    ),
   ]),
 ];
 
@@ -214,11 +302,6 @@ class _ThemeTokensPageState extends State<ThemeTokensPage> {
   }
 
   ThemeOverrides get _o => AppThemeController.instance.overrides;
-
-  /// `SettingsTile.onTap` is non-nullable, and a disabled row still has to
-  /// supply something. Doing nothing is the honest behaviour for "there is
-  /// nothing to reset".
-  static Future<void> _noop() async {}
 
   Future<void> _set(String key, String? value) async {
     await AppThemeController.instance.setOverrides(_o.with_(key, value));
@@ -267,7 +350,8 @@ class _ThemeTokensPageState extends State<ThemeTokensPage> {
                     padding: const EdgeInsets.only(bottom: 12),
                     child: SettingsInfoBanner(
                       icon: Icons.info_outline_rounded,
-                      text: 'Classic is the unthemed look — it has no tokens '
+                      text:
+                          'Classic is the unthemed look — it has no tokens '
                           'to edit. Pick any other Look first and these will '
                           'take effect.',
                     ),
@@ -287,8 +371,8 @@ class _ThemeTokensPageState extends State<ThemeTokensPage> {
                     label: o.isEmpty
                         ? 'Nothing changed yet — following the Look'
                         : '${o.count} '
-                            '${o.count == 1 ? "change" : "changes"} '
-                            'over the Look',
+                              '${o.count == 1 ? "change" : "changes"} '
+                              'over the Look',
                     onTap: _resetAll,
                   ),
                 ),
@@ -332,30 +416,27 @@ class _ThemeTokensPageState extends State<ThemeTokensPage> {
     );
   }
 
-  Widget _row(
-    BuildContext context,
-    dynamic app,
-    _Knob knob,
-    ThemeOverrides o,
-  ) {
+  Widget _row(BuildContext context, dynamic app, _Knob knob, ThemeOverrides o) {
     final value = o.valueOf(knob.key);
     final following = value == null;
     final subtitle = following
         ? knob.blurb
         : knob.isColour
-            ? (ThemePalette.byId(value)?.label ?? knob.blurb)
-            : _title(value);
+        ? (ThemePalette.byId(value)?.label ?? knob.blurb)
+        : _title(value);
 
     return SettingsTile(
       icon: knob.isColour ? Icons.palette_outlined : Icons.tune_rounded,
       title: knob.label,
       subtitle: subtitle,
       trailing: following
-          ? Text('Look',
-              style: TextStyle(fontSize: 12, color: app.settings.dim))
+          ? Text(
+              'Look',
+              style: TextStyle(fontSize: 12, color: app.settings.dim),
+            )
           : knob.isColour
-              ? _Dot(color: ThemePalette.colorOf(value))
-              : Icon(Icons.check_rounded, size: 18, color: app.settings.accent2),
+          ? _Dot(color: ThemePalette.colorOf(value))
+          : Icon(Icons.check_rounded, size: 18, color: app.settings.accent2),
       onTap: () async =>
           knob.isColour ? await _pickColour(knob) : await _pickOption(knob),
     );
@@ -441,7 +522,9 @@ class _RescueRowState extends State<_RescueRow> {
       focusNode: _focusNode,
       onFocusChange: (_) => setState(() {}),
       onKeyEvent: (_, e) {
-        if (!widget.enabled || e is! KeyDownEvent) return KeyEventResult.ignored;
+        if (!widget.enabled || e is! KeyDownEvent) {
+          return KeyEventResult.ignored;
+        }
         final k = e.logicalKey;
         if (k != LogicalKeyboardKey.enter &&
             k != LogicalKeyboardKey.select &&
@@ -512,14 +595,14 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: color ?? Colors.transparent,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-        ),
-      );
+    width: 20,
+    height: 20,
+    decoration: BoxDecoration(
+      color: color ?? Colors.transparent,
+      shape: BoxShape.circle,
+      border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+    ),
+  );
 }
 
 /// The 50-swatch grid. A grid rather than a list because fifty rows is a very
@@ -596,8 +679,7 @@ class _SwatchPageState extends State<_SwatchPage> {
                         subtitle: selected == null
                             ? 'Currently following'
                             : 'Give this colour back to the Look',
-                        onTap: () async =>
-                            Navigator.of(context).pop(_kFollow),
+                        onTap: () async => Navigator.of(context).pop(_kFollow),
                       ),
                     ],
                   ),
@@ -668,7 +750,8 @@ class _SwatchTileState extends State<_SwatchTile> {
       onKeyEvent: (_, e) {
         if (e is! KeyDownEvent) return KeyEventResult.ignored;
         final k = e.logicalKey;
-        final ok = k == LogicalKeyboardKey.enter ||
+        final ok =
+            k == LogicalKeyboardKey.enter ||
             k == LogicalKeyboardKey.select ||
             k == LogicalKeyboardKey.space ||
             k == LogicalKeyboardKey.gameButtonA;
@@ -702,8 +785,11 @@ class _SwatchTileState extends State<_SwatchTile> {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: widget.selected
-                    ? const Icon(Icons.check_rounded,
-                        size: 18, color: Colors.black)
+                    ? const Icon(
+                        Icons.check_rounded,
+                        size: 18,
+                        color: Colors.black,
+                      )
                     : null,
               ),
               const SizedBox(height: 6),
@@ -788,32 +874,33 @@ class _OptionPageState extends State<_OptionPage> {
                   canRequestFocus: false,
                   skipTraversal: true,
                   child: SettingsSection(
-                  title: '',
-                  children: [
-                    SettingsTile(
-                      icon: Icons.auto_awesome_rounded,
-                      title: 'Follow the Look',
-                      subtitle: selected == null
-                          ? 'Currently following'
-                          : 'Give this back to the Look',
-                      onTap: () async =>
-                          Navigator.of(context).pop(_kFollow),
-                    ),
-                    for (final o in options)
+                    title: '',
+                    children: [
                       SettingsTile(
-                        icon: o.value == selected
-                            ? Icons.radio_button_checked_rounded
-                            : Icons.radio_button_unchecked_rounded,
-                        title: o.title,
-                        subtitle: o.subtitle ?? '',
-                        trailing: o.value == selected
-                            ? Icon(Icons.check_rounded,
-                                size: 20, color: app.settings.accent2)
-                            : const SizedBox.shrink(),
-                        onTap: () async =>
-                            Navigator.of(context).pop(o.value),
+                        icon: Icons.auto_awesome_rounded,
+                        title: 'Follow the Look',
+                        subtitle: selected == null
+                            ? 'Currently following'
+                            : 'Give this back to the Look',
+                        onTap: () async => Navigator.of(context).pop(_kFollow),
                       ),
-                  ],
+                      for (final o in options)
+                        SettingsTile(
+                          icon: o.value == selected
+                              ? Icons.radio_button_checked_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          title: o.title,
+                          subtitle: o.subtitle ?? '',
+                          trailing: o.value == selected
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  size: 20,
+                                  color: app.settings.accent2,
+                                )
+                              : const SizedBox.shrink(),
+                          onTap: () async => Navigator.of(context).pop(o.value),
+                        ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

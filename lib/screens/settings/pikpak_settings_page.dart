@@ -148,6 +148,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
         _passwordController.clear();
 
         // Ask if user wants to set up folder restriction
+        if (!mounted) return;
         final shouldSetupRestriction = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -936,7 +937,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                               await StorageService.deletePikPakDeviceId();
                               await StorageService.clearPikPakCaptchaToken();
                               debugPrint('PikPak: Device ID cleared');
-                              if (mounted) {
+                              if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(

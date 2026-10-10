@@ -40,7 +40,12 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
   void initState() {
     super.initState();
     _resolveTimeout = Timer(const Duration(seconds: 20), () {
-      if (mounted) setState(() { _failed = true; _loading = false; });
+      if (mounted) {
+        setState(() {
+          _failed = true;
+          _loading = false;
+        });
+      }
     });
     _resolve();
   }
@@ -51,7 +56,10 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
         widget.item,
         isCurrent: () => _current,
       );
-      if (!_current || _failed || streams == null || !streams.hasPlayable) return;
+      if (!_current || _failed || streams == null || !streams.hasPlayable) {
+        return;
+      }
+      if (!mounted) return;
       if (ModalRoute.of(context)?.isCurrent == false ||
           (WidgetsBinding.instance.lifecycleState != null &&
               WidgetsBinding.instance.lifecycleState !=
@@ -81,33 +89,40 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
     final streams = _streams;
     if (!_current || _failed) return const SizedBox.shrink();
     return IgnorePointer(
-      child: Stack(fit: StackFit.expand, children: [
-      if (streams != null) HeroTrailerBackdrop(
-        imageUrl: null,
-        videoUrl: streams.playUrl,
-        audioUrl: streams.audioUrl,
-        // Native platform-view renderer on iOS, like the detail page trailer.
-        muxedVideoUrl: streams.muxedPlaybackFallback,
-        enabled: true,
-        focusPreviewOwner: _owner,
-        ambientVolume: widget.volume,
-        imageBlurSigma: 0,
-        videoBlurSigma: 0,
-        startDelay: Duration.zero,
-        firstFrameTimeout: const Duration(seconds: 12),
-        onPlayingChanged: (playing) {
-          if (mounted && playing && _loading) setState(() => _loading = false);
-          widget.onPlayingChanged(playing);
-        },
-        onPlaybackFailed: () {
-          if (!mounted) return;
-          setState(() => _failed = true);
-          CollectionFocusPlayback.release(_owner);
-          widget.onPlayingChanged(false);
-        },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (streams != null)
+            HeroTrailerBackdrop(
+              imageUrl: null,
+              videoUrl: streams.playUrl,
+              audioUrl: streams.audioUrl,
+              // Native platform-view renderer on iOS, like the detail page trailer.
+              muxedVideoUrl: streams.muxedPlaybackFallback,
+              enabled: true,
+              focusPreviewOwner: _owner,
+              ambientVolume: widget.volume,
+              imageBlurSigma: 0,
+              videoBlurSigma: 0,
+              startDelay: Duration.zero,
+              firstFrameTimeout: const Duration(seconds: 12),
+              onPlayingChanged: (playing) {
+                if (mounted && playing && _loading) {
+                  setState(() => _loading = false);
+                }
+                widget.onPlayingChanged(playing);
+              },
+              onPlaybackFailed: () {
+                if (!mounted) return;
+                setState(() => _failed = true);
+                CollectionFocusPlayback.release(_owner);
+                widget.onPlayingChanged(false);
+              },
+            ),
+          if (_loading)
+            const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
+        ],
       ),
-      if (_loading) const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
-      ]),
     );
   }
 }
@@ -118,8 +133,14 @@ class _TrailerLoadingDot extends StatefulWidget {
   State<_TrailerLoadingDot> createState() => _TrailerLoadingDotState();
 }
 
-class _TrailerLoadingDotState extends State<_TrailerLoadingDot> with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 700), lowerBound: .3, upperBound: 1);
+class _TrailerLoadingDotState extends State<_TrailerLoadingDot>
+    with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+    lowerBound: .3,
+    upperBound: 1,
+  );
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -130,14 +151,27 @@ class _TrailerLoadingDotState extends State<_TrailerLoadingDot> with SingleTicke
       _pulse.repeat(reverse: true);
     }
   }
+
   @override
-  void dispose() { _pulse.dispose(); super.dispose(); }
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
   @override
-  Widget build(BuildContext context) => Semantics(label: 'Loading trailer', child: FadeTransition(
-    opacity: _pulse,
-    child: Container(width: 7, height: 7, decoration: const BoxDecoration(
-      color: Colors.white, shape: BoxShape.circle,
-      boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 4)],
-    )),
-  ));
+  Widget build(BuildContext context) => Semantics(
+    label: 'Loading trailer',
+    child: FadeTransition(
+      opacity: _pulse,
+      child: Container(
+        width: 7,
+        height: 7,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 4)],
+        ),
+      ),
+    ),
+  );
 }

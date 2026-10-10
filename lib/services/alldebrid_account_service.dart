@@ -72,7 +72,7 @@ class AllDebridAccountService {
     try {
       final apiKey = await StorageService.getAllDebridApiKey();
       if (apiKey == null || apiKey.isEmpty) return false;
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       // A profile switch deliberately revokes a credential read in flight.
       return false;
@@ -93,7 +93,7 @@ class AllDebridAccountService {
         _setCurrentUser(null);
         return false;
       }
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       // Do not clear the newly active profile's process-global user state.
       return false;

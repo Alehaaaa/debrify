@@ -1230,11 +1230,14 @@ class IptvSettingsTwoPaneState extends State<IptvSettingsTwoPane> {
                     ? 'Currently: ${widget.lastLiveChannelLabel}'
                     : 'Nothing watched yet — starts on the first channel, '
                           'then remembers what you watch.',
-                trailing: Radio<String>(
-                  value: StorageService.startupIptvModeLast,
+                trailing: RadioGroup<String>(
                   groupValue: widget.startupMode,
-                  onChanged: (v) =>
-                      v == null ? null : widget.onStartupModeChanged(v),
+                  onChanged: (v) {
+                    if (v != null) widget.onStartupModeChanged(v);
+                  },
+                  child: const Radio<String>(
+                    value: StorageService.startupIptvModeLast,
+                  ),
                 ),
                 onTap: () => widget.onStartupModeChanged(
                   StorageService.startupIptvModeLast,
@@ -1246,11 +1249,14 @@ class IptvSettingsTwoPaneState extends State<IptvSettingsTwoPane> {
                 icon: Icons.push_pin_rounded,
                 title: 'A specific channel',
                 subtitle: widget.startupChannelLabel,
-                trailing: Radio<String>(
-                  value: StorageService.startupIptvModePinned,
+                trailing: RadioGroup<String>(
                   groupValue: widget.startupMode,
-                  onChanged: (v) =>
-                      v == null ? null : widget.onStartupModeChanged(v),
+                  onChanged: (v) {
+                    if (v != null) widget.onStartupModeChanged(v);
+                  },
+                  child: const Radio<String>(
+                    value: StorageService.startupIptvModePinned,
+                  ),
                 ),
                 onTap: () => widget.onStartupModeChanged(
                   StorageService.startupIptvModePinned,
@@ -1376,11 +1382,12 @@ class IptvSettingsTwoPaneState extends State<IptvSettingsTwoPane> {
         icon: icon,
         title: title,
         subtitle: subtitle,
-        trailing: Radio<String>(
-          value: value,
+        trailing: RadioGroup<String>(
           groupValue: widget.iptvStyle,
-          onChanged: (v) =>
-              v == null ? null : widget.onIptvStyleChanged?.call(v),
+          onChanged: (v) {
+            if (v != null) widget.onIptvStyleChanged?.call(v);
+          },
+          child: Radio<String>(value: value),
         ),
         onTap: () => widget.onIptvStyleChanged?.call(value),
         onLeft: _returnToRail,
@@ -1430,11 +1437,12 @@ class IptvSettingsTwoPaneState extends State<IptvSettingsTwoPane> {
         icon: icon,
         title: title,
         subtitle: subtitle,
-        trailing: Radio<String>(
-          value: value,
+        trailing: RadioGroup<String>(
           groupValue: widget.playerGuideStyle,
-          onChanged: (v) =>
-              v == null ? null : widget.onPlayerGuideStyleChanged?.call(v),
+          onChanged: (v) {
+            if (v != null) widget.onPlayerGuideStyleChanged?.call(v);
+          },
+          child: Radio<String>(value: value),
         ),
         onTap: () => widget.onPlayerGuideStyleChanged?.call(value),
         onLeft: _returnToRail,

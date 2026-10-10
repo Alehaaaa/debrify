@@ -43,6 +43,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart'
     show ValueListenable, listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../models/custom_series_identity.dart';
 import 'package:flutter/services.dart';
 
@@ -6364,7 +6365,8 @@ class _SearchScreenState extends State<SearchScreen>
         CardMenuAction(
           value: _TitleCardAction.markEpisodeWatched,
           icon: Icons.check_rounded,
-          label: 'Mark S${episodeRef.season} · E${episodeRef.episode} as watched',
+          label:
+              'Mark S${episodeRef.season} · E${episodeRef.episode} as watched',
           description:
               'Clears its resume position here and on your synced trackers, '
               'so the row moves on to the next episode.',
@@ -6602,6 +6604,7 @@ class _SearchScreenState extends State<SearchScreen>
       await _loadSimklContinueWatching(refreshBound: false);
       return;
     }
+    if (!mounted) return;
     await handleSimklMenuAction(
       context,
       item,
@@ -7903,6 +7906,7 @@ class _SearchScreenState extends State<SearchScreen>
       setState(() => _spotlightFieldSlotWidth = width);
     }
   }
+
   bool _focusSearchAfterMorph = false;
 
   void _focusExpandedSearch() {
@@ -9452,7 +9456,7 @@ class _SearchScreenState extends State<SearchScreen>
   final ValueNotifier<_TonightCardInfo?> _tonightCard =
       ValueNotifier<_TonightCardInfo?>(null);
 
-  /// Identity of the remembered queue row: '<rail key>#<column>'. Resolved
+  /// Identity of the remembered queue row: `<rail key>#<column>`. Resolved
   /// against the rebuilt queue every time, exactly like [_canvasRailKey].
   String? _tonightQueueKey;
 
@@ -9769,7 +9773,10 @@ class _SearchScreenState extends State<SearchScreen>
                           child: favRail
                               ? ListView.builder(
                                   // Keyed by rail IDENTITY, like the meta shelf.
-                                  cacheExtent: 400, key: ValueKey('canvas-rail-$railKey'),
+                                  scrollCacheExtent: ScrollCacheExtent.pixels(
+                                    400,
+                                  ),
+                                  key: ValueKey('canvas-rail-$railKey'),
                                   scrollDirection: Axis.horizontal,
                                   clipBehavior: Clip.hardEdge,
                                   padding: const EdgeInsets.symmetric(
@@ -9798,7 +9805,10 @@ class _SearchScreenState extends State<SearchScreen>
                               : ListView.builder(
                                   // Keyed by rail IDENTITY: insertions above the active
                                   // rail must never read as a content swap.
-                                  cacheExtent: 400, key: ValueKey('canvas-rail-$railKey'),
+                                  scrollCacheExtent: ScrollCacheExtent.pixels(
+                                    400,
+                                  ),
+                                  key: ValueKey('canvas-rail-$railKey'),
                                   scrollDirection: Axis.horizontal,
                                   clipBehavior: Clip.hardEdge,
                                   padding: const EdgeInsets.symmetric(
@@ -10262,7 +10272,8 @@ class _SearchScreenState extends State<SearchScreen>
                         child: ListView.builder(
                           // Keyed by rail IDENTITY: insertions above the
                           // active rail must never read as a content swap.
-                          cacheExtent: 400, key: ValueKey('prom-rail-$railKey'),
+                          scrollCacheExtent: ScrollCacheExtent.pixels(400),
+                          key: ValueKey('prom-rail-$railKey'),
                           scrollDirection: Axis.horizontal,
                           clipBehavior: Clip.hardEdge,
                           padding: EdgeInsets.symmetric(horizontal: sidePad),
@@ -10780,7 +10791,8 @@ class _SearchScreenState extends State<SearchScreen>
           height: rowBoxH,
           child: ListView.builder(
             // Keyed by rail IDENTITY, never index.
-            cacheExtent: 400, key: ValueKey('atrium-rail-$railKey'),
+            scrollCacheExtent: ScrollCacheExtent.pixels(400),
+            key: ValueKey('atrium-rail-$railKey'),
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
             itemCount: count,
@@ -11066,7 +11078,8 @@ class _SearchScreenState extends State<SearchScreen>
                     child: GridView.builder(
                       // Keyed by rail IDENTITY: a rail streaming in above the
                       // active one must never swap the wall's contents.
-                      cacheExtent: 600, key: ValueKey('mosaic-rail-$railKey'),
+                      scrollCacheExtent: ScrollCacheExtent.pixels(600),
+                      key: ValueKey('mosaic-rail-$railKey'),
                       padding: const EdgeInsets.only(bottom: 24),
                       clipBehavior: Clip.hardEdge,
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -11459,7 +11472,8 @@ class _SearchScreenState extends State<SearchScreen>
                       SizedBox(
                         height: railBoxH,
                         child: ListView.builder(
-                          cacheExtent: 400, key: ValueKey('deck-rail-$railKey'),
+                          scrollCacheExtent: ScrollCacheExtent.pixels(400),
+                          key: ValueKey('deck-rail-$railKey'),
                           scrollDirection: Axis.horizontal,
                           clipBehavior: Clip.hardEdge,
                           itemCount: count,
@@ -12195,7 +12209,8 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: boxH,
           child: ListView.builder(
-            cacheExtent: 400, key: ValueKey('tonight-rail-$railKey'),
+            scrollCacheExtent: ScrollCacheExtent.pixels(400),
+            key: ValueKey('tonight-rail-$railKey'),
             scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
             itemCount: count,
@@ -15182,8 +15197,7 @@ class _SearchScreenState extends State<SearchScreen>
                             : ReorderableListView.builder(
                                 shrinkWrap: true,
                                 itemCount: sources.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  if (newIndex > oldIndex) newIndex--;
+                                onReorderItem: (oldIndex, newIndex) {
                                   setDialogState(() {
                                     final moved = sources.removeAt(oldIndex);
                                     sources.insert(newIndex, moved);
@@ -15796,6 +15810,7 @@ class _SearchScreenState extends State<SearchScreen>
     // The loader's backdrop/logo/meta line for this title. Captured here (the
     // one play entry point that still holds the catalog meta) and read back in
     // [_metaFor], which only ever sees a selection.
+    if (!mounted) return;
     _capturePlayArt(item);
     var cancelled = false;
     final resolving = preferTraktResume
@@ -18273,7 +18288,8 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: rowH,
           child: ListView.builder(
-            cacheExtent: 400, scrollDirection: Axis.horizontal,
+            scrollCacheExtent: ScrollCacheExtent.pixels(400),
+            scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             itemCount: _listsResults.length,
@@ -18589,7 +18605,8 @@ class _SearchScreenState extends State<SearchScreen>
                         },
                         child: SourceListScrollAnchor(
                           child: ListView.builder(
-                            cacheExtent: 1200, controller: _kwScroll,
+                            scrollCacheExtent: ScrollCacheExtent.pixels(1200),
+                            controller: _kwScroll,
                             // A focused SourceRow can scale and rise in
                             // Spotlight. The first item starts at scroll offset
                             // zero, so it needs real viewport clearance rather
@@ -20943,7 +20960,8 @@ class _SearchScreenState extends State<SearchScreen>
 
                           final showFooter = _boardLoadingMore;
                           return ListView.builder(
-                            cacheExtent: 300, controller: _boardScroll,
+                            scrollCacheExtent: ScrollCacheExtent.pixels(300),
+                            controller: _boardScroll,
                             // A lazy sliver cannot relocate a keyed child by
                             // itself. Tracker/CW rows can arrive above the
                             // focused row, so provide the new index to preserve
@@ -21915,7 +21933,8 @@ class _SearchScreenState extends State<SearchScreen>
                         }
                       };
                 return ListView.builder(
-                  cacheExtent: 400, scrollDirection: Axis.horizontal,
+                  scrollCacheExtent: ScrollCacheExtent.pixels(400),
+                  scrollDirection: Axis.horizontal,
                   // Clip the horizontal viewport so scrolled-off cards don't paint
                   // over the sidebar to the left. rowH has enough headroom that the
                   // hover/focus lift still isn't clipped.
@@ -22154,7 +22173,8 @@ class _SearchScreenState extends State<SearchScreen>
               VoidCallback down(int col) =>
                   () => _focusRelativeHomeRail(homeRowId, 1, col);
               return ListView.builder(
-                cacheExtent: 400, scrollDirection: Axis.horizontal,
+                scrollCacheExtent: ScrollCacheExtent.pixels(400),
+                scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.hardEdge,
                 padding: const EdgeInsets.symmetric(horizontal: 13),
                 itemCount: items.length,
@@ -22329,7 +22349,8 @@ class _SearchScreenState extends State<SearchScreen>
         SizedBox(
           height: rowH,
           child: ListView.builder(
-            cacheExtent: 400, scrollDirection: Axis.horizontal,
+            scrollCacheExtent: ScrollCacheExtent.pixels(400),
+            scrollDirection: Axis.horizontal,
             clipBehavior: Clip.hardEdge,
             padding: const EdgeInsets.symmetric(horizontal: 13),
             itemCount: itemCount,

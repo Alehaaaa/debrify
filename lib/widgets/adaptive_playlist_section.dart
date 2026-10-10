@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../theme/app_theme_scope.dart';
 import '../utils/platform_util.dart';
 import 'playlist_grid_card.dart';
@@ -27,8 +28,10 @@ class AdaptivePlaylistSection extends StatefulWidget {
   final int? targetFocusIndex;
   final bool shouldRestoreFocus;
   final VoidCallback? onFocusRestored;
+
   /// Called when up arrow is pressed from any card in this section
   final VoidCallback? onUpArrowPressed;
+
   /// Called when down arrow is pressed from any card in this section
   final VoidCallback? onDownArrowPressed;
 
@@ -54,7 +57,8 @@ class AdaptivePlaylistSection extends StatefulWidget {
   });
 
   @override
-  State<AdaptivePlaylistSection> createState() => AdaptivePlaylistSectionState();
+  State<AdaptivePlaylistSection> createState() =>
+      AdaptivePlaylistSectionState();
 }
 
 /// State is public so parent can call requestFocusOnFirstItem()
@@ -136,7 +140,9 @@ class AdaptivePlaylistSectionState extends State<AdaptivePlaylistSection> {
 
     // Add new nodes
     while (_cardFocusNodes.length < neededCount) {
-      _cardFocusNodes.add(FocusNode(debugLabel: 'playlist_card_${_cardFocusNodes.length}'));
+      _cardFocusNodes.add(
+        FocusNode(debugLabel: 'playlist_card_${_cardFocusNodes.length}'),
+      );
     }
   }
 
@@ -149,8 +155,9 @@ class AdaptivePlaylistSectionState extends State<AdaptivePlaylistSection> {
     super.dispose();
   }
 
-String _getDedupeKey(Map<String, dynamic> item) {
-    final provider = (item['provider'] as String? ?? 'realdebrid').toLowerCase();
+  String _getDedupeKey(Map<String, dynamic> item) {
+    final provider = (item['provider'] as String? ?? 'realdebrid')
+        .toLowerCase();
     final rdTorrentId = item['rdTorrentId'] as String?;
     final torrentHash = item['torrent_hash'] as String?;
     final torboxId = item['torboxTorrentId']?.toString();
@@ -174,19 +181,6 @@ String _getDedupeKey(Map<String, dynamic> item) {
   }
 
   // Always use horizontal scroll layout (matching home screen)
-  bool _isHorizontalLayout(double screenWidth) => true;
-
-  (int, double) _getGridParams(double screenWidth) {
-    if (screenWidth > 900) {
-      return (4, 1.65);
-    } else if (screenWidth > 600) {
-      return (3, 1.6);
-    } else if (screenWidth > 500) {
-      return (2, 1.55);
-    } else {
-      return (2, 1.5);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,21 +229,14 @@ String _getDedupeKey(Map<String, dynamic> item) {
                   ),
                 ],
               ),
-              child: Icon(
-                widget.sectionIcon,
-                color: iconColor,
-                size: 20,
-              ),
+              child: Icon(widget.sectionIcon, color: iconColor, size: 20),
             ),
             const SizedBox(width: 12),
           ],
           // Section title with gradient text effect
           ShaderMask(
             shaderCallback: (bounds) => LinearGradient(
-              colors: [
-                app.core.tx,
-                app.core.tx.withValues(alpha: 0.85),
-              ],
+              colors: [app.core.tx, app.core.tx.withValues(alpha: 0.85)],
             ).createShader(bounds),
             child: Text(
               widget.sectionTitle,
@@ -273,10 +260,7 @@ String _getDedupeKey(Map<String, dynamic> item) {
                 ],
               ),
               borderRadius: app.shape.br(12),
-              border: Border.all(
-                color: app.playlist.hairline,
-                width: 1,
-              ),
+              border: Border.all(color: app.playlist.hairline, width: 1),
             ),
             child: Text(
               '${widget.items.length}',
@@ -326,54 +310,33 @@ String _getDedupeKey(Map<String, dynamic> item) {
     final double cardHeight = isMobile ? 180 : 195;
 
     return SizedBox(
-      height: cardHeight + 35, // Extra space for scale animation overflow + shadows
+      height:
+          cardHeight + 35, // Extra space for scale animation overflow + shadows
       child: HorizontalMouseWheel(
         controller: _scrollController,
         child: _edgeFade(
-        ListView.builder(
-          cacheExtent: 600, controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-          clipBehavior: Clip.none, // Pre-cache more items for smoother scrolling
-          itemCount: widget.items.length,
-          itemBuilder: (context, index) {
-            return Padding(
-              padding: EdgeInsets.only(
-                right: index < widget.items.length - 1 ? 18 : 0,
-              ),
-              child: SizedBox(
-                width: cardWidth,
-                height: cardHeight,
-                child: _buildCardItem(context, index),
-              ),
-            );
-          },
+          ListView.builder(
+            scrollCacheExtent: ScrollCacheExtent.pixels(600),
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+            clipBehavior:
+                Clip.none, // Pre-cache more items for smoother scrolling
+            itemCount: widget.items.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  right: index < widget.items.length - 1 ? 18 : 0,
+                ),
+                child: SizedBox(
+                  width: cardWidth,
+                  height: cardHeight,
+                  child: _buildCardItem(context, index),
+                ),
+              );
+            },
+          ),
         ),
-      ),
-      ),
-    );
-  }
-
-  /// Mobile/Tablet layout: Responsive grid
-  Widget _buildGrid(double screenWidth) {
-    final (crossAxisCount, childAspectRatio) = _getGridParams(screenWidth);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        primary: false,
-        addAutomaticKeepAlives: true,
-        addRepaintBoundaries: true,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: crossAxisCount,
-          childAspectRatio: childAspectRatio,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: widget.items.length,
-        itemBuilder: _buildCardItem,
       ),
     );
   }
@@ -382,11 +345,14 @@ String _getDedupeKey(Map<String, dynamic> item) {
     final item = widget.items[index];
     final dedupeKey = _getDedupeKey(item);
     final progressData = widget.progressMap[dedupeKey];
-    final bool shouldAutofocus = (widget.shouldAutofocusFirst && index == 0) ||
-                                (widget.shouldRestoreFocus && widget.targetFocusIndex == index);
+    final bool shouldAutofocus =
+        (widget.shouldAutofocusFirst && index == 0) ||
+        (widget.shouldRestoreFocus && widget.targetFocusIndex == index);
 
     // Get focus node for this card (with bounds check)
-    final focusNode = index < _cardFocusNodes.length ? _cardFocusNodes[index] : null;
+    final focusNode = index < _cardFocusNodes.length
+        ? _cardFocusNodes[index]
+        : null;
 
     return RepaintBoundary(
       child: PlaylistGridCard(
@@ -397,14 +363,21 @@ String _getDedupeKey(Map<String, dynamic> item) {
         onPlay: () => widget.onItemPlay(item),
         onView: () => widget.onItemView(item),
         onDelete: () => widget.onItemDelete(item),
-        onClearProgress: widget.onItemClearProgress != null ? () => widget.onItemClearProgress!(item) : null,
-        onToggleFavorite: widget.onItemToggleFavorite != null ? () => widget.onItemToggleFavorite!(item) : null,
+        onClearProgress: widget.onItemClearProgress != null
+            ? () => widget.onItemClearProgress!(item)
+            : null,
+        onToggleFavorite: widget.onItemToggleFavorite != null
+            ? () => widget.onItemToggleFavorite!(item)
+            : null,
         autofocus: shouldAutofocus,
         focusNode: focusNode,
         onUpArrowPressed: widget.onUpArrowPressed,
         onDownArrowPressed: widget.onDownArrowPressed,
         onFocusChanged: (focused) {
-          if (focused && widget.shouldRestoreFocus && widget.targetFocusIndex == index && !_hasNotifiedRestore) {
+          if (focused &&
+              widget.shouldRestoreFocus &&
+              widget.targetFocusIndex == index &&
+              !_hasNotifiedRestore) {
             _hasNotifiedRestore = true;
             widget.onFocusRestored?.call();
           }
@@ -441,7 +414,11 @@ String _getDedupeKey(Map<String, dynamic> item) {
 
     // Calculate target to center the focused item with slight left offset for context
     final viewportWidth = _scrollController.position.viewportDimension;
-    final targetOffset = (index * (cardWidth + spacing)) + padding - (viewportWidth / 2) + (cardWidth / 2);
+    final targetOffset =
+        (index * (cardWidth + spacing)) +
+        padding -
+        (viewportWidth / 2) +
+        (cardWidth / 2);
     final maxScroll = _scrollController.position.maxScrollExtent;
     final clampedOffset = targetOffset.clamp(0.0, maxScroll);
 

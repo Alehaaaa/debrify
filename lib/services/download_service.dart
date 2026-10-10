@@ -1297,7 +1297,7 @@ class DownloadService {
     try {
       bool proceed = true;
       String choice = 'denied';
-      if (context != null) {
+      if (context != null && context.mounted) {
         bool dontAskAgain = false;
         proceed =
             await showModalBottomSheet<bool>(
@@ -1507,7 +1507,7 @@ class DownloadService {
         return true;
       } else {
         await StorageService.setBatteryOptimizationStatus('denied');
-        if (context != null) {
+        if (context != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -2408,7 +2408,7 @@ class DownloadService {
       wifiOnly: wifiOnly,
       retries: retries,
       meta: meta,
-      context: context,
+      context: context?.mounted == true ? context : null,
       torrentName: torrentName,
       contentKey: contentKey,
       destPath: destPath,

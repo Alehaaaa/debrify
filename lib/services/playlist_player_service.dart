@@ -60,6 +60,7 @@ class PlaylistPlayerService {
     // Re-read from storage to pick up any fields saved by other screens
     // (e.g. imdbId saved by View Files or video player)
     final freshItems = await StorageService.getPlaylistItemsRaw();
+    if (!context.mounted) return;
     final dedupeKey = StorageService.computePlaylistDedupeKey(item);
     final freshItem = freshItems.firstWhere(
       (e) => StorageService.computePlaylistDedupeKey(e) == dedupeKey,
@@ -158,6 +159,7 @@ class PlaylistPlayerService {
               final viewMode = PlaylistViewModeStorage.fromStorageString(
                 savedViewModeString,
               );
+              if (!context.mounted) return;
               await VideoPlayerLauncher.push(
                 context,
                 VideoPlayerLaunchArgs(
@@ -185,7 +187,7 @@ class PlaylistPlayerService {
         } catch (e) {
           if (!context.mounted) return;
           if (torrentHash != null && torrentHash.isNotEmpty) {
-            await _attemptRecovery(context, item);
+            if (context.mounted) await _attemptRecovery(context, item);
           } else {
             ScaffoldMessenger.of(
               context,
@@ -391,6 +393,7 @@ class PlaylistPlayerService {
         final viewMode = PlaylistViewModeStorage.fromStorageString(
           savedViewModeString,
         );
+        if (!context.mounted) return;
         await VideoPlayerLauncher.push(
           context,
           VideoPlayerLaunchArgs(
@@ -412,7 +415,7 @@ class PlaylistPlayerService {
           Navigator.of(context).pop();
         }
         if (torrentHash != null && torrentHash.isNotEmpty) {
-          await _attemptRecovery(context, item);
+          if (context.mounted) await _attemptRecovery(context, item);
         }
       }
       return;
@@ -428,6 +431,7 @@ class PlaylistPlayerService {
     final viewMode = PlaylistViewModeStorage.fromStorageString(
       savedViewModeString,
     );
+    if (!context.mounted) return;
     await VideoPlayerLauncher.push(
       context,
       VideoPlayerLaunchArgs(
@@ -481,6 +485,7 @@ class PlaylistPlayerService {
             final viewMode = PlaylistViewModeStorage.fromStorageString(
               savedViewModeString,
             );
+            if (!context.mounted) return;
             await VideoPlayerLauncher.push(
               context,
               VideoPlayerLaunchArgs(
@@ -642,6 +647,7 @@ class PlaylistPlayerService {
     final int startIndex = (firstIndex >= 0 && firstIndex < entries.length)
         ? firstIndex
         : 0;
+    if (!context.mounted) return;
     await VideoPlayerLauncher.push(
       context,
       VideoPlayerLaunchArgs(
@@ -724,6 +730,7 @@ class PlaylistPlayerService {
         final viewMode = PlaylistViewModeStorage.fromStorageString(
           savedViewModeString,
         );
+        if (!context.mounted) return;
         await VideoPlayerLauncher.push(
           context,
           VideoPlayerLaunchArgs(
@@ -772,6 +779,7 @@ class PlaylistPlayerService {
       );
 
       if (torrent == null) {
+        if (!context.mounted) return;
         torrent = await _recoverTorboxPlaylistTorrent(
           apiKey: apiKey,
           item: item,
@@ -896,6 +904,7 @@ class PlaylistPlayerService {
       final viewMode = PlaylistViewModeStorage.fromStorageString(
         savedViewModeString,
       );
+      if (!context.mounted) return;
       await VideoPlayerLauncher.push(
         context,
         VideoPlayerLaunchArgs(
@@ -1009,6 +1018,8 @@ class PlaylistPlayerService {
             ? ((storedFile['_fullPath'] as String?) ??
                   (storedFile['name'] as String?))
             : (fileData['name'] as String?);
+
+        if (!context.mounted) return;
 
         await VideoPlayerLauncher.push(
           context,
@@ -1274,6 +1285,7 @@ class PlaylistPlayerService {
       final viewMode = PlaylistViewModeStorage.fromStorageString(
         savedViewModeString,
       );
+      if (!context.mounted) return;
       await VideoPlayerLauncher.push(
         context,
         VideoPlayerLaunchArgs(
@@ -1337,6 +1349,7 @@ class PlaylistPlayerService {
         (item['premiumizeItemIds'] is List &&
             (item['premiumizeItemIds'] as List).isNotEmpty);
     if ((infohash == null || infohash.isEmpty) && hasCloudIds) {
+      if (!context.mounted) return;
       await _playPremiumizeCloudItem(
         context,
         item,
@@ -1418,6 +1431,7 @@ class PlaylistPlayerService {
         final viewMode = PlaylistViewModeStorage.fromStorageString(
           savedViewModeString,
         );
+        if (!context.mounted) return;
         await VideoPlayerLauncher.push(
           context,
           VideoPlayerLaunchArgs(
@@ -1549,6 +1563,7 @@ class PlaylistPlayerService {
       final viewMode = PlaylistViewModeStorage.fromStorageString(
         savedViewModeString,
       );
+      if (!context.mounted) return;
       await VideoPlayerLauncher.push(
         context,
         VideoPlayerLaunchArgs(
@@ -1671,6 +1686,7 @@ class PlaylistPlayerService {
         final viewMode = PlaylistViewModeStorage.fromStorageString(
           savedViewModeString,
         );
+        if (!context.mounted) return;
         await VideoPlayerLauncher.push(
           context,
           VideoPlayerLaunchArgs(
@@ -1849,6 +1865,7 @@ class PlaylistPlayerService {
       final viewMode = PlaylistViewModeStorage.fromStorageString(
         savedViewModeString,
       );
+      if (!context.mounted) return;
       await VideoPlayerLauncher.push(
         context,
         VideoPlayerLaunchArgs(
@@ -2151,6 +2168,7 @@ class PlaylistPlayerService {
     VideoPlayerLaunchArgs args,
   ) async {
     MainPageBridge.notifyPlayerLaunching();
+    if (!context.mounted) return;
     await VideoPlayerLauncher.push(context, args);
   }
 
@@ -2251,6 +2269,7 @@ class PlaylistPlayerService {
         if (context.mounted && Navigator.of(context).canPop()) {
           Navigator.of(context).pop();
         }
+        if (!context.mounted) return;
         await play(context, item);
       } else {
         if (context.mounted && Navigator.of(context).canPop()) {

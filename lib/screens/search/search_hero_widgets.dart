@@ -83,7 +83,6 @@ class _HeroSpotlight extends StatefulWidget {
 
 class _HeroSpotlightState extends State<_HeroSpotlight>
     with TickerProviderStateMixin, MetadataPresentationMixin<_HeroSpotlight> {
-  @override
   StremioMeta? _hostBaseline;
   @override
   StremioMeta get originalMetadata => _hostBaseline ??= _buildHostBaseline();
@@ -594,8 +593,7 @@ class _HeroSpotlightState extends State<_HeroSpotlight>
                             memCacheHeight: hasBackgroundArtwork
                                 ? null
                                 : widget.artworkCacheHeight,
-                            errorWidget: (_, _, _) =>
-                                const SizedBox.shrink(),
+                            errorWidget: (_, _, _) => const SizedBox.shrink(),
                           ),
                         ),
                       ),

@@ -130,7 +130,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
 
   // Search state
   bool _isSearchMode = false;
-  String _lastSearchQuery = '';
   Timer? _searchDebouncer;
 
   // Scroll controller for pagination
@@ -170,9 +169,11 @@ class CatalogBrowserState extends State<CatalogBrowser> {
   int? _pendingEpisodeSeason;
   int? _pendingEpisodeEpisode;
   bool _pushingEpisodes = false; // Guards against double-push on fast re-tap
-  StremioMeta? _drillDownShow; // Last show opened in EpisodesScreen (for return)
+  StremioMeta?
+  _drillDownShow; // Last show opened in EpisodesScreen (for return)
   bool _pushingDetail = false; // Guards against double-push of the detail route
-  StremioMeta? _detailItem; // Last item opened in the detail screen (for return)
+  StremioMeta?
+  _detailItem; // Last item opened in the detail screen (for return)
 
   /// Public method to request focus on the first dropdown (catalog dropdown)
   /// Called from parent when navigating down from Sources
@@ -371,7 +372,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
         _selectedGenre = null;
         _content = [];
         _isSearchMode = false;
-        _lastSearchQuery = '';
       });
       _loadAddons();
       return; // Skip search query handling since we're reloading everything
@@ -394,7 +394,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
         // Exit search mode - return to catalog browsing
         setState(() {
           _isSearchMode = false;
-          _lastSearchQuery = '';
         });
         _loadContent();
       }
@@ -564,7 +563,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
 
     setState(() {
       _isSearchMode = true;
-      _lastSearchQuery = query;
       _isLoadingContent = true;
       _content = [];
       _hasMoreContent = false; // Search doesn't support pagination
@@ -633,22 +631,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
     _contentFocusNodes = [];
   }
 
-  void _onAddonChanged(StremioAddon? addon) {
-    if (addon == null || addon == _selectedAddon) return;
-
-    setState(() {
-      _selectedAddon = addon;
-      // Reset catalog and genre when addon changes
-      _selectedCatalog = addon.catalogs.isNotEmpty
-          ? addon.catalogs.first
-          : null;
-      _selectedGenre = null;
-    });
-    if (_selectedCatalog != null) {
-      _loadContent();
-    }
-  }
-
   void _onCatalogChanged(StremioAddonCatalog? catalog) {
     if (catalog == null || catalog == _selectedCatalog) return;
 
@@ -695,9 +677,9 @@ class CatalogBrowserState extends State<CatalogBrowser> {
     // can stack on top of it). For the direct/movie path there is no pushed
     // child, so close the detail route here or the host's inline search
     // result would be hidden behind it.
-    Navigator.of(context).popUntil(
-      (r) => r.settings.name != kCatalogDetailRouteName,
-    );
+    Navigator.of(
+      context,
+    ).popUntil((r) => r.settings.name != kCatalogDetailRouteName);
     widget.onItemSelected!(selection);
   }
 
@@ -756,9 +738,9 @@ class CatalogBrowserState extends State<CatalogBrowser> {
     if (browseSourcesOnly) {
       // This callback is invoked by the detail route above the catalog. Source
       // results render in the host, so remove the detail before dispatching.
-      Navigator.of(context).popUntil(
-        (r) => r.settings.name != kCatalogDetailRouteName,
-      );
+      Navigator.of(
+        context,
+      ).popUntil((r) => r.settings.name != kCatalogDetailRouteName);
       widget.onItemSelected?.call(selection);
     } else if (widget.onQuickPlay != null) {
       // Use onQuickPlay if available, otherwise fallback to onItemSelected.
@@ -869,77 +851,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
     );
   }
 
-  Widget _buildProviderDropdown() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: _providerDropdownFocused,
-      builder: (context, isFocused, child) {
-        return Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: isFocused
-                  ? const Color(0xFF3B82F6)
-                  : Colors.white.withValues(alpha: 0.1),
-              width: isFocused ? 2 : 1,
-            ),
-            boxShadow: isFocused
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<StremioAddon>(
-              value: _selectedAddon,
-              focusNode: _providerDropdownFocusNode,
-              isExpanded: true,
-              dropdownColor: const Color(0xFF1E293B),
-              icon: Icon(
-                Icons.keyboard_arrow_down_rounded,
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-              hint: Text(
-                'Select Provider',
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-              ),
-              items: _addons.map((addon) {
-                return DropdownMenuItem(
-                  value: addon,
-                  child: Row(
-                    children: [
-                      _buildProviderIcon(addon),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          addon.displayName,
-                          // Explicit color: dropdown menu items render
-                          // outside the page's DefaultTextStyle. onSurface
-                          // follows Appearance → Text Brightness.
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface,
-                            fontSize: 14,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: _onAddonChanged,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildCatalogDropdown() {
     final catalogs = _selectedAddon?.catalogs ?? [];
 
@@ -994,9 +905,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
                           catalog.type.isNotEmpty
                               ? '${catalog.name} (${catalog.type[0].toUpperCase()}${catalog.type.substring(1)})'
                               : catalog.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                          ),
+                          style: const TextStyle(fontSize: 14),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1082,36 +991,6 @@ class CatalogBrowserState extends State<CatalogBrowser> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildProviderIcon(StremioAddon addon) {
-    // Determine icon and color based on addon name or types
-    IconData icon;
-    Color color;
-
-    final name = addon.name.toLowerCase();
-    if (name.contains('cinemeta')) {
-      icon = Icons.movie_filter_rounded;
-      color = const Color(0xFF60A5FA);
-    } else if (name.contains('tv') || addon.types.contains('tv')) {
-      icon = Icons.live_tv_rounded;
-      color = const Color(0xFFF472B6);
-    } else if (name.contains('anime')) {
-      icon = Icons.animation_rounded;
-      color = const Color(0xFFA78BFA);
-    } else {
-      icon = Icons.extension_rounded;
-      color = const Color(0xFF34D399);
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Icon(icon, size: 16, color: color),
     );
   }
 
@@ -1215,11 +1094,11 @@ class CatalogBrowserState extends State<CatalogBrowser> {
     final pikpakEnabled = await StorageService.getPikPakEnabled();
     final rdEnabled = rdKey != null && rdKey.isNotEmpty;
     final torboxEnabled = torboxKey != null && torboxKey.isNotEmpty;
-    final premiumizeEnabled = premiumizeIntegration &&
+    final premiumizeEnabled =
+        premiumizeIntegration &&
         premiumizeKey != null &&
         premiumizeKey.isNotEmpty;
-    final allDebridEnabled =
-        allDebridKey != null && allDebridKey.isNotEmpty;
+    final allDebridEnabled = allDebridKey != null && allDebridKey.isNotEmpty;
 
     if (!mounted) return;
 
@@ -1276,24 +1155,24 @@ class CatalogBrowserState extends State<CatalogBrowser> {
           : null,
       onPremiumize: premiumizeEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'premiumize',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'premiumize',
+            )
           : null,
       onAllDebrid: allDebridEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'alldebrid',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'alldebrid',
+            )
           : null,
       onPikPak: pikpakEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'pikpak',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'pikpak',
+            )
           : null,
     );
   }
@@ -1493,8 +1372,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
                             : ReorderableListView.builder(
                                 shrinkWrap: true,
                                 itemCount: sources.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  if (newIndex > oldIndex) newIndex--;
+                                onReorderItem: (oldIndex, newIndex) {
                                   setDialogState(() {
                                     final item = sources.removeAt(oldIndex);
                                     sources.insert(newIndex, item);
@@ -1588,9 +1466,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
                                   imdbId,
                                 );
                                 if (mounted) {
-                                  setState(
-                                    () => _boundSources.remove(imdbId),
-                                  );
+                                  setState(() => _boundSources.remove(imdbId));
                                 }
                                 if (dialogContext.mounted) {
                                   Navigator.of(dialogContext).pop();
@@ -1683,7 +1559,7 @@ class CatalogBrowserState extends State<CatalogBrowser> {
 
     // Both enabled — show picker
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(
@@ -1697,17 +1573,12 @@ sheetAnimationStyle: kMenuSheetAnimation,
               padding: EdgeInsets.all(16),
               child: Text(
                 'Select Provider',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.cloud, color: Color(0xFF22C55E)),
-              title: const Text(
-                'Real-Debrid',
-              ),
+              title: const Text('Real-Debrid'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 pushRd();
@@ -1715,9 +1586,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             ),
             ListTile(
               leading: const Icon(Icons.cloud, color: Color(0xFF7C3AED)),
-              title: const Text(
-                'TorBox',
-              ),
+              title: const Text('TorBox'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 pushTorbox();
@@ -1952,8 +1821,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
   Widget _buildContentGrid() {
     final w = MediaQuery.of(context).size.width;
-    final crossAxisCount =
-        catalogGridColumnsFor(w, isTelevision: widget.isTelevision);
+    final crossAxisCount = catalogGridColumnsFor(
+      w,
+      isTelevision: widget.isTelevision,
+    );
     final hPadding = w >= 900 ? 40.0 : 20.0;
 
     return GridView.builder(
@@ -2005,14 +1876,13 @@ sheetAnimationStyle: kMenuSheetAnimation,
 
     final hasTrakt =
         item.hasValidImdbId ||
-        (item.hasValidId &&
-            (item.type == 'movie' || item.type == 'series'));
-    final hasBoundSource =
-        _boundSources.containsKey(item.effectiveImdbId ?? item.id);
+        (item.hasValidId && (item.type == 'movie' || item.type == 'series'));
+    final hasBoundSource = _boundSources.containsKey(
+      item.effectiveImdbId ?? item.id,
+    );
 
     // Recommendations need an IMDb id and a movie/series type.
-    final recImdbId =
-        (item.type == 'movie' || item.type == 'series')
+    final recImdbId = (item.type == 'movie' || item.type == 'series')
         ? item.effectiveImdbId
         : null;
 
@@ -2056,9 +1926,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
           TraktItemMenuAction.playRandomEpisode,
         };
         if (leaves.contains(action)) {
-          Navigator.of(context).popUntil(
-            (r) => r.settings.name != kCatalogDetailRouteName,
-          );
+          Navigator.of(
+            context,
+          ).popUntil((r) => r.settings.name != kCatalogDetailRouteName);
         }
         handleTraktMenuAction(
           context,
@@ -2086,9 +1956,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
       // full Play/Sources/Trakt wiring (and its own recommendations).
       recommendationsLoader: recImdbId != null
           ? () => _stremioService.getRecommendations(
-                imdbId: recImdbId,
-                type: item.type,
-              )
+              imdbId: recImdbId,
+              type: item.type,
+            )
           : null,
       onRecommendationTap: recImdbId != null
           ? (rec) => _openItemDetail(rec)
@@ -2098,10 +1968,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
       // catalog open. The screen only invokes this when the item lacks
       // structured fields, so a normal open costs nothing.
       metaEnricher: recImdbId != null
-          ? (imdbId, type) => _stremioService.fetchMetaDetails(
-                imdbId: imdbId,
-                type: type,
-              )
+          ? (imdbId, type) =>
+                _stremioService.fetchMetaDetails(imdbId: imdbId, type: type)
           : null,
     );
 

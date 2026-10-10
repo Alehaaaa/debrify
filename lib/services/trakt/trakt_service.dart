@@ -429,7 +429,7 @@ class TraktService {
       final authorization = await ProfileAsyncAuthorization.capture(
         ProfileFeature.trackersAndDiscovery,
       );
-      if (authorization == null) return _refreshAccessTokenScoped();
+      if (authorization == null) return await _refreshAccessTokenScoped();
       return await authorization.run(_refreshAccessTokenScoped);
     } on StateError {
       return false;
@@ -747,7 +747,8 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType, bool queueOnFailure = true,
+    String? contentType,
+    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/start',
@@ -755,7 +756,8 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType, queueOnFailure: queueOnFailure,
+      contentType: contentType,
+      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -765,7 +767,8 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType, bool queueOnFailure = true,
+    String? contentType,
+    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/pause',
@@ -773,7 +776,8 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType, queueOnFailure: queueOnFailure,
+      contentType: contentType,
+      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -783,7 +787,8 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType, bool queueOnFailure = true,
+    String? contentType,
+    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/stop',
@@ -791,7 +796,8 @@ class TraktService {
       progress,
       season: season,
       episode: episode,
-      contentType: contentType, queueOnFailure: queueOnFailure,
+      contentType: contentType,
+      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -801,7 +807,8 @@ class TraktService {
     double progress, {
     int? season,
     int? episode,
-    String? contentType, bool queueOnFailure = true,
+    String? contentType,
+    bool queueOnFailure = true,
   }) async {
     final scope = ProfileRuntime.scope.value;
     if (MediaIdentity.isNative(imdbId) &&
@@ -860,7 +867,19 @@ class TraktService {
       },
     );
     if (response == null) {
-      if (queueOnFailure) unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'trakt', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: type, season: season, episode: episode));
+      if (queueOnFailure) {
+        unawaited(
+          TrackerScrobbleOutbox.instance.enqueue(
+            tracker: 'trakt',
+            action: path.split('/').last,
+            imdbId: imdbId,
+            progress: progress,
+            contentType: type,
+            season: season,
+            episode: episode,
+          ),
+        );
+      }
       return false;
     }
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -874,7 +893,19 @@ class TraktService {
       debugPrint('Trakt: Scrobble completed');
       return true;
     }
-    if (queueOnFailure) unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'trakt', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: type, season: season, episode: episode));
+    if (queueOnFailure) {
+      unawaited(
+        TrackerScrobbleOutbox.instance.enqueue(
+          tracker: 'trakt',
+          action: path.split('/').last,
+          imdbId: imdbId,
+          progress: progress,
+          contentType: type,
+          season: season,
+          episode: episode,
+        ),
+      );
+    }
     debugPrint('Trakt: Scrobble failed (${response.statusCode})');
     return false;
   }
@@ -898,16 +929,15 @@ class TraktService {
     final ids = await _idsForContent(imdbId, type);
     if (ids == null) return false;
     final apiKey = type == 'series' ? 'shows' : 'movies';
-    final item = <String, dynamic>{
-      'ids': ids,
-      ...?extraItemFields,
-    };
+    final item = <String, dynamic>{'ids': ids, ...?extraItemFields};
     final body = {
       apiKey: [item],
     };
     final response = await _authenticatedPost(path, body);
     if (response == null) return false;
-    final ok = response.statusCode >= 200 && response.statusCode < 300 &&
+    final ok =
+        response.statusCode >= 200 &&
+        response.statusCode < 300 &&
         (!path.startsWith('/sync/history') || _historyMatched(response.body));
     if (!ok) {
       debugPrint('Trakt: Sync action failed (${response.statusCode})');
@@ -942,14 +972,25 @@ class TraktService {
       final data = jsonDecode(body);
       if (data is! Map) return false;
       final missing = data['not_found'];
-      return missing is! Map || missing.values.every((value) => value is List && value.isEmpty);
-    } catch (_) { return false; }
+      return missing is! Map ||
+          missing.values.every((value) => value is List && value.isEmpty);
+    } catch (_) {
+      return false;
+    }
   }
 
-  Future<bool> addToHistory(String imdbId, String type, {DateTime? watchedAt}) =>
-      _syncAction('/sync/history', imdbId, type, extraItemFields: {
-        if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
-      });
+  Future<bool> addToHistory(
+    String imdbId,
+    String type, {
+    DateTime? watchedAt,
+  }) => _syncAction(
+    '/sync/history',
+    imdbId,
+    type,
+    extraItemFields: {
+      if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
+    },
+  );
 
   Future<bool> removeFromHistory(String imdbId, String type) =>
       _syncAction('/sync/history/remove', imdbId, type);
@@ -984,10 +1025,7 @@ class TraktService {
   }) async {
     final ids = await _idsForContent(showImdbId, 'series');
     if (ids == null) return false;
-    final ep = <String, dynamic>{
-      'number': episode,
-      ...?extraEpisodeFields,
-    };
+    final ep = <String, dynamic>{'number': episode, ...?extraEpisodeFields};
     final body = {
       'shows': [
         {
@@ -1003,7 +1041,9 @@ class TraktService {
     };
     final response = await _authenticatedPost(path, body);
     if (response == null) return false;
-    final ok = response.statusCode >= 200 && response.statusCode < 300 &&
+    final ok =
+        response.statusCode >= 200 &&
+        response.statusCode < 300 &&
         (!path.startsWith('/sync/history') || _historyMatched(response.body));
     if (!ok) {
       debugPrint('Trakt: Episode sync failed (${response.statusCode})');
@@ -1015,11 +1055,20 @@ class TraktService {
     return ok;
   }
 
-  Future<bool> markEpisodeWatched(String showImdbId, int season, int episode,
-      {DateTime? watchedAt}) =>
-      _syncEpisodeAction('/sync/history', showImdbId, season, episode,
-        extraEpisodeFields: {if (watchedAt != null)
-          'watched_at': watchedAt.toUtc().toIso8601String()});
+  Future<bool> markEpisodeWatched(
+    String showImdbId,
+    int season,
+    int episode, {
+    DateTime? watchedAt,
+  }) => _syncEpisodeAction(
+    '/sync/history',
+    showImdbId,
+    season,
+    episode,
+    extraEpisodeFields: {
+      if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
+    },
+  );
 
   Future<bool> markEpisodeUnwatched(
     String showImdbId,
@@ -1250,7 +1299,9 @@ class TraktService {
   }
 
   /// Fetch the user's custom lists.
-  Future<List<Map<String, dynamic>>> fetchCustomLists({bool strict = false}) async {
+  Future<List<Map<String, dynamic>>> fetchCustomLists({
+    bool strict = false,
+  }) async {
     if (strict) return _fetchHomeListDirectory('/users/me/lists');
     final response = await _authenticatedGet('/users/me/lists');
     if (response == null || response.statusCode != 200) {
@@ -1268,8 +1319,12 @@ class TraktService {
   }
 
   /// Fetch lists the authenticated user has liked on Trakt.
-  Future<List<Map<String, dynamic>>> fetchLikedLists({bool strict = false}) async {
-    if (strict) return _fetchHomeListDirectory('/users/me/likes/lists', liked: true);
+  Future<List<Map<String, dynamic>>> fetchLikedLists({
+    bool strict = false,
+  }) async {
+    if (strict) {
+      return _fetchHomeListDirectory('/users/me/likes/lists', liked: true);
+    }
     final response = await _authenticatedGet('/users/me/likes/lists?limit=100');
     if (response == null || response.statusCode != 200) {
       debugPrint('Trakt: fetchLikedLists failed (${response?.statusCode})');
@@ -1293,8 +1348,9 @@ class TraktService {
   /// Home needs an authoritative directory before removing retained rows.
   /// Never turn a transport/parse failure or partial page walk into emptiness.
   Future<List<Map<String, dynamic>>> _fetchHomeListDirectory(
-    String path, {bool liked = false}
-  ) async {
+    String path, {
+    bool liked = false,
+  }) async {
     final lists = <Map<String, dynamic>>[];
     var pages = 1;
     for (var page = 1; page <= pages; page++) {
@@ -1447,7 +1503,11 @@ class TraktService {
   }) {
     final base = _likedListBasePath(list);
     if (base == null) return Future.value(null);
-    return _fetchListItemsOrderedOrNull(base, 'likedList $base', preview: preview);
+    return _fetchListItemsOrderedOrNull(
+      base,
+      'likedList $base',
+      preview: preview,
+    );
   }
 
   /// Search Trakt for movies or shows by query.

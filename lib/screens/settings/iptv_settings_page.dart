@@ -467,10 +467,13 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
     if (playlist.isXtreamCodes) {
       return <String, WebDavSyncCatalogOwnerReference>{
         for (final type in IptvCatalogKey.xtreamContentTypes)
-          ?IptvCatalogKey.forPlaylist(playlist, type): WebDavSyncCatalogOwnerReference(
-              localResourceId: resourceId,
-              variant: 'xc-$type',
-            ),
+          ?IptvCatalogKey.forPlaylist(
+            playlist,
+            type,
+          ): WebDavSyncCatalogOwnerReference(
+            localResourceId: resourceId,
+            variant: 'xc-$type',
+          ),
       };
     }
     final key = IptvCatalogKey.forPlaylist(playlist, 'live');
@@ -873,8 +876,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
 
       // Read file content
       final Uint8List? fileBytes =
-          file.bytes ??
-          (file.path != null ? await file.readAsBytes() : null);
+          file.bytes ?? (file.path != null ? await file.readAsBytes() : null);
       if (fileBytes == null) {
         _showSnackBar('Could not read file content');
         return;
@@ -1478,7 +1480,7 @@ class _IptvSettingsPageState extends State<IptvSettingsPage>
     if (index < 0) return;
 
     final action = await showModalBottomSheet<String>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: t.panel,
       shape: const RoundedRectangleBorder(
@@ -2594,27 +2596,31 @@ sheetAnimationStyle: kMenuSheetAnimation,
               ),
               if (_startupEnabled) ...[
                 const Divider(height: 1),
-                RadioListTile<String>(
-                  title: const Text('Last watched channel'),
-                  subtitle: Text(
-                    _lastLiveChannel == null
-                        // Honest about the bootstrap: the first boot after
-                        // enabling this has nothing to resume, and silently
-                        // doing nothing reads as broken.
-                        ? 'Nothing watched yet — starts on the first '
-                              'channel, then remembers what you watch.'
-                        : 'Currently: $_lastLiveChannelLabel',
+                RadioGroup<String>(
+                  groupValue: _startupMode,
+                  onChanged: _setStartupMode,
+                  child: Column(
+                    children: [
+                      RadioListTile<String>(
+                        title: const Text('Last watched channel'),
+                        subtitle: Text(
+                          _lastLiveChannel == null
+                              // Honest about the bootstrap: the first boot after
+                              // enabling this has nothing to resume, and silently
+                              // doing nothing reads as broken.
+                              ? 'Nothing watched yet — starts on the first '
+                                    'channel, then remembers what you watch.'
+                              : 'Currently: $_lastLiveChannelLabel',
+                        ),
+                        value: StorageService.startupIptvModeLast,
+                      ),
+                      RadioListTile<String>(
+                        title: const Text('A specific channel'),
+                        subtitle: Text(_startupChannelLabel),
+                        value: StorageService.startupIptvModePinned,
+                      ),
+                    ],
                   ),
-                  value: StorageService.startupIptvModeLast,
-                  groupValue: _startupMode,
-                  onChanged: _setStartupMode,
-                ),
-                RadioListTile<String>(
-                  title: const Text('A specific channel'),
-                  subtitle: Text(_startupChannelLabel),
-                  value: StorageService.startupIptvModePinned,
-                  groupValue: _startupMode,
-                  onChanged: _setStartupMode,
                 ),
                 if (_startupMode == StorageService.startupIptvModePinned)
                   _FocusableSettingsTile(

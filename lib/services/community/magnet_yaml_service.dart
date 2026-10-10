@@ -120,10 +120,10 @@ class MagnetYamlService {
         channelName: channelName,
         version: version,
       );
-    } on FormatException catch (e) {
-      throw MagnetYamlException('Invalid debrify link format: ${e.message}');
     } on ArchiveException catch (e) {
       throw MagnetYamlException('Failed to decompress data: $e');
+    } on FormatException catch (e) {
+      throw MagnetYamlException('Invalid debrify link format: ${e.message}');
     } catch (e) {
       throw MagnetYamlException('Failed to decode debrify link: $e');
     }
@@ -217,7 +217,7 @@ class MagnetYamlDecodeResult {
   @override
   String toString() {
     return 'MagnetYamlDecodeResult(channel: $channelName, version: $version, '
-           'contentLength: ${yamlContent.length})';
+        'contentLength: ${yamlContent.length})';
   }
 }
 

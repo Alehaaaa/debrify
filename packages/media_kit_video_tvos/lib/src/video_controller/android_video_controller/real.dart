@@ -1,8 +1,8 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:io';
 import 'dart:async';
 import 'dart:collection';
@@ -137,7 +137,8 @@ class AndroidVideoController extends PlatformVideoController {
     Future<String> getDefaultHwdec() async {
       // Enforce software rendering in emulators.
       bool hw = configuration.enableHardwareAcceleration;
-      final bool isEmulator = await _channel.invokeMethod('Utils.IsEmulator');
+      final bool isEmulator =
+          await _channel.invokeMethod<bool>('Utils.IsEmulator') ?? false;
       if (isEmulator) {
         hw = false;
         debugPrint('media_kit: Emulator detected.');
@@ -258,15 +259,17 @@ class AndroidVideoController extends PlatformVideoController {
                 case 'VideoOutput.Resize':
                   {
                     // Notify about updated texture ID & [Rect].
-                    final int handle = call.arguments['handle'];
+                    final arguments = call.arguments as Map<Object?, Object?>;
+                    final rectValues = arguments['rect'] as Map<Object?, Object?>;
+                    final int handle = arguments['handle'] as int;
                     final Rect rect = Rect.fromLTWH(
-                      call.arguments['rect']['left'] * 1.0,
-                      call.arguments['rect']['top'] * 1.0,
-                      call.arguments['rect']['width'] * 1.0,
-                      call.arguments['rect']['height'] * 1.0,
+                      (rectValues['left'] as num).toDouble(),
+                      (rectValues['top'] as num).toDouble(),
+                      (rectValues['width'] as num).toDouble(),
+                      (rectValues['height'] as num).toDouble(),
                     );
-                    final int id = call.arguments['id'];
-                    final int wid = call.arguments['wid'];
+                    final int id = arguments['id'] as int;
+                    final int wid = arguments['wid'] as int;
                     _controllers[handle]?.rect.value = rect;
                     _controllers[handle]?.id.value = id;
                     _controllers[handle]?.wid.value = wid;
@@ -275,7 +278,7 @@ class AndroidVideoController extends PlatformVideoController {
                 case 'VideoOutput.WaitUntilFirstFrameRenderedNotify':
                   {
                     // Notify about updated texture ID & [Rect].
-                    final int handle = call.arguments['handle'];
+                    final int handle = (call.arguments as Map<Object?, Object?>)['handle'] as int;
                     debugPrint(handle.toString());
                     // Notify about the first frame being rendered.
                     final completer = _controllers[handle]

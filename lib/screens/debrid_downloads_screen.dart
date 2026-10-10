@@ -753,50 +753,6 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
   }
 
-  Future<void> _handlePlayVideo(RDTorrent torrent) async {
-    if (_apiKey == null) return;
-
-    if (torrent.links.length == 1) {
-      // Single file - check MIME type after unrestricting
-      try {
-        final unrestrictResult = await DebridService.unrestrictLink(
-          _apiKey!,
-          torrent.links[0],
-        );
-        final downloadLink = unrestrictResult['download'];
-        final mimeType = unrestrictResult['mimeType']?.toString() ?? '';
-
-        // Check if it's actually a video using MIME type
-        if (FileUtils.isVideoMimeType(mimeType)) {
-          if (mounted) {
-            await VideoPlayerLauncher.push(
-              context,
-              VideoPlayerLaunchArgs(
-                videoUrl: downloadLink,
-                title: torrent.filename,
-                subtitle: Formatters.formatFileSize(torrent.bytes),
-                viewMode: PlaylistViewMode.sorted, // Single file - not series
-              ),
-            );
-          }
-        } else {
-          if (mounted) {
-            _showError('This file is not a video (MIME type: $mimeType)');
-          }
-        }
-      } catch (e) {
-        if (mounted) {
-          _showError('Failed to load video: ${e.toString()}');
-        }
-      }
-    } else {
-      // Multiple files - navigate into torrent folder view
-      if (mounted) {
-        await _navigateIntoTorrent(torrent);
-      }
-    }
-  }
-
   // Download action methods
   Future<void> _handleDownloadAction(DebridDownload download) async {
     if (_apiKey == null) return;
@@ -2140,7 +2096,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
 
     final filenames = videoFiles.map((n) => n.name).toList();
     final analysis = SeriesParser.analyzePlaylistConfidence(filenames);
-    return analysis.classification == PlaylistClassification.SERIES;
+    return analysis.classification == PlaylistClassification.series;
   }
 
   /// Recursively collect all video files from nodes and their subfolders
@@ -2852,8 +2808,10 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
 
     return ListView.builder(
-      scrollCacheExtent: ScrollCacheExtent.pixels(200.0), padding: const EdgeInsets.all(16),
-      itemCount: _currentViewNodes!.length, // Pre-cache items for smoother scrolling
+      scrollCacheExtent: ScrollCacheExtent.pixels(200.0),
+      padding: const EdgeInsets.all(16),
+      itemCount:
+          _currentViewNodes!.length, // Pre-cache items for smoother scrolling
       addRepaintBoundaries: true, // Optimize repainting
       itemBuilder: (context, index) {
         final node = _currentViewNodes![index];
@@ -3318,9 +3276,14 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         backgroundColor: const Color(0xFF1E293B),
         strokeWidth: 3,
         child: ListView.builder(
-          scrollCacheExtent: ScrollCacheExtent.pixels(200.0), controller: _torrentScrollController,
+          scrollCacheExtent: ScrollCacheExtent.pixels(200.0),
+          controller: _torrentScrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: _torrents.length + (_hasMoreTorrents ? 1 : 0), // Pre-cache items for smoother scrolling
+          itemCount:
+              _torrents.length +
+              (_hasMoreTorrents
+                  ? 1
+                  : 0), // Pre-cache items for smoother scrolling
           addRepaintBoundaries: true, // Optimize repainting
           itemBuilder: (context, index) {
             if (index == _torrents.length) {
@@ -3603,9 +3566,14 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         backgroundColor: const Color(0xFF1E293B),
         strokeWidth: 3,
         child: ListView.builder(
-          scrollCacheExtent: ScrollCacheExtent.pixels(200.0), controller: _downloadScrollController,
+          scrollCacheExtent: ScrollCacheExtent.pixels(200.0),
+          controller: _downloadScrollController,
           padding: const EdgeInsets.all(16),
-          itemCount: _downloads.length + (_hasMoreDownloads ? 1 : 0), // Pre-cache items for smoother scrolling
+          itemCount:
+              _downloads.length +
+              (_hasMoreDownloads
+                  ? 1
+                  : 0), // Pre-cache items for smoother scrolling
           addRepaintBoundaries: true, // Optimize repainting
           itemBuilder: (context, index) {
             if (index == _downloads.length) {
@@ -4620,6 +4588,8 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     // Auto-paste link from clipboard if available
     await _autoPasteLink();
 
+    if (!mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -4836,6 +4806,8 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
   }
 
   // New on-demand action handlers
+  // Retained for the legacy file-action flow and future compatibility.
+  // ignore: unused_element
   Future<void> _playFileOnDemand(
     RDTorrent torrent,
     int index,
@@ -4891,6 +4863,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _addFileToPlaylist(
     RDTorrent torrent,
     int index,
@@ -4934,6 +4907,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _downloadFileOnDemand(
     RDTorrent torrent,
     int index,
@@ -4956,6 +4930,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
       final downloadLink = unrestrictResult['download']?.toString() ?? '';
 
       if (downloadLink.isNotEmpty) {
+        if (!mounted) return;
         await DownloadService.instance.enqueueDownload(
           credentialKey: 'real_debrid_api_key',
           url: downloadLink,
@@ -4983,6 +4958,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
   }
 
+  // ignore: unused_element
   Future<void> _copyFileLinkOnDemand(
     RDTorrent torrent,
     int index,
@@ -5022,6 +4998,8 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     }
   }
 
+  // Retained alongside its file-action callbacks for the legacy browser.
+  // ignore: unused_element
   Widget _buildModernFileCard({
     required String fileName,
     required int fileSize,
@@ -5455,438 +5433,6 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     );
   }
 
-  Widget _buildSeriesFileBrowser({
-    required List<dynamic> files,
-    required List<SeriesInfo> seriesInfos,
-    required Set<int> selectedFiles,
-    required Set<int> added,
-    required Map<int, bool> unrestrictingFiles,
-    required bool showPlayButtons,
-    required RDTorrent torrent,
-    required StateSetter setLocal,
-  }) {
-    // Track current season for navigation
-    int? currentSeason;
-
-    return StatefulBuilder(
-      builder: (context, setBrowserState) {
-        return _buildFileBrowserContent(
-          files: files,
-          seriesInfos: seriesInfos,
-          selectedFiles: selectedFiles,
-          added: added,
-          unrestrictingFiles: unrestrictingFiles,
-          showPlayButtons: showPlayButtons,
-          torrent: torrent,
-          setLocal: setLocal,
-          setBrowserState: setBrowserState,
-          currentSeason: currentSeason,
-          onSeasonChanged: (season) {
-            setBrowserState(() {
-              currentSeason = season;
-            });
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildFileBrowserContent({
-    required List<dynamic> files,
-    required List<SeriesInfo> seriesInfos,
-    required Set<int> selectedFiles,
-    required Set<int> added,
-    required Map<int, bool> unrestrictingFiles,
-    required bool showPlayButtons,
-    required RDTorrent torrent,
-    required StateSetter setLocal,
-    required StateSetter setBrowserState,
-    required int? currentSeason,
-    required Function(int?) onSeasonChanged,
-  }) {
-    final app = AppThemeScope.of(context);
-    // Use the passed currentSeason instead of defining a local one
-    final currentSeason0 = currentSeason;
-    // Group files by season
-    final seasonMap = <int, List<Map<String, dynamic>>>{};
-    String? seriesTitle;
-
-    for (int i = 0; i < files.length; i++) {
-      final file = files[i];
-      final seriesInfo = seriesInfos[i];
-
-      if (seriesInfo.isSeries && seriesInfo.season != null) {
-        final seasonNumber = seriesInfo.season!;
-        seriesTitle ??= seriesInfo.title;
-
-        seasonMap.putIfAbsent(seasonNumber, () => []);
-        seasonMap[seasonNumber]!.add({
-          'file': file,
-          'seriesInfo': seriesInfo,
-          'index': i,
-        });
-      }
-    }
-
-    // Sort seasons
-    final sortedSeasons = seasonMap.keys.toList()..sort();
-
-    return Column(
-      children: [
-        // Breadcrumb navigation
-        if (currentSeason0 != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              color: app.cloud.dialogSurface.withValues(alpha: 0.5),
-              border: Border(
-                bottom: BorderSide(
-                  color: const Color(0xFF475569).withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () {
-                    setBrowserState(() {
-                      onSeasonChanged(null);
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF6366F1).withValues(alpha: 0.2),
-                      borderRadius: app.shape.br(8),
-                      border: Border.all(
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                        width: 1,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.arrow_back_rounded,
-                          color: Color(0xFF6366F1),
-                          size: 16,
-                        ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          'Back to Seasons',
-                          style: TextStyle(
-                            color: Color(0xFF6366F1),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Season $currentSeason0',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                // Selection counter
-                if (selectedFiles.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981),
-                      borderRadius: app.shape.br(12),
-                    ),
-                    child: Text(
-                      // Ink pinned with the green fill above: the surface does
-                      // not follow the palette, so its ink must not either.
-                      '${selectedFiles.length} selected',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-
-        // Content area
-        Expanded(
-          child: currentSeason0 == null
-              ? _buildSeasonsList(
-                  seasonMap: seasonMap,
-                  sortedSeasons: sortedSeasons,
-                  selectedFiles: selectedFiles,
-                  added: added,
-                  unrestrictingFiles: unrestrictingFiles,
-                  showPlayButtons: showPlayButtons,
-                  torrent: torrent,
-                  setLocal: setLocal,
-                  setBrowserState: setBrowserState,
-                  onSeasonChanged: onSeasonChanged,
-                )
-              : _buildEpisodesList(
-                  seasonFiles: seasonMap[currentSeason0]!,
-                  selectedFiles: selectedFiles,
-                  added: added,
-                  unrestrictingFiles: unrestrictingFiles,
-                  showPlayButtons: showPlayButtons,
-                  torrent: torrent,
-                  setLocal: setLocal,
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSeasonsList({
-    required Map<int, List<Map<String, dynamic>>> seasonMap,
-    required List<int> sortedSeasons,
-    required Set<int> selectedFiles,
-    required Set<int> added,
-    required Map<int, bool> unrestrictingFiles,
-    required bool showPlayButtons,
-    required RDTorrent torrent,
-    required StateSetter setLocal,
-    required StateSetter setBrowserState,
-    required Function(int?) onSeasonChanged,
-  }) {
-    // Hoisted out of the itemBuilders below: one theme lookup per list build.
-    final app = AppThemeScope.of(context);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-      shrinkWrap: true,
-      itemCount: sortedSeasons.length,
-      itemBuilder: (context, seasonIndex) {
-        final seasonNumber = sortedSeasons[seasonIndex];
-        final seasonFiles = seasonMap[seasonNumber]!;
-
-        // Sort episodes within season
-        seasonFiles.sort((a, b) {
-          final aEpisode = a['seriesInfo'].episode ?? 0;
-          final bEpisode = b['seriesInfo'].episode ?? 0;
-          return aEpisode.compareTo(bEpisode);
-        });
-
-        // Check if all episodes in this season are selected
-        final seasonFileIndices = seasonFiles
-            .map((f) => f['index'] as int)
-            .toList();
-        final allSelected = seasonFileIndices.every(
-          (index) => selectedFiles.contains(index),
-        );
-        final someSelected = seasonFileIndices.any(
-          (index) => selectedFiles.contains(index),
-        );
-
-        return Container(
-          key: ValueKey('season-$seasonNumber'),
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: app.cloud.dialogSurface.withValues(alpha: 0.3),
-            borderRadius: app.shape.br(12),
-            border: Border.all(
-              color: const Color(0xFF475569).withValues(alpha: 0.3),
-              width: 1,
-            ),
-          ),
-          child: GestureDetector(
-            onTap: () {
-              setBrowserState(() {
-                onSeasonChanged(seasonNumber);
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Season checkbox
-                  GestureDetector(
-                    onTap: () {
-                      setLocal(() {
-                        final seasonFileIndices = seasonFiles
-                            .map((f) => f['index'] as int)
-                            .toList();
-                        if (allSelected) {
-                          // Deselect all episodes in this season
-                          selectedFiles.removeAll(seasonFileIndices);
-                        } else {
-                          // Select all episodes in this season
-                          selectedFiles.addAll(seasonFileIndices);
-                        }
-                      });
-                    },
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: allSelected
-                            ? const Color(0xFF10B981)
-                            : someSelected
-                            ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                            : Colors.transparent,
-                        border: Border.all(
-                          color: allSelected || someSelected
-                              ? const Color(0xFF10B981)
-                              : Colors.grey[600]!,
-                          width: 2,
-                        ),
-                        borderRadius: app.shape.br(6),
-                      ),
-                      // Both glyphs pinned with the green fill/border above.
-                      child: allSelected
-                          ? const Icon(
-                              Icons.check,
-                              color: Colors.white,
-                              size: 16,
-                            )
-                          : someSelected
-                          ? const Icon(
-                              Icons.remove,
-                              color: Colors.white,
-                              size: 16,
-                            )
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Folder icon
-                  Icon(
-                    Icons.folder_rounded,
-                    color: const Color(0xFF6366F1),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  // Season title
-                  Expanded(
-                    child: Text(
-                      'Season $seasonNumber',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  // Episode count
-                  Text(
-                    '${seasonFiles.length} episodes',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  // Navigation arrow
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Colors.grey[400],
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildEpisodesList({
-    required List<Map<String, dynamic>> seasonFiles,
-    required Set<int> selectedFiles,
-    required Set<int> added,
-    required Map<int, bool> unrestrictingFiles,
-    required bool showPlayButtons,
-    required RDTorrent torrent,
-    required StateSetter setLocal,
-  }) {
-    // Hoisted out of itemBuilder: one theme lookup per list build, not per row.
-    final app = AppThemeScope.of(context);
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-      shrinkWrap: true,
-      itemCount: seasonFiles.length,
-      itemBuilder: (context, index) {
-        final seasonFile = seasonFiles[index];
-        final file = seasonFile['file'] as Map<String, dynamic>;
-        final seriesInfo = seasonFile['seriesInfo'] as SeriesInfo;
-        final fileIndex = seasonFile['index'] as int;
-
-        String fileName = file['path']?.toString() ?? 'Unknown file';
-        if (fileName.startsWith('/')) {
-          fileName = fileName.split('/').last;
-        }
-        final fileSize = (file['bytes'] ?? 0) as int;
-        final isVideo = FileUtils.isVideoFile(fileName);
-        final isAdded = added.contains(fileIndex);
-        final isSelected = selectedFiles.contains(fileIndex);
-        final isUnrestricting = unrestrictingFiles[fileIndex] ?? false;
-
-        return Container(
-          key: ValueKey('file-$fileIndex'),
-          margin: const EdgeInsets.only(bottom: 12),
-          child: _buildModernFileCard(
-            fileName: fileName,
-            fileSize: fileSize,
-            isVideo: isVideo,
-            isAdded: isAdded,
-            isSelected: isSelected,
-            isUnrestricting: isUnrestricting,
-            showPlayButtons: showPlayButtons,
-            surface: app.cloud.dialogSurface,
-            onPlay: () => _playFileOnDemand(
-              torrent,
-              fileIndex,
-              setLocal,
-              unrestrictingFiles,
-            ),
-            onAddToPlaylist: () =>
-                _addFileToPlaylist(torrent, fileIndex, setLocal),
-            onDownload: () => _downloadFileOnDemand(
-              torrent,
-              fileIndex,
-              fileName,
-              setLocal,
-              added,
-              unrestrictingFiles,
-            ),
-            onCopy: () => _copyFileLinkOnDemand(
-              torrent,
-              fileIndex,
-              setLocal,
-              unrestrictingFiles,
-            ),
-            onSelect: () {
-              setLocal(() {
-                if (isSelected) {
-                  selectedFiles.remove(fileIndex);
-                } else {
-                  selectedFiles.add(fileIndex);
-                }
-              });
-            },
-            index: index,
-            episodeInfo: seriesInfo.episode != null
-                ? 'E${seriesInfo.episode.toString().padLeft(2, '0')}'
-                : null,
-          ),
-        );
-      },
-    );
-  }
-
   // ========== File/Folder Action Methods ==========
 
   /// Play a single file from the folder browser
@@ -5909,7 +5455,8 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
       );
 
       // Close loading dialog
-      if (mounted) Navigator.of(context).pop();
+      if (!mounted) return;
+      Navigator.of(context).pop();
 
       // Launch video player
       await VideoPlayerLauncher.push(
@@ -6015,6 +5562,7 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
           playlist.length > 1 && SeriesParser.isSeriesPlaylist(filenames);
 
       // Launch video player with playlist
+      if (!mounted) return;
       await VideoPlayerLauncher.push(
         context,
         VideoPlayerLaunchArgs(
@@ -6378,35 +5926,6 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
       }
     } catch (e) {
       return '';
-    }
-  }
-
-  /// Copy download link for torrent to clipboard
-  Future<void> _copyDownloadLink(RDTorrent torrent) async {
-    if (_apiKey == null) return;
-
-    try {
-      // Get torrent info
-      final info = await DebridService.getTorrentInfo(_apiKey!, torrent.id);
-      final links = (info['links'] as List).cast<String>();
-
-      if (links.isEmpty) {
-        _showError('No links available');
-        return;
-      }
-
-      // Unrestrict the first link
-      final unrestrictedData = await DebridService.unrestrictLink(
-        _apiKey!,
-        links[0],
-      );
-      final downloadUrl = unrestrictedData['download'] as String;
-
-      // Copy to clipboard
-      await Clipboard.setData(ClipboardData(text: downloadUrl));
-      _showSuccess('Download link copied to clipboard');
-    } catch (e) {
-      _showError('Failed to get download link: $e');
     }
   }
 

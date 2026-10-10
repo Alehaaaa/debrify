@@ -126,7 +126,8 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     _selectedDirect = null;
     if (_bound.isNotEmpty && _bound.first.isMediaServer) {
       for (final candidate in _torrents) {
-        if (MediaServerService.bindingFor(candidate)?.bindingKey == _bound.first.bindingKey) {
+        if (MediaServerService.bindingFor(candidate)?.bindingKey ==
+            _bound.first.bindingKey) {
           _selectedDirect = candidate;
           break;
         }
@@ -389,7 +390,11 @@ class _SourcesScreenState extends State<_SourcesScreen> {
   bool get _isMovie => !widget.selection.isSeries;
   SeriesSource? _bindingFor(Torrent torrent) {
     for (final source in _bound) {
-      if (source.isMediaServer && MediaServerService.bindingFor(torrent)?.bindingKey == source.bindingKey) return source;
+      if (source.isMediaServer &&
+          MediaServerService.bindingFor(torrent)?.bindingKey ==
+              source.bindingKey) {
+        return source;
+      }
       if (IptvSourceSearch.owns(torrent) &&
           source.isIptvDirect &&
           source.iptvPlaylistId == torrent.iptvPlaylistId &&
@@ -491,7 +496,8 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     if (_imdbId.isEmpty) return;
     try {
       final stremio = StremioService.instance;
-      final builtIn = !widget.selection.hasStremioEpisodeIdentity &&
+      final builtIn =
+          !widget.selection.hasStremioEpisodeIdentity &&
           (MediaIdentity.isNative(_imdbId) ||
               widget.meta.addonId == NativeSeriesMetadataService.addon.id);
       final videos = await stremio.fetchSourcesSeriesGuide(
@@ -579,11 +585,14 @@ class _SourcesScreenState extends State<_SourcesScreen> {
         ? widget.selection.stremioCatalogId
         : null;
     final bound = allBound
-        .where((source) => source.matchesCatalogScope(
+        .where(
+          (source) => source.matchesCatalogScope(
             catalogId: catalogId,
             catalogKey: widget.selection.hasStremioEpisodeIdentity
-              ? widget.selection.stremioAddonKey : null,
-        ))
+                ? widget.selection.stremioAddonKey
+                : null,
+          ),
+        )
         .toList();
     Torrent? cached;
     if (widget.selection.isSeries &&
@@ -1289,7 +1298,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
     final binding = _bindingFor(t);
     final bound = binding != null;
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.home.sheetBg,
       builder: (sheetCtx) => SafeArea(
@@ -1353,7 +1362,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
     final external = t.isExternalStream;
     final binding = _bindingFor(t);
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.home.sheetBg,
       builder: (sheetCtx) => SafeArea(
@@ -1430,7 +1439,11 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   DialogTapGuard.markKeyAction();
                   Navigator.of(sheetCtx).pop();
                   unawaited(
-                    TorrentDownloads.downloadDirectStream(context, t, meta: widget.meta),
+                    TorrentDownloads.downloadDirectStream(
+                      context,
+                      t,
+                      meta: widget.meta,
+                    ),
                   );
                 },
               ),
@@ -1664,7 +1677,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
                                   },
                                   child: SourceListScrollAnchor(
                                     child: ListView.builder(
-                                      cacheExtent: 1200, controller: _resultsScroll,
+                                      scrollCacheExtent:
+                                          ScrollCacheExtent.pixels(1200),
+                                      controller: _resultsScroll,
                                       padding: EdgeInsets.symmetric(
                                         // Spotlight expands the focused
                                         // SourceRow beyond its layout box.
@@ -1777,8 +1792,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               episode: sel.episode!,
             );
       }
-      if (sel.hasStremioEpisodeIdentity &&
-          originVideoId?.isNotEmpty != true) {
+      if (sel.hasStremioEpisodeIdentity && originVideoId?.isNotEmpty != true) {
         if (mounted && token == _searchToken) {
           setState(() => _retryingAddons.remove(requestKey));
         }
@@ -2099,8 +2113,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showProviders && (sortedKeys.length > 1 || retryByKey.isNotEmpty ||
-            _iptvSources.any((s) => s.retryableFailure)))
+        if (showProviders &&
+            (sortedKeys.length > 1 ||
+                retryByKey.isNotEmpty ||
+                _iptvSources.any((s) => s.retryableFailure)))
           SizedBox(
             height: 44,
             child: ListView(
@@ -2192,8 +2208,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
             if (_sourceFilter == null || _sourceFilter == entry.key)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-                child: Text(entry.value,
-                    style: TextStyle(color: scheme.error, fontSize: 12)),
+                child: Text(
+                  entry.value,
+                  style: TextStyle(color: scheme.error, fontSize: 12),
+                ),
               ),
         if (showProviders)
           for (final source in _iptvSources)
@@ -2201,8 +2219,10 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 (_sourceFilter == null || _sourceFilter == source.key))
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
-                child: Text('IPTV · ${source.name}: ${source.message}',
-                  style: TextStyle(color: scheme.error, fontSize: 12)),
+                child: Text(
+                  'IPTV · ${source.name}: ${source.message}',
+                  style: TextStyle(color: scheme.error, fontSize: 12),
+                ),
               ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 2, 12, 8),
@@ -3661,10 +3681,8 @@ class _DiscoverStageBackdropState extends State<_DiscoverStageBackdrop> {
       // backdrop paint at its own intrinsic size instead of covering the
       // frame — outgoing and incoming art must both be the same full-bleed
       // crop, or the swap reads as a jump in zoom.
-      layoutBuilder: (current, previous) => Stack(
-        fit: StackFit.expand,
-        children: [...previous, ?current],
-      ),
+      layoutBuilder: (current, previous) =>
+          Stack(fit: StackFit.expand, children: [...previous, ?current]),
       child: art,
     );
   }

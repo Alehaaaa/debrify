@@ -32,7 +32,10 @@ class SeasonWatchedService {
     Iterable<int> episodes,
     TrackingSource provider,
   ) async {
-    if (CustomSeriesIdentity.isCustom(imdbId) && provider != TrackingSource.local) return null;
+    if (CustomSeriesIdentity.isCustom(imdbId) &&
+        provider != TrackingSource.local) {
+      return null;
+    }
     final numbers = episodes.toSet();
     if (numbers.isEmpty) return null;
     try {
@@ -62,8 +65,6 @@ class SeasonWatchedService {
             for (final e in result.data!.entries)
               if (e.value >= 100) e.key,
           };
-        default:
-          return null;
       }
       return inventory == null
           ? null
@@ -84,7 +85,10 @@ class SeasonWatchedService {
     bool watched = true,
     MdblistService? mdblistService,
   }) {
-    if (CustomSeriesIdentity.isCustom(imdbId) && provider != TrackingSource.local) return Future.value(0);
+    if (CustomSeriesIdentity.isCustom(imdbId) &&
+        provider != TrackingSource.local) {
+      return Future.value(0);
+    }
     final numbers = episodes.toSet().toList()..sort();
     Future<int> run() async {
       Set<String> alreadyWatched = {};

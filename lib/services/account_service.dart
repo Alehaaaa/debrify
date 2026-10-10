@@ -80,7 +80,7 @@ class AccountService {
     try {
       final apiKey = await StorageService.getApiKey();
       if (apiKey == null || apiKey.isEmpty) return false;
-      return validateAndGetUserInfo(apiKey);
+      return await validateAndGetUserInfo(apiKey);
     } on ResourceAuthorizationException {
       return false;
     }
@@ -101,7 +101,7 @@ class AccountService {
         _setCurrentUser(null);
         return false;
       }
-      return validateAndGetUserInfo(apiKey);
+      return await validateAndGetUserInfo(apiKey);
     } on ResourceAuthorizationException {
       return false;
     }

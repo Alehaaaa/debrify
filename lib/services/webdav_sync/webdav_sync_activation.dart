@@ -774,7 +774,7 @@ final class WebDavSyncNewRootInitializer {
           persistedCandidate != null &&
           _bytesEqual(markerBeforeWrite.bytes, persistedCandidate);
       if (markerBeforeWrite != null && !resumesOwnCommittedRoot) {
-        return _followConcurrentRoot(
+        return await _followConcurrentRoot(
           binding: binding,
           transport: transport,
           markerBytes: markerBeforeWrite.bytes,
@@ -838,7 +838,7 @@ final class WebDavSyncNewRootInitializer {
       if (markerBeforeWrite != null) {
         await seed.beforeRootCommit();
         if (!_bytesEqual(markerBeforeWrite.bytes, markerBytes)) {
-          return _followConcurrentRoot(
+          return await _followConcurrentRoot(
             binding: binding,
             transport: transport,
             markerBytes: markerBeforeWrite.bytes,
@@ -908,7 +908,7 @@ final class WebDavSyncNewRootInitializer {
       final existing = await _readMarkerIfPresent(transport);
       if (existing != null) {
         if (_bytesEqual(existing.bytes, markerBytes)) {
-          return _finishCandidate(
+          return await _finishCandidate(
             binding: binding,
             namespace: namespace,
             root: root,
@@ -919,7 +919,7 @@ final class WebDavSyncNewRootInitializer {
             serverNowMs: clockDecision.serverNowMs!,
           );
         }
-        return _followConcurrentRoot(
+        return await _followConcurrentRoot(
           binding: binding,
           transport: transport,
           markerBytes: existing.bytes,
@@ -948,7 +948,7 @@ final class WebDavSyncNewRootInitializer {
         throw const WebDavSyncAuthorityClaimException();
       }
       if (!_bytesEqual(committed.bytes, markerBytes)) {
-        return _followConcurrentRootAfterMarkerCommit(
+        return await _followConcurrentRootAfterMarkerCommit(
           binding: binding,
           transport: transport,
           markerBytes: committed.bytes,
@@ -956,7 +956,7 @@ final class WebDavSyncNewRootInitializer {
           statusCode: committed.metadata.statusCode,
         );
       }
-      return _finishCandidate(
+      return await _finishCandidate(
         binding: binding,
         namespace: namespace,
         root: root,

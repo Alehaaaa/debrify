@@ -253,48 +253,6 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     }
   }
 
-  /// Load progress data for all files
-  Future<void> _loadProgressData() async {
-    try {
-      Map<String, Map<String, dynamic>> episodeProgress = {};
-
-      // 1. Try IMDB ID lookup first (most reliable — avoids title mismatches)
-      final imdbId = widget.playlistItem['imdbId'] as String?;
-      if (imdbId != null && imdbId.isNotEmpty) {
-        episodeProgress = await StorageService.getEpisodeProgressByImdbId(
-          imdbId,
-        );
-      }
-
-      // 2. Fallback: try seriesTitle field
-      if (episodeProgress.isEmpty) {
-        final seriesTitle = widget.playlistItem['seriesTitle'] as String?;
-        if (seriesTitle != null && seriesTitle.isNotEmpty) {
-          episodeProgress = await StorageService.getEpisodeProgress(
-            seriesTitle: seriesTitle,
-          );
-        }
-      }
-
-      // 3. Fallback: try raw title
-      if (episodeProgress.isEmpty) {
-        final title = widget.playlistItem['title'] as String?;
-        if (title != null) {
-          episodeProgress = await StorageService.getEpisodeProgress(
-            seriesTitle: title,
-          );
-        }
-      }
-
-      setState(() {
-        _fileProgressCache = episodeProgress;
-      });
-    } catch (e) {
-      print('❌ Error loading progress data: $e');
-      _fileProgressCache = {};
-    }
-  }
-
   /// Load content from provider
   Future<void> _loadContent() async {
     setState(() {
@@ -324,7 +282,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       // Note: View mode is now applied in _initializeScreen() after _parseSeriesPlaylist()
       // This ensures _seriesPlaylist is available for series detection
     } catch (e) {
-      print('Error loading content: $e');
+      debugPrint('Error loading content: $e');
       setState(() {
         _errorMessage = 'Failed to load content: ${e.toString()}';
       });
@@ -419,7 +377,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       throw Exception('Torrent not found');
     }
 
-    final allFiles = cachedTorrent.files ?? [];
+    final allFiles = cachedTorrent.files;
     if (allFiles.isEmpty) {
       throw Exception('No files found in torrent');
     }
@@ -803,7 +761,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
           );
         } catch (e) {
           // Folder not found - reset to root
-          print(
+          debugPrint(
             'Warning: Folder "$segment" not found in current view, resetting to root',
           );
           _folderPath.clear();
@@ -1179,7 +1137,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         await _reloadProgress();
       }
     } catch (e) {
-      print('❌ Error playing file: $e');
+      debugPrint('❌ Error playing file: $e');
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -1947,7 +1905,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
             mostRecentKey = entry.key;
           }
         } catch (e) {
-          print(
+          debugPrint(
             '⚠️ Failed to parse updatedAt timestamp: $updatedAt (${e.toString()})',
           );
         }
@@ -1960,7 +1918,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       if (parts.length >= 2) {
         final seasonNum = int.tryParse(parts[0]);
         if (seasonNum != null) {
-          print(
+          debugPrint(
             '🎯 Found most recent season: $seasonNum from key: $mostRecentKey',
           );
           return seasonNum;
@@ -1968,7 +1926,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       }
     }
 
-    print('📺 No recent progress found, defaulting to Season 1');
+    debugPrint('📺 No recent progress found, defaulting to Season 1');
     return 1; // Default to season 1
   }
 
@@ -2027,7 +1985,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
                 mostRecentEpisodeNum = episodeNum;
               }
             } catch (e) {
-              print(
+              debugPrint(
                 '⚠️ Failed to parse updatedAt timestamp: $updatedAt (${e.toString()})',
               );
             }
@@ -2041,7 +1999,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       for (int i = 0; i < season.episodes.length; i++) {
         final episode = season.episodes[i];
         if (episode.seriesInfo.episode == mostRecentEpisodeNum) {
-          print(
+          debugPrint(
             '🎯 Found most recent episode in season: Episode $mostRecentEpisodeNum at index $i',
           );
           return i;
@@ -2065,24 +2023,26 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
           widget.playlistItem['title'] as String?;
 
       if (seriesTitle != null && seriesTitle.isNotEmpty) {
-        print('🔄 Reloading progress after video playback for: $seriesTitle');
+        debugPrint(
+          '🔄 Reloading progress after video playback for: $seriesTitle',
+        );
         final episodeProgress = await StorageService.getEpisodeProgress(
           seriesTitle: seriesTitle,
         );
 
         if (!mounted) return; // Check again after async operation
 
-        print(
+        debugPrint(
           '📊 Reloaded ${episodeProgress.length} episodes with updated progress',
         );
-        print('🔑 Progress keys: ${episodeProgress.keys.toList()}');
+        debugPrint('🔑 Progress keys: ${episodeProgress.keys.toList()}');
 
         setState(() {
           _fileProgressCache = episodeProgress;
         });
       }
     } catch (e) {
-      print('❌ Error reloading progress data: $e');
+      debugPrint('❌ Error reloading progress data: $e');
       // Don't rethrow - this is a non-critical background operation
     }
   }
@@ -2169,19 +2129,21 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
           widget.playlistItem['title'] as String?;
 
       if (titleForProgress != null && titleForProgress.isNotEmpty) {
-        print('🔄 Reloading progress with clean title: $titleForProgress');
-        print('📌 isSeries: ${_seriesPlaylist!.isSeries}');
+        debugPrint('🔄 Reloading progress with clean title: $titleForProgress');
+        debugPrint('📌 isSeries: ${_seriesPlaylist!.isSeries}');
         final episodeProgress = await StorageService.getEpisodeProgress(
           seriesTitle: titleForProgress,
         );
-        print('📊 Loaded ${episodeProgress.length} episodes with progress');
-        print('🔑 Progress keys: ${episodeProgress.keys.toList()}');
+        debugPrint(
+          '📊 Loaded ${episodeProgress.length} episodes with progress',
+        );
+        debugPrint('🔑 Progress keys: ${episodeProgress.keys.toList()}');
         _fileProgressCache = episodeProgress;
 
         // Determine initial season based on most recent viewing history
         if (_seriesPlaylist!.isSeries && _fileProgressCache.isNotEmpty) {
           final initialSeason = _determineInitialSeason();
-          print('🎬 Setting initial season to: $initialSeason');
+          debugPrint('🎬 Setting initial season to: $initialSeason');
           _selectedSeasonNumber = initialSeason;
         }
       }
@@ -2219,7 +2181,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               }
             })
             .catchError((e) {
-              print('Failed to fetch episode metadata: $e');
+              debugPrint('Failed to fetch episode metadata: $e');
               if (mounted) {
                 setState(() {
                   _isLoadingSeriesMetadata = false;
@@ -2228,7 +2190,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
             });
       }
     } catch (e) {
-      print('Failed to parse series playlist: $e');
+      debugPrint('Failed to parse series playlist: $e');
       setState(() {
         _isLoadingSeriesMetadata = false;
       });
@@ -2316,7 +2278,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               }
             })
             .catchError((e) {
-              print('Failed to refresh episode metadata: $e');
+              debugPrint('Failed to refresh episode metadata: $e');
               if (mounted) {
                 setState(() {
                   _isLoadingSeriesMetadata = false;
@@ -2368,11 +2330,11 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       }
 
       if (posterUrl == null || posterUrl.isEmpty) {
-        print('No poster URL found in TVMaze show data');
+        debugPrint('No poster URL found in TVMaze show data');
         return;
       }
 
-      print('🎬 Updating playlist poster with: $posterUrl');
+      debugPrint('🎬 Updating playlist poster with: $posterUrl');
 
       // CRITICAL: Save poster override to persistent storage
       // This ensures the poster persists across app restarts
@@ -2445,16 +2407,16 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       }
 
       if (updated) {
-        print(
+        debugPrint(
           '✅ Successfully updated playlist poster in memory and persistent storage',
         );
       } else {
-        print(
+        debugPrint(
           '⚠️ Updated persistent storage but in-memory update failed - poster will still persist on restart',
         );
       }
     } catch (e) {
-      print('❌ Error updating playlist poster: $e');
+      debugPrint('❌ Error updating playlist poster: $e');
     }
   }
 
@@ -2591,7 +2553,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     if (!_episodeListScrollController.hasClients) {
       // Retry up to 3 times with increasing delay
       if (retryCount < 3) {
-        print(
+        debugPrint(
           '⏳ ScrollController not ready yet, scheduling retry ${retryCount + 1}/3',
         );
         _scrollRetryTimer = Timer(
@@ -2603,7 +2565,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
           },
         );
       } else {
-        print(
+        debugPrint(
           '❌ Failed to scroll after 3 retries - ScrollController never attached',
         );
       }
@@ -2626,7 +2588,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         ? maxScrollExtent
         : targetOffset;
 
-    print(
+    debugPrint(
       '📜 Auto-scrolling to episode index: $episodeIndex (offset: $finalOffset, max: $maxScrollExtent)',
     );
 
@@ -2647,13 +2609,15 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     if (episode.seriesInfo.season != null &&
         episode.seriesInfo.episode != null) {
       final key = '${episode.seriesInfo.season}_${episode.seriesInfo.episode}';
-      print(
+      debugPrint(
         '🔍 Looking for progress with key: $key for ${episode.displayTitle}',
       );
-      print('💾 Available keys in cache: ${_fileProgressCache.keys.toList()}');
+      debugPrint(
+        '💾 Available keys in cache: ${_fileProgressCache.keys.toList()}',
+      );
       final progressData = _fileProgressCache[key];
       if (progressData != null) {
-        print('✅ Found progress data: $progressData');
+        debugPrint('✅ Found progress data: $progressData');
         final positionMs = progressData['positionMs'] as int? ?? 0;
         final durationMs = progressData['durationMs'] as int? ?? 0;
         if (durationMs > 0) {
@@ -2664,12 +2628,12 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               progress >= 0.9 ||
               (durationMs - positionMs) < 120000 ||
               (positionMs == 0 && durationMs == 1);
-          print(
+          debugPrint(
             '📈 Progress: ${(progress * 100).round()}%, Finished: $isFinished',
           );
         }
       } else {
-        print('❌ No progress data found for key: $key');
+        debugPrint('❌ No progress data found for key: $key');
       }
     }
 
@@ -3292,7 +3256,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         _seriesPlaylist!.seriesTitle ?? widget.playlistItem['title'] as String?;
 
     if (seriesTitle == null || seriesTitle.isEmpty) {
-      print('❌ Cannot toggle watched state: No series title available');
+      debugPrint('❌ Cannot toggle watched state: No series title available');
       return;
     }
 
@@ -3313,7 +3277,9 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
 
       if (isCurrentlyFinished) {
         // Episode is marked as watched, unmark it
-        print('🔄 Unmarking as watched: $seriesTitle S${season}E$episodeNum');
+        debugPrint(
+          '🔄 Unmarking as watched: $seriesTitle S${season}E$episodeNum',
+        );
         await StorageService.unmarkEpisodeAsFinished(
           seriesTitle: seriesTitle,
           season: season,
@@ -3322,7 +3288,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         );
       } else {
         // Episode is not watched, mark it as finished
-        print('✅ Marking as watched: $seriesTitle S${season}E$episodeNum');
+        debugPrint('✅ Marking as watched: $seriesTitle S${season}E$episodeNum');
         await StorageService.markEpisodeAsFinished(
           seriesTitle: seriesTitle,
           season: season,
@@ -3352,7 +3318,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         );
       }
     } catch (e) {
-      print('❌ Error toggling watched state: $e');
+      debugPrint('❌ Error toggling watched state: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -3459,7 +3425,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         await _reloadProgress();
       }
     } catch (e) {
-      print('❌ Error playing episode: $e');
+      debugPrint('❌ Error playing episode: $e');
       if (mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -3500,7 +3466,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     final List<PlaylistEntry> entries = [];
     for (int i = 0; i < videoFiles.length; i++) {
       final file = videoFiles[i];
-      final linkIndex = file.linkIndex ?? i;
+      final linkIndex = file.linkIndex;
 
       if (linkIndex >= links.length) continue;
 

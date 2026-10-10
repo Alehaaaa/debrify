@@ -1,8 +1,8 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/widgets.dart';
@@ -147,7 +147,7 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
   late bool _disposeNotifiers;
   final _subtitleViewKey = GlobalKey<SubtitleViewState>();
   final _wakelock = Wakelock();
-  final _subscriptions = <StreamSubscription>[];
+  final _subscriptions = <StreamSubscription<dynamic>>[];
   late int? _width = widget.controller.player.state.width;
   late int? _height = widget.controller.player.state.height;
   late bool _visible = (_width ?? 0) > 0 && (_height ?? 0) > 0;
@@ -372,7 +372,7 @@ class VideoState extends State<Video> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return media_kit_video_controls.VideoStateInheritedWidget(
-      state: this as dynamic,
+      state: this,
       contextNotifier: _contextNotifier,
       videoViewParametersNotifier: videoViewParametersNotifier,
       child: ValueListenableBuilder<VideoViewParameters>(

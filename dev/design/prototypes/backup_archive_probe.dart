@@ -48,8 +48,12 @@ COMMIT;
 ''');
     final m3u = File('${root.path}/imported.m3u');
     final output = m3u.openSync(mode: FileMode.write);
-    final chunk = utf8.encode(List.generate(512, (i) =>
-        '#EXTINF:-1,Test channel $i\nhttps://example.invalid/live/$i\n').join());
+    final chunk = utf8.encode(
+      List.generate(
+        512,
+        (i) => '#EXTINF:-1,Test channel $i\nhttps://example.invalid/live/$i\n',
+      ).join(),
+    );
     final target = (mib ~/ 10 + 1) * 1024 * 1024;
     while (output.positionSync() < target) {
       output.writeFromSync(chunk);
@@ -58,7 +62,8 @@ COMMIT;
     final records = <String, Object?>{};
     for (final file in [database, m3u]) {
       records[file.uri.pathSegments.last] = {
-        'size': await file.length(), 'sha256': await digest(file),
+        'size': await file.length(),
+        'sha256': await digest(file),
       };
     }
     await manifestFile.writeAsString(jsonEncode(records));
@@ -70,7 +75,8 @@ COMMIT;
       final input = InputFileStream('${root.path}/$name');
       final entry = ArchiveFile.stream(name, input)
         ..compression = variant == 'store'
-            ? CompressionType.none : CompressionType.deflate;
+            ? CompressionType.none
+            : CompressionType.deflate;
       encoder.add(entry, level: 1);
       await input.close();
     }
@@ -82,13 +88,16 @@ COMMIT;
     final sink = destination.openWrite();
     await sink.addStream(File(archivePath).openRead());
     await sink.close();
-    require(await digest(destination) == await digest(File(archivePath)),
-        'Destination read-back mismatch');
+    require(
+      await digest(destination) == await digest(File(archivePath)),
+      'Destination read-back mismatch',
+    );
     details['destinationVerified'] = true;
   } else if (mode == 'restore' || mode == 'corrupt' || mode == 'truncated') {
     final savedPath = '${root.path}/saved-$variant.zip';
     var source = mode == 'restore' && File(savedPath).existsSync()
-        ? savedPath : archivePath;
+        ? savedPath
+        : archivePath;
     if (mode != 'restore') {
       require(variant == 'store', 'Fault probes use stored entries');
       source = '${root.path}/$mode.zip';
@@ -118,24 +127,47 @@ COMMIT;
       final seen = <String>{};
       for (final entry in archive) {
         require(seen.add(entry.name), 'Duplicate name');
-        require(['library.db', 'imported.m3u', 'expected.json'].contains(entry.name)
-            && entry.isFile && !entry.isSymbolicLink, 'Unexpected entry');
+        require(
+          [
+                'library.db',
+                'imported.m3u',
+                'expected.json',
+              ].contains(entry.name) &&
+              entry.isFile &&
+              !entry.isSymbolicLink,
+          'Unexpected entry',
+        );
         final expectedSize = entry.name == 'expected.json'
-            ? await manifestFile.length() : expected[entry.name]['size'] as int;
+            ? await manifestFile.length()
+            : expected[entry.name]['size'] as int;
         require(entry.size == expectedSize, 'Declared size mismatch');
         final outputFile = File('${destination.path}/${entry.name}');
         final output = OutputFileStream(outputFile.path);
-        try { entry.writeContent(output); } finally { await output.close(); }
-        require(await outputFile.length() == expectedSize, 'Extracted size mismatch');
+        try {
+          entry.writeContent(output);
+        } finally {
+          await output.close();
+        }
+        require(
+          await outputFile.length() == expectedSize,
+          'Extracted size mismatch',
+        );
         final hash = entry.name == 'expected.json'
-            ? await digest(manifestFile) : expected[entry.name]['sha256'];
+            ? await digest(manifestFile)
+            : expected[entry.name]['sha256'];
         require(await digest(outputFile) == hash, 'SHA-256 mismatch');
       }
       final db = '${destination.path}/library.db';
-      require(await sql(db, 'PRAGMA integrity_check;') == 'ok', 'SQLite integrity');
+      require(
+        await sql(db, 'PRAGMA integrity_check;') == 'ok',
+        'SQLite integrity',
+      );
       require(await sql(db, 'PRAGMA user_version;') == '7', 'Schema version');
-      require(await sql(db, 'SELECT name FROM favorites WHERE id=1;') ==
-          'Synthetic favorite', 'Favorite missing');
+      require(
+        await sql(db, 'SELECT name FROM favorites WHERE id=1;') ==
+            'Synthetic favorite',
+        'Favorite missing',
+      );
       details['verified'] = true;
     } catch (error) {
       if (mode == 'restore') rethrow;
@@ -150,7 +182,9 @@ COMMIT;
     // Deliberately excludes encryption and does not represent full app timing.
     final files = <String, String>{};
     for (final name in ['library.db', 'imported.m3u']) {
-      files[name] = base64Encode(await File('${root.path}/$name').readAsBytes());
+      files[name] = base64Encode(
+        await File('${root.path}/$name').readAsBytes(),
+      );
     }
     final encoded = Uint8List.fromList(utf8.encode(jsonEncode(files)));
     await File('${root.path}/baseline.json').writeAsBytes(encoded);
@@ -158,9 +192,14 @@ COMMIT;
   } else {
     throw ArgumentError('Unknown mode $mode');
   }
-  print(jsonEncode({
-    'mode': mode, 'variant': variant, 'seconds': timer.elapsedMilliseconds / 1000,
-    'baselineRssMiB': baselineRss / 1048576,
-    'peakRssMiB': ProcessInfo.maxRss / 1048576, ...details,
-  }));
+  stdout.writeln(
+    jsonEncode({
+      'mode': mode,
+      'variant': variant,
+      'seconds': timer.elapsedMilliseconds / 1000,
+      'baselineRssMiB': baselineRss / 1048576,
+      'peakRssMiB': ProcessInfo.maxRss / 1048576,
+      ...details,
+    }),
+  );
 }

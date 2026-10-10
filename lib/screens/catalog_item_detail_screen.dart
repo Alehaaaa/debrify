@@ -232,9 +232,6 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
   bool _resumePending = false;
   bool get _primaryBusy => _resumePending && !_resumeLoaded;
 
-  /// Live Simkl status (drives the "Rewatch" relabel). Null until
-  /// [simklStatusLoader] resolves — the button keeps "Play" until then.
-  SimklTitleStatus? _simklStatus;
   // Completion from the selected Progress source(s), not Home tick settings.
   bool _localMovieFinished = false;
   bool _inMyWatchlist = false;
@@ -337,7 +334,7 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
     try {
       final status = await loader();
       if (!mounted || status == null) return;
-      setState(() => _simklStatus = status);
+      setState(() {});
     } catch (_) {
       // Non-critical — leave the plain "Play" label.
     }
@@ -471,7 +468,6 @@ class _CatalogItemDetailScreenState extends State<CatalogItemDetailScreen>
       setState(() {
         _rewatchPending = false;
         _localMovieFinished = false;
-        _simklStatus = null;
         _resumeStarted = false;
       });
       restart();

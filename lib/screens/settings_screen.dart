@@ -2969,7 +2969,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       if (Platform.isIOS) {
         return optionLabels(
-          iOSExternalPlayer.values
+          IosExternalPlayer.values
               .where((player) => !PlatformUtil.isTvOS || player.availableOnTvos)
               .map((player) => player.displayName),
         );
@@ -5637,6 +5637,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final fileName =
         'debrify-backup-${ts.year.toString().padLeft(4, '0')}${ts.month.toString().padLeft(2, '0')}${ts.day.toString().padLeft(2, '0')}-${ts.hour.toString().padLeft(2, '0')}${ts.minute.toString().padLeft(2, '0')}.json';
 
+    if (!mounted) return;
     try {
       final savedPath = await ProfileBackupFlows(
         context,
@@ -6506,6 +6507,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actor?.role == UserProfileRole.admin &&
         actor!.allows(ProfileFeature.manageProfiles) &&
         actor.allows(ProfileFeature.backupRestore);
+    if (!mounted) return;
     final action = await showSettingsDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -6536,12 +6538,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (action == null) return;
 
     if (profileMode && action == 'device') {
+      if (!mounted) return;
       if (!await ProfileBackupFlows(
         context,
       ).reauthenticateSensitiveProfile(actor!)) {
         return;
       }
       final typed = TextEditingController();
+      if (!mounted) return;
       final confirmed = await showSettingsDialog<bool>(
         context: context,
         builder: (dialogContext) => StatefulBuilder(

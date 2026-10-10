@@ -79,11 +79,14 @@ class StremioSourcePersistenceSession {
       }
     });
     _tail = queued;
-    return queued.timeout(waitTimeout, onTimeout: () {
-      debugPrint(
-        'AndroidTvPlayerBridge: source persistence timed out (session=$id)',
-      );
-    });
+    return queued.timeout(
+      waitTimeout,
+      onTimeout: () {
+        debugPrint(
+          'AndroidTvPlayerBridge: source persistence timed out (session=$id)',
+        );
+      },
+    );
   }
 
   Future<void> closeAndDrain() async {
@@ -137,7 +140,7 @@ class AndroidTvPlayerBridge {
   static Future<List<Map<String, dynamic>>?> Function(int)?
   _sourcePlaylistResolver;
   static Future<List<Map<String, dynamic>>?> Function(int)?
-      _startupSourcePlaylistResolver;
+  _startupSourcePlaylistResolver;
   static Future<void> Function(int)? _stremioSourceCommitter;
   static PlaybackFinishedCallback? _startupSourcesExhaustedCallback;
   static Future<void> Function(int, String)? _startupSourceFailedCallback;
@@ -266,17 +269,6 @@ class AndroidTvPlayerBridge {
     _subtitleAppearanceSaveQueue = operation.catchError((_) {});
     await operation;
   }
-
-  // Deprecated: use _streamNextProvider
-  static StreamNextProvider? get _torboxNextProvider => _streamNextProvider;
-  static set _torboxNextProvider(StreamNextProvider? provider) =>
-      _streamNextProvider = provider;
-
-  // Deprecated: use _playbackFinishedCallback
-  static PlaybackFinishedCallback? get _torboxFinishedCallback =>
-      _playbackFinishedCallback;
-  static set _torboxFinishedCallback(PlaybackFinishedCallback? callback) =>
-      _playbackFinishedCallback = callback;
 
   /// Get custom font info for Android TV player
   static Future<Map<String, String?>> _getCustomFontInfo() async {
@@ -603,7 +595,9 @@ class AndroidTvPlayerBridge {
             'AndroidTvPlayerBridge: requestSourcePlaylistResolve received - args: ${call.arguments}',
           );
           final playlistRequest = call.arguments;
-          final playlistResolver = playlistRequest is Map && playlistRequest['automaticRecovery'] == true
+          final playlistResolver =
+              playlistRequest is Map &&
+                  playlistRequest['automaticRecovery'] == true
               ? _startupSourcePlaylistResolver ?? _sourcePlaylistResolver
               : _sourcePlaylistResolver;
           if (playlistResolver == null) {
@@ -675,14 +669,19 @@ class AndroidTvPlayerBridge {
         case 'startupSourceFailed':
           final failure = call.arguments;
           final failureSession = _sourcePersistenceSession;
-          if (failure is! Map || failureSession == null ||
+          if (failure is! Map ||
+              failureSession == null ||
               failure['sourcePersistenceSessionId'] != failureSession.id) {
             return null;
           }
           final failureCallback = _startupSourceFailedCallback;
           final failedIndex = failure['sourceIndex'];
           final failureReason = failure['reason'];
-          if (failureCallback == null || failedIndex is! int || failureReason is! String) return null;
+          if (failureCallback == null ||
+              failedIndex is! int ||
+              failureReason is! String) {
+            return null;
+          }
           // Enqueue synchronously on the same session as commits: a successful
           // candidate must never read the saved list before this removal ends.
           _startupFailureDrain = failureSession.enqueue(
@@ -912,7 +911,8 @@ class AndroidTvPlayerBridge {
           // Clear the old session before recovery can launch a replacement
           // player and begin receiving its own next-episode requests.
           _quickPlayNextEpisodeResult = null;
-          if (startupExhausted && finishedArgs['startupRecoveryConsumed'] != true &&
+          if (startupExhausted &&
+              finishedArgs['startupRecoveryConsumed'] != true &&
               recoverFromStartupExhaustion != null) {
             try {
               await recoverFromStartupExhaustion();
@@ -982,8 +982,7 @@ class AndroidTvPlayerBridge {
             final raw = epgArgs['channelUrl'];
             if (raw is String) epgChannelUrl = raw;
             includeSchedule = epgArgs['includeSchedule'] == true;
-            includeCatchupMetadata =
-                epgArgs['includeCatchupMetadata'] == true;
+            includeCatchupMetadata = epgArgs['includeCatchupMetadata'] == true;
             archiveDisabled = epgArgs['archiveDisabled'] == true;
             archiveDurationDays = (epgArgs['archiveDurationDays'] as num?)
                 ?.toInt();
@@ -1070,14 +1069,21 @@ class AndroidTvPlayerBridge {
                 else if (args['archiveEnabled'] == true)
                   'tv_archive': '1',
                 if (args['archiveDurationDays'] is num)
-                  'tv_archive_duration':
-                      (args['archiveDurationDays'] as num).toInt().toString(),
+                  'tv_archive_duration': (args['archiveDurationDays'] as num)
+                      .toInt()
+                      .toString(),
               },
             );
             if (programme == null ||
                 !(args['startOver'] == true
-                    ? IptvEpgService.isStartOverAvailable(replayChannel, programme)
-                    : IptvEpgService.isCatchupAvailable(replayChannel, programme))) {
+                    ? IptvEpgService.isStartOverAvailable(
+                        replayChannel,
+                        programme,
+                      )
+                    : IptvEpgService.isCatchupAvailable(
+                        replayChannel,
+                        programme,
+                      ))) {
               return null;
             }
             final url = await IptvEpgService.instance.catchupUrl(
@@ -1778,7 +1784,8 @@ class AndroidTvPlayerBridge {
     MovieMetadataProvider? onRequestMovieMetadata,
     Future<String?> Function(int)? onResolveStremioSource,
     Future<List<Map<String, dynamic>>?> Function(int)? onResolveSourcePlaylist,
-    Future<List<Map<String, dynamic>>?> Function(int)? onResolveStartupSourcePlaylist,
+    Future<List<Map<String, dynamic>>?> Function(int)?
+    onResolveStartupSourcePlaylist,
     Future<void> Function(int)? onCommitStremioSource,
     void Function(int)? onCommitPlaybackProgressSource,
     PlaybackFinishedCallback? onStartupSourcesExhausted,
@@ -1830,8 +1837,8 @@ class AndroidTvPlayerBridge {
     final persistenceSession = StremioSourcePersistenceSession(sessionId);
     _sourcePersistenceSession = persistenceSession;
     final profileOwner = ProfileSessionMemory.captureOwner();
-    final progressSession = onProgress == null &&
-            onCommitPlaybackProgressSource == null
+    final progressSession =
+        onProgress == null && onCommitPlaybackProgressSource == null
         ? null
         : NativePlaybackProgressSession(
             id: persistenceSession.id,

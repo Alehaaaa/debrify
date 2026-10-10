@@ -73,7 +73,7 @@ class TorboxAccountService {
     try {
       final apiKey = await StorageService.getTorboxApiKey();
       if (apiKey == null || apiKey.isEmpty) return false;
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       return false;
     }
@@ -93,7 +93,7 @@ class TorboxAccountService {
         _setCurrentUser(null);
         return false;
       }
-      return validateAndGetUserInfo(apiKey, persist: false);
+      return await validateAndGetUserInfo(apiKey, persist: false);
     } on ResourceAuthorizationException {
       return false;
     }

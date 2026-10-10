@@ -1210,8 +1210,7 @@ class TraktResultsViewState extends State<TraktResultsView> {
                             : ReorderableListView.builder(
                                 shrinkWrap: true,
                                 itemCount: sources.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  if (newIndex > oldIndex) newIndex--;
+                                onReorderItem: (oldIndex, newIndex) {
                                   setDialogState(() {
                                     final item = sources.removeAt(oldIndex);
                                     sources.insert(newIndex, item);
@@ -1414,7 +1413,7 @@ class TraktResultsViewState extends State<TraktResultsView> {
     }
 
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(

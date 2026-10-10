@@ -242,7 +242,11 @@ class PikPakApiService {
         ProfileFeature.cloud,
       );
       if (authorization == null) {
-        return _loginScoped(email, password, notifyListeners: notifyListeners);
+        return await _loginScoped(
+          email,
+          password,
+          notifyListeners: notifyListeners,
+        );
       }
       return await authorization.run(
         () => _loginScoped(
@@ -375,7 +379,7 @@ class PikPakApiService {
       final authorization = await ProfileAsyncAuthorization.capture(
         ProfileFeature.cloud,
       );
-      if (authorization == null) return _refreshAccessTokenScoped(null);
+      if (authorization == null) return await _refreshAccessTokenScoped(null);
       return await authorization.run(
         () => _refreshAccessTokenScoped(authorization),
       );

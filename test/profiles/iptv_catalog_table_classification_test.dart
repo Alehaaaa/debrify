@@ -64,7 +64,7 @@ void main() {
         isEmpty,
       );
     } finally {
-      db.dispose();
+      db.close();
     }
   });
 }

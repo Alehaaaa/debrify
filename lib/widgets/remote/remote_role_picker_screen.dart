@@ -314,7 +314,13 @@ class _RoleCardState extends State<_RoleCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          transform: Matrix4.identity()..scale(_focused ? 1.015 : 1.0),
+          transform: Matrix4.identity()
+            ..scaleByDouble(
+              _focused ? 1.015 : 1.0,
+              _focused ? 1.015 : 1.0,
+              _focused ? 1.015 : 1.0,
+              1.0,
+            ),
           transformAlignment: Alignment.center,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(

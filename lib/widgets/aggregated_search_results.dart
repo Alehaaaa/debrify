@@ -364,11 +364,12 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
   }
 
   Future<void> _openItemDetail(StremioMeta item) async {
-    final hasTrakt = item.hasValidImdbId ||
-        (item.hasValidId &&
-            (item.type == 'movie' || item.type == 'series'));
-    final hasBoundSource =
-        _boundSources.containsKey(item.effectiveImdbId ?? item.id);
+    final hasTrakt =
+        item.hasValidImdbId ||
+        (item.hasValidId && (item.type == 'movie' || item.type == 'series'));
+    final hasBoundSource = _boundSources.containsKey(
+      item.effectiveImdbId ?? item.id,
+    );
 
     final traktItems = hasTrakt
         ? buildTraktAddOnlyMenuOptions(
@@ -408,8 +409,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
               TraktItemMenuAction.addToStremioTv,
               TraktItemMenuAction.playRandomEpisode,
             };
-            if (leaves.contains(action) &&
-                Navigator.of(context).canPop()) {
+            if (leaves.contains(action) && Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
             }
             handleTraktMenuAction(
@@ -419,10 +419,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
               onSelectSource: widget.onSelectSource,
               onEditSource: _handleSelectSourceAction,
               onPlayRandomEpisode: (show) async {
-                await widget.onPlayRandomEpisode?.call(
-                  show,
-                  show.sourceAddon,
-                );
+                await widget.onPlayRandomEpisode?.call(show, show.sourceAddon);
               },
               onSearchPacks: widget.onSearchPacks,
               onAddToStremioTv: _handleAddToStremioTv,
@@ -591,11 +588,11 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
     final pikpakEnabled = await StorageService.getPikPakEnabled();
     final rdEnabled = rdKey != null && rdKey.isNotEmpty;
     final torboxEnabled = torboxKey != null && torboxKey.isNotEmpty;
-    final premiumizeEnabled = premiumizeIntegration &&
+    final premiumizeEnabled =
+        premiumizeIntegration &&
         premiumizeKey != null &&
         premiumizeKey.isNotEmpty;
-    final allDebridEnabled =
-        allDebridKey != null && allDebridKey.isNotEmpty;
+    final allDebridEnabled = allDebridKey != null && allDebridKey.isNotEmpty;
 
     if (!mounted) return;
 
@@ -642,24 +639,24 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
           : null,
       onPremiumize: premiumizeEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'premiumize',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'premiumize',
+            )
           : null,
       onAllDebrid: allDebridEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'alldebrid',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'alldebrid',
+            )
           : null,
       onPikPak: pikpakEnabled
           ? () => _pushCloudSelectSource(
-                show: item,
-                imdbId: imdbId,
-                provider: 'pikpak',
-              )
+              show: item,
+              imdbId: imdbId,
+              provider: 'pikpak',
+            )
           : null,
     );
   }
@@ -851,8 +848,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
                             : ReorderableListView.builder(
                                 shrinkWrap: true,
                                 itemCount: sources.length,
-                                onReorder: (oldIndex, newIndex) {
-                                  if (newIndex > oldIndex) newIndex--;
+                                onReorderItem: (oldIndex, newIndex) {
                                   setDialogState(() {
                                     final item = sources.removeAt(oldIndex);
                                     sources.insert(newIndex, item);
@@ -946,9 +942,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
                                   imdbId,
                                 );
                                 if (mounted) {
-                                  setState(
-                                    () => _boundSources.remove(imdbId),
-                                  );
+                                  setState(() => _boundSources.remove(imdbId));
                                 }
                                 if (dialogContext.mounted) {
                                   Navigator.of(dialogContext).pop();
@@ -1051,7 +1045,7 @@ class AggregatedSearchResultsState extends State<AggregatedSearchResults> {
 
     // Both enabled — show picker
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF1E293B),
       shape: const RoundedRectangleBorder(
@@ -1065,17 +1059,12 @@ sheetAnimationStyle: kMenuSheetAnimation,
               padding: EdgeInsets.all(16),
               child: Text(
                 'Select Provider',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
             ),
             ListTile(
               leading: const Icon(Icons.cloud, color: Color(0xFF22C55E)),
-              title: const Text(
-                'Real-Debrid',
-              ),
+              title: const Text('Real-Debrid'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 pushRd();
@@ -1083,9 +1072,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
             ),
             ListTile(
               leading: const Icon(Icons.cloud, color: Color(0xFF7C3AED)),
-              title: const Text(
-                'TorBox',
-              ),
+              title: const Text('TorBox'),
               onTap: () {
                 Navigator.of(sheetContext).pop();
                 pushTorbox();
@@ -1385,7 +1372,9 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   Icon(
                     Icons.search_off,
                     size: 64,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.5,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -1398,8 +1387,8 @@ sheetAnimationStyle: kMenuSheetAnimation,
                   Text(
                     'Try the keyword search above for torrent results',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant.withValues(alpha:
-                        0.7,
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.7,
                       ),
                     ),
                   ),

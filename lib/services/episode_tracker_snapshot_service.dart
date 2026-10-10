@@ -325,7 +325,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: snapshotRevision,
       );
 
-      return _refreshTraktSnapshot(
+      return await _refreshTraktSnapshot(
         key: key,
         storeWriteKey: storeWriteKey,
         force: force,
@@ -469,7 +469,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: refreshRevision,
       );
 
-      return _refreshCoordinator.run(
+      return await _refreshCoordinator.run(
         key: key,
         ttl: _refreshTtl,
         force: force,
@@ -610,7 +610,7 @@ class EpisodeTrackerSnapshotService {
       // Playback remains fresh on every launch (zero TTL), while concurrent
       // callers share one request. Its read/modify/write is serialized with
       // full-history replacement via [operationKey].
-      return _refreshCoordinator.run(
+      return await _refreshCoordinator.run(
         key: key,
         ttl: Duration.zero,
         force: force,
@@ -729,7 +729,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: snapshotRevision,
       );
 
-      return _refreshCoordinator.run(
+      return await _refreshCoordinator.run(
         key: key,
         ttl: _refreshTtl,
         force: force,
