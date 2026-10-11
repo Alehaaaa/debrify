@@ -27,6 +27,7 @@ import '../services/debrify_tv_channel_add_service.dart';
 import '../widgets/cloud/cloud_file_row.dart';
 import '../widgets/cloud/cloud_row_skeleton.dart';
 import '../widgets/cloud/cloud_segmented_tabs.dart';
+import '../widgets/cloud/cloud_confirm_dialog.dart';
 import '../widgets/cloud/cloud_theme.dart';
 import '../widgets/file_selection_dialog.dart';
 import '../widgets/tv_text_field.dart';
@@ -826,28 +827,11 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete Torrent',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'Are you sure you want to delete "${torrent.filename}" from Real Debrid? This action cannot be undone.',
-          style: const TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (context) => CloudConfirmDialog(
+        title: 'Delete Torrent',
+        message:
+            'Are you sure you want to delete "${torrent.filename}" from Real Debrid? This action cannot be undone.',
+        confirmLabel: 'Delete',
       ),
     );
 
@@ -858,7 +842,12 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
+            backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                : AppThemeScope.of(context).cloud.dialogSurface,
+            shape: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.shape(AppThemeScope.of(context))
+                : null,
             content: const Row(
               children: [
                 CircularProgressIndicator(),
@@ -904,28 +893,11 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete All Torrents',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Are you sure you want to delete all torrents from Real Debrid? This action cannot be undone.',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete All'),
-          ),
-        ],
+      builder: (context) => const CloudConfirmDialog(
+        title: 'Delete All Torrents',
+        message:
+            'Are you sure you want to delete all torrents from Real Debrid? This action cannot be undone.',
+        confirmLabel: 'Delete All',
       ),
     );
 
@@ -1108,28 +1080,11 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete All Downloads',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text(
-          'Are you sure you want to delete all downloads from Real Debrid? This action cannot be undone.',
-          style: TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete All'),
-          ),
-        ],
+      builder: (context) => const CloudConfirmDialog(
+        title: 'Delete All Downloads',
+        message:
+            'Are you sure you want to delete all downloads from Real Debrid? This action cannot be undone.',
+        confirmLabel: 'Delete All',
       ),
     );
 
@@ -1312,28 +1267,11 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete Download',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'Are you sure you want to delete "${download.filename}" from Real Debrid? This action cannot be undone.',
-          style: const TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (context) => CloudConfirmDialog(
+        title: 'Delete Download',
+        message:
+            'Are you sure you want to delete "${download.filename}" from Real Debrid? This action cannot be undone.',
+        confirmLabel: 'Delete',
       ),
     );
 
@@ -1344,7 +1282,12 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-            backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
+            backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                : AppThemeScope.of(context).cloud.dialogSurface,
+            shape: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.shape(AppThemeScope.of(context))
+                : null,
             content: const Row(
               children: [
                 CircularProgressIndicator(),
@@ -1449,28 +1392,11 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppThemeScope.of(context).cloud.dialogSurface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Delete $count ${count == 1 ? itemType : itemTypePlural}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          'Are you sure you want to delete $count selected ${count == 1 ? itemType : itemTypePlural}? This action cannot be undone.',
-          style: const TextStyle(color: Colors.grey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (context) => CloudConfirmDialog(
+        title: 'Delete $count ${count == 1 ? itemType : itemTypePlural}',
+        message:
+            'Are you sure you want to delete $count selected ${count == 1 ? itemType : itemTypePlural}? This action cannot be undone.',
+        confirmLabel: 'Delete',
       ),
     );
 
