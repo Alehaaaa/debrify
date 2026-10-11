@@ -3449,7 +3449,15 @@ class SpotlightBoardState extends State<SpotlightBoard>
                   // aspect implies, so a shelf that mixes posters and channel
                   // tiles sits on one baseline instead of stepping up and down.
                   height: cardHeight,
-                  expandedHeight: m.wideCardW / SpotlightCardShape.wide.aspect,
+                  // A pointer-expanded poster must become landscape even on
+                  // intermediate desktop widths where the nominal wide tile
+                  // is narrower than the portrait row is tall. Leave DPAD
+                  // sizing unchanged for TV layouts.
+                  expandedHeight:
+                      (_largeCardInteractions && !widget.dpad
+                          ? max(m.wideCardW, cardHeight)
+                          : m.wideCardW) /
+                      SpotlightCardShape.wide.aspect,
                   caption: m.caption,
                   description: m.description,
                   radius: m.radius,

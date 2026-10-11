@@ -561,29 +561,38 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('expanded posters retain row height with landscape-sized width', (
-    tester,
-  ) async {
-    surface(tester, const Size(1200, 800));
-    await tester.pumpWidget(host(platform: TargetPlatform.macOS));
-    await tester.pumpAndSettle();
-    final restingSize =
-        (nodes[1].context!.findRenderObject() as RenderBox).size;
-    nodes[1].requestFocus();
-    await tester.pumpAndSettle();
-    final posterSize = (nodes[1].context!.findRenderObject() as RenderBox).size;
-    await tester.pumpWidget(
-      host(platform: TargetPlatform.macOS, shape: SpotlightCardShape.wide),
-    );
-    await tester.pumpAndSettle();
-    final landscapeSize =
-        (nodes[1].context!.findRenderObject() as RenderBox).size;
-    expect(posterSize.width, closeTo(landscapeSize.width, 0.01));
-    expect(posterSize.height, closeTo(restingSize.height, 0.01));
-    expect(posterSize.width, greaterThan(restingSize.width));
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+  testWidgets(
+    'expanded posters widen while landscape shelves keep their own height',
+    (tester) async {
+      surface(tester, const Size(1200, 800));
+      await tester.pumpWidget(host(platform: TargetPlatform.macOS));
+      await tester.pumpAndSettle();
+      final restingSize =
+          (nodes[1].context!.findRenderObject() as RenderBox).size;
+      nodes[1].requestFocus();
+      await tester.pumpAndSettle();
+      final posterSize =
+          (nodes[1].context!.findRenderObject() as RenderBox).size;
+      await tester.pumpWidget(
+        host(platform: TargetPlatform.macOS, shape: SpotlightCardShape.wide),
+      );
+      await tester.pumpAndSettle();
+      final landscapeSize =
+          (nodes[1].context!.findRenderObject() as RenderBox).size;
+      expect(posterSize.height, closeTo(restingSize.height, 0.01));
+      expect(posterSize.width, greaterThan(posterSize.height));
+      expect(posterSize.width, greaterThan(restingSize.width));
+      // A uniformly-wide shelf deliberately uses a shorter native 16:9 row.
+      // It must not inherit the height of a portrait shelf when its shape changes.
+      expect(landscapeSize.height, lessThan(restingSize.height));
+      expect(
+        landscapeSize.width / landscapeSize.height,
+        greaterThan(SpotlightCardShape.wide.aspect),
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('desktop hover and keyboard each own one expanded card', (
     tester,

@@ -5002,15 +5002,14 @@ class _SearchScreenState extends State<SearchScreen>
     StremioMeta item, {
     required String message,
   }) async {
+    final app = AppThemeScope.of(context);
     final remove = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
             : null,
-        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
-            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: const Text('Series unavailable'),
         content: Text('$message\n\nRemove it from My Watchlist?'),
         actions: [
@@ -5331,15 +5330,14 @@ class _SearchScreenState extends State<SearchScreen>
 
   Future<void> _confirmDeletePlaylistItem(Map<String, dynamic> item) async {
     final title = (item['title'] as String?) ?? 'this item';
+    final app = AppThemeScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
             : null,
-        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
-            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: const Text('Delete?'),
         content: Text('Remove "$title" from your playlist?'),
         actions: [
@@ -13966,7 +13964,17 @@ class _SearchScreenState extends State<SearchScreen>
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: app.home.sheetBg,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.home.sheetBg,
+      shape: GlassChrome.enabled(app)
+          ? RoundedRectangleBorder(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              side: BorderSide(color: GlassChrome.edge(app)),
+            )
+          : null,
       builder: (sheetCtx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -14361,6 +14369,7 @@ class _SearchScreenState extends State<SearchScreen>
   Future<void> _openKeywordProviders() async {
     // Freeze + adopt so the provider counts reflect everything found so far.
     _kwFreezeAndAdopt();
+    final app = AppThemeScope.of(context);
     await showDialog<void>(
       context: context,
       builder: (dialogCtx) {
@@ -14444,6 +14453,10 @@ class _SearchScreenState extends State<SearchScreen>
             }
 
             return AlertDialog(
+              backgroundColor: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : null,
+              shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
               title: const Text('Filter by source'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -14474,6 +14487,7 @@ class _SearchScreenState extends State<SearchScreen>
     // Sorting mid-stream over a shifting set would be meaningless — freeze
     // and fold parked arrivals in first.
     _kwFreezeAndAdopt();
+    final app = AppThemeScope.of(context);
     await showDialog<void>(
       context: context,
       builder: (dialogCtx) {
@@ -14506,9 +14520,10 @@ class _SearchScreenState extends State<SearchScreen>
 
             final dirEnabled = _kwSort != 'relevance';
             return AlertDialog(
-              backgroundColor: GlassChrome.enabled(AppThemeScope.of(ctx))
-                  ? GlassChrome.fill(AppThemeScope.of(ctx), raised: true)
+              backgroundColor: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
                   : scheme.surfaceContainerHigh,
+              shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
               title: const Text('Sort by'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -14659,15 +14674,14 @@ class _SearchScreenState extends State<SearchScreen>
     final origin = await _progressOriginAddon(item, addon);
     if (!mounted) return;
     if (origin == null) {
+      final app = AppThemeScope.of(context);
       final remove = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-              ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
               : null,
-          shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
-              ? GlassChrome.shape(AppThemeScope.of(dialogContext))
-              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           title: Text(item.name),
           content: const Text(
             'The addon configuration for this series is unavailable. Your local history is still saved.',
@@ -15136,12 +15150,12 @@ class _SearchScreenState extends State<SearchScreen>
       if (updated.isEmpty) closeIfEmpty();
     }
 
+    final app = AppThemeScope.of(context);
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
-            final app = AppThemeScope.of(dialogContext);
             void closeIfEmpty() {
               if (dialogContext.mounted) Navigator.of(dialogContext).pop();
             }

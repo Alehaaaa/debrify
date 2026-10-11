@@ -6,6 +6,12 @@ import 'package:debrify/screens/settings/metadata_settings_page.dart';
 import 'package:debrify/services/metadata_preferences_service.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/services/tmdb_metadata_repository.dart';
+import 'package:debrify/services/text_brightness.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -18,7 +24,7 @@ void main() {
     StremioService.instance.invalidateCache();
   });
 
-  Future<void> open(WidgetTester tester) async {
+  Future<void> open(WidgetTester tester, {AppTheme? appearance}) async {
     final repository = TmdbMetadataRepository(
       token: 'test',
       clientFactory: () => MockClient(
@@ -31,30 +37,50 @@ void main() {
       ),
     );
     await tester.pumpWidget(
-      MaterialApp(home: MetadataSettingsPage(repository: repository)),
+      MaterialApp(
+        theme: appearance == null
+            ? null
+            : AppThemeAdapter.themed(appearance, TextBrightness.bright),
+        home: appearance == null
+            ? MetadataSettingsPage(repository: repository)
+            : AppThemeScope(
+                theme: appearance,
+                child: MetadataSettingsPage(repository: repository),
+              ),
+      ),
     );
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Restore defaults re-enables all optional features and restores the cast default', (tester) async {
-    await MetadataPreferencesService.save(MetadataPreferences(
-      providers: {for (final c in MetadataCategory.values) c: 'current'},
-      features: {},
-      fallback: true,
-      language: 'hi-IN', artworkLanguage: 'original',
-      trailerLanguage: 'hi-IN', region: 'IN',
-    ));
-    await open(tester);
-    await tester.scrollUntilVisible(find.text('Restore defaults'), 400);
-    await tester.tap(find.text('Restore defaults'));
-    await tester.pumpAndSettle();
-    final prefs = await MetadataPreferencesService.load();
-    expect(prefs.toJson(), MetadataPreferences().toJson());
-    expect(prefs.features, MetadataFeature.values.toSet());
-    expect(prefs.provider(MetadataCategory.credits),
-      const String.fromEnvironment('TMDB_READ_ACCESS_TOKEN').trim().isEmpty
-          ? MetadataPreferences.current : MetadataPreferences.tmdb);
-  });
+  testWidgets(
+    'Restore defaults re-enables all optional features and restores the cast default',
+    (tester) async {
+      await MetadataPreferencesService.save(
+        MetadataPreferences(
+          providers: {for (final c in MetadataCategory.values) c: 'current'},
+          features: {},
+          fallback: true,
+          language: 'hi-IN',
+          artworkLanguage: 'original',
+          trailerLanguage: 'hi-IN',
+          region: 'IN',
+        ),
+      );
+      await open(tester);
+      await tester.scrollUntilVisible(find.text('Restore defaults'), 400);
+      await tester.tap(find.text('Restore defaults'));
+      await tester.pumpAndSettle();
+      final prefs = await MetadataPreferencesService.load();
+      expect(prefs.toJson(), MetadataPreferences().toJson());
+      expect(prefs.features, MetadataFeature.values.toSet());
+      expect(
+        prefs.provider(MetadataCategory.credits),
+        const String.fromEnvironment('TMDB_READ_ACCESS_TOKEN').trim().isEmpty
+            ? MetadataPreferences.current
+            : MetadataPreferences.tmdb,
+      );
+    },
+  );
 
   testWidgets(
     'external metadata revision is retained by the next settings edit',
@@ -92,7 +118,12 @@ void main() {
     await open(tester);
     await tester.tap(find.text('Posters'));
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of: find.byType(SimpleDialog), matching: find.text('TMDB')));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SimpleDialog),
+        matching: find.text('TMDB'),
+      ),
+    );
     await tester.pumpAndSettle();
     final raw = (await SharedPreferences.getInstance()).getString(
       MetadataPreferencesService.key,
@@ -104,51 +135,78 @@ void main() {
     for (final category in MetadataCategory.values.where(
       (c) => c != MetadataCategory.posters,
     )) {
-      expect(prefs.provider(category), category == MetadataCategory.credits ? MetadataPreferences.defaultCreditsProvider : 'current');
+      expect(
+        prefs.provider(category),
+        category == MetadataCategory.credits
+            ? MetadataPreferences.defaultCreditsProvider
+            : 'current',
+      );
     }
     expect(prefs.features, MetadataFeature.values.toSet());
     expect(prefs.fallback, isFalse);
   });
 
-  testWidgets('language controls follow their consumers and preserve saved values', (tester) async {
-    tester.view.physicalSize = const Size(1000, 4000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await open(tester);
-    Future<bool> enabled(String title) async {
-      return tester.widget<ListTile>(find.ancestor(of: find.text(title), matching: find.byType(ListTile))).enabled;
-    }
-    expect(await enabled('Metadata language'), isTrue);
-    expect(await enabled('Artwork language'), isFalse);
-    expect(await enabled('Trailer language'), isFalse);
-    expect(await enabled('Country / region'), isTrue);
-    var prefs = MetadataPreferences(providers: {MetadataCategory.posters: 'tmdb'},
-      language: 'hi-IN', region: 'IN');
-    await MetadataPreferencesService.save(prefs);
-    await tester.pumpAndSettle();
-    expect(await enabled('Metadata language'), isTrue);
-    expect(await enabled('Artwork language'), isTrue);
-    expect(await enabled('Trailer language'), isFalse);
-    prefs = prefs.copyWith(providers: {MetadataCategory.trailers: 'tmdb'}, features: {MetadataFeature.availability});
-    await MetadataPreferencesService.save(prefs);
-    await tester.pumpAndSettle();
-    expect(await enabled('Trailer language'), isTrue);
-    expect(await enabled('Country / region'), isTrue);
-    await MetadataPreferencesService.save(prefs.copyWith(providers: {}, features: {}));
-    await tester.pumpAndSettle();
-    expect(await enabled('Country / region'), isFalse);
-    final saved = await MetadataPreferencesService.load();
-    expect(saved.language, 'hi-IN');
-    expect(saved.region, 'IN');
-  });
+  testWidgets(
+    'language controls follow their consumers and preserve saved values',
+    (tester) async {
+      tester.view.physicalSize = const Size(1000, 4000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await open(tester);
+      Future<bool> enabled(String title) async {
+        return tester
+            .widget<ListTile>(
+              find.ancestor(
+                of: find.text(title),
+                matching: find.byType(ListTile),
+              ),
+            )
+            .enabled;
+      }
+
+      expect(await enabled('Metadata language'), isTrue);
+      expect(await enabled('Artwork language'), isFalse);
+      expect(await enabled('Trailer language'), isFalse);
+      expect(await enabled('Country / region'), isTrue);
+      var prefs = MetadataPreferences(
+        providers: {MetadataCategory.posters: 'tmdb'},
+        language: 'hi-IN',
+        region: 'IN',
+      );
+      await MetadataPreferencesService.save(prefs);
+      await tester.pumpAndSettle();
+      expect(await enabled('Metadata language'), isTrue);
+      expect(await enabled('Artwork language'), isTrue);
+      expect(await enabled('Trailer language'), isFalse);
+      prefs = prefs.copyWith(
+        providers: {MetadataCategory.trailers: 'tmdb'},
+        features: {MetadataFeature.availability},
+      );
+      await MetadataPreferencesService.save(prefs);
+      await tester.pumpAndSettle();
+      expect(await enabled('Trailer language'), isTrue);
+      expect(await enabled('Country / region'), isTrue);
+      await MetadataPreferencesService.save(
+        prefs.copyWith(providers: {}, features: {}),
+      );
+      await tester.pumpAndSettle();
+      expect(await enabled('Country / region'), isFalse);
+      final saved = await MetadataPreferencesService.load();
+      expect(saved.language, 'hi-IN');
+      expect(saved.region, 'IN');
+    },
+  );
 
   testWidgets('language picker includes TMDB configuration results', (
     tester,
   ) async {
     await open(tester);
-    await MetadataPreferencesService.save(MetadataPreferences(
-      providers: {MetadataCategory.information: MetadataPreferences.tmdb}));
+    await MetadataPreferencesService.save(
+      MetadataPreferences(
+        providers: {MetadataCategory.information: MetadataPreferences.tmdb},
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Metadata language'), 350);
     await tester.tap(find.text('Metadata language'));
@@ -162,7 +220,10 @@ void main() {
     await tester.pumpAndSettle();
     final prefs = await MetadataPreferencesService.load();
     expect(prefs.language, 'nl');
-    expect(prefs.provider(MetadataCategory.information), MetadataPreferences.tmdb);
+    expect(
+      prefs.provider(MetadataCategory.information),
+      MetadataPreferences.tmdb,
+    );
   });
   testWidgets('metadata picker fits a narrow phone with enlarged text', (
     tester,
@@ -177,7 +238,12 @@ void main() {
     await tester.scrollUntilVisible(find.text('Posters'), 250);
     await tester.tap(find.text('Posters'));
     await tester.pumpAndSettle();
-    await tester.tap(find.descendant(of: find.byType(SimpleDialog), matching: find.text('TMDB')));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SimpleDialog),
+        matching: find.text('TMDB'),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(
       (await MetadataPreferencesService.load()).provider(
@@ -211,5 +277,32 @@ void main() {
     );
     expect(find.byType(SimpleDialog), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('nested metadata picker reopens with the selected appearance', (
+    tester,
+  ) async {
+    AppThemeAdapter.debugUseTestTypography = true;
+    addTearDown(() => AppThemeAdapter.debugUseTestTypography = false);
+    final glass = PremiumLooks.glass.build();
+    await open(tester, appearance: glass);
+    for (var i = 0; i < 2; i++) {
+      await tester.tap(find.text('Posters'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<SimpleDialog>(find.byType(SimpleDialog)).backgroundColor,
+        GlassChrome.fill(glass, raised: true),
+      );
+      Navigator.of(tester.element(find.byType(SimpleDialog))).pop();
+      await tester.pumpAndSettle();
+    }
+
+    await open(tester, appearance: AppThemes.legacy);
+    await tester.tap(find.text('Posters'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SimpleDialog>(find.byType(SimpleDialog)).backgroundColor,
+      isNull,
+    );
   });
 }

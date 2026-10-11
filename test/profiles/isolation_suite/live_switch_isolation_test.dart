@@ -11,6 +11,7 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/app_storage.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,9 +39,14 @@ void main() {
   late String profileB;
 
   setUpAll(() {
+    // A real profile switch warms appearance, but this suite asserts scoped
+    // caches rather than network font loading. Keep typography deterministic.
+    AppThemeAdapter.debugUseTestTypography = true;
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   });
+
+  tearDownAll(() => AppThemeAdapter.debugUseTestTypography = false);
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -87,75 +93,82 @@ void main() {
     await temporaryDirectory.delete(recursive: true);
   });
 
-  test('a live switch leaves no cache stamped to the outgoing profile',
-      () async {
-    await StorageService.setTvHomeStyle('atrium');
-    expect(StorageService.tvHomeStyleCached, 'atrium');
+  test(
+    'a live switch leaves no cache stamped to the outgoing profile',
+    () async {
+      await StorageService.setTvHomeStyle('atrium');
+      expect(StorageService.tvHomeStyleCached, 'atrium');
 
-    final lifecycle = ProfileLifecycleCoordinator(
-      registry: registry,
-      participants: <ProfileLifecycleParticipant>[
-        ProfileAppLifecycleParticipant(),
-      ],
-    );
-    addTearDown(lifecycle.dispose);
+      final lifecycle = ProfileLifecycleCoordinator(
+        registry: registry,
+        participants: <ProfileLifecycleParticipant>[
+          ProfileAppLifecycleParticipant(),
+        ],
+      );
+      addTearDown(lifecycle.dispose);
 
-    expect(await lifecycle.switchTo(profileB), isTrue);
-    expect(ProfileRuntime.capture().profileId, profileB);
+      expect(await lifecycle.switchTo(profileB), isTrue);
+      expect(ProfileRuntime.capture().profileId, profileB);
 
-    // The ledger is the instrument built for exactly this question. Each row
-    // is stamped as its group warms, so a warm that threw partway leaves the
-    // rows after the throw showing profile A — a stale stamp IS the leak.
-    final active = ProfileCacheLedger.keyFor(ProfileRuntime.capture());
-    final stale = ProfileCacheLedger.snapshot().entries
-        .where((entry) => entry.value != active && entry.value != 'unloaded')
-        .map((entry) => '${entry.key}=${entry.value}')
-        .toList()
-      ..sort();
+      // The ledger is the instrument built for exactly this question. Each row
+      // is stamped as its group warms, so a warm that threw partway leaves the
+      // rows after the throw showing profile A — a stale stamp IS the leak.
+      final active = ProfileCacheLedger.keyFor(ProfileRuntime.capture());
+      final stale =
+          ProfileCacheLedger.snapshot().entries
+              .where(
+                (entry) => entry.value != active && entry.value != 'unloaded',
+              )
+              .map((entry) => '${entry.key}=${entry.value}')
+              .toList()
+            ..sort();
 
-    expect(
-      stale,
-      isEmpty,
-      reason:
-          'These caches are still serving the previous profile after the '
-          'switch completed. With no relaunch, that is profile A\'s data on '
-          'profile B\'s screen.',
-    );
+      expect(
+        stale,
+        isEmpty,
+        reason:
+            'These caches are still serving the previous profile after the '
+            'switch completed. With no relaunch, that is profile A\'s data on '
+            'profile B\'s screen.',
+      );
 
-    expect(
-      StorageService.tvHomeStyleCached,
-      isNot('atrium'),
-      reason: 'the synchronous mirror still holds profile A\'s choice',
-    );
-  });
+      expect(
+        StorageService.tvHomeStyleCached,
+        isNot('atrium'),
+        reason: 'the synchronous mirror still holds profile A\'s choice',
+      );
+    },
+  );
 
-  test('switching back does not resurrect the other profile\'s values',
-      () async {
-    await StorageService.setTvHomeStyle('atrium');
+  test(
+    'switching back does not resurrect the other profile\'s values',
+    () async {
+      await StorageService.setTvHomeStyle('atrium');
 
-    final lifecycle = ProfileLifecycleCoordinator(
-      registry: registry,
-      participants: <ProfileLifecycleParticipant>[
-        ProfileAppLifecycleParticipant(),
-      ],
-    );
-    addTearDown(lifecycle.dispose);
+      final lifecycle = ProfileLifecycleCoordinator(
+        registry: registry,
+        participants: <ProfileLifecycleParticipant>[
+          ProfileAppLifecycleParticipant(),
+        ],
+      );
+      addTearDown(lifecycle.dispose);
 
-    await lifecycle.switchTo(profileB);
-    await StorageService.setTvHomeStyle('mosaic');
-    await lifecycle.switchTo(profileA);
+      await lifecycle.switchTo(profileB);
+      await StorageService.setTvHomeStyle('mosaic');
+      await lifecycle.switchTo(profileA);
 
-    expect(
-      await StorageService.getTvHomeStyle(),
-      'atrium',
-      reason: 'profile A must get its own choice back',
-    );
-    expect(
-      StorageService.tvHomeStyleCached,
-      'atrium',
-      reason: 'the mirror must be re-warmed from A, not left holding B',
-    );
-  });
+      expect(
+        await StorageService.getTvHomeStyle(),
+        'atrium',
+        reason: 'profile A must get its own choice back',
+      );
+      expect(
+        StorageService.tvHomeStyleCached,
+        'atrium',
+        reason: 'the mirror must be re-warmed from A, not left holding B',
+      );
+    },
+  );
 
   test('the ledger accounts for every cache the participant warms', () async {
     final lifecycle = ProfileLifecycleCoordinator(
