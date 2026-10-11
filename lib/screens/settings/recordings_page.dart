@@ -51,6 +51,8 @@ class _RecordingsPageState extends State<RecordingsPage>
   List<ScheduledRecording> _schedules = const [];
   List<RecordingLibraryEntry> _library = const [];
   bool _loading = true;
+  Object? _loadError;
+  int _loadGeneration = 0;
   bool _exactAlarms = true;
 
   /// Wall clock for elapsed/countdown text. Only ticks while something needs
@@ -62,6 +64,7 @@ class _RecordingsPageState extends State<RecordingsPage>
   /// engine finalizes) with no in-process signal — poll while anything is
   /// live or could go live, idle otherwise.
   Timer? _poll;
+  bool _pollingLive = false;
 
   /// False while the app is paused/hidden. _syncTimers refuses to arm
   /// anything in that state — otherwise a revision bump arriving while
@@ -170,30 +173,41 @@ class _RecordingsPageState extends State<RecordingsPage>
   }
 
   Future<void> _loadAll() async {
-    final results = await Future.wait<Object>([
-      _isAndroid
-          ? LiveRecordingService.query()
-          : Future.value(const <LiveRecordingStatus>[]),
-      _desktop
-          ? DesktopScheduleService.instance.list().then(
-              (list) => list
-                  .map((s) => s.toScheduledRecording())
-                  .toList(growable: false),
-            )
-          : (_isAndroid
-                ? LiveRecordingService.listSchedules()
-                : Future.value(const <ScheduledRecording>[])),
-      _isAndroid
-          ? LiveRecordingService.queryLibrary()
-          : DesktopRecordingService.listLibrary(),
-      _isAndroid
-          ? LiveRecordingService.exactAlarmsGranted()
-          : Future.value(true),
-      _isAndroid
-          ? LiveRecordingService.isIgnoringBatteryOptimizations()
-          : Future.value(true),
-    ]);
-    if (!mounted) return;
+    final generation = ++_loadGeneration;
+    late final List<Object> results;
+    try {
+      results = await Future.wait<Object>([
+        _isAndroid
+            ? LiveRecordingService.query()
+            : Future.value(const <LiveRecordingStatus>[]),
+        _desktop
+            ? DesktopScheduleService.instance.list().then(
+                (list) => list
+                    .map((s) => s.toScheduledRecording())
+                    .toList(growable: false),
+              )
+            : (_isAndroid
+                  ? LiveRecordingService.listSchedules()
+                  : Future.value(const <ScheduledRecording>[])),
+        _isAndroid
+            ? LiveRecordingService.queryLibrary()
+            : DesktopRecordingService.listLibrary(),
+        _isAndroid
+            ? LiveRecordingService.exactAlarmsGranted()
+            : Future.value(true),
+        _isAndroid
+            ? LiveRecordingService.isIgnoringBatteryOptimizations()
+            : Future.value(true),
+      ]);
+    } catch (error) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loadError = error;
+        _loading = false;
+      });
+      return;
+    }
+    if (!mounted || generation != _loadGeneration) return;
     final live = (results[0] as List<LiveRecordingStatus>)
         .where((r) => r.isRecording)
         .toList(growable: false);
@@ -210,6 +224,7 @@ class _RecordingsPageState extends State<RecordingsPage>
       _library = library;
       _exactAlarms = results[3] as bool;
       _batteryExempt = results[4] as bool;
+      _loadError = null;
       _loading = false;
     });
     _syncTimers();
@@ -245,12 +260,23 @@ class _RecordingsPageState extends State<RecordingsPage>
   /// change (a capture started or finished, a schedule fired) escalates to a
   /// full [_loadAll] so the library picks up the new file too.
   Future<void> _pollLive() async {
-    if (!_isAndroid) return;
-    final results = await Future.wait<Object>([
-      LiveRecordingService.query(),
-      LiveRecordingService.listSchedules(),
-    ]);
-    if (!mounted) return;
+    if (!_isAndroid || !_appVisible || _pollingLive) return;
+    final generation = _loadGeneration;
+    _pollingLive = true;
+    late final List<Object> results;
+    try {
+      results = await Future.wait<Object>([
+        LiveRecordingService.query(),
+        LiveRecordingService.listSchedules(),
+      ]);
+    } catch (_) {
+      // The native recorder may be restarting while Android wakes the app.
+      // Keep the last known entries; the next scheduled poll can recover.
+      return;
+    } finally {
+      _pollingLive = false;
+    }
+    if (!mounted || !_appVisible || generation != _loadGeneration) return;
     final live = (results[0] as List<LiveRecordingStatus>)
         .where((r) => r.isRecording)
         .toList(growable: false);
@@ -789,13 +815,14 @@ class _RecordingsPageState extends State<RecordingsPage>
   @override
   Widget build(BuildContext context) {
     final desktopCaptures = _desktopCaptures;
+    final app = AppThemeScope.of(context);
     final liveCount = _live.length + desktopCaptures.length;
     final totalBytes = _library.fold<int>(0, (sum, e) => sum + e.bytes);
     final empty =
         !_loading && liveCount == 0 && _schedules.isEmpty && _library.isEmpty;
 
     return Scaffold(
-      backgroundColor: _kBg,
+      backgroundColor: GlassChrome.enabled(app) ? app.core.ground : _kBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -818,6 +845,30 @@ class _RecordingsPageState extends State<RecordingsPage>
               child: _loading
                   ? const Center(
                       child: CircularProgressIndicator(color: _kAccent),
+                    )
+                  : _loadError != null
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Could not load recordings',
+                            style: TextStyle(color: app.core.tx),
+                          ),
+                          const SizedBox(height: 12),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _loading = true;
+                                _loadError = null;
+                              });
+                              unawaited(_loadAll());
+                            },
+                            icon: const Icon(Icons.refresh_rounded),
+                            label: const Text('Retry'),
+                          ),
+                        ],
+                      ),
                     )
                   : empty
                   ? _EmptyDvr(
@@ -1016,6 +1067,7 @@ class _HubBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 20, 10),
       child: Row(
@@ -1028,10 +1080,10 @@ class _HubBar extends StatelessWidget {
           const SizedBox(width: 10),
           const Icon(Icons.fiber_manual_record_rounded, color: _kRec, size: 16),
           const SizedBox(width: 8),
-          const Text(
+          Text(
             'Recordings',
             style: TextStyle(
-              color: Colors.white,
+              color: GlassChrome.enabled(app) ? app.core.tx : Colors.white,
               fontSize: 19,
               fontWeight: FontWeight.w800,
               letterSpacing: 0.2,
@@ -1067,6 +1119,7 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 10, 0, 8),
       child: Row(
@@ -1074,7 +1127,9 @@ class _SectionHeader extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.38),
+              color: GlassChrome.enabled(app)
+                  ? app.settings.dim
+                  : Colors.white.withValues(alpha: 0.38),
               fontSize: 11,
               fontWeight: FontWeight.w800,
               letterSpacing: 1.6,
@@ -1092,7 +1147,9 @@ class _SectionHeader extends StatelessWidget {
                 chip!,
                 style: TextStyle(
                   color: chipColor == Colors.white38
-                      ? Colors.white.withValues(alpha: 0.55)
+                      ? (GlassChrome.enabled(app)
+                            ? app.settings.dim
+                            : Colors.white.withValues(alpha: 0.55))
                       : chipColor,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
@@ -1116,17 +1173,22 @@ class _EmptyHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(12))
+          : BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.03),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+            ),
       child: Text(
         text,
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.45),
+          color: GlassChrome.enabled(app)
+              ? app.settings.dim
+              : Colors.white.withValues(alpha: 0.45),
           fontSize: 12.5,
           height: 1.45,
         ),
@@ -1160,21 +1222,32 @@ class _LiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _kRec.withValues(alpha: 0.35), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: _kRec.withValues(alpha: 0.07),
-            blurRadius: 18,
-            spreadRadius: 1,
-          ),
-        ],
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(
+              app,
+              raised: true,
+              active: true,
+              radius: BorderRadius.circular(14),
+            )
+          : BoxDecoration(
+              color: _kCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: _kRec.withValues(alpha: 0.35),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: _kRec.withValues(alpha: 0.07),
+                  blurRadius: 18,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
       child: Row(
         children: [
           const _RecDot(),
@@ -1187,8 +1260,10 @@ class _LiveCard extends StatelessWidget {
                   channelName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: GlassChrome.enabled(app)
+                        ? app.core.tx
+                        : Colors.white,
                     fontSize: 14.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1320,6 +1395,7 @@ class _ScheduleRowState extends State<_ScheduleRow> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     final s = widget.schedule;
     final title = s.programmeTitle.isEmpty ? s.channelName : s.programmeTitle;
     return Focus(
@@ -1339,16 +1415,25 @@ class _ScheduleRowState extends State<_ScheduleRow> {
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-          decoration: BoxDecoration(
-            color: _focused
-                ? Colors.white.withValues(alpha: 0.07)
-                : Colors.white.withValues(alpha: 0.035),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _focused ? _kGold : Colors.white.withValues(alpha: 0.06),
-              width: _focused ? 1.8 : 1,
-            ),
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(
+                  app,
+                  raised: _focused,
+                  active: _focused,
+                  radius: BorderRadius.circular(12),
+                )
+              : BoxDecoration(
+                  color: _focused
+                      ? Colors.white.withValues(alpha: 0.07)
+                      : Colors.white.withValues(alpha: 0.035),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _focused
+                        ? _kGold
+                        : Colors.white.withValues(alpha: 0.06),
+                    width: _focused ? 1.8 : 1,
+                  ),
+                ),
           child: Row(
             children: [
               Container(
@@ -1378,8 +1463,10 @@ class _ScheduleRowState extends State<_ScheduleRow> {
                       title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: GlassChrome.enabled(app)
+                            ? app.core.tx
+                            : Colors.white,
                         fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -1392,7 +1479,9 @@ class _ScheduleRowState extends State<_ScheduleRow> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: GlassChrome.enabled(app)
+                            ? app.settings.dim
+                            : Colors.white.withValues(alpha: 0.5),
                         fontSize: 11.5,
                       ),
                     ),
@@ -1434,7 +1523,9 @@ class _ScheduleRowState extends State<_ScheduleRow> {
               Icon(
                 Icons.close_rounded,
                 size: 17,
-                color: Colors.white.withValues(alpha: _focused ? 0.8 : 0.35),
+                color: GlassChrome.enabled(app)
+                    ? app.settings.dim
+                    : Colors.white.withValues(alpha: _focused ? 0.8 : 0.35),
               ),
             ],
           ),
@@ -1489,18 +1580,26 @@ class _LibraryRowState extends State<_LibraryRow> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: _focused
-            ? Colors.white.withValues(alpha: 0.07)
-            : Colors.white.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _focused ? _kGold : Colors.white.withValues(alpha: 0.06),
-          width: _focused ? 1.8 : 1,
-        ),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(
+              app,
+              raised: _focused,
+              active: _focused,
+              radius: BorderRadius.circular(12),
+            )
+          : BoxDecoration(
+              color: _focused
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : Colors.white.withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _focused ? _kGold : Colors.white.withValues(alpha: 0.06),
+                width: _focused ? 1.8 : 1,
+              ),
+            ),
       child: Row(
         children: [
           Expanded(
@@ -1536,8 +1635,10 @@ class _LibraryRowState extends State<_LibraryRow> {
                               widget.title,
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: GlassChrome.enabled(app)
+                                    ? app.core.tx
+                                    : Colors.white,
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w700,
                                 height: 1.2,
@@ -1549,7 +1650,9 @@ class _LibraryRowState extends State<_LibraryRow> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.5),
+                                color: GlassChrome.enabled(app)
+                                    ? app.settings.dim
+                                    : Colors.white.withValues(alpha: 0.5),
                                 fontSize: 11.5,
                                 fontFeatures: const [
                                   FontFeature.tabularFigures(),
@@ -1921,6 +2024,7 @@ class _HubButtonState extends State<_HubButton> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     final Color fill;
     final Color fg;
     if (widget.danger) {
@@ -1960,23 +2064,38 @@ class _HubButtonState extends State<_HubButton> {
         behavior: HitTestBehavior.opaque,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: _focused ? _kGold : Colors.transparent,
-              width: 1.8,
-            ),
-          ),
+          decoration: GlassChrome.enabled(app) && !widget.danger
+              ? GlassChrome.decoration(
+                  app,
+                  raised: widget.filled || _focused,
+                  active: _focused,
+                  radius: BorderRadius.circular(10),
+                )
+              : BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _focused ? _kGold : Colors.transparent,
+                    width: 1.8,
+                  ),
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(widget.icon, size: 17, color: fg),
+              Icon(
+                widget.icon,
+                size: 17,
+                color: GlassChrome.enabled(app) && !widget.danger
+                    ? app.core.tx
+                    : fg,
+              ),
               const SizedBox(width: 7),
               Text(
                 widget.label,
                 style: TextStyle(
-                  color: fg,
+                  color: GlassChrome.enabled(app) && !widget.danger
+                      ? app.core.tx
+                      : fg,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w800,
                 ),
@@ -2029,6 +2148,7 @@ class _HubIconButtonState extends State<_HubIconButton> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Focus(
       focusNode: _focusNode,
       onFocusChange: (_) => setState(() {}),
@@ -2059,18 +2179,29 @@ class _HubIconButtonState extends State<_HubIconButton> {
           child: Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: _focused ? 0.12 : 0.05),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: _focused ? _kGold : Colors.transparent,
-                width: 1.8,
-              ),
-            ),
+            decoration: GlassChrome.enabled(app)
+                ? GlassChrome.decoration(
+                    app,
+                    raised: _focused,
+                    active: _focused,
+                    radius: BorderRadius.circular(10),
+                  )
+                : BoxDecoration(
+                    color: Colors.white.withValues(
+                      alpha: _focused ? 0.12 : 0.05,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: _focused ? _kGold : Colors.transparent,
+                      width: 1.8,
+                    ),
+                  ),
             child: Icon(
               widget.icon,
               size: 18,
-              color: Colors.white.withValues(alpha: 0.8),
+              color: GlassChrome.enabled(app)
+                  ? app.core.tx
+                  : Colors.white.withValues(alpha: 0.8),
             ),
           ),
         ),
@@ -2112,6 +2243,7 @@ class _RowIconButtonState extends State<_RowIconButton> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
     return Focus(
       focusNode: _focusNode,
       onFocusChange: (_) => setState(() {}),
@@ -2130,22 +2262,31 @@ class _RowIconButtonState extends State<_RowIconButton> {
           child: Container(
             width: 34,
             height: 34,
-            decoration: BoxDecoration(
-              color: _focused
-                  ? _kRec.withValues(alpha: 0.2)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(
-                color: _focused ? _kGold : Colors.transparent,
-                width: 1.8,
-              ),
-            ),
+            decoration: GlassChrome.enabled(app)
+                ? GlassChrome.decoration(
+                    app,
+                    raised: _focused,
+                    active: _focused,
+                    radius: BorderRadius.circular(9),
+                  )
+                : BoxDecoration(
+                    color: _focused
+                        ? _kRec.withValues(alpha: 0.2)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(
+                      color: _focused ? _kGold : Colors.transparent,
+                      width: 1.8,
+                    ),
+                  ),
             child: Icon(
               widget.icon,
               size: 17,
-              color: _focused
-                  ? const Color(0xFFFF8CA3)
-                  : Colors.white.withValues(alpha: 0.4),
+              color: GlassChrome.enabled(app)
+                  ? app.settings.dim
+                  : (_focused
+                        ? const Color(0xFFFF8CA3)
+                        : Colors.white.withValues(alpha: 0.4)),
             ),
           ),
         ),
