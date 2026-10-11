@@ -2450,7 +2450,9 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : Theme.of(context).dividerColor.withValues(alpha: 0.1),
             width: 1,
           ),
         ),
@@ -2462,6 +2464,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
             dropdownColor: GlassChrome.enabled(app)
                 ? GlassChrome.fill(app, raised: true)
                 : app.cloud.dialogSurface,
+            borderRadius: GlassChrome.enabled(app) ? app.shape.br(16) : null,
             underline: const SizedBox.shrink(),
             items: _seriesPlaylist!.seasons.map((season) {
               return DropdownMenuItem(

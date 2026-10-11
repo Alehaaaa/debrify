@@ -386,14 +386,19 @@ class _MediaServerLibraryPanelState extends State<MediaServerLibraryPanel> {
                     ),
                     SizedBox(
                       width: MediaQuery.sizeOf(context).width < 600 ? 170 : 280,
-                      child: TvTextField(
-                        controller: _search,
-                        hintText: 'Search this library',
-                        textInputAction: TextInputAction.search,
-                        onSubmitted: (value) {
-                          _query = value.trim();
-                          _loadPage();
-                        },
+                      child: Container(
+                        decoration: GlassChrome.enabled(app)
+                            ? GlassChrome.decoration(app)
+                            : null,
+                        child: TvTextField(
+                          controller: _search,
+                          hintText: 'Search this library',
+                          textInputAction: TextInputAction.search,
+                          onSubmitted: (value) {
+                            _query = value.trim();
+                            _loadPage();
+                          },
+                        ),
                       ),
                     ),
                     IconButton(
@@ -499,29 +504,40 @@ class _MediaServerLibraryPanelState extends State<MediaServerLibraryPanel> {
     );
   }
 
-  Widget _notice(String text, {VoidCallback? retry, bool settings = false}) =>
-      Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                text,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppThemeScope.of(context).core.tx),
-              ),
-              if (retry != null)
-                TextButton(onPressed: retry, child: const Text('Retry')),
-              if (settings)
-                TextButton(
-                  onPressed: _settings,
-                  child: const Text('Manage servers'),
+  Widget _notice(String text, {VoidCallback? retry, bool settings = false}) {
+    final app = AppThemeScope.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: GlassChrome.enabled(app)
+                ? GlassChrome.decoration(app, raised: true)
+                : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppThemeScope.of(context).core.tx),
                 ),
-            ],
+                if (retry != null)
+                  TextButton(onPressed: retry, child: const Text('Retry')),
+                if (settings)
+                  TextButton(
+                    onPressed: _settings,
+                    child: const Text('Manage servers'),
+                  ),
+              ],
+            ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
 class _LibraryCard extends StatefulWidget {

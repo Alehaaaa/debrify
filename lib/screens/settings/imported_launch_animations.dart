@@ -16,6 +16,8 @@ import '../../widgets/remote/remote_control_screen.dart';
 import '../../widgets/remote/remote_pairing_dialog.dart';
 import '../../services/profiles/profile_runtime.dart';
 import '../../theme/app_looks.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/launch/imported_launch_player.dart';
 import 'widgets/settings_widgets.dart';
@@ -122,9 +124,14 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
             ? pair.portrait.id
             : pair.landscape.id;
       } else if (package.animations.length > 1) {
+        final app = AppThemeScope.of(context);
         final choice = await showDialog<String>(
           context: context,
           builder: (context) => SimpleDialog(
+            backgroundColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : null,
+            shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
             title: const Text('Choose an animation'),
             children: [
               for (final animation in package.animations)
@@ -186,9 +193,14 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
           subtitle:
               'Preserves the damaged index. You will need to import your animation files again.',
           onTap: () => _run(() async {
+            final app = AppThemeScope.of(context);
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
+                backgroundColor: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : null,
+                shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
                 title: const Text('Reset animation library?'),
                 content: const Text(
                   'Installed animations will need to be imported again. Your built-in animations are unaffected.',
@@ -441,9 +453,14 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
   }
 
   Future<void> _remove() async {
+    final app = AppThemeScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: Text('Remove ${widget.entry.name}?'),
         content: const Text(
           'This removes the animation from this device. Profiles using it will use their built-in animation.',

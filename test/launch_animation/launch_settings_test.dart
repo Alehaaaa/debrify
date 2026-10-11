@@ -10,9 +10,56 @@ import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:debrify/services/launch_animation/launch_animation_library.dart';
 import 'package:debrify/screens/settings/imported_launch_animations.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/widgets/launch/imported_launch_player.dart';
 
+void _emptyCallback() {}
+
 void main() {
+  testWidgets('nested remove dialog keeps glass appearance when reopened', (
+    tester,
+  ) async {
+    const entry = InstalledLaunchAnimation(
+      id: 'missing-preview',
+      name: 'Demo animation',
+      animationId: 'demo',
+      background: 0xff080b12,
+      warnings: [],
+    );
+    for (final app in [PremiumLooks.glass.build(), AppThemes.legacy]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => AppThemeScope(theme: app, child: child!),
+          home: const ImportedLaunchDetail(
+            entry: entry,
+            onSelectionChanged: _emptyCallback,
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var reopening = 0; reopening < 2; reopening++) {
+        await tester.ensureVisible(find.text('Remove animation'));
+        await tester.pump();
+        await tester.tap(find.text('Remove animation'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+        if (GlassChrome.enabled(app)) {
+          expect(dialog.backgroundColor, GlassChrome.fill(app, raised: true));
+          expect(dialog.shape, GlassChrome.shape(app));
+        } else {
+          expect(dialog.backgroundColor, isNull);
+        }
+        await tester.tap(find.text('Cancel'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(tester.takeException(), isNull);
+    }
+  });
   testWidgets(
     'preview gates Use, replays, changes layout and persists selection',
     (tester) async {

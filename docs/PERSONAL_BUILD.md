@@ -1,7 +1,7 @@
 # Personal installation
 
 The Personal build is an opt-in second installation whose operating-system
-identity and private data container are separate from the normal Debrify app.
+identity and private data container are separate from the standard Nextup app.
 Existing `flutter run`, `flutter build`, Gradle, Xcode, and release commands keep
 their original identifiers and behaviour.
 

@@ -11,6 +11,7 @@ import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:debrify/theme/glass_chrome.dart';
 import 'package:debrify/theme/premium_looks.dart';
+import 'package:debrify/widgets/tv_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -174,6 +175,52 @@ void main() {
         GlassChrome.decoration(glass, radius: BorderRadius.circular(12)),
       ),
     );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('library empty notice follows glass and classic appearances', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass, loader: () async => []);
+    expect(find.textContaining('Connect a Jellyfin server'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Container>(find.byType(Container))
+          .map((c) => c.decoration),
+      contains(GlassChrome.decoration(glass, raised: true)),
+    );
+    await pump(
+      tester,
+      Library(),
+      appearance: AppThemes.legacy,
+      loader: () async => [],
+    );
+    expect(find.textContaining('Connect a Jellyfin server'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Container>(find.byType(Container))
+          .map((c) => c.decoration),
+      isNot(contains(GlassChrome.decoration(glass, raised: true))),
+    );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('library search retains frosted chrome after refresh', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass);
+    Container searchFrame() => tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.byType(TvTextField),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(searchFrame().decoration, GlassChrome.decoration(glass));
+    await tester.tap(find.byTooltip('Refresh servers'));
+    await tester.pumpAndSettle();
+    expect(searchFrame().decoration, GlassChrome.decoration(glass));
     expect(tester.takeException(), isNull);
   });
 

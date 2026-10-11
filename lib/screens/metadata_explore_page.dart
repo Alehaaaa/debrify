@@ -11,6 +11,8 @@ import '../services/metadata_explore_service.dart';
 import '../services/metadata_preferences_service.dart';
 import '../services/main_page_bridge.dart';
 import '../services/profiles/profile_runtime.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../widgets/catalog_item_tile.dart';
 import '../widgets/metadata_explore_spotlight.dart';
 import '../widgets/metadata_title_navigation.dart';
@@ -107,6 +109,7 @@ class _MetadataExplorePageState extends State<MetadataExplorePage> {
     _retryTimer?.cancel();
     _retryTimer = null;
   }
+
   late MetadataPreferences _preferences;
   final _scope = ProfileRuntime.scope.value;
   int _policyGeneration = 0;
@@ -166,8 +169,11 @@ class _MetadataExplorePageState extends State<MetadataExplorePage> {
   }
 
   Future<void> _attemptLoad(int generation, int attempt) async {
-    bool current() => mounted && !_profileChanged &&
-        _scope == ProfileRuntime.scope.value && generation == _loadGeneration;
+    bool current() =>
+        mounted &&
+        !_profileChanged &&
+        _scope == ProfileRuntime.scope.value &&
+        generation == _loadGeneration;
     if (!current()) return;
     try {
       final data = await (widget.service ?? MetadataExploreService.instance)
@@ -195,7 +201,9 @@ class _MetadataExplorePageState extends State<MetadataExplorePage> {
   }
 
   void _entity(String kind, Map<String, dynamic> row) {
-    if (!mounted || _profileChanged || _scope != ProfileRuntime.scope.value) return;
+    if (!mounted || _profileChanged || _scope != ProfileRuntime.scope.value) {
+      return;
+    }
     final id = MetadataDetailsService.positiveId(row['id']);
     if (id == null) return;
     Navigator.of(context).push(
@@ -218,9 +226,11 @@ class _MetadataExplorePageState extends State<MetadataExplorePage> {
     if (_profileChanged) {
       return Scaffold(
         appBar: AppBar(title: const Text('Explore')),
-        body: const Center(child: Text(
-          'Profile changed. Go back to browse your current profile.',
-        )),
+        body: const Center(
+          child: Text(
+            'Profile changed. Go back to browse your current profile.',
+          ),
+        ),
       );
     }
     return MetadataExploreSpotlight(
@@ -234,14 +244,21 @@ class _MetadataExplorePageState extends State<MetadataExplorePage> {
       onEntity: _entity,
       titleBuilder: (item, focusNode) => _MetadataTitleTile(
         focusNode: focusNode,
-        item: item, onOpen: widget.onOpen, isTelevision: widget.isTelevision,
+        item: item,
+        onOpen: widget.onOpen,
+        isTelevision: widget.isTelevision,
       ),
-      onDiscover: () => Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => MetadataBrowsePage(
-          title: 'Discover', kind: 'discover', preferences: _preferences,
-          onOpen: widget.onOpen, isTelevision: widget.isTelevision,
+      onDiscover: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => MetadataBrowsePage(
+            title: 'Discover',
+            kind: 'discover',
+            preferences: _preferences,
+            onOpen: widget.onOpen,
+            isTelevision: widget.isTelevision,
+          ),
         ),
-      )),
+      ),
     );
   }
 }
@@ -471,18 +488,19 @@ class _MetadataBrowsePageState extends State<MetadataBrowsePage> {
     }
   }
 
-  Widget _buildLanguageDropdown({bool quiet = false}) => StremioDropdown<String>(
-    label: 'Language',
-    value: _language,
-    quiet: quiet,
-    isTelevision: widget.isTelevision,
-    focusNode: _languageNode,
-    options: _metadataBrowseLanguages,
-    onSelected: (value) {
-      _language = value;
-      _load(reset: true);
-    },
-  );
+  Widget _buildLanguageDropdown({bool quiet = false}) =>
+      StremioDropdown<String>(
+        label: 'Language',
+        value: _language,
+        quiet: quiet,
+        isTelevision: widget.isTelevision,
+        focusNode: _languageNode,
+        options: _metadataBrowseLanguages,
+        onSelected: (value) {
+          _language = value;
+          _load(reset: true);
+        },
+      );
 
   Widget _buildEmbedded() {
     final quiet = widget.isTelevision;
@@ -633,6 +651,49 @@ class _MetadataBrowsePageState extends State<MetadataBrowsePage> {
   Widget build(BuildContext context) =>
       widget.embedded ? _buildEmbedded() : _buildStandalone();
 
+  Widget _buildStandaloneFilters() {
+    final app = AppThemeScope.of(context);
+    return Wrap(
+      spacing: 12,
+      children: [
+        DropdownButton<String>(
+          value: _type,
+          dropdownColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          borderRadius: GlassChrome.enabled(app) ? app.shape.br(14) : null,
+          items: const [
+            DropdownMenuItem(value: 'movie', child: Text('Movies')),
+            DropdownMenuItem(value: 'tv', child: Text('TV shows')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            _type = value;
+            _load(reset: true);
+          },
+        ),
+        FilterChip(
+          label: const Text('Under two hours'),
+          selected: _short,
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app)
+              : null,
+          selectedColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          side: GlassChrome.enabled(app)
+              ? BorderSide(color: GlassChrome.edge(app, active: _short))
+              : null,
+          onSelected: (value) {
+            _short = value;
+            _load(reset: true);
+          },
+        ),
+        _buildLanguageDropdown(),
+      ],
+    );
+  }
+
   Widget _buildStandalone() => Scaffold(
     appBar: AppBar(title: Text(widget.title)),
     body: _profileChanged
@@ -652,40 +713,7 @@ class _MetadataBrowsePageState extends State<MetadataBrowsePage> {
                   ),
                 ),
               if (widget.kind == 'discover')
-                SliverToBoxAdapter(
-                  child: Wrap(
-                    spacing: 12,
-                    children: [
-                      DropdownButton<String>(
-                        value: _type,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'movie',
-                            child: Text('Movies'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'tv',
-                            child: Text('TV shows'),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          if (v == null) return;
-                          _type = v;
-                          _load(reset: true);
-                        },
-                      ),
-                      FilterChip(
-                        label: const Text('Under two hours'),
-                        selected: _short,
-                        onSelected: (v) {
-                          _short = v;
-                          _load(reset: true);
-                        },
-                      ),
-                      _buildLanguageDropdown(),
-                    ],
-                  ),
-                ),
+                SliverToBoxAdapter(child: _buildStandaloneFilters()),
               SliverPadding(
                 padding: const EdgeInsets.all(20),
                 sliver: SliverGrid(
