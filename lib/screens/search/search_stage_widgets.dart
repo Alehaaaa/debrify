@@ -727,7 +727,7 @@ class _TonightCardCaption extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   widthFactor: progress.clamp(0.0, 1.0),
                   heightFactor: 1,
-                  child: const ColoredBox(color: Colors.white),
+                  child: ColoredBox(color: app.core.accent),
                 ),
               ),
             ),
@@ -888,7 +888,7 @@ class _TonightQueueRowState extends State<_TonightQueueRow> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        const ColoredBox(color: Color(0xFF171426)),
+                        ColoredBox(color: app.core.pane),
                         if (art != null && art.isNotEmpty)
                           CachedNetworkImage(
                             imageUrl: art,

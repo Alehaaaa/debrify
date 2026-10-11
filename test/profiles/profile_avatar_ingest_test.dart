@@ -20,7 +20,7 @@ void main() {
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('avatar-ingest-');
-    AppStorage.debugOverride(documents: root);
+    AppStorage.debugOverride(documents: root, support: root);
   });
 
   tearDown(() async {

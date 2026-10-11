@@ -18,11 +18,16 @@ void main() {
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('avatar-view-');
-    AppStorage.debugOverride(documents: root);
+    AppStorage.debugOverride(documents: root, support: root);
   });
 
   tearDown(() async {
     AppStorage.debugReset();
+    // Windows holds decoded GIF file handles while Flutter still retains an
+    // image stream. Release both image caches before removing the fixture.
+    PaintingBinding.instance.imageCache
+      ..clear()
+      ..clearLiveImages();
     if (await root.exists()) await root.delete(recursive: true);
   });
 
@@ -145,6 +150,7 @@ void main() {
       await pumpResolved(tester, harness(avatarKey: key, focused: true));
       expect(find.byType(Image), findsOneWidget);
       expect(find.byKey(ProfileAvatarView.stillFrameKey), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
     });
 
     testWidgets('animateWhenIdle plays the GIF without focus (touch)', (
@@ -157,6 +163,7 @@ void main() {
       );
       expect(find.byType(Image), findsOneWidget);
       expect(find.byKey(ProfileAvatarView.stillFrameKey), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
     });
 
     testWidgets('the animation switch still outranks animateWhenIdle', (
@@ -251,6 +258,7 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('M'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('a parent refresh resolves bytes repaired under the same key', (
@@ -273,6 +281,7 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('M'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('cache eviction does not dispose images held by mounted tiles', (
@@ -368,7 +377,11 @@ void main() {
     // the scale-down cannot divide by zero.
     for (final art in ProfileArtRegistry.all) {
       if (art.paint == null) continue;
-      for (final size in const <Size>[Size(1, 1), Size(48, 48), Size(320, 96)]) {
+      for (final size in const <Size>[
+        Size(1, 1),
+        Size(48, 48),
+        Size(320, 96),
+      ]) {
         for (var step = 0; step <= 20; step++) {
           final recorder = ui.PictureRecorder();
           final canvas = ui.Canvas(recorder);

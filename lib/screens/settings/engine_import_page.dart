@@ -8,6 +8,8 @@ import '../../services/engine/local_engine_storage.dart';
 import '../../services/engine/config_loader.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../utils/tv_keys.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// Page for importing and managing torrent search engines (with Scaffold wrapper)
 class EngineImportPage extends StatefulWidget {
@@ -373,22 +375,23 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
       policy: OrderedTraversalPolicy(),
       child: Stack(
         children: [
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF14101C),
-                    Color(0xFF0A0810),
-                    Color(0xFF030305),
-                  ],
-                  stops: [0.0, 0.35, 1.0],
+          if (!GlassChrome.enabled(AppThemeScope.of(context)))
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF14101C),
+                      Color(0xFF0A0810),
+                      Color(0xFF030305),
+                    ],
+                    stops: [0.0, 0.35, 1.0],
+                  ),
                 ),
               ),
             ),
-          ),
           Positioned(
             top: -200,
             left: 0,
@@ -421,14 +424,17 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Color(0xFFED1C24)),
-            SizedBox(height: 16),
-            Text('Loading engines...', style: TextStyle(color: Colors.white70)),
+            const CircularProgressIndicator(color: Color(0xFFED1C24)),
+            const SizedBox(height: 16),
+            Text(
+              'Loading engines...',
+              style: TextStyle(color: AppThemeScope.of(context).settings.dim),
+            ),
           ],
         ),
       );
@@ -457,7 +463,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                 _error!,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: AppThemeScope.of(context).settings.dim,
                   fontSize: 12.5,
                 ),
               ),
@@ -547,12 +553,16 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                   const Color(0xFFED1C24).withValues(alpha: 0.04),
                 ],
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(
+                color: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.edge(AppThemeScope.of(context))
+                    : Theme.of(context).dividerColor,
+              ),
             ),
             child: Icon(
               Icons.inbox_outlined,
               size: 40,
-              color: Colors.white.withValues(alpha: 0.7),
+              color: AppThemeScope.of(context).settings.dim,
             ),
           ),
           const SizedBox(height: 18),
@@ -569,7 +579,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
             'Check your internet connection and try again,\nor import an engine YAML manually.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: AppThemeScope.of(context).settings.dim,
               fontSize: 13,
               height: 1.45,
             ),
@@ -707,7 +717,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                     Text(
                       'Imported ${_formatDate(engine.importedAt)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: AppThemeScope.of(context).settings.dim,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -797,7 +807,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: AppThemeScope.of(context).settings.dim,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           height: 1.35,
@@ -1616,6 +1626,8 @@ class _TvFocusableCardState extends State<_TvFocusableCard> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
@@ -1650,22 +1662,29 @@ class _TvFocusableCardState extends State<_TvFocusableCard> {
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: _isFocused
-                      ? [
-                          const Color(0xFFED1C24).withValues(alpha: 0.18),
-                          const Color(0xFFED1C24).withValues(alpha: 0.06),
-                        ]
-                      : [
-                          Colors.white.withValues(alpha: 0.05),
-                          Colors.white.withValues(alpha: 0.02),
-                        ],
-                ),
+                color: frosted
+                    ? GlassChrome.fill(app, raised: _isFocused)
+                    : null,
+                gradient: frosted
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: _isFocused
+                            ? [
+                                const Color(0xFFED1C24).withValues(alpha: 0.18),
+                                const Color(0xFFED1C24).withValues(alpha: 0.06),
+                              ]
+                            : [
+                                Colors.white.withValues(alpha: 0.05),
+                                Colors.white.withValues(alpha: 0.02),
+                              ],
+                      ),
                 border: Border.all(
                   color: _isFocused
                       ? const Color(0xFFED1C24).withValues(alpha: 0.9)
+                      : frosted
+                      ? GlassChrome.edge(app)
                       : Colors.white.withValues(alpha: 0.07),
                   width: _isFocused ? 2 : 1,
                 ),
@@ -1740,6 +1759,8 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFED1C24);
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return Focus(
       focusNode: widget.focusNode,
       onKeyEvent: (node, event) {
@@ -1757,12 +1778,18 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
           gradient: widget.filled
               ? const LinearGradient(colors: [accent, Color(0xFFB81D24)])
               : null,
-          color: widget.filled ? null : Colors.white.withValues(alpha: 0.04),
+          color: widget.filled
+              ? null
+              : frosted
+              ? GlassChrome.fill(app, raised: _focused)
+              : Colors.white.withValues(alpha: 0.04),
           border: Border.all(
             color: _focused
                 ? Colors.white.withValues(alpha: 0.95)
                 : (widget.filled
                       ? Colors.transparent
+                      : frosted
+                      ? GlassChrome.edge(app, active: _focused)
                       : accent.withValues(alpha: 0.55)),
             width: _focused ? 2 : 1.2,
           ),

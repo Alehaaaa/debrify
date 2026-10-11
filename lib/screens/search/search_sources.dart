@@ -1930,9 +1930,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                     // Same rule as the keyword pill: unfocused the fill is the
                     // accent, so the ink is scored against it rather than
                     // hardcoded white.
-                    color: focused
-                        ? const Color(0xFF17131F)
-                        : app.inkOn(accent),
+                    color: focused ? app.inkOn(app.core.tx) : app.inkOn(accent),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -1941,7 +1939,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                       color: focused
-                          ? const Color(0xFF17131F)
+                          ? app.inkOn(app.core.tx)
                           : app.inkOn(accent),
                     ),
                   ),
@@ -2274,7 +2272,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                             text: _selectedSeason == null
                                 ? 'All'
                                 : '$_selectedSeason',
-                            style: const TextStyle(color: Color(0xFFF1F1F6)),
+                            style: TextStyle(color: app.core.tx),
                           ),
                         ],
                       ),
@@ -2318,7 +2316,7 @@ class _SourcesScreenState extends State<_SourcesScreen> {
                         ),
                         TextSpan(
                           text: _sortLabel(_sortBy),
-                          style: const TextStyle(color: Color(0xFFF1F1F6)),
+                          style: TextStyle(color: app.core.tx),
                         ),
                       ],
                     ),

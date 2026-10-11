@@ -6,10 +6,61 @@ import 'package:debrify/services/home_collections_store.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/models/home_collection.dart';
 import 'package:debrify/screens/collections/collection_editor_screen.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  for (final appearance in ['glass', 'legacy']) {
+    testWidgets('nested collection dropdown follows $appearance appearance', (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(1000, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final app = AppThemes.byId(appearance);
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => AppThemeScope(theme: app, child: child!),
+          home: const CollectionEditorScreen(addons: []),
+        ),
+      );
+      await tester.tap(find.text('Add folder'));
+      await tester.pumpAndSettle();
+      final folderDropdown = find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Tile shape',
+      );
+      expect(folderDropdown, findsOneWidget);
+      final folderTheme = Theme.of(tester.element(folderDropdown));
+      if (appearance == 'glass') {
+        expect(folderTheme.canvasColor, GlassChrome.fill(app, raised: true));
+      } else {
+        expect(folderTheme.canvasColor, ThemeData().canvasColor);
+      }
+      await tester.ensureVisible(find.text('Add source'));
+      await tester.tap(find.text('Add source'));
+      await tester.pumpAndSettle();
+      final sourceDropdown = find.widgetWithText(
+        DropdownButtonFormField<String>,
+        'Source',
+      );
+      expect(sourceDropdown, findsOneWidget);
+      expect(
+        Theme.of(tester.element(sourceDropdown)).canvasColor,
+        folderTheme.canvasColor,
+      );
+      await tester.tap(sourceDropdown);
+      await tester.pumpAndSettle();
+      expect(find.text('Public Trakt list').last, findsOneWidget);
+      await tester.tap(find.text('Public Trakt list').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Trakt list ID'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   for (final size in [
     const Size(390, 844),
     const Size(900, 700),

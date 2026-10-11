@@ -534,6 +534,9 @@ class ExoTrailerEngine implements TrailerEngine {
 
   int? _textureId;
   bool _disposed = false;
+  // A page can lose visibility while Android is still creating the player.
+  // Keep its last playback intent until the native id is available.
+  bool _wantsPlay = true;
 
   /// A background pause and a post-frame teardown can dispose concurrently.
   /// Both callers must await the same native release before another decoder is
@@ -603,7 +606,13 @@ class ExoTrailerEngine implements TrailerEngine {
     _textureId = id;
     _render.value = _ExoRender(id, _render.value.width, _render.value.height);
     _TvTrailerChannel.instance.register(id, this);
-    _startPolling();
+    if (_wantsPlay) {
+      _startPolling();
+    } else {
+      // Native create starts the clip. Respect a pause requested during create
+      // before this player can become an invisible background decoder.
+      await _TvTrailerChannel.instance.pause(id);
+    }
   }
 
   void _startPolling() {
@@ -681,6 +690,7 @@ class ExoTrailerEngine implements TrailerEngine {
 
   @override
   Future<void> play() async {
+    _wantsPlay = true;
     final id = _textureId;
     if (_disposed || id == null) return;
     _startPolling(); // resume position updates
@@ -689,6 +699,7 @@ class ExoTrailerEngine implements TrailerEngine {
 
   @override
   Future<void> pause() async {
+    _wantsPlay = false;
     final id = _textureId;
     if (_disposed || id == null) return;
     // Stop the 250ms getPosition round-trips while paused/covered/backgrounded —

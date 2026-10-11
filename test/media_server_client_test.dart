@@ -61,7 +61,7 @@ void main() {
         expect(
           headers['Authorization'],
           '${kind == MediaServerKind.emby ? 'Emby' : 'MediaBrowser'} '
-          'Client="Debrify", Device="Debrify", DeviceId="device1", Version="1.0", '
+          'Client="Nextup", Device="Nextup", DeviceId="device1", Version="1.0", '
           'Token="opaque.token_123-abc=="',
         );
         expect(headers['X-Emby-Token'], 'opaque.token_123-abc==');
@@ -459,9 +459,9 @@ void main() {
             ],
           });
         }
-          final start = int.parse(request.url.queryParameters['StartIndex']!);
-          return jsonResponse({
-            'TotalRecordCount': 1100,
+        final start = int.parse(request.url.queryParameters['StartIndex']!);
+        return jsonResponse({
+          'TotalRecordCount': 1100,
           'Items': List.generate(
             start == 1000 ? 100 : 500,
             (i) => {

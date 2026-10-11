@@ -28,226 +28,416 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  for (final platform in [TargetPlatform.macOS, TargetPlatform.iOS, TargetPlatform.android]) {
+  for (final platform in [
+    TargetPlatform.macOS,
+    TargetPlatform.iOS,
+    TargetPlatform.android,
+  ]) {
     for (final tv in [false, true]) {
-      testWidgets('Spotlight Home folder opens all rows directly: $platform TV $tv', (tester) async {
-        debugDefaultTargetPlatformOverride = platform;
-        addTearDown(() => debugDefaultTargetPlatformOverride = null);
-        tester.view.physicalSize = const Size(1400, 1100);
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
-        SharedPreferences.setMockInitialValues({
-          'tv_collection_list_style': 'spotlight',
-          'home_hero_trailer_enabled': false,
-          HomeCollectionsStore.folderLayoutKey: 'rows',
-        });
-        final sources = [
-          for (final title in ['Recent', 'Popular'])
-            CollectionCatalogSource.fromJson({
-              'provider': 'tmdb', 'tmdbSourceType': 'DISCOVER',
-              'title': title, 'debrifySourceId': title,
-            })!,
-        ];
-        final native = CollectionNativeSourceService(
-          tmdbToken: 'dummy', resolveIds: false,
-          client: MockClient((_) async => http.Response(jsonEncode({
-            'results': [{'id': 42, 'title': 'Movie'}], 'total_pages': 1,
-          }), 200)),
-        );
-        addTearDown(native.close);
-        await tester.pumpWidget(MaterialApp(home: CollectionFolderScreen(
-          collection: HomeCollection(id: 'studios', title: 'Studios', folders: [
-            HomeCollectionFolder(id: 'marvel', title: 'Marvel', sources: sources),
-          ]),
-          fromHome: true, isTelevision: tv,
-          nativeSources: native, onOpenItem: (_) {},
-        )));
-        await tester.pumpAndSettle();
-        expect(find.byType(CollectionListGallery), findsNothing);
-        expect(find.byType(CollectionCategoryTabs), findsNothing);
-        final board = tester.widget<SpotlightBoard>(find.byType(SpotlightBoard));
-        expect(board.sections.map((section) => section.title), ['Recent', 'Popular']);
-        expect(board.largeScreenInteractions, isTrue);
-        expect(tester.takeException(), isNull);
-        await tester.pumpWidget(const SizedBox());
-        debugDefaultTargetPlatformOverride = null;
-      });
+      testWidgets(
+        'Spotlight Home folder opens all rows directly: $platform TV $tv',
+        (tester) async {
+          debugDefaultTargetPlatformOverride = platform;
+          addTearDown(() => debugDefaultTargetPlatformOverride = null);
+          tester.view.physicalSize = const Size(1400, 1100);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          SharedPreferences.setMockInitialValues({
+            'tv_collection_list_style': 'spotlight',
+            'home_hero_trailer_enabled': false,
+            HomeCollectionsStore.folderLayoutKey: 'rows',
+          });
+          final sources = [
+            for (final title in ['Recent', 'Popular'])
+              CollectionCatalogSource.fromJson({
+                'provider': 'tmdb',
+                'tmdbSourceType': 'DISCOVER',
+                'title': title,
+                'debrifySourceId': title,
+              })!,
+          ];
+          final native = CollectionNativeSourceService(
+            tmdbToken: 'dummy',
+            resolveIds: false,
+            client: MockClient(
+              (_) async => http.Response(
+                jsonEncode({
+                  'results': [
+                    {'id': 42, 'title': 'Movie'},
+                  ],
+                  'total_pages': 1,
+                }),
+                200,
+              ),
+            ),
+          );
+          addTearDown(native.close);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: CollectionFolderScreen(
+                collection: HomeCollection(
+                  id: 'studios',
+                  title: 'Studios',
+                  folders: [
+                    HomeCollectionFolder(
+                      id: 'marvel',
+                      title: 'Marvel',
+                      sources: sources,
+                    ),
+                  ],
+                ),
+                fromHome: true,
+                isTelevision: tv,
+                nativeSources: native,
+                onOpenItem: (_) {},
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.byType(CollectionListGallery), findsNothing);
+          expect(find.byType(CollectionCategoryTabs), findsNothing);
+          final board = tester.widget<SpotlightBoard>(
+            find.byType(SpotlightBoard),
+          );
+          expect(board.sections.map((section) => section.title), [
+            'Recent',
+            'Popular',
+          ]);
+          expect(board.largeScreenInteractions, isTrue);
+          expect(tester.takeException(), isNull);
+          await tester.pumpWidget(const SizedBox());
+          debugDefaultTargetPlatformOverride = null;
+        },
+      );
     }
   }
 
   for (final style in ['snowy_mountain', 'midnight_rain', 'moonlit_ocean']) {
-  for (final tv in [false, true]) {
-    testWidgets('Spotlight collection inherits $style preference (TV: $tv)', (tester) async {
+    for (final tv in [false, true]) {
+      testWidgets('Spotlight collection inherits $style preference (TV: $tv)', (
+        tester,
+      ) async {
+        SharedPreferences.setMockInitialValues({
+          'tv_collection_list_style': 'spotlight',
+          'home_animations_enabled': true,
+          'home_animation_style': style,
+          'home_hero_trailer_enabled': false,
+        });
+        final source = CollectionCatalogSource.fromJson({
+          'provider': 'tmdb',
+          'tmdbSourceType': 'DISCOVER',
+          'title': 'Movies',
+          'debrifySourceId': 'movies',
+        })!;
+        final native = CollectionNativeSourceService(
+          tmdbToken: 'dummy',
+          resolveIds: false,
+          client: MockClient(
+            (_) async => http.Response(
+              jsonEncode({
+                'results': [
+                  {'id': 42, 'title': 'Movie'},
+                ],
+                'total_pages': 1,
+              }),
+              200,
+            ),
+          ),
+        );
+        addTearDown(native.close);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(1400, 1100),
+                disableAnimations: true,
+              ),
+              child: CollectionFolderScreen(
+                collection: HomeCollection(
+                  id: 'snow',
+                  title: 'Collection',
+                  folders: [
+                    HomeCollectionFolder(
+                      id: 'folder',
+                      title: 'Folder',
+                      sources: [source],
+                    ),
+                  ],
+                ),
+                sourceKey: source.key,
+                isTelevision: tv,
+                nativeSources: native,
+                onOpenItem: (_) {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final board = tester.widget<SpotlightBoard>(
+          find.byType(SpotlightBoard),
+        );
+        expect(board.largeScreenInteractions, isTrue);
+        expect(board.animationsEnabled, isTrue);
+        expect(board.shelvesOnly, isTrue);
+        expect(board.animationStyle, style);
+        if (style == 'moonlit_ocean') {
+          expect(
+            tester
+                .widget<MoonlitOceanBackground>(
+                  find.byType(MoonlitOceanBackground),
+                )
+                .lowPower,
+            tv,
+          );
+        } else if (style == 'midnight_rain') {
+          expect(
+            tester
+                .widget<MidnightRainBackground>(
+                  find.byType(MidnightRainBackground),
+                )
+                .lowPower,
+            tv,
+          );
+          expect(find.byType(SnowyMountainBackground), findsNothing);
+        } else {
+          expect(
+            tester
+                .widget<SnowyMountainBackground>(
+                  find.byType(SnowyMountainBackground),
+                )
+                .lowPower,
+            tv,
+          );
+        }
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      });
+    }
+  }
+
+  testWidgets(
+    'Spotlight short pointer shelves expose paging and sibling retries',
+    (tester) async {
       SharedPreferences.setMockInitialValues({
         'tv_collection_list_style': 'spotlight',
-        'home_animations_enabled': true,
-        'home_animation_style': style,
-        'home_hero_trailer_enabled': false,
       });
-      final source = CollectionCatalogSource.fromJson({
-        'provider': 'tmdb', 'tmdbSourceType': 'DISCOVER',
-        'title': 'Movies', 'debrifySourceId': 'movies',
-      })!;
+      tester.view.physicalSize = const Size(1400, 1100);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final sources = List.generate(
+        2,
+        (i) => CollectionCatalogSource.fromJson({
+          'provider': 'tmdb',
+          'tmdbSourceType': 'DISCOVER',
+          'title': 'Shelf $i',
+          'debrifySourceId': 'shelf-$i',
+          'filters': {'with_genres': '${i + 1}'},
+        })!,
+      );
+      var failNextPage = true;
+      var nextPageRequests = 0;
       final native = CollectionNativeSourceService(
-        tmdbToken: 'dummy', resolveIds: false,
-        client: MockClient((_) async => http.Response(jsonEncode({
-          'results': [{'id': 42, 'title': 'Movie'}], 'total_pages': 1,
-        }), 200)),
+        tmdbToken: 'dummy',
+        resolveIds: false,
+        client: MockClient((request) async {
+          final page = int.parse(request.url.queryParameters['page'] ?? '1');
+          if (page == 2) {
+            nextPageRequests++;
+            if (failNextPage) return http.Response('Unavailable', 401);
+          }
+          return http.Response(
+            jsonEncode({
+              'results': [
+                {'id': 40 + page, 'title': 'Page $page'},
+              ],
+              'total_pages': 2,
+            }),
+            200,
+          );
+        }),
       );
       addTearDown(native.close);
-      await tester.pumpWidget(MaterialApp(home: MediaQuery(
-        data: const MediaQueryData(size: Size(1400, 1100), disableAnimations: true),
-        child: CollectionFolderScreen(
-          collection: HomeCollection(id: 'snow', title: 'Collection', folders: [
-            HomeCollectionFolder(id: 'folder', title: 'Folder', sources: [source]),
-          ]), sourceKey: source.key, isTelevision: tv,
-          nativeSources: native, onOpenItem: (_) {},
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CollectionFolderScreen(
+            collection: HomeCollection(
+              id: 'paging',
+              title: 'Collection',
+              folders: [
+                HomeCollectionFolder(
+                  id: 'folder',
+                  title: 'Folder',
+                  sources: sources,
+                ),
+              ],
+            ),
+            sourceKey: sources.first.key,
+            nativeSources: native,
+            onOpenItem: (_) {},
+          ),
         ),
-      )));
+      );
       await tester.pumpAndSettle();
-      final board = tester.widget<SpotlightBoard>(find.byType(SpotlightBoard));
-      expect(board.largeScreenInteractions, isTrue);
-      expect(board.animationsEnabled, isTrue);
-      expect(board.shelvesOnly, isTrue);
-      expect(board.animationStyle, style);
-      if (style == 'moonlit_ocean') {
-        expect(tester.widget<MoonlitOceanBackground>(find.byType(MoonlitOceanBackground)).lowPower, tv);
-      } else if (style == 'midnight_rain') {
-        expect(tester.widget<MidnightRainBackground>(find.byType(MidnightRainBackground)).lowPower, tv);
-        expect(find.byType(SnowyMountainBackground), findsNothing);
-      } else {
-        expect(tester.widget<SnowyMountainBackground>(find.byType(SnowyMountainBackground)).lowPower, tv);
-      }
+      SpotlightBoard board() => tester.widget(find.byType(SpotlightBoard));
+      expect(board().sections[1].items.last.title, 'Load more');
+      final sibling = find.byKey(
+        PageStorageKey('spotlight-row-${sources[1].key}'),
+      );
+      final load = find.descendant(
+        of: sibling,
+        matching: find.text('Load more'),
+      );
+      await tester.ensureVisible(load);
+      await tester.tapAt(tester.getCenter(load));
+      await tester.pumpAndSettle();
+      expect(nextPageRequests, greaterThan(0));
+      expect(board().sections[1].items.first.title, 'Page 1');
+      expect(board().sections[1].items.last.title, 'Retry loading titles');
+      failNextPage = false;
+      final retry = find.descendant(
+        of: sibling,
+        matching: find.text('Retry loading titles'),
+      );
+      await tester.ensureVisible(retry);
+      await tester.tapAt(tester.getCenter(retry));
+      await tester.pumpAndSettle();
+      expect(board().sections[1].items.map((c) => c.title), [
+        'Page 1',
+        'Page 2',
+      ]);
       expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-  }
-
-  }
-
-  testWidgets('Spotlight short pointer shelves expose paging and sibling retries', (tester) async {
-    SharedPreferences.setMockInitialValues({'tv_collection_list_style': 'spotlight'});
-    tester.view.physicalSize = const Size(1400, 1100);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final sources = List.generate(2, (i) => CollectionCatalogSource.fromJson({
-      'provider': 'tmdb', 'tmdbSourceType': 'DISCOVER',
-      'title': 'Shelf $i', 'debrifySourceId': 'shelf-$i',
-      'filters': {'with_genres': '${i + 1}'},
-    })!);
-    var failNextPage = true;
-    var nextPageRequests = 0;
-    final native = CollectionNativeSourceService(
-      tmdbToken: 'dummy', resolveIds: false,
-      client: MockClient((request) async {
-        final page = int.parse(request.url.queryParameters['page'] ?? '1');
-        if (page == 2) {
-          nextPageRequests++;
-          if (failNextPage) return http.Response('Unavailable', 401);
-        }
-        return http.Response(jsonEncode({
-          'results': [{'id': 40 + page, 'title': 'Page $page'}],
-          'total_pages': 2,
-        }), 200);
-      }),
-    );
-    addTearDown(native.close);
-    await tester.pumpWidget(MaterialApp(home: CollectionFolderScreen(
-      collection: HomeCollection(id: 'paging', title: 'Collection', folders: [
-        HomeCollectionFolder(id: 'folder', title: 'Folder', sources: sources),
-      ]), sourceKey: sources.first.key, nativeSources: native, onOpenItem: (_) {},
-    )));
-    await tester.pumpAndSettle();
-    SpotlightBoard board() => tester.widget(find.byType(SpotlightBoard));
-    expect(board().sections[1].items.last.title, 'Load more');
-    final sibling = find.byKey(PageStorageKey('spotlight-row-${sources[1].key}'));
-    final load = find.descendant(of: sibling, matching: find.text('Load more'));
-    await tester.ensureVisible(load);
-    await tester.tapAt(tester.getCenter(load));
-    await tester.pumpAndSettle();
-    expect(nextPageRequests, greaterThan(0));
-    expect(board().sections[1].items.first.title, 'Page 1');
-    expect(board().sections[1].items.last.title, 'Retry loading titles');
-    failNextPage = false;
-    final retry = find.descendant(of: sibling, matching: find.text('Retry loading titles'));
-    await tester.ensureVisible(retry);
-    await tester.tapAt(tester.getCenter(retry));
-    await tester.pumpAndSettle();
-    expect(board().sections[1].items.map((c) => c.title), ['Page 1', 'Page 2']);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
-  testWidgets('Spotlight empty collection keeps recovery reachable from filters', (tester) async {
-    SharedPreferences.setMockInitialValues({'tv_collection_list_style': 'spotlight'});
-    await tester.pumpWidget(MaterialApp(home: CollectionFolderScreen(
-      collection: HomeCollection(id: 'empty', title: 'Empty', viewMode: 'TABBED_GRID', folders: [
-        HomeCollectionFolder(id: 'empty', title: 'Empty', sources: const []),
-      ]), isTelevision: true, onOpenItem: (_) {},
-    )));
-    await tester.pumpAndSettle();
-    expect(find.byType(SpotlightBoard), findsNothing);
-    final sort = tester.widgetList<StremioDropdown<String>>(find.byType(StremioDropdown<String>))
-        .firstWhere((d) => d.label == 'Sort');
-    sort.focusNode!.requestFocus();
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    final retry = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Retry'));
-    expect(retry.focusNode!.hasFocus, isTrue);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
-  testWidgets('Spotlight opens the selected category and navigates sibling rows', (tester) async {
-    SharedPreferences.setMockInitialValues({
-      'tv_collection_list_style': 'spotlight',
-      'spotlight_focus_details': true,
-      'home_hero_trailer_enabled': false,
-    });
-    final sources = List.generate(8, (i) => CollectionCatalogSource.fromJson({
-      'provider': 'tmdb', 'tmdbSourceType': 'DISCOVER',
-      'title': 'Category $i', 'debrifySourceId': 'category-$i',
-    })!);
-    final native = CollectionNativeSourceService(
-      tmdbToken: 'dummy', resolveIds: false,
-      client: MockClient((_) async => http.Response(jsonEncode({
-        'results': [ {'id': 42, 'title': 'First'}, {'id': 43, 'title': 'Second'} ],
-        'total_pages': 1,
-      }), 200)),
-    );
-    addTearDown(native.close);
-    await tester.pumpWidget(MaterialApp(home: CollectionFolderScreen(
-      collection: HomeCollection(id: 'spotlight', title: 'Collection', folders: [
-        HomeCollectionFolder(id: 'folder', title: 'Folder', sources: sources),
-      ]),
-      sourceKey: sources[6].key, isTelevision: true,
-      nativeSources: native, onOpenItem: (_) {},
-    )));
-    await tester.pumpAndSettle();
-    SpotlightBoard board() => tester.widget(find.byType(SpotlightBoard));
-    expect(board().sections, hasLength(8));
-    expect(board().shelvesOnly, isTrue);
-    expect(board().expandFocusedCard, isTrue);
-    expect(board().sections[6].nodes.any((n) => n.hasFocus), isTrue);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.pumpAndSettle();
-    expect(board().sections[6].nodes[1].hasFocus, isTrue);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pumpAndSettle();
-    expect(board().sections[5].nodes.any((n) => n.hasFocus), isTrue);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pumpAndSettle();
-    expect(board().sections[6].nodes[1].hasFocus, isTrue);
-    final state = tester.state<SpotlightBoardState>(find.byType(SpotlightBoard));
-    state.focusShelf(0);
-    await tester.pumpAndSettle();
-    expect(board().sections[0].nodes.any((n) => n.hasFocus), isTrue);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
-    await tester.pumpAndSettle();
-    expect(board().sections[0].nodes.any((n) => n.hasFocus), isFalse);
-    expect(tester.takeException(), isNull);
-    await tester.pumpWidget(const SizedBox());
-  });
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Spotlight empty collection keeps recovery reachable from filters',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'tv_collection_list_style': 'spotlight',
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CollectionFolderScreen(
+            collection: HomeCollection(
+              id: 'empty',
+              title: 'Empty',
+              viewMode: 'TABBED_GRID',
+              folders: [
+                HomeCollectionFolder(
+                  id: 'empty',
+                  title: 'Empty',
+                  sources: const [],
+                ),
+              ],
+            ),
+            isTelevision: true,
+            onOpenItem: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(SpotlightBoard), findsNothing);
+      final sort = tester
+          .widgetList<StremioDropdown<String>>(
+            find.byType(StremioDropdown<String>),
+          )
+          .firstWhere((d) => d.label == 'Sort');
+      sort.focusNode!.requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      final retry = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Retry'),
+      );
+      expect(retry.focusNode!.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'Spotlight opens the selected category and navigates sibling rows',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'tv_collection_list_style': 'spotlight',
+        'spotlight_focus_details': true,
+        'home_hero_trailer_enabled': false,
+      });
+      final sources = List.generate(
+        8,
+        (i) => CollectionCatalogSource.fromJson({
+          'provider': 'tmdb',
+          'tmdbSourceType': 'DISCOVER',
+          'title': 'Category $i',
+          'debrifySourceId': 'category-$i',
+        })!,
+      );
+      final native = CollectionNativeSourceService(
+        tmdbToken: 'dummy',
+        resolveIds: false,
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'results': [
+                {'id': 42, 'title': 'First'},
+                {'id': 43, 'title': 'Second'},
+              ],
+              'total_pages': 1,
+            }),
+            200,
+          ),
+        ),
+      );
+      addTearDown(native.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CollectionFolderScreen(
+            collection: HomeCollection(
+              id: 'spotlight',
+              title: 'Collection',
+              folders: [
+                HomeCollectionFolder(
+                  id: 'folder',
+                  title: 'Folder',
+                  sources: sources,
+                ),
+              ],
+            ),
+            sourceKey: sources[6].key,
+            isTelevision: true,
+            nativeSources: native,
+            onOpenItem: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      SpotlightBoard board() => tester.widget(find.byType(SpotlightBoard));
+      expect(board().sections, hasLength(8));
+      expect(board().shelvesOnly, isTrue);
+      expect(board().expandFocusedCard, isTrue);
+      expect(board().sections[6].nodes.any((n) => n.hasFocus), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(board().sections[6].nodes[1].hasFocus, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      expect(board().sections[5].nodes.any((n) => n.hasFocus), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+      expect(board().sections[6].nodes[1].hasFocus, isTrue);
+      final state = tester.state<SpotlightBoardState>(
+        find.byType(SpotlightBoard),
+      );
+      state.focusShelf(0);
+      await tester.pumpAndSettle();
+      expect(board().sections[0].nodes.any((n) => n.hasFocus), isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+      expect(board().sections[0].nodes.any((n) => n.hasFocus), isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   setUp(() {
     SharedPreferences.setMockInitialValues({
       'tv_collection_spotlight_alpha_migrated_v1': true,
@@ -355,12 +545,22 @@ void main() {
           expect(titles(), ['Zulu', 'Alpha']);
           await tester.tap(find.byTooltip('Sort titles'));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Title · A → Z'));
+          await tester.tap(
+            find.ancestor(
+              of: find.text('Title · A → Z'),
+              matching: find.byType(CheckedPopupMenuItem<String>),
+            ),
+          );
           await tester.pumpAndSettle();
           expect(titles(), ['Alpha', 'Zulu']);
           await tester.tap(find.byTooltip('Sort titles'));
           await tester.pumpAndSettle();
-          await tester.tap(find.text('IMDb Rating · High → Low'));
+          await tester.tap(
+            find.ancestor(
+              of: find.text('IMDb Rating · High → Low'),
+              matching: find.byType(CheckedPopupMenuItem<String>),
+            ),
+          );
           await tester.pumpAndSettle();
           expect(titles(), ['Zulu', 'Alpha']);
         }

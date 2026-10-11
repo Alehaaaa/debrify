@@ -16,11 +16,19 @@ void main() {
         ]) {
           expect(
             source,
-            contains('$notifier.addListener(_loadLocalMovieFinished)'),
+            matches(RegExp(
+              '${RegExp.escape(notifier)}\\.addListener\\(\\s*'
+              '_loadLocalMovieFinished\\s*,?\\s*\\)',
+            )),
           );
           expect(
             source,
-            contains('$notifier.removeListener(_loadLocalMovieFinished)'),
+            matches(
+              RegExp(
+                '${RegExp.escape(notifier)}\\.removeListener\\(\\s*'
+                '_loadLocalMovieFinished\\s*,?\\s*\\)',
+              ),
+            ),
           );
         }
         expect(source, contains('generation == _movieCompletionGeneration'));
@@ -67,7 +75,7 @@ void main() {
     final branch = source.indexOf('if (startFromBeginning)', start);
     final end = source.indexOf('\n      }', branch);
     final launch = source.substring(branch, end);
-    expect(launch, contains('await launch(AdvancedSearchSelection('));
+    expect(launch, matches(RegExp(r'await launch\(\s*AdvancedSearchSelection\(')));
     expect(launch, contains("season: item.type == 'series' ? 1 : null"));
     expect(launch, contains("episode: item.type == 'series' ? 1 : null"));
     for (final tracker in ['trakt', 'simkl', 'mdblist']) {

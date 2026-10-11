@@ -413,7 +413,7 @@ void main() {
     expect(outcome.result, WebDavSyncLibraryApplyResult.applied);
     expect(await DebrifyTvRepository.instance.fetchAllChannels(), isEmpty);
     expect(diagnostics, <String>[
-      'Ignored Debrify TV records in an ambient library section',
+      'Ignored Nextup TV records in an ambient library section',
     ]);
   });
 
