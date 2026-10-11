@@ -886,7 +886,13 @@ class _TvTrailerChannel {
 
   final Map<int, ExoTrailerEngine> _engines = {};
   // Events that arrive before their engine registers (race guard) are buffered.
+  // Native codec callbacks can also arrive *after* release. Bound unmatched
+  // events so repeated fast swipes cannot accumulate abandoned texture IDs.
+  static const int _maxPendingTextures = 8;
+  static const int _maxPendingEvents = 8;
   final Map<int, List<MethodCall>> _pending = {};
+  final Set<int> _retired = <int>{};
+  static const int _maxRetiredTextures = 64;
 
   Future<int> create({
     required String videoUrl,
@@ -910,6 +916,7 @@ class _TvTrailerChannel {
   }
 
   void register(int id, ExoTrailerEngine engine) {
+    _retired.remove(id);
     _engines[id] = engine;
     final buffered = _pending.remove(id);
     if (buffered != null) {
@@ -922,6 +929,10 @@ class _TvTrailerChannel {
   void unregister(int id) {
     _engines.remove(id);
     _pending.remove(id);
+    _retired.add(id);
+    if (_retired.length > _maxRetiredTextures) {
+      _retired.remove(_retired.first);
+    }
   }
 
   // Control calls are fire-and-forget and can land after the native handler is
@@ -981,7 +992,24 @@ class _TvTrailerChannel {
     if (id == null) return null;
     final engine = _engines[id];
     if (engine == null) {
-      (_pending[id] ??= []).add(call);
+      if (_retired.contains(id)) return null;
+      if (!_pending.containsKey(id) && _pending.length >= _maxPendingTextures) {
+        _pending.remove(_pending.keys.first);
+      }
+      final queue = _pending.putIfAbsent(id, () => <MethodCall>[]);
+      // The first-frame signal is not repeatable. Keep it when trimming
+      // pre-registration noise, or the poster may remain visible forever.
+      if (call.method == 'firstFrame' &&
+          queue.any((event) => event.method == 'firstFrame')) {
+        return null;
+      }
+      if (queue.length >= _maxPendingEvents) {
+        final removable = queue.indexWhere(
+          (event) => event.method != 'firstFrame',
+        );
+        queue.removeAt(removable < 0 ? 0 : removable);
+      }
+      queue.add(call);
     } else {
       engine.handleEvent(call.method, args);
     }

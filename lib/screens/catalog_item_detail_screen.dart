@@ -3391,6 +3391,8 @@ class _PrimaryButtonState extends State<_PrimaryButton> {
     final filled = widget.filled;
     final accent = widget.accent;
     final t = DetailThemeScope.maybeOf(context);
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
 
     final filledBg = accent ?? Colors.white;
     final filledFg =
@@ -3398,6 +3400,8 @@ class _PrimaryButtonState extends State<_PrimaryButton> {
 
     final bg = filled
         ? (_focused ? Color.lerp(filledBg, Colors.white, 0.12)! : filledBg)
+        : frosted
+        ? GlassChrome.fill(app, raised: _focused)
         : (_focused
               ? Colors.white.withValues(alpha: 0.18)
               : Colors.white.withValues(alpha: 0.06));
@@ -3415,6 +3419,8 @@ class _PrimaryButtonState extends State<_PrimaryButton> {
     } else if (widget.tinted) {
       // A bound source: hint with a soft gold resting border.
       borderColor = t.fade(t.focus, 0.5);
+    } else if (frosted) {
+      borderColor = GlassChrome.edge(app);
     } else {
       borderColor = Colors.white.withValues(alpha: 0.18);
     }
@@ -3571,6 +3577,8 @@ class _GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -3580,10 +3588,14 @@ class _GlassIconButton extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
+            color: frosted
+                ? GlassChrome.fill(app, raised: true)
+                : Colors.black.withValues(alpha: 0.55),
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.18),
+              color: frosted
+                  ? GlassChrome.edge(app)
+                  : Colors.white.withValues(alpha: 0.18),
               width: 0.5,
             ),
             boxShadow: const [
@@ -3594,7 +3606,11 @@ class _GlassIconButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(icon, color: Colors.white, size: 22),
+          child: Icon(
+            icon,
+            color: frosted ? app.core.tx : Colors.white,
+            size: 22,
+          ),
         ),
       ),
     );

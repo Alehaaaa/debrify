@@ -317,7 +317,13 @@ void main() {
   for (final enabled in [false, true]) {
     testWidgets('Showcase person navigation respects feature toggle $enabled', (tester) async {
       _surface(tester, const Size(960, 1400));
-      await tester.pumpWidget(_host(_model(isMovie: true, peopleEnabled: enabled), tall: true));
+      // Person navigation requires a configured metadata provider; otherwise
+      // the real widget deliberately leaves a TMDB-only person non-clickable.
+      await tester.pumpWidget(_host(
+        _model(isMovie: true, peopleEnabled: enabled),
+        tall: true,
+        exploreService: _ExploreFixture(),
+      ));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('A Person'));
       await tester.pumpAndSettle();
@@ -613,9 +619,10 @@ void main() {
     // The branded pills are gone from the action row entirely.
     expect(find.text('TRAKT'), findsNothing);
     expect(find.text('SIMKL'), findsNothing);
-    // And the marks that replaced them cannot take the cursor.
-    expect(find.text('T'), findsOneWidget);
-    expect(find.text('S'), findsOneWidget);
+    // The provider marks are rendered as graphic widgets, not text glyphs.
+    expect(find.byType(TraktMark), findsOneWidget);
+    // Only the primary tracker is shown unless the secondary action is enabled.
+    expect(find.byType(SimklMark), findsNothing);
   });
 
   testWidgets('tracker action uses the connected service brand', (

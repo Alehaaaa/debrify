@@ -123,6 +123,7 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
 
   ProfileAvatar? _avatar;
   File? _file;
+  Uint8List? _imageBytes;
   int _resolveSerial = 0;
 
   @override
@@ -163,6 +164,7 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
     final serial = ++_resolveSerial;
     _avatar = ProfileAvatar.tryParse(widget.avatarKey);
     _file = null;
+    _imageBytes = null;
     _syncTicker();
     if (_avatar?.kind == ProfileAvatarKind.image) {
       _resolveFile(serial, _avatar!, widget.profileId);
@@ -175,8 +177,21 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
     String profileId,
   ) async {
     final file = await ProfileAvatarStorage.resolveExisting(profileId, avatar);
+    Uint8List? bytes;
+    if (file != null) {
+      try {
+        // Decode from memory so native animated-image codecs never retain a
+        // handle to an avatar being replaced, deleted or restored on Windows.
+        bytes = await file.readAsBytes();
+      } on FileSystemException {
+        // A concurrently removed avatar has the same fallback as a missing one.
+      }
+    }
     if (!mounted || serial != _resolveSerial || _avatar != avatar) return;
-    setState(() => _file = file);
+    setState(() {
+      _file = bytes == null ? null : file;
+      _imageBytes = bytes;
+    });
   }
 
   /// The whole of focus-only animation for procedural art: run the controller
@@ -206,7 +221,10 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
         if (art != null) return _buildArt(art);
       case ProfileAvatarKind.image:
         final file = _file;
-        if (file != null) return _buildImage(avatar!, file);
+        final bytes = _imageBytes;
+        if (file != null && bytes != null) {
+          return _buildImage(avatar!, file, bytes);
+        }
         // Absent file: fall through to the colour-and-initial floor.
         return _buildFallback();
       case ProfileAvatarKind.icon:
@@ -252,26 +270,27 @@ class _ProfileAvatarViewState extends State<ProfileAvatarView>
     );
   }
 
-  Widget _buildImage(ProfileAvatar avatar, File file) {
+  Widget _buildImage(ProfileAvatar avatar, File file, Uint8List bytes) {
     if (!avatar.isAnimatedImage) {
-      return Image.file(
-        file,
+      return Image.memory(
+        bytes,
         fit: BoxFit.cover,
         gaplessPlayback: true,
         errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
     if ((widget.focused || widget.animateWhenIdle) && widget.allowAnimation) {
-      return Image.file(
-        file,
+      return Image.memory(
+        bytes,
         fit: BoxFit.cover,
         gaplessPlayback: true,
         errorBuilder: (_, _, _) => _buildFallback(),
       );
     }
-    return _StillFrame.file(
+    return _StillFrame.bytes(
       key: ProfileAvatarView.stillFrameKey,
-      file: file,
+      cacheKey: file.path,
+      bytes: bytes,
       placeholderColor: ProfileAvatarView.washColor(
         widget.avatarKey,
         widget.role,
@@ -352,27 +371,30 @@ class _ArtPainter extends CustomPainter {
 /// This is what keeps a wall of GIFs affordable: only the focused tile holds a
 /// live decoder, and every other tile is a single static bitmap.
 class _StillFrame extends StatefulWidget {
-  final File? file;
   final String? assetPath;
+  final Uint8List? bytes;
+  final String? byteCacheKey;
   final Color placeholderColor;
 
-  const _StillFrame.file({
+  const _StillFrame.bytes({
     super.key,
-    required File this.file,
+    required String cacheKey,
+    required Uint8List this.bytes,
     required this.placeholderColor,
-  }) : assetPath = null;
+  }) : assetPath = null,
+       byteCacheKey = cacheKey;
 
   const _StillFrame.asset({
     super.key,
     required String this.assetPath,
     required this.placeholderColor,
-  }) : file = null;
+  }) : bytes = null,
+       byteCacheKey = null;
 
-  String get cacheKey => file?.path ?? 'asset:$assetPath';
+  String get cacheKey => byteCacheKey ?? 'asset:$assetPath';
 
   Future<Uint8List> readBytes() async {
-    final sourceFile = file;
-    if (sourceFile != null) return sourceFile.readAsBytes();
+    if (bytes != null) return bytes!;
     final data = await rootBundle.load(assetPath!);
     return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   }

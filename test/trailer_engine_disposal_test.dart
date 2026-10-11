@@ -111,4 +111,66 @@ void main() {
     expect(calls, isNot(contains('pause')));
     await engine.dispose();
   });
+
+  test(
+    'Exo replays early native frames but ignores callbacks after release',
+    () async {
+      const channel = MethodChannel('com.debrify.app/tv_trailer');
+      const codec = StandardMethodCodec();
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      final creates = <Completer<Map<String, dynamic>>>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'create') {
+          final pending = Completer<Map<String, dynamic>>();
+          creates.add(pending);
+          return pending.future;
+        }
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+      Future<void> nativeEvent(String method) async {
+        final reply = Completer<void>();
+        messenger.handlePlatformMessage(
+          channel.name,
+          codec.encodeMethodCall(MethodCall(method, const {'id': 63})),
+          (_) => reply.complete(),
+        );
+        await reply.future;
+      }
+
+      final first = ExoTrailerEngine();
+      final firstOpening = first.open(
+        videoUrl: 'https://example.invalid/one.mp4',
+        volume: 0,
+        loop: false,
+      );
+      await nativeEvent('firstFrame'); // First-frame callback beats create().
+      for (var i = 0; i < 20; i++) {
+        await nativeEvent('playing'); // Must not evict the sole first frame.
+      }
+      creates.first.complete({'textureId': 63});
+      await firstOpening;
+      await first.firstFrameRendered;
+      await first.dispose();
+
+      await nativeEvent('firstFrame'); // Released decoder must not queue.
+      final second = ExoTrailerEngine();
+      final secondOpening = second.open(
+        videoUrl: 'https://example.invalid/two.mp4',
+        volume: 0,
+        loop: false,
+      );
+      creates.last.complete({'textureId': 63});
+      await secondOpening;
+      var framed = false;
+      second.firstFrameRendered.then((_) => framed = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(framed, isFalse);
+      await nativeEvent('firstFrame');
+      await second.firstFrameRendered;
+      await second.dispose();
+    },
+  );
 }

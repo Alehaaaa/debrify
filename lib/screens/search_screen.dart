@@ -19227,9 +19227,7 @@ class _SearchScreenState extends State<SearchScreen>
                     // has to be scored against it — white is invisible on the
                     // near-white accents (Noir, Frost, Vault). The focused
                     // branch keeps its dark ink on the white focus fill.
-                    color: focused
-                        ? const Color(0xFF17131F)
-                        : app.inkOn(accent),
+                    color: focused ? app.inkOn(app.core.tx) : app.inkOn(accent),
                   ),
                   const SizedBox(width: 6),
                   Text(
@@ -19238,7 +19236,7 @@ class _SearchScreenState extends State<SearchScreen>
                       fontSize: 12.5,
                       fontWeight: FontWeight.w700,
                       color: focused
-                          ? const Color(0xFF17131F)
+                          ? app.inkOn(app.core.tx)
                           : app.inkOn(accent),
                     ),
                   ),
@@ -19569,9 +19567,15 @@ class _SearchScreenState extends State<SearchScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : const Color(0xFF1E293B),
           borderRadius: app.shape.br(16),
-          border: Border.all(color: app.fade(app.home.chromeAccent, 0.45)),
+          border: Border.all(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app, active: true)
+                : app.fade(app.home.chromeAccent, 0.45),
+          ),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.4),

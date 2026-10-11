@@ -11,6 +11,7 @@ import '../services/media_server_service.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/video_player_launcher.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../widgets/see_all/stremio_dropdown.dart';
 import '../widgets/tv_text_field.dart';
 import 'settings/media_server_settings_page.dart';
@@ -579,7 +580,9 @@ class _LibraryCardState extends State<_LibraryCard> {
       button: true,
       label: '${item.name}, ${item.subtitle}',
       child: Material(
-        color: app.fade(app.core.tx, 0.06),
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : app.fade(app.core.tx, 0.06),
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -599,8 +602,12 @@ class _LibraryCardState extends State<_LibraryCard> {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _focused ? app.home.chromeAccent : Colors.transparent,
-                width: 3,
+                color: _focused
+                    ? app.home.chromeAccent
+                    : GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app)
+                    : Colors.transparent,
+                width: _focused ? 3 : 1,
               ),
             ),
             child: Column(

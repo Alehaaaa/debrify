@@ -65,11 +65,17 @@ void main() {
     // inside it deadlocks. So: pump to mount, let real IO run, pump again to
     // rebuild with the resolved file.
     await tester.pumpWidget(widget);
-    for (var attempt = 0; attempt < 4; attempt++) {
+    // Resolution now reads bytes as well as checking the path; wait for that
+    // second asynchronous IO stage before asserting on the rendered image.
+    for (var attempt = 0; attempt < 12; attempt++) {
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await tester.pump();
+      if (find.byType(Image).evaluate().isNotEmpty ||
+          find.byKey(ProfileAvatarView.stillFrameKey).evaluate().isNotEmpty) {
+        break;
+      }
     }
   }
 
@@ -149,6 +155,7 @@ void main() {
       final key = (await tester.runAsync(writeGif))!;
       await pumpResolved(tester, harness(avatarKey: key, focused: true));
       expect(find.byType(Image), findsOneWidget);
+      expect(tester.widget<Image>(find.byType(Image)).image, isA<MemoryImage>());
       expect(find.byKey(ProfileAvatarView.stillFrameKey), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -248,15 +255,10 @@ void main() {
     });
 
     await tester.pumpWidget(harness(avatarKey: 'file:avatars/a.png'));
-    await tester.pumpWidget(harness(avatarKey: 'file:avatars/b.png'));
-    for (var attempt = 0; attempt < 4; attempt++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 40)),
-      );
-      await tester.pump();
-    }
+    await pumpResolved(tester, harness(avatarKey: 'file:avatars/b.png'));
 
     expect(find.byType(Image), findsOneWidget);
+    expect(tester.widget<Image>(find.byType(Image)).image, isA<MemoryImage>());
     expect(find.text('M'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
