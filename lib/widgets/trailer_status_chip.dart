@@ -144,7 +144,12 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
     _syncWave();
     _tapIconTimer = Timer(const Duration(milliseconds: 600), () {
       if (!mounted) return;
-      setState(() => _showTapIcon = false);
+      // The host is authoritative. A rejected/failed volume request must not
+      // leave an optimistic mute icon and tooltip stuck indefinitely.
+      setState(() {
+        _showTapIcon = false;
+        _pendingSoundOn = null;
+      });
       _syncWave();
     });
     callback();

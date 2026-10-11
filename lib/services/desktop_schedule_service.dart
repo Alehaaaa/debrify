@@ -177,26 +177,45 @@ class DesktopScheduleService {
   final Map<String, Timer> _timers = {};
   Timer? _tick;
   bool _initialized = false;
+  int _lifecycleGeneration = 0;
 
   bool get isSupported => DesktopRecordingService.instance.isSupported;
+
+  @visibleForTesting
+  bool get debugHasActiveTick => _tick?.isActive ?? false;
 
   /// Arm everything at app start. Safe to call repeatedly.
   Future<void> init() async {
     if (!isSupported || _initialized) return;
     _initialized = true;
+    final generation = ++_lifecycleGeneration;
     // Primes LiveRecordingService.maxConcurrentCached for the recording
     // service's synchronous start path.
-    await LiveRecordingService.maxConcurrent();
-    await _migrateLegacySchedules();
-    await _armAll();
-    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
-      // Wall-clock safety net for sleep/wake drift.
-      unawaited(_fireDue());
-    });
+    try {
+      await LiveRecordingService.maxConcurrent();
+      if (!_startupCurrent(generation)) return;
+      await _migrateLegacySchedules();
+      if (!_startupCurrent(generation)) return;
+      await _armAll(startupGeneration: generation);
+      if (!_startupCurrent(generation)) return;
+      _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+        // Wall-clock safety net for sleep/wake drift.
+        unawaited(_fireDue());
+      });
+    } catch (_) {
+      // A failed re-arm can already have installed some exact timers. A retry
+      // must start from an entirely stopped scheduler.
+      if (_startupCurrent(generation)) shutdown();
+      rethrow;
+    }
   }
+
+  bool _startupCurrent(int generation) =>
+      _initialized && generation == _lifecycleGeneration;
 
   /// Stop the tick and every armed timer (tests / teardown). init() re-arms.
   void shutdown() {
+    ++_lifecycleGeneration;
     _tick?.cancel();
     _tick = null;
     for (final timer in _timers.values) {
@@ -434,20 +453,26 @@ class DesktopScheduleService {
     LiveRecordingService.schedulesRevision.value++;
   }
 
-  Future<void> _armAll() async {
+  Future<void> _armAll({int? startupGeneration}) async {
+    bool current() =>
+        startupGeneration == null || _startupCurrent(startupGeneration);
+    if (!current()) return;
     for (final timer in _timers.values) {
       timer.cancel();
     }
     _timers.clear();
     final now = DateTime.now().millisecondsSinceEpoch;
     final schedules = await list(allOwners: true);
+    if (!current()) return;
     final keep = <DesktopSchedule>[];
     for (final schedule in schedules) {
+      if (!current()) return;
       if (schedule.endMs - _minRemaining.inMilliseconds <= now) {
         await DeviceJobStore.markTerminal(
           backend: 'desktopSchedule',
           externalJobId: schedule.id,
         );
+        if (!current()) return;
         continue; // fully missed — drop
       }
       keep.add(schedule);
@@ -461,7 +486,7 @@ class DesktopScheduleService {
         );
       }
     }
-    if (keep.length != schedules.length) await _save(keep);
+    if (keep.length != schedules.length && current()) await _save(keep);
   }
 
   /// Fire anything whose wall-clock start has arrived (safety tick).

@@ -71,7 +71,15 @@ class HomeLoadProgress {
     _schedule();
   }
 
-  void catalogOrder(List<String> ids) => _order = List.of(ids);
+  void catalogOrder(List<String> ids) {
+    if (_closed || !isCurrent()) return;
+    if (_order.length == ids.length &&
+        Iterable<int>.generate(ids.length).every((i) => _order[i] == ids[i])) {
+      return;
+    }
+    _order = List.of(ids);
+    if (_catalogs.isNotEmpty) _schedule();
+  }
 
   void lists(List<HomeListSection> rows) {
     if (_closed || !isCurrent()) return;
@@ -102,8 +110,7 @@ class HomeLoadProgress {
       ..._collections.where((row) => row.collection.pinToTop),
       ..._lists,
       ..._collections.where((row) => !row.collection.pinToTop),
-      for (final id in _order)
-        ?_catalogs[id],
+      for (final id in _order) ?_catalogs[id],
     ];
     if (rows.isEmpty && !allowEmpty) return;
     if (hasPublished &&
