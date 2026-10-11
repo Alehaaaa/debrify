@@ -549,6 +549,69 @@ void main() {
     });
 
     testWidgets(
+      'a late frame from a failed player cannot reveal its replacement',
+      (tester) async {
+        ReelPlayback? active;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            onPlayer: (playback) {
+              if (playback.active) active = playback;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final failedPlayer = active!;
+        expect(failedPlayer.firstFrameReady, isFalse);
+        failedPlayer.onPlaybackFailed!();
+        await tester.pumpAndSettle();
+        expect(find.text('Retry clip'), findsOneWidget);
+
+        await tester.tap(find.text('Retry clip'));
+        await tester.pumpAndSettle();
+        expect(active!.streams, isNotNull);
+        expect(active!.firstFrameReady, isFalse);
+
+        failedPlayer.onFirstFrameReady!();
+        await tester.pump();
+        expect(active!.firstFrameReady, isFalse);
+        active!.onFirstFrameReady!();
+        await tester.pump();
+        expect(active!.firstFrameReady, isTrue);
+      },
+    );
+
+    testWidgets(
+      'a late failure from a previous page preserves reverse playback',
+      (tester) async {
+        ReelPlayback? active;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            onPlayer: (playback) {
+              if (playback.active) active = playback;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        final outgoingFailure = active!.onPlaybackFailed!;
+
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
+        await tester.pumpAndSettle();
+        expect(activeId(tester), isNot(first));
+        outgoingFailure();
+        await tester.pumpAndSettle();
+
+        await tester.fling(find.byType(PageView), const Offset(0, 500), 2000);
+        await tester.pumpAndSettle();
+        expect(activeId(tester), first);
+        expect(playing(first), findsOneWidget);
+        expect(find.text('Retry clip'), findsNothing);
+      },
+    );
+
+    testWidgets(
       'playback follows the swipe midpoint and reverses before release',
       (tester) async {
         await tester.pumpWidget(host(feedFor(FakeTmdb())));

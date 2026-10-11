@@ -595,10 +595,14 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   void _playbackFailed(_Reel reel, int revision) {
+    final page = _reels.indexOf(reel);
     if (!_current ||
         reel.revision != revision ||
         reel.state != _ClipState.ready ||
-        !_reels.contains(reel)) {
+        page < 0 ||
+        // A disposed player from a page already left behind cannot retire
+        // that page's clip or poison discovery for a later revisit.
+        page < _index) {
       return;
     }
     // A relay tunnel can die without the clip being unavailable: it expired
@@ -967,7 +971,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
               onAddToWatchlist: (origin) => _addToWatchlist(reel.item, origin),
               onOpen: () => _open(reel.item),
               onShare: (origin) => _share(reel, origin),
-              onPosition: (position) => reel.position = position,
+              onPosition: (position) {
+                if (_current &&
+                    reel.revision == revision &&
+                    _reels.contains(reel)) {
+                  reel.position = position;
+                }
+              },
               playerBuilder: widget.playerBuilder,
             );
           },
@@ -1257,6 +1267,7 @@ class _ReelPageState extends State<_ReelPage>
   Widget build(BuildContext context) {
     super.build(context);
     final reel = widget.reel;
+    final revision = reel.revision;
     final item = reel.item;
     final insets = MediaQuery.paddingOf(context);
     final playback = ReelPlayback(
@@ -1274,9 +1285,14 @@ class _ReelPageState extends State<_ReelPage>
       onPosition: widget.onPosition,
       firstFrameReady: reel.framed,
       onFirstFrameReady: () {
-        if (reel.framed) return;
+        if (!mounted ||
+            reel.revision != revision ||
+            reel.state != _ClipState.ready ||
+            reel.framed) {
+          return;
+        }
         reel.framed = true;
-        if (mounted) setState(() {});
+        setState(() {});
       },
       failed: reel.state == _ClipState.failed,
       onPlaybackFailed: widget.onPlaybackFailed,
