@@ -26,6 +26,25 @@ void main() {
           home: const CollectionEditorScreen(addons: []),
         ),
       );
+      final focusSwitch = tester.widget<SwitchListTile>(
+        find.widgetWithText(SwitchListTile, 'Focus glow'),
+      );
+      if (appearance == 'glass') {
+        expect(focusSwitch.tileColor, GlassChrome.fill(app));
+        expect(focusSwitch.shape, GlassChrome.shape(app, radius: 12));
+      } else {
+        expect(focusSwitch.tileColor, isNull);
+      }
+      await tester.tap(find.text('Focus glow'));
+      await tester.pump();
+      expect(
+        tester
+            .widget<SwitchListTile>(
+              find.widgetWithText(SwitchListTile, 'Focus glow'),
+            )
+            .value,
+        false,
+      );
       await tester.tap(find.text('Add folder'));
       await tester.pumpAndSettle();
       final folderDropdown = find.widgetWithText(

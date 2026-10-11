@@ -8,6 +8,8 @@ import '../../services/mdblist/mdblist_service.dart';
 import '../../services/simkl/simkl_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/trakt/trakt_service.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -127,7 +129,9 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       const SnackBar(
-        content: Text('Syncing all watch history, Continue Watching and watchlists…'),
+        content: Text(
+          'Syncing all watch history, Continue Watching and watchlists…',
+        ),
       ),
     );
     try {
@@ -141,9 +145,13 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
       if (!mounted || !_syncAllContinueWatching) return;
       messenger
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text(
-          'Sync interrupted. Pending watch history will retry on the next refresh.',
-        )));
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sync interrupted. Pending watch history will retry on the next refresh.',
+            ),
+          ),
+        );
     }
   }
 
@@ -218,9 +226,25 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: DropdownButtonFormField<WatchProgressSource>(
           initialValue: _progress,
-          decoration: const InputDecoration(
+          dropdownColor: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+              : null,
+          borderRadius: GlassChrome.enabled(AppThemeScope.of(context))
+              ? BorderRadius.circular(16)
+              : null,
+          decoration: InputDecoration(
             labelText: 'Progress source',
-            border: OutlineInputBorder(),
+            filled: GlassChrome.enabled(AppThemeScope.of(context)),
+            fillColor: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.field(AppThemeScope.of(context))
+                : null,
+            border: OutlineInputBorder(
+              borderSide: GlassChrome.enabled(AppThemeScope.of(context))
+                  ? BorderSide(
+                      color: GlassChrome.edge(AppThemeScope.of(context)),
+                    )
+                  : const BorderSide(),
+            ),
           ),
           items: [
             for (final source in WatchProgressSource.values)
@@ -351,6 +375,17 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
               child: ListTile(
                 autofocus: index == 0,
                 selected: index == _selectedSection,
+                shape: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.shape(
+                        AppThemeScope.of(context),
+                        radius: 12,
+                        active: index == _selectedSection,
+                      )
+                    : null,
+                selectedTileColor:
+                    GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                    : null,
                 leading: Icon(icons[index]),
                 title: Text(labels[index]),
                 trailing: const Icon(Icons.chevron_right_rounded),

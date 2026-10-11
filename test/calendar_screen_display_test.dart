@@ -95,6 +95,26 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('Today episode'), findsOneWidget);
           expect(find.text('Earlier episode'), findsNothing);
+          if (layout.tv) {
+            final header = tester.widget<Container>(
+              find
+                  .ancestor(
+                    of: find.text(
+                      'Browse only the days that have episodes airing.',
+                    ),
+                    matching: find.byType(Container),
+                  )
+                  .first,
+            );
+            final decoration = header.decoration! as BoxDecoration;
+            if (frosted != null) {
+              expect(decoration.color, GlassChrome.fill(frosted, raised: true));
+              expect(decoration.gradient, isNull);
+              expect(decoration.border!.top.color, GlassChrome.edge(frosted));
+            } else {
+              expect(decoration.gradient, isNotNull);
+            }
+          }
           if (frosted != null && layout.tv) {
             // The TV card used to paint an almost-opaque gradient and a white
             // inactive border even when the surrounding Calendar was glass.

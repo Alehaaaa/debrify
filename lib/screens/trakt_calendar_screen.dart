@@ -1002,22 +1002,28 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: app.shape.br(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF211017), Color(0xFF110A0F), Color(0xFF07090F)],
-        ),
-        border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
-        boxShadow: [
-          BoxShadow(
-            color: app.fade(app.calendar.accent, 0.12),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.br(20), raised: true)
+          : BoxDecoration(
+              borderRadius: app.shape.br(20),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF211017),
+                  Color(0xFF110A0F),
+                  Color(0xFF07090F),
+                ],
+              ),
+              border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
+              boxShadow: [
+                BoxShadow(
+                  color: app.fade(app.calendar.accent, 0.12),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1030,8 +1036,10 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             ),
             child: Text(
               'YOUR ${_sourceName.toUpperCase()} SCHEDULE',
-              style: const TextStyle(
-                color: Color(0xFFFFC4C8),
+              style: TextStyle(
+                color: GlassChrome.enabled(app)
+                    ? app.core.tx
+                    : const Color(0xFFFFC4C8),
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
@@ -1114,10 +1122,12 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.bolt_rounded,
                   size: 13,
-                  color: Color(0xFFFFB3B8),
+                  color: GlassChrome.enabled(app)
+                      ? app.calendar.accent
+                      : const Color(0xFFFFB3B8),
                 ),
                 const SizedBox(width: 6),
                 Flexible(

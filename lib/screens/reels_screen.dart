@@ -1404,20 +1404,33 @@ class _ReelPageState extends State<_ReelPage>
         ),
         if (playback.failed && widget.active)
           Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Clip unavailable',
-                  style: TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 8),
-                FilledButton.icon(
-                  onPressed: widget.onRetry,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry clip'),
-                ),
-              ],
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: GlassChrome.enabled(AppThemeScope.of(context))
+                  ? GlassChrome.decoration(
+                      AppThemeScope.of(context),
+                      radius: BorderRadius.circular(18),
+                      raised: true,
+                    )
+                  : BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.68),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Clip unavailable',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: widget.onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry clip'),
+                  ),
+                ],
+              ),
             ),
           ),
         if (widget.paused && widget.showPauseOverlay)

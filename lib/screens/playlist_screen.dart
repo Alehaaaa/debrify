@@ -785,8 +785,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: app.fade(app.playlist.card, 0.5),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app)
+                  : app.fade(app.playlist.card, 0.5),
               shape: BoxShape.circle,
+              border: GlassChrome.enabled(app)
+                  ? Border.all(color: GlassChrome.edge(app))
+                  : null,
             ),
             child: Icon(
               Icons.video_library_outlined,
@@ -825,8 +830,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: app.fade(app.playlist.card, 0.5),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app)
+                  : app.fade(app.playlist.card, 0.5),
               shape: BoxShape.circle,
+              border: GlassChrome.enabled(app)
+                  ? Border.all(color: GlassChrome.edge(app))
+                  : null,
             ),
             child: Icon(
               Icons.search_off_rounded,

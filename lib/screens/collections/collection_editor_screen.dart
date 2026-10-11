@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/home_collection.dart';
 import '../../models/stremio_addon.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../settings/widgets/settings_widgets.dart';
 
 /// Edits a detached draft. The caller saves only after the user presses Save,
@@ -614,12 +616,19 @@ Widget _toggle(
   String title,
   bool fallback,
 ) => StatefulBuilder(
-  builder: (context, update) => SwitchListTile(
-    contentPadding: EdgeInsets.zero,
-    title: Text(title),
-    value: values[key] as bool? ?? fallback,
-    onChanged: (value) => update(() => values[key] = value),
-  ),
+  builder: (context, update) {
+    final app = AppThemeScope.of(context);
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 12)
+          : null,
+      tileColor: GlassChrome.enabled(app) ? GlassChrome.fill(app) : null,
+      title: Text(title),
+      value: values[key] as bool? ?? fallback,
+      onChanged: (value) => update(() => values[key] = value),
+    );
+  },
 );
 
 Widget _orderedTile<T>({
@@ -631,11 +640,20 @@ Widget _orderedTile<T>({
 }) => Column(
   key: ValueKey(values[index]),
   children: [
-    ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(title),
-      onTap: onEdit,
-      trailing: const Icon(Icons.edit_outlined),
+    Builder(
+      builder: (context) {
+        final app = AppThemeScope.of(context);
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          shape: GlassChrome.enabled(app)
+              ? GlassChrome.shape(app, radius: 12)
+              : null,
+          tileColor: GlassChrome.enabled(app) ? GlassChrome.fill(app) : null,
+          title: Text(title),
+          onTap: onEdit,
+          trailing: const Icon(Icons.edit_outlined),
+        );
+      },
     ),
     Row(
       mainAxisAlignment: MainAxisAlignment.end,
