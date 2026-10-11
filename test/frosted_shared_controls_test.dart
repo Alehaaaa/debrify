@@ -9,6 +9,7 @@ import 'package:debrify/widgets/search_source_dropdown.dart';
 import 'package:debrify/widgets/see_all/see_all_random_button.dart';
 import 'package:debrify/widgets/view_mode_dropdown.dart';
 import 'package:debrify/screens/settings/widgets/settings_widgets.dart';
+import 'package:debrify/screens/settings/widgets/sync_device_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -116,5 +117,43 @@ void main() {
       find.byType(DropdownButton<String>),
     );
     expect(dropdown.dropdownColor, AppThemes.legacy.settings.panel2);
+  });
+
+  testWidgets('Settings outlined actions and sync devices follow appearance', (
+    tester,
+  ) async {
+    Widget controls() => Builder(
+      builder: (context) => Theme(
+        data: settingsPageTheme(context),
+        child: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OutlinedButton(onPressed: null, child: Text('Action')),
+            SyncDeviceTile(name: 'Living room', status: 'Connected'),
+          ],
+        ),
+      ),
+    );
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass, controls()));
+    final buttonContext = tester.element(find.byType(OutlinedButton));
+    final side = Theme.of(
+      buttonContext,
+    ).outlinedButtonTheme.style!.side!.resolve(<WidgetState>{});
+    expect(side!.color, GlassChrome.edge(glass));
+    final glassColors = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .map((decoration) => decoration.color);
+    expect(glassColors, contains(GlassChrome.fill(glass)));
+
+    await tester.pumpWidget(host(AppThemes.legacy, controls()));
+    final legacyColors = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .map((decoration) => decoration.color);
+    expect(legacyColors, isNot(contains(GlassChrome.fill(glass))));
   });
 }

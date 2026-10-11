@@ -594,7 +594,11 @@ ThemeData _buildSettingsPageTheme(ThemeData base, AppTheme app) {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: app.core.tx,
-        side: BorderSide(color: const Color(0xFFB4A0FF).withValues(alpha: 0.3)),
+        side: BorderSide(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : const Color(0xFFB4A0FF).withValues(alpha: 0.3),
+        ),
         textStyle: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700),
         shape: RoundedRectangleBorder(borderRadius: app.shape.br(12)),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),

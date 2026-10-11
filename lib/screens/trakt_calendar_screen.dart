@@ -12,6 +12,7 @@ import '../services/trakt/trakt_calendar_service.dart';
 import '../services/trakt/trakt_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../widgets/trakt_calendar_day_sheet.dart';
 import '../widgets/card_action_menu.dart';
 import '../widgets/hold_feedback.dart';
@@ -1385,19 +1386,31 @@ class _SelectorField<T> extends StatelessWidget {
       focusNode: focusNode,
       items: items,
       onChanged: onChanged,
-      dropdownColor: const Color(0xFF12182B),
+      dropdownColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : const Color(0xFF12182B),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: app.core.tx.withValues(alpha: 0.72)),
         filled: true,
-        fillColor: const Color(0xFF1A1720),
+        fillColor: GlassChrome.enabled(app)
+            ? GlassChrome.field(app)
+            : const Color(0xFF1A1720),
         border: OutlineInputBorder(
           borderRadius: app.shape.br(18),
-          borderSide: BorderSide(color: app.core.tx.withValues(alpha: 0.07)),
+          borderSide: BorderSide(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : app.core.tx.withValues(alpha: 0.07),
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: app.shape.br(18),
-          borderSide: BorderSide(color: app.core.tx.withValues(alpha: 0.08)),
+          borderSide: BorderSide(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : app.core.tx.withValues(alpha: 0.08),
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(18)),
@@ -1409,7 +1422,7 @@ class _SelectorField<T> extends StatelessWidget {
           vertical: dense ? 11 : 16,
         ),
       ),
-      iconEnabledColor: Colors.white70,
+      iconEnabledColor: GlassChrome.enabled(app) ? app.core.tx : Colors.white70,
       // Explicit color: the dropdown renders its menu with this style,
       // outside the page's DefaultTextStyle. onSurface follows the
       // Appearance → Text Brightness preset.
@@ -1621,9 +1634,11 @@ class _AiringDayCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            SettingsSectionLabel(dateLabel),
+            Flexible(child: SettingsSectionLabel(dateLabel)),
             if (relative != null)
-              SettingsSectionLabel('  ·  $relative', color: accent),
+              Flexible(
+                child: SettingsSectionLabel('  ·  $relative', color: accent),
+              ),
             const Spacer(),
             SettingsSectionLabel(count),
           ],

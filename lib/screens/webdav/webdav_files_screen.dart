@@ -15,6 +15,7 @@ import '../../services/video_player_launcher.dart';
 import '../../services/webdav_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/file_utils.dart';
 import '../../utils/formatters.dart';
 import '../../utils/series_parser.dart';
@@ -891,14 +892,18 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
               focusNode: _serverDropdownFocusNode,
               initialValue: _config?.id,
               isExpanded: true,
-              dropdownColor: app.cloud.menuSurface,
+              dropdownColor: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : app.cloud.menuSurface,
               decoration: InputDecoration(
                 prefixIcon: Icon(
                   Icons.cloud_sync_rounded,
                   color: app.cloud.accent,
                 ),
                 filled: true,
-                fillColor: app.fade(app.core.tx, 0.06),
+                fillColor: GlassChrome.enabled(app)
+                    ? GlassChrome.field(app)
+                    : app.fade(app.core.tx, 0.06),
                 border: OutlineInputBorder(
                   borderRadius: app.shape.br(10),
                   borderSide: BorderSide(color: app.fade(app.core.tx, 0.12)),

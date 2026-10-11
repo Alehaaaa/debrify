@@ -21,6 +21,7 @@ import '../services/webdav_service.dart';
 import '../services/premiumize_service.dart';
 import '../models/premiumize_file.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../utils/series_parser.dart';
 import '../utils/file_utils.dart';
 import '../utils/formatters.dart';
@@ -2428,9 +2429,11 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
         border: Border(
           bottom: BorderSide(
             color: Theme.of(context).dividerColor.withValues(alpha: 0.1),
@@ -2442,7 +2445,9 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         children: [
           DropdownButton<int>(
             value: _selectedSeasonNumber,
-            dropdownColor: app.cloud.dialogSurface,
+            dropdownColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : app.cloud.dialogSurface,
             underline: const SizedBox.shrink(),
             items: _seriesPlaylist!.seasons.map((season) {
               return DropdownMenuItem(

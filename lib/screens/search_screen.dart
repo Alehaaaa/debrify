@@ -14494,7 +14494,9 @@ class _SearchScreenState extends State<SearchScreen>
 
             final dirEnabled = _kwSort != 'relevance';
             return AlertDialog(
-              backgroundColor: scheme.surfaceContainerHigh,
+              backgroundColor: GlassChrome.enabled(AppThemeScope.of(ctx))
+                  ? GlassChrome.fill(AppThemeScope.of(ctx), raised: true)
+                  : scheme.surfaceContainerHigh,
               title: const Text('Sort by'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -15127,8 +15129,12 @@ class _SearchScreenState extends State<SearchScreen>
             }
 
             return Dialog(
-              backgroundColor: const Color(0xFF1E293B),
-              shape: RoundedRectangleBorder(borderRadius: app.shape.br(16)),
+              backgroundColor: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : const Color(0xFF1E293B),
+              shape: GlassChrome.enabled(app)
+                  ? GlassChrome.shape(app)
+                  : RoundedRectangleBorder(borderRadius: app.shape.br(16)),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
                   maxWidth: 450,
@@ -18465,7 +18471,9 @@ class _SearchScreenState extends State<SearchScreen>
                   vertical: 9,
                 ),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app)
+                      : scheme.surfaceContainerHigh,
                   borderRadius: app.shape.brPill,
                   border: Border.all(
                     color: focused
@@ -18864,7 +18872,9 @@ class _SearchScreenState extends State<SearchScreen>
                   vertical: 9,
                 ),
                 decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app)
+                      : scheme.surfaceContainerHigh,
                   borderRadius: app.shape.brPill,
                   // 1.5px always so focus never shifts layout: white ring when
                   // focused, else the faint idle border.
