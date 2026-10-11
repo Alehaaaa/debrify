@@ -77,4 +77,38 @@ void main() {
       Colors.white,
     );
   });
+
+  testWidgets('arrange instructions adapt to frosted and classic contrast', (
+    tester,
+  ) async {
+    Widget host(AppTheme theme) => AppThemeScope(
+      theme: theme,
+      child: const MaterialApp(
+        home: HomeSectionsFilterPage(
+          catalogTree: [],
+          disabled: {},
+          rowOrder: ['cw:movies'],
+          isTelevision: false,
+        ),
+      ),
+    );
+
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass));
+    await tester.tap(find.text('Arrange'));
+    await tester.pumpAndSettle();
+    final hint = find.textContaining('Drag rows into the order');
+    expect(hint, findsOneWidget);
+    expect(
+      tester.widget<Text>(hint).style!.color,
+      glass.core.tx.withValues(alpha: 0.68),
+    );
+
+    await tester.pumpWidget(host(AppThemes.legacy));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(hint).style!.color,
+      Colors.white.withValues(alpha: 0.55),
+    );
+  });
 }

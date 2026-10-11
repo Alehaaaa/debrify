@@ -1051,7 +1051,12 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(width: 300, child: _buildRail()),
-        Container(width: 0.5, color: Colors.white.withValues(alpha: 0.07)),
+        Container(
+          width: 0.5,
+          color: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.edge(AppThemeScope.of(context))
+              : Colors.white.withValues(alpha: 0.07),
+        ),
         Expanded(child: _buildItemList()),
       ],
     );
@@ -1064,7 +1069,11 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       return Center(
         child: Text(
           'Turn on at least one row before arranging.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+          style: TextStyle(
+            color: GlassChrome.enabled(app)
+                ? app.core.tx.withValues(alpha: 0.7)
+                : Colors.white.withValues(alpha: 0.6),
+          ),
         ),
       );
     }
@@ -1078,7 +1087,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                 ? 'Press OK to pick up a row, move it with ↑↓, then press OK to drop.'
                 : 'Drag rows into the order you want. Hidden rows keep their saved positions.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.55),
+              color: GlassChrome.enabled(app)
+                  ? app.core.tx.withValues(alpha: 0.68)
+                  : Colors.white.withValues(alpha: 0.55),
               fontSize: 12.5,
             ),
           ),
@@ -1244,6 +1255,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
     required bool enabled,
     required VoidCallback onTap,
   }) {
+    final app = AppThemeScope.of(context);
     return GestureDetector(
       onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
@@ -1252,7 +1264,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
         child: Icon(
           icon,
           size: 19,
-          color: Colors.white.withValues(alpha: enabled ? 0.72 : 0.18),
+          color: GlassChrome.enabled(app)
+              ? app.core.tx.withValues(alpha: enabled ? 0.78 : 0.28)
+              : Colors.white.withValues(alpha: enabled ? 0.72 : 0.18),
         ),
       ),
     );
@@ -1260,6 +1274,10 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
 
   Widget _buildNarrowBreadcrumb() {
     final g = _groups[_selectedGroup];
+    final app = AppThemeScope.of(context);
+    final hintColor = GlassChrome.enabled(app)
+        ? app.core.tx.withValues(alpha: 0.72)
+        : Colors.white.withValues(alpha: 0.6);
     return GestureDetector(
       onTap: _showRailPane,
       behavior: HitTestBehavior.opaque,
@@ -1267,11 +1285,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
         padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
         child: Row(
           children: [
-            Icon(
-              Icons.chevron_left_rounded,
-              size: 18,
-              color: Colors.white.withValues(alpha: 0.6),
-            ),
+            Icon(Icons.chevron_left_rounded, size: 18, color: hintColor),
             const SizedBox(width: 2),
             Flexible(
               child: Text(
@@ -1279,7 +1293,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: hintColor,
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1578,6 +1592,8 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildHintBar() {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     final hints = _arranging
         ? const [
             ('↑↓', 'navigate · move when picked up'),
@@ -1595,7 +1611,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: Colors.white.withValues(alpha: 0.07),
+            color: frosted
+                ? GlassChrome.edge(app)
+                : Colors.white.withValues(alpha: 0.07),
             width: 0.5,
           ),
         ),
@@ -1608,13 +1626,17 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
               margin: const EdgeInsets.only(left: 18),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.07),
+                color: frosted
+                    ? GlassChrome.fill(app, raised: true)
+                    : Colors.white.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
                 key,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.65),
+                  color: frosted
+                      ? app.core.tx.withValues(alpha: 0.85)
+                      : Colors.white.withValues(alpha: 0.65),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1624,7 +1646,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
             Text(
               label,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.38),
+                color: frosted
+                    ? app.core.tx.withValues(alpha: 0.62)
+                    : Colors.white.withValues(alpha: 0.38),
                 fontSize: 11,
               ),
             ),

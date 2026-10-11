@@ -1761,6 +1761,7 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
     const accent = Color(0xFFED1C24);
     final app = AppThemeScope.of(context);
     final frosted = GlassChrome.enabled(app);
+    final unfilledColor = frosted ? app.core.tx : accent;
     return Focus(
       focusNode: widget.focusNode,
       onKeyEvent: (node, event) {
@@ -1775,25 +1776,27 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          gradient: widget.filled
+          gradient: widget.filled && !frosted
               ? const LinearGradient(colors: [accent, Color(0xFFB81D24)])
               : null,
           color: widget.filled
-              ? null
+              ? (frosted ? GlassChrome.fill(app, raised: true) : null)
               : frosted
               ? GlassChrome.fill(app, raised: _focused)
               : Colors.white.withValues(alpha: 0.04),
           border: Border.all(
             color: _focused
-                ? Colors.white.withValues(alpha: 0.95)
+                ? (frosted
+                      ? GlassChrome.edge(app, active: true)
+                      : Colors.white.withValues(alpha: 0.95))
                 : (widget.filled
-                      ? Colors.transparent
+                      ? (frosted ? GlassChrome.edge(app) : Colors.transparent)
                       : frosted
                       ? GlassChrome.edge(app, active: _focused)
                       : accent.withValues(alpha: 0.55)),
             width: _focused ? 2 : 1.2,
           ),
-          boxShadow: _focused || widget.filled
+          boxShadow: !frosted && (_focused || widget.filled)
               ? [
                   BoxShadow(
                     color: accent.withValues(alpha: _focused ? 0.55 : 0.3),
@@ -1817,7 +1820,9 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
                   Icon(
                     widget.icon,
                     size: 18,
-                    color: widget.filled ? Colors.white : accent,
+                    color: widget.filled && !frosted
+                        ? Colors.white
+                        : unfilledColor,
                   ),
                   const SizedBox(width: 8),
                   Flexible(
@@ -1826,7 +1831,9 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: widget.filled ? Colors.white : accent,
+                        color: widget.filled && !frosted
+                            ? Colors.white
+                            : unfilledColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 13.5,
                         letterSpacing: 0.1,

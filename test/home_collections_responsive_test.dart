@@ -13,6 +13,8 @@ import 'package:debrify/widgets/see_all/see_all_poster_grid.dart';
 import 'package:debrify/widgets/see_all/stremio_dropdown.dart';
 import 'package:debrify/widgets/see_all/discover_card_settings_scope.dart';
 import 'package:debrify/widgets/collections/collection_list_gallery.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -71,6 +73,9 @@ void main() {
       HomeCollectionsStore.folderLayoutKey: layout,
       HomeCollectionsStore.prefsKey: jsonEncode([collection.toJson()]),
     });
+    // The current fresh-install default is Spotlight. These cases explicitly
+    // exercise the legacy Rows/Tabs grid layout and its filters.
+    await StorageService.setTvCollectionListStyle('grid');
     await tester.runAsync(() async {
       await StremioService.instance.getCatalogAddons();
       await http.runWithClient(
@@ -105,57 +110,69 @@ void main() {
       testWidgets('$layout folder fits $size and refreshes after removal', (
         tester,
       ) async {
-        tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 1;
-        addTearDown(tester.view.reset);
-        await seed(tester, layout);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: CollectionFolderScreen(
-              collection: collection,
-              isTelevision: size.width >= 1280,
-              onOpenItem: (_) {},
+        // These cases validate the explicit Rows/Tabs entrance, while native
+        // mobile normally starts on the combined All page by design.
+        debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+        try {
+          tester.view.physicalSize = size;
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          await seed(tester, layout);
+          await tester.pumpWidget(
+            MaterialApp(
+              home: CollectionFolderScreen(
+                collection: collection,
+                isTelevision: size.width >= 1280,
+                onOpenItem: (_) {},
+              ),
             ),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        expect(find.byType(layout == 'rows' ? CollectionListGallery : SeeAllPosterGrid), findsWidgets);
-        final narrow = size.width < 640;
-        if (narrow) {
-          await tester.tap(find.text('Filters'));
+          );
           await tester.pumpAndSettle();
-        }
-        final selector = find.byWidgetPredicate(
-          (w) =>
-              w is StremioDropdown &&
-              w.label == (layout == 'tabs' ? 'List' : 'View'),
-        );
-        await tester.tap(selector);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('All').last);
-        await tester.pumpAndSettle();
-        if (narrow) {
-          await tester.tap(find.byIcon(Icons.close_rounded));
+          expect(tester.takeException(), isNull);
+          expect(
+            find.byType(
+              layout == 'rows' ? CollectionListGallery : SeeAllPosterGrid,
+            ),
+            findsWidgets,
+          );
+          final narrow = size.width < 640;
+          if (narrow) {
+            await tester.tap(find.text('Filters'));
+            await tester.pumpAndSettle();
+          }
+          final selector = find.byWidgetPredicate(
+            (w) =>
+                w is StremioDropdown &&
+                w.label == (layout == 'tabs' ? 'List' : 'View'),
+          );
+          await tester.tap(selector);
           await tester.pumpAndSettle();
+          await tester.tap(find.text('All').last);
+          await tester.pumpAndSettle();
+          if (narrow) {
+            await tester.tap(find.byIcon(Icons.close_rounded));
+            await tester.pumpAndSettle();
+          }
+          expect(tester.takeException(), isNull);
+          expect(find.byType(SeeAllPosterGrid), findsOneWidget);
+          final grid = tester.widget<SeeAllPosterGrid>(
+            find.byType(SeeAllPosterGrid),
+          );
+          expect(
+            grid.items,
+            hasLength(100),
+            reason: 'Overlapping lists are deduplicated in All',
+          );
+          expect(grid.items.every((m) => m.sourceAddon?.id == addon.id), true);
+          await HomeCollectionsStore.instance.clear();
+          MainPageBridge.notifyHomeSettingsChanged();
+          await tester.pumpAndSettle();
+          expect(find.text('This collection has no folders'), findsOneWidget);
+          expect(find.byType(SeeAllPosterGrid), findsNothing);
+          expect(tester.takeException(), isNull);
+        } finally {
+          debugDefaultTargetPlatformOverride = null;
         }
-        expect(tester.takeException(), isNull);
-        expect(find.byType(SeeAllPosterGrid), findsOneWidget);
-        final grid = tester.widget<SeeAllPosterGrid>(
-          find.byType(SeeAllPosterGrid),
-        );
-        expect(
-          grid.items,
-          hasLength(100),
-          reason: 'Overlapping lists are deduplicated in All',
-        );
-        expect(grid.items.every((m) => m.sourceAddon?.id == addon.id), true);
-        await HomeCollectionsStore.instance.clear();
-        MainPageBridge.notifyHomeSettingsChanged();
-        await tester.pumpAndSettle();
-        expect(find.text('This collection has no folders'), findsOneWidget);
-        expect(find.byType(SeeAllPosterGrid), findsNothing);
-        expect(tester.takeException(), isNull);
       });
     }
   }
@@ -211,30 +228,51 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(tester.widget<CollectionListGallery>(find.byType(CollectionListGallery)).lists, hasLength(1));
+    expect(
+      tester
+          .widget<CollectionListGallery>(find.byType(CollectionListGallery))
+          .lists,
+      hasLength(1),
+    );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('opening a list preserves hidden Discover card details', (tester) async {
-    await seed(tester, 'rows');
-    await tester.pumpWidget(MaterialApp(
-      home: DiscoverCardSettingsScope(
-        showTitles: false, showRatings: false, showTypeTags: false,
-        child: CollectionFolderScreen(
-          collection: collection, onOpenItem: (_) {},
+  testWidgets('opening a list preserves hidden Discover card details', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await seed(tester, 'rows');
+      await tester.pumpWidget(
+        MaterialApp(
+          home: DiscoverCardSettingsScope(
+            showTitles: false,
+            showRatings: false,
+            showTypeTags: false,
+            child: CollectionFolderScreen(
+              collection: collection,
+              onOpenItem: (_) {},
+            ),
+          ),
         ),
-      ),
-    ));
-    await tester.pumpAndSettle();
-    tester.widget<CollectionListGallery>(find.byType(CollectionListGallery)).onOpen(0);
-    await tester.pumpAndSettle();
-    expect(find.byType(SeeAllPosterGrid), findsOneWidget);
-    final scope = DiscoverCardSettingsScope.maybeOf(tester.element(find.byType(SeeAllPosterGrid)));
-    expect(scope, isNotNull);
-    expect(scope!.showTitles, isFalse);
-    expect(scope.showRatings, isFalse);
-    expect(scope.showTypeTags, isFalse);
-    expect(tester.takeException(), isNull);
+      );
+      await tester.pumpAndSettle();
+      tester
+          .widget<CollectionListGallery>(find.byType(CollectionListGallery))
+          .onOpen(0);
+      await tester.pumpAndSettle();
+      expect(find.byType(SeeAllPosterGrid), findsOneWidget);
+      final scope = DiscoverCardSettingsScope.maybeOf(
+        tester.element(find.byType(SeeAllPosterGrid)),
+      );
+      expect(scope, isNotNull);
+      expect(scope!.showTitles, isFalse);
+      expect(scope.showRatings, isFalse);
+      expect(scope.showTypeTags, isFalse);
+      expect(tester.takeException(), isNull);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('open settings refreshes after remote collection changes', (
