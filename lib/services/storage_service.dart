@@ -7830,9 +7830,16 @@ class StorageService {
   }
 
   // PikPak API Settings
-  static Future<bool> getPikPakEnabled() async {
+  /// The user's requested setup state, even before a PikPak account is linked.
+  /// Runtime callers must keep using [getPikPakEnabled], which also verifies
+  /// that a credential is configured.
+  static Future<bool> getPikPakSetupEnabled() async {
     final prefs = await ProfilePreferences.instance();
-    if (!(prefs.getBool(_pikpakEnabledKey) ?? false)) return false;
+    return prefs.getBool(_pikpakEnabledKey) ?? false;
+  }
+
+  static Future<bool> getPikPakEnabled() async {
+    if (!await getPikPakSetupEnabled()) return false;
     return _credentialConfigured(_pikpakEmailKey, () => getPikPakEmail());
   }
 

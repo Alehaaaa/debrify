@@ -7,6 +7,7 @@ import '../../utils/platform_util.dart';
 import '../../widgets/pikpak_folder_picker_dialog.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
+import 'widgets/settings_load_error.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/glass_chrome.dart';
 
@@ -47,6 +48,8 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _loading = true;
+  bool _loadFailed = false;
+  int _loadGeneration = 0;
   bool _hiddenFromNav = false;
   String? _restrictedFolderId;
   String? _restrictedFolderName;
@@ -60,6 +63,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
 
   @override
   void dispose() {
+    _loadGeneration++;
     _emailController.dispose();
     _passwordController.dispose();
     _emailFocusNode.dispose();
@@ -74,42 +78,72 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   }
 
   Future<void> _loadSettings() async {
-    final enabled = await StorageService.getPikPakEnabled();
-    final showVideosOnly = await StorageService.getPikPakShowVideosOnly();
-    final ignoreSmallVideos = await StorageService.getPikPakIgnoreSmallVideos();
-    final isAuth = await PikPakApiService.instance.isAuthenticated();
-    final restrictedId = await StorageService.getPikPakRestrictedFolderId();
-    final restrictedName = await StorageService.getPikPakRestrictedFolderName();
-    final hiddenFromNav = await StorageService.getPikPakHiddenFromNav();
-    final postAction = await StorageService.getPikPakPostTorrentAction();
-
-    if (!mounted) return;
-
+    final generation = ++_loadGeneration;
     setState(() {
-      _pikpakEnabled = enabled;
-      _showVideosOnly = showVideosOnly;
-      _ignoreSmallVideos = ignoreSmallVideos;
-      // A connected shared account is usable without exposing its credential
-      // fields to this screen. Replacement login always starts empty.
-      _emailController.clear();
-      _isConnected = isAuth;
-      _restrictedFolderId = restrictedId;
-      _restrictedFolderName = restrictedName;
-      _hiddenFromNav = hiddenFromNav;
-      _postTorrentAction = postAction;
-      _loading = false;
+      _loading = true;
+      _loadFailed = false;
     });
+    try {
+      final (
+        enabled,
+        showVideosOnly,
+        ignoreSmallVideos,
+        isAuth,
+        restrictedId,
+        restrictedName,
+        hiddenFromNav,
+        postAction,
+      ) = await (() async {
+        final enabled = await StorageService.getPikPakSetupEnabled();
+        final showVideosOnly = await StorageService.getPikPakShowVideosOnly();
+        final ignoreSmallVideos =
+            await StorageService.getPikPakIgnoreSmallVideos();
+        final isAuth = await PikPakApiService.instance.isAuthenticated();
+        final restrictedId = await StorageService.getPikPakRestrictedFolderId();
+        final restrictedName =
+            await StorageService.getPikPakRestrictedFolderName();
+        final hiddenFromNav = await StorageService.getPikPakHiddenFromNav();
+        final postAction = await StorageService.getPikPakPostTorrentAction();
+        return (
+          enabled,
+          showVideosOnly,
+          ignoreSmallVideos,
+          isAuth,
+          restrictedId,
+          restrictedName,
+          hiddenFromNav,
+          postAction,
+        );
+      })().timeout(const Duration(seconds: 5));
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _pikpakEnabled = enabled;
+        _showVideosOnly = showVideosOnly;
+        _ignoreSmallVideos = ignoreSmallVideos;
+        // A connected shared account is usable without exposing its credential
+        // fields to this screen. Replacement login always starts empty.
+        _emailController.clear();
+        _isConnected = isAuth;
+        _restrictedFolderId = restrictedId;
+        _restrictedFolderName = restrictedName;
+        _hiddenFromNav = hiddenFromNav;
+        _postTorrentAction = postAction;
+        _loading = false;
+      });
 
-    // TV: land DPAD focus on the first interactive row so users aren't
-    // stranded with nothing focused when the page opens.
-    if (PlatformUtil.isTelevision) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        // Only a bare FocusScopeNode as primary focus means DPAD is
-        // stranded — don't steal focus the user already placed somewhere.
-        final primary = FocusManager.instance.primaryFocus;
-        if (primary != null && primary is! FocusScopeNode) return;
-        _enableToggleFocusNode.requestFocus();
+      if (PlatformUtil.isTelevision) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || generation != _loadGeneration) return;
+          final primary = FocusManager.instance.primaryFocus;
+          if (primary != null && primary is! FocusScopeNode) return;
+          _enableToggleFocusNode.requestFocus();
+        });
+      }
+    } catch (_) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _loading = false;
+        _loadFailed = true;
       });
     }
   }
@@ -498,6 +532,12 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
       return const SettingsPageScaffold(
         title: 'PikPak Settings',
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_loadFailed) {
+      return SettingsPageScaffold(
+        title: 'PikPak Settings',
+        body: SettingsLoadError(onRetry: _loadSettings),
       );
     }
 
