@@ -6,6 +6,7 @@ import 'package:debrify/screens/settings/detail_theme_page.dart';
 import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/profiles/profile_appearance_preferences.dart';
 import 'package:debrify/theme/app_looks.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_controller.dart';
 
@@ -13,6 +14,9 @@ import 'package:debrify/theme/app_theme_controller.dart';
 /// about what it can reach and what happens when two writers meet.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // These contracts exercise preference writes, not downloaded typography.
+  // Building the themes must not start network font loads in a widget test.
+  AppThemeAdapter.debugUseTestTypography = true;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});

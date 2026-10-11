@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:debrify/theme/app_sound.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
 import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/theme/app_surfaces.dart';
 import 'package:debrify/theme/app_theme_controller.dart';
@@ -26,6 +27,9 @@ class _RecordingBackend extends FeedbackBackend {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // Focus-feedback tests switch looks repeatedly; use the deterministic test
+  // typography instead of asking Google Fonts to fetch assets at each switch.
+  AppThemeAdapter.debugUseTestTypography = true;
 
   late _RecordingBackend backend;
   late Duration now;
@@ -65,8 +69,9 @@ void main() {
     );
   }
 
-  testWidgets('a directional key followed by a focus change ticks once',
-      (tester) async {
+  testWidgets('a directional key followed by a focus change ticks once', (
+    tester,
+  ) async {
     final a = FocusNode();
     final b = FocusNode();
     addTearDown(a.dispose);
@@ -170,8 +175,9 @@ void main() {
     expect(backend.plays, hasLength(1));
   });
 
-  testWidgets('a stale token cannot authorise a later autofocus',
-      (tester) async {
+  testWidgets('a stale token cannot authorise a later autofocus', (
+    tester,
+  ) async {
     final a = FocusNode();
     final b = FocusNode();
     addTearDown(a.dispose);

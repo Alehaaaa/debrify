@@ -117,9 +117,89 @@ class DownloadService {
   bool _profileViewWasStarted = false;
   bool _profileSwitchInProgress = false;
   StreamSubscription<Map<String, dynamic>>? _androidEventsSub;
+  StreamSubscription<TaskUpdate>? _pluginUpdatesSub;
   bool _batteryCheckShown = false;
   ConnectivityResult _net = ConnectivityResult.wifi; // default optimistic
   StreamSubscription<List<ConnectivityResult>>? _netSub;
+
+  /// Transfer observations belong to this process-wide service, not to a
+  /// screen or an individual initialization attempt. A native/plugin failure
+  /// after subscription registration can make initialize() retry.
+  void _observePluginUpdates(Stream<TaskUpdate> updates) {
+    _pluginUpdatesSub ??= updates.listen((update) async {
+      if (!_profileViewAttached || !_ownsPluginTask(update.task)) return;
+      if (!await _pluginAuthorizationValid(update.task)) {
+        try {
+          await FileDownloader().cancel(update.task);
+        } catch (_) {}
+        await DeviceJobStore.markTerminal(
+          backend: 'backgroundDownloader',
+          externalJobId: update.task.taskId,
+        );
+        return;
+      }
+      switch (update) {
+        case TaskProgressUpdate():
+          _progressController.add(update);
+        case TaskStatusUpdate():
+          _statusController.add(update);
+          if (update.status == TaskStatus.canceled) {
+            try {
+              await FileDownloader().database.deleteRecordWithId(
+                update.task.taskId,
+              );
+            } catch (_) {}
+            unawaited(
+              DeviceJobStore.markTerminal(
+                backend: 'backgroundDownloader',
+                externalJobId: update.task.taskId,
+              ),
+            );
+          }
+          if (update.status == TaskStatus.failed) {
+            final recId = _resolveRecordIdForTaskId(update.task.taskId);
+            unawaited(() async {
+              final retried = await _handlePikPakFailedRetry(recId);
+              if (retried) {
+                try {
+                  await FileDownloader().database.deleteRecordWithId(
+                    update.task.taskId,
+                  );
+                } catch (_) {}
+              }
+              _reevaluateQueue();
+            }());
+          } else if (update.status == TaskStatus.complete ||
+              update.status == TaskStatus.canceled ||
+              update.status == TaskStatus.paused) {
+            if (update.status == TaskStatus.complete) {
+              final owner = _pluginOwner(update.task);
+              unawaited(() async {
+                await DeviceJobStore.markTerminal(
+                  backend: 'backgroundDownloader',
+                  externalJobId: update.task.taskId,
+                );
+                if (ProfileRuntime.isProfileCommitted && owner != null) {
+                  await _registerPluginArtifact(update.task, owner);
+                }
+              }());
+            }
+            _reevaluateQueue();
+          }
+      }
+    });
+  }
+
+  @visibleForTesting
+  void debugObservePluginUpdates(Stream<TaskUpdate> updates) =>
+      _observePluginUpdates(updates);
+
+  @visibleForTesting
+  Future<void> debugDetachPluginUpdates() async {
+    final subscription = _pluginUpdatesSub;
+    _pluginUpdatesSub = null;
+    await subscription?.cancel();
+  }
 
   ConnectivityResult _computeEffectiveNet(List<ConnectivityResult> results) {
     if (results.isEmpty) return ConnectivityResult.none;
@@ -1796,70 +1876,7 @@ class DownloadService {
         progressBar: true,
       );
 
-      FileDownloader().updates.listen((update) async {
-        if (!_profileViewAttached || !_ownsPluginTask(update.task)) return;
-        if (!await _pluginAuthorizationValid(update.task)) {
-          try {
-            await FileDownloader().cancel(update.task);
-          } catch (_) {}
-          await DeviceJobStore.markTerminal(
-            backend: 'backgroundDownloader',
-            externalJobId: update.task.taskId,
-          );
-          return;
-        }
-        switch (update) {
-          case TaskProgressUpdate():
-            _progressController.add(update);
-          case TaskStatusUpdate():
-            _statusController.add(update);
-            if (update.status == TaskStatus.canceled) {
-              try {
-                await FileDownloader().database.deleteRecordWithId(
-                  update.task.taskId,
-                );
-              } catch (_) {}
-              unawaited(
-                DeviceJobStore.markTerminal(
-                  backend: 'backgroundDownloader',
-                  externalJobId: update.task.taskId,
-                ),
-              );
-            }
-            if (update.status == TaskStatus.failed) {
-              // Try PikPak cold storage retry before giving up
-              final recId = _resolveRecordIdForTaskId(update.task.taskId);
-              unawaited(() async {
-                final retried = await _handlePikPakFailedRetry(recId);
-                if (retried) {
-                  // Clean up the failed task record from plugin
-                  try {
-                    await FileDownloader().database.deleteRecordWithId(
-                      update.task.taskId,
-                    );
-                  } catch (_) {}
-                }
-                _reevaluateQueue();
-              }());
-            } else if (update.status == TaskStatus.complete ||
-                update.status == TaskStatus.canceled ||
-                update.status == TaskStatus.paused) {
-              if (update.status == TaskStatus.complete) {
-                final owner = _pluginOwner(update.task);
-                unawaited(() async {
-                  await DeviceJobStore.markTerminal(
-                    backend: 'backgroundDownloader',
-                    externalJobId: update.task.taskId,
-                  );
-                  if (ProfileRuntime.isProfileCommitted && owner != null) {
-                    await _registerPluginArtifact(update.task, owner);
-                  }
-                }());
-              }
-              _reevaluateQueue();
-            }
-        }
-      });
+      _observePluginUpdates(FileDownloader().updates);
       await FileDownloader().trackTasks();
       await _captureLegacyPluginAuthorities();
       await FileDownloader().resumeFromBackground();

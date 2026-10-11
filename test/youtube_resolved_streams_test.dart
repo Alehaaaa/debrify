@@ -219,6 +219,54 @@ void main() {
       },
     );
     test(
+      'failed visible preview retry overtakes older preload after cancellation',
+      () async {
+        final gates = [
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+        ];
+        final started = <String>[];
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) {
+              started.add(id);
+              if (started.length <= 2) return gates[started.length - 1].future;
+              return Future.value((streams: stream, client: 'androidVr'));
+            };
+        Future<YoutubeResolvedStreams?> resolve(
+          String id, {
+          bool foreground = false,
+        }) => YoutubeService.resolvePreviewStreams(
+          id,
+          maxHeightOverride: 1080,
+          foreground: foreground,
+        );
+
+        final first = resolve('aaaaaaaaaaa');
+        final second = resolve('bbbbbbbbbbb');
+        await Future<void>.delayed(Duration.zero);
+        final olderPreload = resolve('ccccccccccc');
+        final failedVisible = resolve('ddddddddddd', foreground: true);
+        YoutubeService.invalidateStreams('ddddddddddd');
+        expect(await failedVisible, isNull);
+        final retriedVisible = resolve('ddddddddddd', foreground: true);
+
+        gates[0].complete((streams: stream, client: 'androidVr'));
+        await first;
+        await Future<void>.delayed(Duration.zero);
+        expect(started.take(3), ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ddddddddddd']);
+        gates[1].complete((streams: stream, client: 'androidVr'));
+        expect(await retriedVisible, same(stream));
+        await Future.wait([second, olderPreload]);
+        expect(started, [
+          'aaaaaaaaaaa',
+          'bbbbbbbbbbb',
+          'ddddddddddd',
+          'ccccccccccc',
+        ]);
+      },
+    );
+    test(
       'trailers and reels both resolve through Cobalt without direct extraction',
       () async {
         final heights = <int>[];
