@@ -260,6 +260,9 @@ class YoutubeService {
 
   /// Continuation token for the current search (for pagination).
   static String? _continuationToken;
+  // A search replaces the entire result set. Late responses from an older
+  // search (including its continuation page) must not take over pagination.
+  static int _searchGeneration = 0;
 
   // ============== Search (InnerTube) ==============
 
@@ -298,8 +301,20 @@ class YoutubeService {
 
   /// Run a fresh search. Resets pagination state.
   static Future<YoutubeSearchResult> search(String query) async {
-    final data = await _innertube('search', {'query': query});
-    return _parseSearchResponse(data);
+    final generation = ++_searchGeneration;
+    _continuationToken = null;
+    try {
+      final data = await _innertube('search', {'query': query});
+      if (generation != _searchGeneration) {
+        return const YoutubeSearchResult(videos: []);
+      }
+      return _parseSearchResponse(data);
+    } catch (_) {
+      if (generation != _searchGeneration) {
+        return const YoutubeSearchResult(videos: []);
+      }
+      rethrow;
+    }
   }
 
   /// Fetch the next page of the current search, if any.
@@ -308,8 +323,19 @@ class YoutubeService {
     if (token == null || token.isEmpty) {
       return const YoutubeSearchResult(videos: [], hasMore: false);
     }
-    final data = await _innertube('search', {'continuation': token});
-    return _parseSearchResponse(data);
+    final generation = _searchGeneration;
+    try {
+      final data = await _innertube('search', {'continuation': token});
+      if (generation != _searchGeneration) {
+        return const YoutubeSearchResult(videos: []);
+      }
+      return _parseSearchResponse(data);
+    } catch (_) {
+      if (generation != _searchGeneration) {
+        return const YoutubeSearchResult(videos: []);
+      }
+      rethrow;
+    }
   }
 
   static YoutubeSearchResult _parseSearchResponse(Map<String, dynamic> data) {

@@ -142,6 +142,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
 
         // Notify main page to update navigation immediately
         MainPageBridge.notifyIntegrationChanged();
+        if (!mounted) return;
 
         _showSnackBar('Connected successfully!', isError: false);
 
@@ -230,6 +231,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
             );
             // Clear subfolder caches when restriction changes
             await StorageService.clearPikPakSubfolderCaches();
+            if (!mounted) return;
             setState(() {
               _restrictedFolderId = folderId;
               _restrictedFolderName = folderName;
@@ -337,6 +339,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
       await StorageService.setPikPakRestrictedFolder(folderId, folderName);
       // Clear subfolder caches when restriction changes
       await StorageService.clearPikPakSubfolderCaches();
+      if (!mounted) return;
       setState(() {
         _restrictedFolderId = folderId;
         _restrictedFolderName = folderName;
@@ -370,11 +373,13 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   Future<void> _savePostAction(String action) async {
     setState(() => _postTorrentAction = action);
     await StorageService.savePikPakPostTorrentAction(action);
+    if (!mounted) return;
     _showSnackBar('Preference saved', isError: false);
   }
 
   Future<void> _toggleHideFromNav(bool value) async {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     if (value) {
       // Show confirmation dialog before enabling
       final confirmed = await showDialog<bool>(
@@ -394,7 +399,9 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: t.warning.withValues(alpha: 0.1),
+                    color: GlassChrome.enabled(app)
+                        ? GlassChrome.fill(app, raised: true)
+                        : t.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: t.warning.withValues(alpha: 0.3)),
                   ),
@@ -432,16 +439,19 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
         ),
       );
 
-      if (confirmed != true) {
+      if (!mounted || confirmed != true) {
         return;
       }
 
       // Enable hiding
       await StorageService.setPikPakHiddenFromNav(true);
+      // The preference belongs to the shell even if this Settings route was
+      // dismissed while the write was pending.
+      MainPageBridge.notifyIntegrationChanged();
+      if (!mounted) return;
       setState(() {
         _hiddenFromNav = true;
       });
-      MainPageBridge.notifyIntegrationChanged();
       _showSnackBar('PikPak hidden from navigation', isError: false);
     } else {
       // Try to disable - show dialog explaining logout requirement
@@ -524,12 +534,11 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                   value: _pikpakEnabled,
                   onChanged: (value) async {
                     await StorageService.setPikPakEnabled(value);
+                    MainPageBridge.notifyIntegrationChanged();
+                    if (!mounted) return;
                     setState(() {
                       _pikpakEnabled = value;
                     });
-
-                    // Notify main page to update navigation immediately
-                    MainPageBridge.notifyIntegrationChanged();
 
                     _showSnackBar(
                       value
@@ -618,6 +627,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                               await StorageService.setPikPakShowVideosOnly(
                                 value,
                               );
+                              if (!mounted) return;
                               setState(() {
                                 _showVideosOnly = value;
                               });
@@ -652,6 +662,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                               await StorageService.setPikPakIgnoreSmallVideos(
                                 value,
                               );
+                              if (!mounted) return;
                               setState(() {
                                 _ignoreSmallVideos = value;
                               });

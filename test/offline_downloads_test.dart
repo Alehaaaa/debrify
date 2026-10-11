@@ -194,6 +194,17 @@ void main() {
     (tester) async {
       disableRuntimeFonts();
       SharedPreferences.setMockInitialValues({'detail_page_style': 'showcase'});
+      // This is a local-only detail route. Its download-library observer must
+      // read the empty local fixture without starting background_downloader's
+      // native runtime in a Flutter widget test process.
+      DownloadedMediaService.debugRecords = () async => [];
+      DownloadedMediaService.debugFolders = () async => [];
+      DownloadedMediaService.debugResetCache();
+      addTearDown(() {
+        DownloadedMediaService.debugRecords = null;
+        DownloadedMediaService.debugFolders = null;
+        DownloadedMediaService.debugResetCache();
+      });
       await StorageService.getDetailPageStyle();
       var requests = 0;
       await tester.pumpWidget(

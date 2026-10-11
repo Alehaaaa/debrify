@@ -426,12 +426,25 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     int? expectedSize;
 
     bool nameTouched = false;
+    bool initialPreviewRequested = false;
+    int previewGeneration = 0;
+    bool sheetClosed = false;
+    BuildContext? previewContext;
+
+    bool previewIsCurrent(int generation) =>
+        !sheetClosed &&
+        mounted &&
+        generation == previewGeneration &&
+        (previewContext?.mounted ?? false) &&
+        (ModalRoute.of(previewContext!)?.isCurrent ?? false);
 
     Future<void> recompute(StateSetter setLocal) async {
+      final generation = ++previewGeneration;
       final url = urlCtrl.text.trim();
       final manualName = nameCtrl.text.trim();
 
       if (url.isEmpty) {
+        if (!previewIsCurrent(generation)) return;
         setLocal(() {
           destPath = null;
           expectedSize = null;
@@ -446,13 +459,11 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
             url: url,
           ).withSuggestedFilename(unique: false);
           filename = suggested.filename;
-          nameCtrl.text = filename;
         } catch (_) {
           final uri = Uri.tryParse(url);
           filename = (uri?.pathSegments.isNotEmpty ?? false)
               ? uri!.pathSegments.last
               : 'file';
-          nameCtrl.text = filename;
         }
       } else if (filename.isEmpty) {
         final uri = Uri.tryParse(url);
@@ -468,6 +479,7 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
           .trim();
       final dot = filename.lastIndexOf('.');
       final folder = sanitize(dot > 0 ? filename.substring(0, dot) : filename);
+      String? nextDestPath;
       // Preview only — the authoritative path is resolved by
       // DownloadService at start (same custom-folder pref + fallback).
       String? customDir;
@@ -478,13 +490,13 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       }
       if (customDir != null && customDir.isNotEmpty) {
         final sep = Platform.pathSeparator;
-        destPath = '$customDir$sep$folder$sep$filename';
+        nextDestPath = '$customDir$sep$folder$sep$filename';
       } else if (Platform.isAndroid) {
         String? treeName;
         try {
           treeName = await StorageService.getDownloadTreeDisplayName();
         } catch (_) {}
-        destPath = treeName != null
+        nextDestPath = treeName != null
             ? '$treeName/$filename'
             : 'Download/Debrify/$filename';
       } else if (Platform.isMacOS || Platform.isWindows) {
@@ -493,30 +505,37 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
           final Directory? downloadsDir = await getDownloadsDirectory();
           if (downloadsDir != null) {
             final sep = Platform.pathSeparator;
-            destPath = 'Downloads${sep}Debrify$sep$folder$sep$filename';
+            nextDestPath = 'Downloads${sep}Debrify$sep$folder$sep$filename';
           } else {
             final docs = await AppStorage.documents();
-            destPath = '${docs.path}/downloads/$folder/$filename';
+            nextDestPath = '${docs.path}/downloads/$folder/$filename';
           }
         } catch (e) {
           final docs = await AppStorage.documents();
-          destPath = '${docs.path}/downloads/$folder/$filename';
+          nextDestPath = '${docs.path}/downloads/$folder/$filename';
         }
       } else {
         final docs = await AppStorage.documents();
-        destPath = '${docs.path}/downloads/$folder/$filename';
+        nextDestPath = '${docs.path}/downloads/$folder/$filename';
       }
 
+      int? nextExpectedSize;
       try {
-        expectedSize = await DownloadTask(
+        nextExpectedSize = await DownloadTask(
           url: url,
           filename: filename,
         ).expectedFileSize();
-      } catch (_) {
-        expectedSize = null;
-      }
+      } catch (_) {}
 
-      setLocal(() {});
+      // A filename lookup or HEAD request may finish after this sheet closes,
+      // or after the user has edited the URL/name again. Neither may update a
+      // disposed StatefulBuilder or replace the latest preview.
+      if (!previewIsCurrent(generation)) return;
+      setLocal(() {
+        if (!nameTouched) nameCtrl.text = filename;
+        destPath = nextDestPath;
+        expectedSize = nextExpectedSize;
+      });
     }
 
     String humanSize(int bytes) {
@@ -548,11 +567,14 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setLocal) {
+            previewContext = context;
             final kb = MediaQuery.of(context).viewInsets.bottom;
             // If we arrived with a prefilled URL, compute destination, filename and size once
             if ((initialUrl?.isNotEmpty ?? false) &&
+                !initialPreviewRequested &&
                 destPath == null &&
                 urlCtrl.text.trim().isNotEmpty) {
+              initialPreviewRequested = true;
               // schedule to avoid calling setState during build
               Future.microtask(() => recompute(setLocal));
             }
@@ -728,6 +750,8 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
         );
       },
     );
+    sheetClosed = true;
+    previewGeneration++;
 
     if (res == true) {
       final url = urlCtrl.text.trim();
@@ -763,8 +787,13 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
             Container(
               margin: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app)
+                    : Theme.of(context).colorScheme.primaryContainer,
                 borderRadius: app.shape.br(12),
+                border: GlassChrome.enabled(app)
+                    ? Border.all(color: GlassChrome.edge(app))
+                    : null,
               ),
               child: TabBar(
                 controller: _tabController,
@@ -775,13 +804,22 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
                 labelPadding: const EdgeInsets.symmetric(vertical: 10),
                 overlayColor: WidgetStateProperty.all(Colors.transparent),
                 indicator: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary,
+                  color: GlassChrome.enabled(app)
+                      ? app.core.accent.withValues(alpha: 0.24)
+                      : Theme.of(context).colorScheme.primary,
                   borderRadius: app.shape.br(10),
+                  border: GlassChrome.enabled(app)
+                      ? Border.all(color: GlassChrome.edge(app))
+                      : null,
                 ),
-                labelColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                unselectedLabelColor: Theme.of(
-                  context,
-                ).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                labelColor: GlassChrome.enabled(app)
+                    ? app.core.tx
+                    : Theme.of(context).colorScheme.onPrimaryContainer,
+                unselectedLabelColor: GlassChrome.enabled(app)
+                    ? app.core.tx.withValues(alpha: 0.7)
+                    : Theme.of(
+                        context,
+                      ).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                 tabs: const [
                   Tab(text: 'In Progress'),
                   Tab(text: 'Finished'),
@@ -797,15 +835,20 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
                         key: ValueKey('download-shimmer-$index'),
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: app.shape.br(12),
-                          border: Border.all(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.outline.withValues(alpha: 0.3),
-                          ),
-                        ),
+                        decoration: GlassChrome.enabled(app)
+                            ? GlassChrome.decoration(
+                                app,
+                                radius: app.shape.br(12),
+                              )
+                            : BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: app.shape.br(12),
+                                border: Border.all(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.outline.withValues(alpha: 0.3),
+                                ),
+                              ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           // The skeleton's own tokens. Omitting them left
@@ -1044,10 +1087,16 @@ class _StyledField extends StatelessWidget {
         hintText: hint,
         prefixIcon: Icon(icon),
         filled: true,
-        fillColor: app.downloads.fieldFill,
+        fillColor: GlassChrome.enabled(app)
+            ? GlassChrome.field(app)
+            : app.downloads.fieldFill,
         enabledBorder: OutlineInputBorder(
           borderRadius: app.shape.br(14),
-          borderSide: BorderSide(color: app.downloads.line),
+          borderSide: BorderSide(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : app.downloads.line,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: app.shape.br(14),
