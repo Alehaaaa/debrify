@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../services/storage_service.dart';
 import '../services/main_page_bridge.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/playlist_player_service.dart';
 import '../widgets/adaptive_playlist_section.dart';
 import '../widgets/tv_text_field.dart';
@@ -469,7 +470,8 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   backgroundColor: app.cloud.dialogSurface,
                   color: app.playlist.accent,
                   child: CustomScrollView(
-                    scrollCacheExtent: ScrollCacheExtent.pixels(500.0), physics: const AlwaysScrollableScrollPhysics(
+                    scrollCacheExtent: ScrollCacheExtent.pixels(500.0),
+                    physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
                     slivers: [
@@ -729,22 +731,29 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           final isFocused = Focus.of(context).hasFocus;
           return GestureDetector(
             onTap: _toggleSearchField,
+            behavior: HitTestBehavior.opaque,
             child: Container(
               height: 40,
               width: 40,
-              decoration: BoxDecoration(
-                color: isFocused
-                    ? app.playlist.controlFill
-                    // No token carries this near-black; left literal.
-                    : const Color(0xFF141414),
-                borderRadius: app.shape.br(20),
-                border: isFocused
-                    ? Border.all(
-                        color: app.fade(app.core.tx, 0.6),
-                        width: 2,
-                      )
-                    : null,
-              ),
+              decoration: GlassChrome.enabled(app)
+                  ? GlassChrome.decoration(
+                      app,
+                      radius: app.shape.br(20),
+                      raised: isFocused || hasActiveSearch || _showSearchField,
+                      active: isFocused,
+                    )
+                  : BoxDecoration(
+                      color: isFocused
+                          ? app.playlist.controlFill
+                          : const Color(0xFF141414),
+                      borderRadius: app.shape.br(20),
+                      border: isFocused
+                          ? Border.all(
+                              color: app.fade(app.core.tx, 0.6),
+                              width: 2,
+                            )
+                          : null,
+                    ),
               child: Icon(
                 Icons.search_rounded,
                 size: 20,

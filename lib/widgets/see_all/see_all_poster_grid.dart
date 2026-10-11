@@ -655,9 +655,11 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                         progress: widget.progressOf?.call(item),
                         downloadProgress: widget.downloadOf?.call(item)?.value,
                         downloadStatus: widget.downloadOf?.call(item)?.status,
-                        // Home's caption on the poster unless the grid
-                        // already names the title below it.
-                        showInlineTitle: !showTitles,
+                        // Discover's "Show titles" preference controls both
+                        // the caption below a poster and its inline overlay.
+                        // Hiding the lower caption must not move the title
+                        // onto the poster and defeat that preference.
+                        showInlineTitle: false,
                         showTypeBadge: showTypeBadge,
                         showRatingBadge: showRatingBadge,
                         compactBadgeLayout: m.childWidth < 142,

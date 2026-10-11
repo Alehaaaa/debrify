@@ -690,6 +690,41 @@ void main() {
     expect(failures, 1);
   });
 
+  testWidgets('background time cannot expire a pending first frame', (
+    tester,
+  ) async {
+    final engine = _PendingFirstFrameEngine();
+    var failures = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HeroTrailerBackdrop(
+          imageUrl: null,
+          videoUrl: 'https://example.invalid/slow-start.mp4',
+          enabled: true,
+          startDelay: Duration.zero,
+          firstFrameTimeout: const Duration(seconds: 15),
+          engineFactory: () async => engine,
+          onPlaybackFailed: () => failures++,
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump(const Duration(seconds: 30));
+    expect(failures, 0);
+    expect(engine.disposed, isFalse);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump(const Duration(seconds: 10));
+    expect(failures, 0);
+    engine._firstFrame.complete();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 10));
+    expect(failures, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('progress resets the stalled timer', (tester) async {
     final engine = _PendingFirstFrameEngine();
     var failures = 0;

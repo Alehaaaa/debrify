@@ -660,15 +660,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // Stall watchdog: no rendered frame within the window = a dead-but-silent
     // stream. Only genuine stalls fire — the timer is cancelled by the first
     // frame and by every teardown path.
-    final timeout = widget.firstFrameTimeout;
-    if (timeout != null) {
-      _firstFrameTimer?.cancel();
-      _firstFrameTimer = Timer(timeout, () {
-        if (!mounted || _engine != engine || _videoVisible) return;
-        _teardownPlayer();
-        _notifyPlaybackFailed();
-      });
-    }
+    _armFirstFrameTimeout(engine);
 
     // Subscribe synchronously, before any await, so a teardown landing in the
     // await window below cancels these subscriptions instead of orphaning them.
@@ -955,6 +947,24 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// original post-frame callback firing later is a harmless no-op.
   final List<TrailerEngine> _pendingDispose = [];
 
+  void _armFirstFrameTimeout(TrailerEngine engine) {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
+    final timeout = widget.firstFrameTimeout;
+    if (timeout == null || _appPaused || _videoVisible) return;
+    _firstFrameTimer = Timer(timeout, () {
+      if (!mounted ||
+          _engine != engine ||
+          _videoVisible ||
+          _appPaused ||
+          _covered) {
+        return;
+      }
+      _teardownPlayer();
+      _notifyPlaybackFailed();
+    });
+  }
+
   void _disposeEngineSoon(TrailerEngine engine) {
     if (_appPaused) {
       engine.dispose();
@@ -1161,6 +1171,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       _appPaused = false;
       if (_covered) return;
       if (_engine != null) {
+        if (!_videoVisible) _armFirstFrameTimeout(_engine!);
         if (!_pausedByUser && !widget.suspended) _engine!.play();
       } else if (mounted && _canPlay) {
         // The start timer may have fired (and skipped) while backgrounded —
@@ -1169,6 +1180,10 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     } else {
       _appPaused = true;
+      // Background time is not a decoder stall. The pending first frame gets
+      // a fresh playback window after resume, preserving the existing engine.
+      _firstFrameTimer?.cancel();
+      _firstFrameTimer = null;
       // Release the hardware decoder on TV so the native fullscreen player can
       // claim it (see [_releaseDecoderWhenHidden]); pause/resume elsewhere.
       if (_releaseDecoderWhenHidden || widget.focusPreviewOwner != null) {

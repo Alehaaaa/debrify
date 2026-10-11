@@ -2208,12 +2208,19 @@ class _EmptyMonthState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(compact ? 18 : 28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        color: const Color(0xFF0A0F1D).withValues(alpha: 0.96),
-      ),
+      decoration: frosted
+          ? GlassChrome.decoration(
+              app,
+              radius: BorderRadius.circular(compact ? 18 : 28),
+            )
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(compact ? 18 : 28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              color: const Color(0xFF0A0F1D).withValues(alpha: 0.96),
+            ),
       padding: EdgeInsets.all(compact ? 16 : 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2224,11 +2231,15 @@ class _EmptyMonthState extends StatelessWidget {
             height: compact ? 48 : 68,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(compact ? 14 : 22),
-              color: Colors.white.withValues(alpha: 0.05),
+              color: frosted
+                  ? GlassChrome.fill(app, raised: true)
+                  : Colors.white.withValues(alpha: 0.05),
             ),
             child: Icon(
               Icons.event_busy_rounded,
-              color: Colors.white70,
+              color: frosted
+                  ? app.core.tx.withValues(alpha: 0.75)
+                  : Colors.white70,
               size: compact ? 22 : 30,
             ),
           ),
@@ -2239,6 +2250,7 @@ class _EmptyMonthState extends StatelessWidget {
                 : 'Nothing airing in $monthLabel $year',
             textAlign: TextAlign.center,
             style: TextStyle(
+              color: frosted ? app.core.tx : null,
               fontSize: compact ? 16 : 24,
               fontWeight: FontWeight.w900,
             ),
@@ -2250,7 +2262,9 @@ class _EmptyMonthState extends StatelessWidget {
                 : 'Try another month or year.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.66),
+              color: frosted
+                  ? app.core.tx.withValues(alpha: 0.7)
+                  : Colors.white.withValues(alpha: 0.66),
               fontSize: compact ? 12 : 14,
               height: 1.4,
             ),
