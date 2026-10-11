@@ -11,6 +11,12 @@ import 'dart:async';
 import 'package:debrify/models/home_collection.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/screens/collections/collection_folder_screen.dart';
+import 'package:debrify/services/text_brightness.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/services/collection_native_source_service.dart';
 import 'package:debrify/services/home_collections_store.dart';
 import 'package:debrify/services/main_page_bridge.dart';
@@ -1150,6 +1156,56 @@ void main() {
     expect(find.textContaining('TMDB denied access'), findsOneWidget);
     expect(find.text('No matching addon installed'), findsNothing);
   });
+  testWidgets(
+    'collection recovery dialog retains glass on reopening and switches appearance',
+    (tester) async {
+      AppThemeAdapter.debugUseTestTypography = true;
+      addTearDown(() => AppThemeAdapter.debugUseTestTypography = false);
+      final native = service(status: 401);
+      addTearDown(native.close);
+      Widget screen(AppTheme app) => MaterialApp(
+        theme: AppThemeAdapter.themed(app, TextBrightness.bright),
+        home: AppThemeScope(
+          theme: app,
+          child: CollectionFolderScreen(
+            collection: collection(viewMode: 'TABBED_GRID'),
+            nativeSources: native,
+            onOpenItem: (_) {},
+          ),
+        ),
+      );
+      final glass = PremiumLooks.glass.build();
+      await tester.pumpWidget(screen(glass));
+      await tester.pumpAndSettle();
+      final retry = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Retry'),
+      );
+      expect(
+        retry.style!.backgroundColor!.resolve(<WidgetState>{}),
+        GlassChrome.fill(glass),
+      );
+
+      for (var i = 0; i < 2; i++) {
+        await tester.tap(find.text('View details'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+          GlassChrome.fill(glass, raised: true),
+        );
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(screen(AppThemes.legacy));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View details'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+        isNull,
+      );
+    },
+  );
   testWidgets(
     'TV gallery opens a list with poster focus and restores its card',
     (tester) async {

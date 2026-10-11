@@ -1291,7 +1291,14 @@ class PlayerMenuPanelState extends State<PlayerMenuPanel>
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      SizedBox(width: compact ? 168 : 208, child: _buildRail()),
+                      // Keep the value pane usable on narrow phones: fixed
+                      // 168dp rail left too little space for subtitle steppers.
+                      SizedBox(
+                        width: compact
+                            ? (panelWidth * 0.42).clamp(120.0, 168.0)
+                            : 208,
+                        child: _buildRail(),
+                      ),
                       Container(
                         width: 0.75,
                         color: _ink.withValues(alpha: 0.09),
@@ -1736,68 +1743,70 @@ class _ValueRow extends StatelessWidget {
                   ),
                 )
               else if (row.isStepper)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _StepChevron(
-                      icon: Icons.chevron_left_rounded,
-                      focused: focused,
-                      onTap: row.onDecrease == null
-                          ? null
-                          : () => row.onDecrease!(),
-                    ),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 64),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // A color value is shown as a bordered swatch, not
-                          // as text ink — white text on the white focus pill
-                          // (or black on the glass) would vanish.
-                          if (row.stepperValueColor != null) ...[
-                            Container(
-                              width: 11,
-                              height: 11,
-                              decoration: BoxDecoration(
-                                color: row.stepperValueColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(
+                Flexible(
+                  flex: 2,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _StepChevron(
+                        icon: Icons.chevron_left_rounded,
+                        focused: focused,
+                        onTap: row.onDecrease == null
+                            ? null
+                            : () => row.onDecrease!(),
+                      ),
+                      Flexible(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // A color value is shown as a bordered swatch, not
+                            // as text ink — white text on the white focus pill
+                            // (or black on the glass) would vanish.
+                            if (row.stepperValueColor != null) ...[
+                              Container(
+                                width: 11,
+                                height: 11,
+                                decoration: BoxDecoration(
+                                  color: row.stepperValueColor,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: focused
+                                        ? Colors.black.withValues(alpha: 0.4)
+                                        : _ink.withValues(alpha: 0.4),
+                                    width: 0.75,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                            ],
+                            Flexible(
+                              child: Text(
+                                row.stepperValue ?? '',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
                                   color: focused
-                                      ? Colors.black.withValues(alpha: 0.4)
-                                      : _ink.withValues(alpha: 0.4),
-                                  width: 0.75,
+                                      ? Colors.black
+                                      : _ink.withValues(alpha: 0.85),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 6),
                           ],
-                          Flexible(
-                            child: Text(
-                              row.stepperValue ?? '',
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: focused
-                                    ? Colors.black
-                                    : _ink.withValues(alpha: 0.85),
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                    _StepChevron(
-                      icon: Icons.chevron_right_rounded,
-                      focused: focused,
-                      onTap: row.onIncrease == null
-                          ? null
-                          : () => row.onIncrease!(),
-                    ),
-                  ],
+                      _StepChevron(
+                        icon: Icons.chevron_right_rounded,
+                        focused: focused,
+                        onTap: row.onIncrease == null
+                            ? null
+                            : () => row.onIncrease!(),
+                      ),
+                    ],
+                  ),
                 )
               else if (row.selected)
                 Icon(

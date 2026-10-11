@@ -155,7 +155,7 @@ These are untested commit builds — use a numbered [release](https://github.com
 
 ## Responsible Use
 
-Debrify does not host, sell, provide, or bundle media content. Search sources, addons, indexers, WebDAV servers, IPTV playlists, and cloud accounts are user-configured integrations. Only use this app with content, services, and sources that you own, created, licensed, or are otherwise authorized to access.
+Nextup does not host, sell, provide, or bundle media content. Search sources, addons, indexers, WebDAV servers, IPTV playlists, and cloud accounts are user-configured integrations. Only use this app with content, services, and sources that you own, created, licensed, or are otherwise authorized to access.
 
 Third-party plugins, addons, indexers, playlists, and services are controlled by their respective providers or users. Using any integration to infringe copyright or violate a provider's terms is not endorsed. See the upstream [Content Responsibility](https://debrify.tv/content-responsibility/) page for more detail.
 

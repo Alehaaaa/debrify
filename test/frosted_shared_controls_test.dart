@@ -9,6 +9,7 @@ import 'package:debrify/widgets/search_source_dropdown.dart';
 import 'package:debrify/widgets/see_all/see_all_random_button.dart';
 import 'package:debrify/widgets/view_mode_dropdown.dart';
 import 'package:debrify/screens/settings/widgets/settings_widgets.dart';
+import 'package:debrify/screens/settings/widgets/manual_order_list.dart';
 import 'package:debrify/screens/settings/widgets/sync_device_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,6 +44,13 @@ void main() {
       (trigger.decoration! as BoxDecoration).color,
       GlassChrome.fill(glass),
     );
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassSurface), findsOneWidget);
+
+    // Closing and reopening the overlay must retain the selected appearance.
+    await tester.tap(find.text('All').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('All'));
     await tester.pumpAndSettle();
     expect(find.byType(GlassSurface), findsOneWidget);
@@ -155,5 +163,49 @@ void main() {
         .whereType<BoxDecoration>()
         .map((decoration) => decoration.color);
     expect(legacyColors, isNot(contains(GlassChrome.fill(glass))));
+  });
+
+  testWidgets('nested Settings ordering rows react to focus and appearance', (
+    tester,
+  ) async {
+    final node = FocusNode(debugLabel: 'settings-order-row');
+    addTearDown(node.dispose);
+    Widget row() => ManualOrderRow(
+      item: const ManualOrderItem(
+        id: 'movie',
+        title: 'Movies',
+        subtitle: 'Saved order',
+        icon: Icons.movie_rounded,
+      ),
+      index: 0,
+      node: node,
+      enabled: true,
+      picked: false,
+      pickedIndex: null,
+      onKey: (_) => KeyEventResult.ignored,
+      onTap: () {},
+      onMoveUp: null,
+      onMoveDown: null,
+      onQuickMoves: null,
+    );
+    BoxDecoration decoration(WidgetTester tester) => tester
+        .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+        .map((widget) => widget.decoration)
+        .whereType<BoxDecoration>()
+        .first;
+
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass, row()));
+    expect(decoration(tester).color, GlassChrome.fill(glass));
+    expect(decoration(tester).border!.top.color, GlassChrome.edge(glass));
+
+    node.requestFocus();
+    await tester.pumpAndSettle();
+    expect(decoration(tester).color, GlassChrome.fill(glass, raised: true));
+    expect(decoration(tester).border!.top.color, glass.settings.accent);
+
+    await tester.pumpWidget(host(AppThemes.legacy, row()));
+    await tester.pumpAndSettle();
+    expect(decoration(tester).color, AppThemes.legacy.settings.panel2);
   });
 }

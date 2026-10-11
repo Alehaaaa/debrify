@@ -719,9 +719,19 @@ class _ManualOrderRowState extends State<ManualOrderRow> {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: active ? t.panel2 : t.panel,
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: active)
+                    : active
+                    ? t.panel2
+                    : t.panel,
                 borderRadius: app.shape.br(12),
-                border: Border.all(color: active ? t.accent : t.line),
+                border: Border.all(
+                  color: active
+                      ? t.accent
+                      : GlassChrome.enabled(app)
+                      ? GlassChrome.edge(app)
+                      : t.line,
+                ),
               ),
               child: Row(
                 children: [

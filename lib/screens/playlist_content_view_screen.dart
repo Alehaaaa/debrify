@@ -1067,24 +1067,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     if (file.isFolder || _rootContent == null) return;
 
     try {
-      // Show loading dialog
-      final app = AppThemeScope.of(context);
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          // A MODAL ground, which is why it is cloud.dialogSurface and not
-          // playlist.card — legacy spells both #1E293B.
-          backgroundColor: app.cloud.dialogSurface,
-          content: const Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Preparing playlist…'),
-            ],
-          ),
-        ),
-      );
+      _showPreparingPlaylistDialog();
 
       // Get all video files from the entire tree
       final allFiles = _rootContent!.getAllFiles();
@@ -1155,6 +1138,29 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
         ).showSnackBar(SnackBar(content: Text('Failed to play file: $e')));
       }
     }
+  }
+
+  void _showPreparingPlaylistDialog() {
+    final app = AppThemeScope.of(context);
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : app.cloud.dialogSurface,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+          content: const Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 16),
+              Text('Preparing playlist…'),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ============ Search Methods ============
@@ -1365,7 +1371,11 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: app.playlist.card,
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app)
+          : app.playlist.card,
+      shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+      elevation: GlassChrome.enabled(app) ? 0 : null,
       child: InkWell(
         onTap: () => _playFile(node),
         child: Stack(
@@ -1607,7 +1617,11 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        color: app.playlist.card,
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : app.playlist.card,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+        elevation: GlassChrome.enabled(app) ? 0 : null,
         child: InkWell(
           onTap: () {
             if (isFolder) {
@@ -3340,24 +3354,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
     if (_rootContent == null || !mounted) return;
 
     try {
-      // Show loading dialog
-      final app = AppThemeScope.of(context);
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          // A MODAL ground, which is why it is cloud.dialogSurface and not
-          // playlist.card — legacy spells both #1E293B.
-          backgroundColor: app.cloud.dialogSurface,
-          content: const Row(
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(width: 16),
-              Text('Preparing playlist…'),
-            ],
-          ),
-        ),
-      );
+      _showPreparingPlaylistDialog();
 
       // Get all video files from the entire tree
       final allFiles = _rootContent!.getAllFiles();

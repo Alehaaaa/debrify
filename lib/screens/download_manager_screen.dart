@@ -1074,11 +1074,13 @@ class _PreviewCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: app.downloads.previewCard,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: app.downloads.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: app.shape.br(16))
+          : BoxDecoration(
+              color: app.downloads.previewCard,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: app.downloads.line),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2212,10 +2214,14 @@ class _TorrentGroupCard extends StatelessWidget {
     }
 
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: app.shape.br(18)),
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 18)
+          : RoundedRectangleBorder(borderRadius: app.shape.br(18)),
       margin: EdgeInsets.zero,
       elevation: 0,
-      color: theme.colorScheme.surface,
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app)
+          : theme.colorScheme.surface,
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
@@ -2517,6 +2523,9 @@ class _DownloadTile extends StatelessWidget {
     return Stack(
       children: [
         Card(
+          color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+          elevation: GlassChrome.enabled(app) ? 0 : null,
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(

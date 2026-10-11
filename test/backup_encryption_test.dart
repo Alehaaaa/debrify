@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:debrify/services/backup_restore_service.dart';
 import 'package:debrify/services/debrify_tv_database.dart';
+import 'package:debrify/services/iptv_catalog_db.dart';
 import 'package:debrify/services/iptv_media_store.dart';
 import 'package:debrify/services/secret_vault.dart';
 // ignore: depend_on_referenced_packages
@@ -216,6 +217,9 @@ void main() {
     });
 
     tearDownAll(() async {
+      // buildBackup reads the native IPTV catalog as well as the profile DB.
+      // On Windows its WAL/SHM files stay locked until that handle is closed.
+      await IptvCatalogDb.closeScope();
       await DebrifyTvDatabase.instance.closeScope();
       IptvMediaStore.debugResetMigration();
       await storageRoot.delete(recursive: true);

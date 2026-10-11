@@ -1053,7 +1053,10 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                     ),
                     PopupMenuButton<String>(
                       color: GlassChrome.enabled(AppThemeScope.of(context))
-                          ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                          ? GlassChrome.fill(
+                              AppThemeScope.of(context),
+                              raised: true,
+                            )
                           : null,
                       shape: GlassChrome.enabled(AppThemeScope.of(context))
                           ? GlassChrome.shape(AppThemeScope.of(context))
@@ -1236,15 +1239,16 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
   bool get _hasHeaderIssue => _hasVisibleLoadError || _sourceIssues.isNotEmpty;
 
   Future<void> _showIssueDetails(String detail, {bool retry = false}) async {
+    // Dialog routes can sit above the page's appearance scope. Capture the
+    // source look before pushing so reopening keeps the same glass material.
+    final app = AppThemeScope.of(context);
     final shouldRetry = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
-            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
             : null,
-        shape: GlassChrome.enabled(AppThemeScope.of(context))
-            ? GlassChrome.shape(AppThemeScope.of(context))
-            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         scrollable: true,
         title: const Text('Collection details'),
         content: Text(detail),
@@ -1852,7 +1856,14 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                     label: const Text('Retry'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: app.core.tx,
-                      side: BorderSide(color: app.seeAll.accentBorder),
+                      backgroundColor: GlassChrome.enabled(app)
+                          ? GlassChrome.fill(app)
+                          : null,
+                      side: BorderSide(
+                        color: GlassChrome.enabled(app)
+                            ? GlassChrome.edge(app)
+                            : app.seeAll.accentBorder,
+                      ),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 12,

@@ -1057,18 +1057,12 @@ void main() {
         await connect();
         return (await search()).first;
       }))!;
-      expect(
-        TorrentDownloads.supportsDirectStreamDownload(source),
-        isFalse,
-      );
+      expect(TorrentDownloads.supportsDirectStreamDownload(source), isFalse);
       final ordinary = Torrent.fromJson({
         ...source.toJson(),
         'source': 'stremio:example',
       });
-      expect(
-        TorrentDownloads.supportsDirectStreamDownload(ordinary),
-        isTrue,
-      );
+      expect(TorrentDownloads.supportsDirectStreamDownload(ordinary), isTrue);
       late BuildContext pageContext;
       await tester.pumpWidget(
         MaterialApp(
@@ -1446,7 +1440,7 @@ void main() {
     () {
       final code = File(
         'lib/screens/video_player_screen.dart',
-      ).readAsStringSync();
+      ).readAsStringSync().replaceAll('\r\n', '\n');
       final open = code.substring(
         code.indexOf('Future<void> _openMedia('),
         code.indexOf('void _releasePlayerDiagnostic('),

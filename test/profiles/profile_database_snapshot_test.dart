@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:debrify/services/profiles/profile_database_snapshot.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/utils/app_storage.dart';
+import 'package:debrify/services/profiles/profile_storage_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -48,7 +48,7 @@ void main() {
         dataGeneration: 2,
         sessionEpoch: 1,
       );
-      final documents = await AppStorage.documents();
+      final documents = await ProfileStoragePaths.profileDataRoot();
       final source = sourceScope.fileIn(
         documents,
         'documents',
@@ -100,7 +100,7 @@ void main() {
       dataGeneration: 2,
       sessionEpoch: 1,
     );
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final source = sourceScope.fileIn(documents, 'documents', 'debrify_tv.db');
     await source.parent.create(recursive: true);
     final database = await openDatabase(source.path);
@@ -141,7 +141,7 @@ void main() {
       dataGeneration: 1,
       sessionEpoch: 1,
     );
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final source = sourceScope.fileIn(documents, 'documents', 'debrify_tv.db');
     await source.parent.create(recursive: true);
     final database = await openDatabase(source.path, singleInstance: false);
@@ -193,7 +193,7 @@ void main() {
       dataGeneration: 1,
       sessionEpoch: 1,
     );
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final source = sourceScope.fileIn(documents, 'documents', 'debrify_tv.db');
     await source.parent.create(recursive: true);
     final database = await openDatabase(source.path);
@@ -230,7 +230,7 @@ void main() {
         dataGeneration: 1,
         sessionEpoch: 1,
       );
-      final documents = await AppStorage.documents();
+      final documents = await ProfileStoragePaths.profileDataRoot();
       final source = sourceScope.fileIn(
         documents,
         'documents',
@@ -373,7 +373,7 @@ void main() {
       dataGeneration: 1,
       sessionEpoch: 1,
     );
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final source = sourceScope.fileIn(documents, 'documents', 'debrify_tv.db');
     await source.parent.create(recursive: true);
     final database = await openDatabase(source.path, singleInstance: false);
@@ -406,7 +406,7 @@ void main() {
       dataGeneration: 1,
       sessionEpoch: 1,
     );
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final source = sourceScope.fileIn(
       documents,
       'documents',
@@ -467,7 +467,7 @@ void main() {
         dataGeneration: 1,
         sessionEpoch: 1,
       );
-      final documents = await AppStorage.documents();
+      final documents = await ProfileStoragePaths.profileDataRoot();
       final media = scope.fileIn(documents, 'documents', 'debrify_tv.db');
       await media.parent.create(recursive: true);
       final mediaDb = await openDatabase(media.path, singleInstance: false);

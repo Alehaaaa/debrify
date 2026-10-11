@@ -95,10 +95,11 @@ void main() {
       );
       final commit = between(
         launch,
-        'final sourceCommitterForTv',
+        'Future<Null> sourceCommitterForTv',
         '// "Load more sources"',
       );
       expect(commit, isNot(contains('serverWatch.commit')));
+      expect(launch, contains('onCommitStremioSource: sourceCommitterForTv'));
       final progressCommit = between(
         launch,
         'onCommitPlaybackProgressSource:',
