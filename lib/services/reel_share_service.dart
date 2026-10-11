@@ -176,6 +176,8 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
   @override
   Widget build(BuildContext context) {
     final content = widget.content;
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Column(
@@ -201,11 +203,13 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
           ),
           const SizedBox(height: 18),
           DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white12),
-            ),
+            decoration: glass
+                ? GlassChrome.decoration(app, radius: BorderRadius.circular(14))
+                : BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white12),
+                  ),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: SelectableText(
@@ -219,8 +223,11 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
             autofocus: true,
             onPressed: _busy ? null : _copy,
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
+              backgroundColor: glass
+                  ? GlassChrome.fill(app, raised: true)
+                  : Colors.white,
+              foregroundColor: glass ? app.core.tx : Colors.black,
+              shape: glass ? GlassChrome.shape(app, active: true) : null,
               minimumSize: const Size.fromHeight(50),
             ),
             icon: const Icon(Icons.link_rounded),
@@ -230,7 +237,7 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
           TextButton.icon(
             onPressed: _busy ? null : _open,
             style: TextButton.styleFrom(
-              foregroundColor: Colors.white,
+              foregroundColor: glass ? app.core.tx : Colors.white,
               minimumSize: const Size.fromHeight(48),
             ),
             icon: const Icon(Icons.open_in_new_rounded, size: 18),

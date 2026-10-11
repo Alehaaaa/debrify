@@ -420,21 +420,21 @@ abstract final class SettingsRows {
   );
   static const reddit = SettingsRowContent(
     icon: Icons.forum_rounded,
-    title: 'Reddit Community',
-    subtitle: 'r/debrify - Questions, tips, and discussion',
+    title: 'Upstream Reddit Community',
+    subtitle: 'r/debrify — upstream project discussions',
     url: 'https://www.reddit.com/r/debrify/',
   );
   static const discord = SettingsRowContent(
     icon: Icons.chat_rounded,
-    title: 'Discord',
-    subtitle: 'Join for help, updates, and discussion',
+    title: 'Upstream Discord',
+    subtitle: 'Debrify community; Nextup support is on GitHub',
     url: 'https://discord.gg/xuAc4Q2c9G',
   );
   static const github = SettingsRowContent(
     icon: Icons.code_rounded,
-    title: 'GitHub',
-    subtitle: 'Source code and contributions',
-    url: 'https://github.com/varunsalian/debrify',
+    title: 'Nextup GitHub',
+    subtitle: 'Nextup source code, issues, and releases',
+    url: 'https://github.com/Alehaaaa/debrify',
   );
   static const version = SettingsRowContent(
     icon: Icons.info_outline_rounded,

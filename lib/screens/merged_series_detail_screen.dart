@@ -52,6 +52,7 @@ import '../widgets/detail/detail_primary_sources.dart';
 import '../widgets/detail/detail_style.dart';
 import '../widgets/detail/detail_model.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../theme/artwork_accent.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import '../widgets/hero_trailer_backdrop.dart';
@@ -1849,6 +1850,12 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       chosen = await showDialog<String>(
         context: context,
         builder: (context) => SimpleDialog(
+          backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+              : null,
+          shape: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.shape(AppThemeScope.of(context))
+              : null,
           title: const Text('Choose trailer'),
           children: [
             for (final video in _trailerCandidates)
@@ -3527,11 +3534,17 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   void _showAppActionsMenu() {
     final options = _appMenuOptions;
     if (options.isEmpty || widget.onTraktAction == null) return;
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       // Same standard sheet chrome as the per-episode ⋮ menu.
-      backgroundColor: AppThemeScope.of(context).sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetCtx) => _QuickActionsMenu(
@@ -3560,10 +3573,16 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// the switches show the truth rather than an optimistic guess.
   void _showQuickActionsMenu() {
     if (_traktOnlyMenuOptions.isEmpty || widget.onTraktAction == null) return;
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: AppThemeScope.of(context).sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetCtx) => _TraktSheet(
@@ -3602,10 +3621,16 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// group instead of a list of "Move to X" commands.
   void _showSimklQuickActionsMenu() {
     if (_menuOptionsSimkl.isEmpty || widget.onSimklAction == null) return;
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: AppThemeScope.of(context).sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetCtx) => _SimklSheet(
@@ -3636,10 +3661,16 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
 
   void _showMdblistQuickActionsMenu() {
     if (_menuOptionsMdblist.isEmpty || widget.onMdblistAction == null) return;
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: AppThemeScope.of(context).sheetSurface,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       showDragHandle: true,
       isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
@@ -3779,10 +3810,16 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   }
 
   void _openDetailsSheet() {
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: _bg,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : _bg,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (_) => DraggableScrollableSheet(

@@ -262,11 +262,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: app.home.sheetBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: app.shape.br(18),
-          side: BorderSide(color: app.fade(app.core.tx, 0.08)),
-        ),
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : app.home.sheetBg,
+        shape: GlassChrome.enabled(app)
+            ? GlassChrome.shape(app, radius: 18)
+            : RoundedRectangleBorder(
+                borderRadius: app.shape.br(18),
+                side: BorderSide(color: app.fade(app.core.tx, 0.08)),
+              ),
         title: const Text(
           'Remove from playlist?',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -363,11 +367,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: app.home.sheetBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: app.shape.br(18),
-          side: BorderSide(color: app.fade(app.core.tx, 0.08)),
-        ),
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : app.home.sheetBg,
+        shape: GlassChrome.enabled(app)
+            ? GlassChrome.shape(app, radius: 18)
+            : RoundedRectangleBorder(
+                borderRadius: app.shape.br(18),
+                side: BorderSide(color: app.fade(app.core.tx, 0.08)),
+              ),
         title: const Text(
           'Clear watch progress?',
           style: TextStyle(fontWeight: FontWeight.w700),

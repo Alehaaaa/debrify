@@ -5,6 +5,8 @@ import 'package:debrify/screens/downloads_screen.dart';
 import 'package:debrify/services/downloaded_media_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:debrify/widgets/card_action_menu.dart';
 import 'package:debrify/widgets/catalog_item_tile.dart';
 import 'package:debrify/widgets/hold_feedback.dart';
@@ -166,6 +168,10 @@ void main() {
     expect(find.text('Resume'), findsNothing);
     expect(find.text('Delete download'), findsOneWidget);
 
+    // The compact dialog scrolls its actions when the poster/header and rows
+    // exceed the available height; reveal the last action before activating it.
+    await tester.ensureVisible(find.text('Delete download'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Delete download'));
     await tester.pumpAndSettle();
     expect(find.text('Delete download?'), findsOneWidget);
@@ -300,6 +306,51 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Some Movie'));
     await tester.pumpAndSettle();
     expect(picked?.id, 'tt1');
+  });
+
+  testWidgets('Fix match dialog and search field follow appearance on reopen', (
+    tester,
+  ) async {
+    Widget hostFor(bool glass) => MaterialApp(
+      builder: (context, child) => AppThemeScope(
+        theme: glass ? PremiumLooks.glass.build() : PremiumLooks.field.build(),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showFixMatchDialog(
+              context,
+              initialQuery: '',
+              search: (_) async => const [],
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(hostFor(false));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Dialog>(find.byType(Dialog)).backgroundColor,
+      PremiumLooks.field.build().sheetSurface,
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(hostFor(true));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final app = PremiumLooks.glass.build();
+    expect(
+      tester.widget<Dialog>(find.byType(Dialog)).backgroundColor,
+      GlassChrome.fill(app, raised: true),
+    );
+    final textField = tester.widget<TextField>(find.byType(TextField));
+    expect(textField.decoration!.fillColor, GlassChrome.field(app));
+    expect(textField.decoration!.filled, true);
   });
 
   group('HoldableTile', () {

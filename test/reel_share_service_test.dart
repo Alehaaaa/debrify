@@ -1,6 +1,9 @@
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/reel_share_service.dart';
 import 'package:debrify/services/reels_feed.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,6 +21,22 @@ void main() {
     expect(content.text, contains('The Movie'));
     expect(content.text, isNot(contains('official123')));
     expect(content.text, isNot(contains('The opening scene')));
+  });
+  test('resolved IMDb field wins over a native catalog ID for a series', () {
+    const nativeId = ReelTitle(
+      item: StremioMeta(
+        id: 'tmdb:1399',
+        imdbId: 'tt9876543',
+        type: 'series',
+        name: 'A Series',
+      ),
+      clipKey: 'clip9876543',
+      clipName: 'Episode scene',
+    );
+    final content = ReelShareContent.fromReel(nativeId);
+    expect(content.url.toString(), 'https://www.imdb.com/title/tt9876543/');
+    expect(content.text, isNot(contains('tmdb:1399')));
+    expect(content.text, isNot(contains('clip9876543')));
   });
 
   test('titles without a valid IMDb id share an IMDb title search', () {
@@ -117,4 +136,50 @@ void main() {
       expect(find.text('Link copied'), findsOneWidget);
     },
   );
+  testWidgets('Reels share controls adopt Frosted Glass when reopened', (
+    tester,
+  ) async {
+    final service = ReelShareService(nativeShare: (_, _) async => false);
+
+    Widget themedHost(bool frosted) => MaterialApp(
+      builder: (context, child) => AppThemeScope(
+        theme: frosted
+            ? PremiumLooks.glass.build()
+            : PremiumLooks.field.build(),
+        child: child!,
+      ),
+      home: Scaffold(
+        body: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => service.share(context, _reel),
+            child: const Text('Share'),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(themedHost(false));
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    FilledButton copyButton() => tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Copy link'),
+    );
+    expect(copyButton().style?.backgroundColor?.resolve({}), Colors.white);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(themedHost(true));
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    final app = PremiumLooks.glass.build();
+    expect(
+      copyButton().style?.backgroundColor?.resolve({}),
+      GlassChrome.fill(app, raised: true),
+    );
+    expect(
+      copyButton().style?.shape?.resolve({}),
+      GlassChrome.shape(app, active: true),
+    );
+    expect(find.text('Open in IMDb'), findsOneWidget);
+  });
 }

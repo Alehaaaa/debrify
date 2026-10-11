@@ -582,6 +582,58 @@ void main() {
     );
 
     testWidgets(
+      'a playing Reel reconnects once and stale callbacks cannot retire it',
+      (tester) async {
+        ReelPlayback? active;
+        final attempts = <String, int>{};
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) async {
+              attempts.update(key, (n) => n + 1, ifAbsent: () => 1);
+              return _clip;
+            },
+            onPlayer: (playback) {
+              if (playback.active) active = playback;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        final firstClip = 'clip${first.substring(2).padLeft(7, '0')}';
+        final initialAttempts = attempts[firstClip]!;
+        final staleFailure = active!.onPlaybackFailed!;
+        final staleFrame = active!.onFirstFrameReady!;
+        staleFrame();
+        await tester.pump();
+        expect(active!.firstFrameReady, isTrue);
+
+        staleFailure();
+        await tester.pumpAndSettle();
+        expect(activeId(tester), first);
+        expect(playing(first), findsOneWidget);
+        expect(find.text('Retry clip'), findsNothing);
+        expect(attempts[firstClip], initialAttempts + 1);
+        expect(active!.firstFrameReady, isFalse);
+        final replacementFailure = active!.onPlaybackFailed!;
+
+        staleFrame();
+        staleFailure();
+        await tester.pump();
+        expect(active!.firstFrameReady, isFalse);
+        expect(find.text('Retry clip'), findsNothing);
+
+        active!.onFirstFrameReady!();
+        await tester.pump();
+        replacementFailure();
+        await tester.pumpAndSettle();
+        expect(activeId(tester), first);
+        expect(find.text('Retry clip'), findsOneWidget);
+        expect(attempts[firstClip], initialAttempts + 1);
+      },
+    );
+
+    testWidgets(
       'a late failure from a previous page preserves reverse playback',
       (tester) async {
         ReelPlayback? active;

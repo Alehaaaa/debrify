@@ -448,6 +448,50 @@ void main() {
       );
       expect(stream.needsRefresh, false);
     });
+    test(
+      'relay URLs close to expiry refresh before a swiped player opens',
+      () async {
+        final soon = DateTime.now().add(const Duration(seconds: 20));
+        final later = DateTime.now().add(const Duration(minutes: 2));
+        expect(
+          YoutubeResolvedStreams(
+            playUrl: 'https://relay.example/almost-expired',
+            validUntil: soon,
+            isRelay: true,
+          ).needsRefresh,
+          isTrue,
+        );
+        expect(
+          YoutubeResolvedStreams(
+            playUrl: 'https://relay.example/fresh',
+            validUntil: later,
+            isRelay: true,
+          ).needsRefresh,
+          isFalse,
+        );
+
+        var resolutions = 0;
+        YoutubeService.cobaltResolverOverride = (id, height) async {
+          resolutions++;
+          return CobaltMedia(
+            'https://relay.example/tunnel?request=$resolutions',
+            Uri.parse('https://relay.example/'),
+            expiresAt: resolutions == 1 ? soon : later,
+          );
+        };
+        final first = await YoutubeService.resolvePreviewStreams(
+          'aaaaaaaaaaa',
+          maxHeightOverride: 1080,
+        );
+        final refreshed = await YoutubeService.resolvePreviewStreams(
+          'aaaaaaaaaaa',
+          maxHeightOverride: 1080,
+        );
+        expect(first!.needsRefresh, isTrue);
+        expect(refreshed!.needsRefresh, isFalse);
+        expect(resolutions, 2);
+      },
+    );
     test('concurrent callers and warm cache share one extraction', () async {
       final pending =
           Completer<({YoutubeResolvedStreams streams, String client})?>();

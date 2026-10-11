@@ -42,10 +42,10 @@ Nextup keeps all of that and tracks upstream on the `nextup` branch, layering th
 ## ✨ What's different in Nextup
 
 ### 🎞️ Reels
-- A vertical, swipeable **Reels** tab of official scene clips and trailers pulled from TMDB
+- A vertical, swipeable **Reels** tab of official scene clips discovered through TMDB
 - Clips start on arrival, the next one is prepared before you swipe, tap to pause, full-HD playback
-- YouTube trailers resolve through a Cobalt relay on every platform (including iOS and tvOS), with the old low-res path as a fallback
-- Share a reel, or jump straight from a clip to its title
+- YouTube trailers try an available Cobalt relay on supported platforms, then direct adaptive extraction with HD where available
+- Share the movie or series IMDb page from a reel, or jump straight from a clip to its title
 
 ### 📈 Tracking & sync
 - **Continue Watching syncs across Trakt, Simkl and MDBList**, always moving to the furthest point you've reached on any of them
@@ -100,14 +100,14 @@ All builds are on the [**Releases**](https://github.com/Alehaaaa/debrify/release
 | **iOS / iPadOS** | IPA | Unsigned, sideload — or use the [SideStore source](#-iphone--ipad-sidestore--altstore-source) |
 | **Apple TV** | tvOS IPA | Unsigned, sideload |
 
-Release builds are produced by GitHub Actions whenever a release is published. Already-installed copies on Android, Windows, macOS and Linux will offer the update in-app; on iPhone, iPad and Apple TV the app tells you to download and reinstall the new IPA.
+GitHub Actions produces enabled-platform release builds. Automatic Android and Android TV APK builds are temporarily disabled until the original stable release-signing key is available; previously published APKs remain on the Releases page. Already-installed copies on supported platforms retain their existing installation identifiers and update paths. On iPhone, iPad and Apple TV the app tells you to download and reinstall the new IPA.
 
 ---
 
 ## 🚀 Installation
 
 ### Android / Android TV
-Download the APK from [Releases](https://github.com/Alehaaaa/debrify/releases/latest) and install it. On TV, use a file manager such as Downloader, or install over ADB.
+Existing signed APKs remain available under [Releases](https://github.com/Alehaaaa/debrify/releases), but new automatic Android/Android TV builds are paused until stable release signing can preserve upgrade compatibility. On TV, an existing APK can be installed with a file manager or ADB.
 
 ### Windows
 Run the installer and launch from the Start Menu. SmartScreen may warn on first run — click **More info → Run anyway**.

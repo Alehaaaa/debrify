@@ -307,7 +307,9 @@ void main() {
     () async {
       final documents = Directory(p.join(directory.path, 'documents'));
       await documents.create();
-      AppStorage.debugOverride(documents: documents);
+      final support = Directory(p.join(directory.path, 'support'));
+      await support.create();
+      AppStorage.debugOverride(documents: documents, support: support);
       addTearDown(AppStorage.debugReset);
       final refresh = _EngineRefreshRecorder();
       final local = ProfileWebDavSyncLocalAdapter(
@@ -338,6 +340,24 @@ version: one
       expect(journalWritten, isTrue);
       expect(applied, {key});
       expect((await ProfilePreferences.instance()).containsKey(key), isFalse);
+      final engineDirectory = ProfileRuntime.capture().storageDirectory(
+        support,
+        'documents',
+      );
+      expect(
+        await File(p.join(engineDirectory.path, 'engines', 'metadata.json'))
+            .exists(),
+        isTrue,
+        reason: 'Synced engines must be stored beside the regular engine files',
+      );
+      final obsoleteDirectory = ProfileRuntime.capture().storageDirectory(
+        documents,
+        'documents',
+      );
+      expect(
+        await Directory(p.join(obsoleteDirectory.path, 'engines')).exists(),
+        isFalse,
+      );
       expect(
         (await local.readProfile(session, activeId)).portablePreferences[key],
         values[key],

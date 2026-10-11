@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'webdav_sync_collection_capacity.dart';
 import 'package:collection/collection.dart';
 import '../engine/local_engine_storage.dart';
-import '../../utils/app_storage.dart';
 
 import 'package:crypto/crypto.dart' as crypto;
 
@@ -24,6 +23,7 @@ import '../profiles/profile_preferences.dart';
 import '../profiles/profile_registry.dart';
 import '../profiles/profile_runtime.dart';
 import '../profiles/profile_scope.dart';
+import '../profiles/profile_storage_paths.dart';
 import 'webdav_sync_diagnostics.dart';
 import '../debrify_tv_database.dart';
 import '../iptv_catalog_db.dart';
@@ -373,7 +373,7 @@ final class ProfileWebDavSyncLocalAdapter
       );
       final engineValues = await LocalEngineStorage.forDirectory(
         Directory(
-          '${scope.storageDirectory(await AppStorage.documents(), 'documents').path}/engines',
+          '${scope.storageDirectory(await ProfileStoragePaths.profileDataRoot(), 'documents').path}/engines',
         ),
       ).exportSyncDefinitions();
       raw.addAll(engineValues);
@@ -480,7 +480,7 @@ final class ProfileWebDavSyncLocalAdapter
         if (engineValues.isNotEmpty) {
           engineAppliedKeys = await LocalEngineStorage.forDirectory(
             Directory(
-              '${scope.storageDirectory(await AppStorage.documents(), 'documents').path}/engines',
+              '${scope.storageDirectory(await ProfileStoragePaths.profileDataRoot(), 'documents').path}/engines',
             ),
           ).applySyncDefinitions(engineValues);
           _validateSession(session);

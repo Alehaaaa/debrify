@@ -2235,10 +2235,15 @@ class _FixMatchDialogState extends State<_FixMatchDialog> {
     final app = AppThemeScope.of(context);
     final size = MediaQuery.sizeOf(context);
     final results = _results;
+    final frosted = GlassChrome.enabled(app);
     return Dialog(
-      backgroundColor: app.sheetSurface,
+      backgroundColor: frosted
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
-      shape: RoundedRectangleBorder(borderRadius: app.shape.br(20)),
+      shape: frosted
+          ? GlassChrome.shape(app, radius: 20)
+          : RoundedRectangleBorder(borderRadius: app.shape.br(20)),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 480,
@@ -2270,6 +2275,22 @@ class _FixMatchDialogState extends State<_FixMatchDialog> {
                 onSubmitted: (_) => _run(),
                 decoration: InputDecoration(
                   hintText: 'Title',
+                  filled: frosted ? true : null,
+                  fillColor: frosted ? GlassChrome.field(app) : null,
+                  enabledBorder: frosted
+                      ? OutlineInputBorder(
+                          borderRadius: app.shape.br(12),
+                          borderSide: BorderSide(color: GlassChrome.edge(app)),
+                        )
+                      : null,
+                  focusedBorder: frosted
+                      ? OutlineInputBorder(
+                          borderRadius: app.shape.br(12),
+                          borderSide: BorderSide(
+                            color: GlassChrome.edge(app, active: true),
+                          ),
+                        )
+                      : null,
                   prefixIcon: const Icon(Icons.search_rounded),
                   suffixIcon: IconButton(
                     tooltip: 'Search',

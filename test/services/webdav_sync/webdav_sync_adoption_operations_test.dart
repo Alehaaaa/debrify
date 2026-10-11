@@ -453,7 +453,7 @@ void main() {
         dataGeneration: 1,
         sessionEpoch: 0,
       );
-      final source = oldScope.fileIn(documents, 'documents', 'debrify_tv.db');
+      final source = oldScope.fileIn(support, 'documents', 'debrify_tv.db');
       await source.parent.create(recursive: true);
       final sourceDb = await openDatabase(source.path, singleInstance: false);
       await sourceDb.execute(
@@ -473,7 +473,7 @@ void main() {
       );
 
       final destination = newScope.fileIn(
-        documents,
+        support,
         'documents',
         'debrify_tv.db',
       );

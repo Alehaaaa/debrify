@@ -5005,6 +5005,12 @@ class _SearchScreenState extends State<SearchScreen>
     final remove = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+            : null,
         title: const Text('Series unavailable'),
         content: Text('$message\n\nRemove it from My Watchlist?'),
         actions: [
@@ -5328,6 +5334,12 @@ class _SearchScreenState extends State<SearchScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+            ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+            : null,
         title: const Text('Delete?'),
         content: Text('Remove "$title" from your playlist?'),
         actions: [
@@ -14650,6 +14662,12 @@ class _SearchScreenState extends State<SearchScreen>
       final remove = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
+          backgroundColor: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+              ? GlassChrome.fill(AppThemeScope.of(dialogContext), raised: true)
+              : null,
+          shape: GlassChrome.enabled(AppThemeScope.of(dialogContext))
+              ? GlassChrome.shape(AppThemeScope.of(dialogContext))
+              : null,
           title: Text(item.name),
           content: const Text(
             'The addon configuration for this series is unavailable. Your local history is still saved.',

@@ -149,7 +149,12 @@ class YoutubeResolvedStreams {
   /// Short-lived relays preloaded for a later reel need refreshing before use.
   bool get needsRefresh {
     final now = DateTime.now();
-    if (validUntil?.isAfter(now) == false) return true;
+    // A tunnel that expires during player initialization is effectively
+    // expired for a still-unopened Reel. Apply the same safety window used for
+    // signed googlevideo URLs, while an already-framed player keeps its socket.
+    if (validUntil?.isAfter(now.add(const Duration(seconds: 30))) == false) {
+      return true;
+    }
     for (final url in [playUrl, audioUrl]) {
       final query = Uri.tryParse(url ?? '')?.queryParameters;
       final millis = int.tryParse(query?['exp'] ?? '');
@@ -586,7 +591,12 @@ class YoutubeService {
 
   static bool _cacheUsable(_ResolvedCacheEntry entry) {
     final now = DateTime.now();
-    if (entry.streams.validUntil?.isAfter(now) == false) return false;
+    if (entry.streams.validUntil?.isAfter(
+          now.add(const Duration(seconds: 30)),
+        ) ==
+        false) {
+      return false;
+    }
     if (entry.until?.isAfter(now) == false) return false;
     if (now.difference(entry.at) >= _resolveCacheTtl) return false;
     for (final url in [

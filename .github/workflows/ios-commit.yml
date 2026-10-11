@@ -19,7 +19,7 @@ permissions:
   contents: write
 
 # Preserve all default-branch builds: each must finish publishing its own
-# release and Android APKs. Supersede in-flight builds on feature branches.
+# iOS release and SideStore source. Supersede in-flight feature-branch builds.
 concurrency:
   group: ios-commit-${{ github.ref_name == github.event.repository.default_branch && github.sha || github.ref }}
   cancel-in-progress: ${{ github.ref_name != github.event.repository.default_branch }}

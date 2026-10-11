@@ -48,6 +48,11 @@ class _Reel {
   /// keeps streaming past the tunnel's expiry, so a prepared clip is kept.
   bool framed = false;
 
+  /// A clip that already displayed video gets one automatic reconnect after a
+  /// transient direct-stream failure. Keep the budget across fresh frames so a
+  /// broken source cannot loop through players and network requests forever.
+  int reconnectAttempts = 0;
+
   StremioMeta get item => title.item;
 }
 
@@ -463,6 +468,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       reel.streams = null;
       reel.framed = false;
       reel.state = _ClipState.idle;
+      reel.reconnectAttempts = 0;
       if (index == _index) _paused = false;
     });
     unawaited(_resolve(index));
@@ -660,6 +666,22 @@ class _ReelsScreenState extends State<ReelsScreen> {
         reel.state = _ClipState.idle;
       });
       unawaited(_resolve(_reels.indexOf(reel)));
+      return;
+    }
+    if (page == _index && reel.framed && reel.reconnectAttempts == 0) {
+      // A decoder that was actually playing can hit a transient network/URL
+      // expiry during a long session. Resolve once with a fresh URL at the
+      // saved position; revision ownership protects the new player from an
+      // obsolete failure or first-frame callback from the old one.
+      YoutubeService.invalidateStreams(reel.title.clipKey);
+      setState(() {
+        reel.reconnectAttempts++;
+        reel.revision++;
+        reel.streams = null;
+        reel.framed = false;
+        reel.state = _ClipState.idle;
+      });
+      unawaited(_resolve(page));
       return;
     }
     setState(() {

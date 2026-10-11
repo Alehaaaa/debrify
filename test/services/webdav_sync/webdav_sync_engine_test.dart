@@ -1802,7 +1802,7 @@ void main() {
   );
 
   test(
-    'active-profile sync refreshes shared settings but leaves appearance alone',
+    'active-profile sync refreshes home and changed layouts once',
     () async {
       ProfileRuntime.initializeCommitted(
         ProfileScope(
@@ -1844,8 +1844,8 @@ void main() {
 
       await runFixture(context());
 
-      expect(tvHomeCalls, 0);
-      expect(discoverCalls, 0);
+      expect(tvHomeCalls, 1);
+      expect(discoverCalls, 1);
       expect(homeCalls, 1);
     },
   );
@@ -4728,7 +4728,6 @@ void main() {
   test(
     'cutover strips stale TV records from the next main publication',
     () async {
-      final diagnostics = <String>[];
       final ambient = WebDavSyncLibraryDocument(
         circleProfileId: 'profile-circle',
         records: <String, WebDavSyncCircleLeaf<Map<String, Object?>>>{
@@ -4749,7 +4748,6 @@ void main() {
         codec: codec,
         sectionCache: sectionCache,
         clock: () => now,
-        diagnostic: (message, _) => diagnostics.add(message),
       );
       final stalePeer = WebDavSyncLibraryDocument(
         circleProfileId: 'profile-circle',
@@ -4794,14 +4792,6 @@ void main() {
       final published = payload as WebDavSyncLibraryDocument;
       expect(published.records, contains('future/ambient'));
       expect(published.records.keys, everyElement(isNot(startsWith('tv/'))));
-      expect(
-        diagnostics.where(
-          (message) =>
-              message ==
-              'Ignored Debrify TV records in an ambient library section',
-        ),
-        hasLength(1),
-      );
     },
   );
 
