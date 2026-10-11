@@ -9,6 +9,8 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -129,6 +131,7 @@ void main() {
     WidgetTester tester,
     Library library, {
     bool tv = false,
+    AppTheme? appearance,
     Future<List<ConnectionResource>> Function()? loader,
   }) async {
     tester.view.resetPhysicalSize();
@@ -141,7 +144,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: AppThemeScope(
-          theme: AppThemes.legacy,
+          theme: appearance ?? AppThemes.legacy,
           child: Scaffold(
             body: MediaServerLibraryPanel(
               kind: MediaServerKind.jellyfin,
@@ -156,6 +159,23 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('library cards use the selected frosted material', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass);
+    final decorations = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((container) => container.decoration);
+    expect(
+      decorations,
+      contains(
+        GlassChrome.decoration(glass, radius: BorderRadius.circular(12)),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
 
   for (final tv in [false, true]) {
     testWidgets('${tv ? 'TV' : 'phone'} folders, back and pagination', (

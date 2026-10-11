@@ -581,7 +581,7 @@ class _LibraryCardState extends State<_LibraryCard> {
       label: '${item.name}, ${item.subtitle}',
       child: Material(
         color: GlassChrome.enabled(app)
-            ? GlassChrome.fill(app)
+            ? Colors.transparent
             : app.fade(app.core.tx, 0.06),
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
@@ -599,17 +599,22 @@ class _LibraryCardState extends State<_LibraryCard> {
             }
           },
           child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _focused
-                    ? app.home.chromeAccent
-                    : GlassChrome.enabled(app)
-                    ? GlassChrome.edge(app)
-                    : Colors.transparent,
-                width: _focused ? 3 : 1,
-              ),
-            ),
+            decoration: GlassChrome.enabled(app)
+                ? GlassChrome.decoration(
+                    app,
+                    raised: _focused,
+                    active: _focused,
+                    radius: BorderRadius.circular(12),
+                  )
+                : BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _focused
+                          ? app.home.chromeAccent
+                          : Colors.transparent,
+                      width: _focused ? 3 : 1,
+                    ),
+                  ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
