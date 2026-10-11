@@ -1175,6 +1175,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
       } else {
         // Focus the search field when activating
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_isSearchActive) return;
           _searchFocusNode.requestFocus();
         });
       }
@@ -1245,10 +1246,14 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               keyboardInkOnAccent: app.inkOn(app.settings.accent),
               decoration: InputDecoration(
                 hintText: 'Search all files...',
-                // Colors.grey left literal: no token carries it.
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: app.fade(app.core.tx, 0.65),
+                ),
                 filled: true,
-                fillColor: app.playlist.fieldFill,
+                fillColor: GlassChrome.enabled(app)
+                    ? GlassChrome.field(app)
+                    : app.playlist.fieldFill,
                 border: OutlineInputBorder(
                   borderRadius: app.shape.br(8),
                   borderSide: BorderSide.none,
@@ -1298,14 +1303,26 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
                     final isFocused = Focus.of(context).hasFocus;
                     return Container(
                       decoration: BoxDecoration(
-                        color: app.playlist.fieldFill,
+                        color: GlassChrome.enabled(app)
+                            ? GlassChrome.field(app)
+                            : app.playlist.fieldFill,
                         borderRadius: app.shape.br(8),
                         border: isFocused
-                            ? Border.all(color: app.core.tx, width: 2)
+                            ? Border.all(
+                                color: GlassChrome.enabled(app)
+                                    ? GlassChrome.edge(app, active: true)
+                                    : app.core.tx,
+                                width: 2,
+                              )
+                            : GlassChrome.enabled(app)
+                            ? Border.all(color: GlassChrome.edge(app))
                             : null,
                       ),
                       child: IconButton(
-                        icon: const Icon(Icons.clear, color: Colors.grey),
+                        icon: Icon(
+                          Icons.clear,
+                          color: app.fade(app.core.tx, 0.65),
+                        ),
                         onPressed: () {
                           setState(() {
                             _searchController.clear();
@@ -1326,18 +1343,22 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
 
   /// Build the search results list
   Widget _buildSearchResults() {
+    final app = AppThemeScope.of(context);
     if (_searchController.text.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'Type to search all files',
-          style: TextStyle(color: Colors.grey),
+          style: TextStyle(color: app.fade(app.core.tx, 0.65)),
         ),
       );
     }
 
     if (_searchResults.isEmpty) {
-      return const Center(
-        child: Text('No files found', style: TextStyle(color: Colors.grey)),
+      return Center(
+        child: Text(
+          'No files found',
+          style: TextStyle(color: app.fade(app.core.tx, 0.65)),
+        ),
       );
     }
 
@@ -1385,9 +1406,9 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
               child: Row(
                 children: [
                   // Icon
-                  const Icon(
+                  Icon(
                     Icons.play_circle_outline,
-                    color: Colors.blue,
+                    color: app.playlist.accent,
                     size: 32,
                   ),
                   const SizedBox(width: 12),
@@ -1408,7 +1429,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
                           Text(
                             result.path,
                             style: TextStyle(
-                              color: Colors.grey[500],
+                              color: app.fade(app.core.tx, 0.58),
                               fontSize: 12,
                             ),
                             maxLines: 1,
@@ -1418,7 +1439,7 @@ class _PlaylistContentViewScreenState extends State<PlaylistContentViewScreen> {
                           Text(
                             Formatters.formatFileSize(node.bytes!),
                             style: TextStyle(
-                              color: Colors.grey[400],
+                              color: app.fade(app.core.tx, 0.66),
                               fontSize: 12,
                             ),
                           ),

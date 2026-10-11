@@ -326,13 +326,21 @@ void main() {
           null,
         ),
       );
+      final frosted = AppThemes.byId('glass');
       await tester.pumpWidget(
-        const MaterialApp(home: CollectionsSettingsPage()),
+        MaterialApp(
+          builder: (context, child) =>
+              AppThemeScope(theme: frosted, child: child!),
+          home: const CollectionsSettingsPage(),
+        ),
       );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Editable collection'));
       await tester.tap(find.text('Editable collection'));
       await tester.pumpAndSettle();
+      var popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
+      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
+      expect(popup.shape, GlassChrome.shape(frosted));
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Move up').last);
@@ -346,8 +354,13 @@ void main() {
       await tester.ensureVisible(find.text('Editable collection'));
       await tester.tap(find.text('Editable collection'));
       await tester.pumpAndSettle();
+      popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
+      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
       await tester.tap(find.text('Export JSON'));
       await tester.pumpAndSettle();
+      popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
+      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
+      expect(popup.shape, GlassChrome.shape(frosted));
       await tester.tap(find.text('Copy JSON'));
       await tester.pumpAndSettle();
       final exported = HomeCollectionParser.parse(copied!).single;

@@ -8,6 +8,8 @@ import '../../services/media_server_watch_sync.dart';
 import '../../services/profiles/profile_collection_resource_facade.dart';
 import '../../services/profiles/profile_runtime.dart';
 import '../../widgets/tv_text_field.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import 'widgets/settings_widgets.dart';
 
 class MediaServerSettingsPage extends StatefulWidget {
@@ -125,9 +127,14 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
       return;
     }
     if (!mounted || ProfileRuntime.scope.value != scope) return;
+    final app = AppThemeScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: Text('Disconnect ${resource.label}?'),
         content: Text(
           borrowers > 0

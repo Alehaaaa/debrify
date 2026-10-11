@@ -14,6 +14,7 @@ import '../../services/main_page_bridge.dart';
 import '../../services/storage_service.dart';
 import '../../services/stremio_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../collections/collection_editor_screen.dart';
 import 'widgets/settings_widgets.dart';
@@ -136,6 +137,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   }
 
   Future<void> _exportCollection(HomeCollection collection) async {
+    final app = AppThemeScope.of(context);
     final session = HomeCollectionsStore.captureSession();
     final text = const JsonEncoder.withIndent(
       '  ',
@@ -145,6 +147,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           title: const Text('Export collection'),
           content: Text(
             'Share "${collection.title}" as a Nuvio-compatible JSON file.',
@@ -304,6 +310,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   // ── Per-collection actions ─────────────────────────────────────────────
 
   Future<void> _openCollectionActions(HomeCollection c) async {
+    final app = AppThemeScope.of(context);
     final session = HomeCollectionsStore.captureSession();
     final unresolved = _issuesFor(c);
     final action = await showDialog<String>(
@@ -311,6 +318,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(c.title),
           content: Column(
@@ -479,11 +490,16 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     required String body,
     required String action,
   }) async {
+    final app = AppThemeScope.of(context);
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(title),
           content: Text(body),
@@ -505,6 +521,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   }
 
   Future<void> _showImportResult(HomeCollectionImportResult r) {
+    final app = AppThemeScope.of(context);
     final lines = <String>[
       if (r.added.isNotEmpty)
         'Added: ${r.added.map((c) => c.title).join(', ')}',
@@ -522,6 +539,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(
             'Imported ${r.collectionCount} collection'
@@ -692,8 +713,14 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
                           key: ValueKey(_gifMode),
                           value: _gifMode.name,
                           options: const [
-                            SettingsSelectOption('visible', 'Animate visible GIFs'),
-                            SettingsSelectOption('focused', 'On focus or hover'),
+                            SettingsSelectOption(
+                              'visible',
+                              'Animate visible GIFs',
+                            ),
+                            SettingsSelectOption(
+                              'focused',
+                              'On focus or hover',
+                            ),
                             SettingsSelectOption('off', 'Off'),
                           ],
                           onChanged: (value) => _guarded(() async {

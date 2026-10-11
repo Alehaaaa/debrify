@@ -9,6 +9,7 @@ import '../../utils/platform_util.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../models/profiles/profile_policy.dart';
 
 /// Focused IconButtons get the accent outline + lit fill — the stock
@@ -139,9 +140,14 @@ class _IndexerManagersSettingsPageState
       ProfileFeature.torrentSearch,
     );
     if (!mounted) return;
+    final app = AppThemeScope.of(context);
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: const Text('Delete Engine'),
         content: Text('Remove ${config.displayName} from torrent search?'),
         actions: [

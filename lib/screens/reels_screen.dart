@@ -1419,9 +1419,13 @@ class _ReelPageState extends State<_ReelPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
+                  Text(
                     'Clip unavailable',
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(
+                      color: GlassChrome.enabled(AppThemeScope.of(context))
+                          ? AppThemeScope.of(context).core.tx
+                          : Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   FilledButton.icon(

@@ -9,6 +9,7 @@ import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/youtube_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -307,9 +308,10 @@ void main() {
       bool isActive = true,
       bool persistSessionForTesting = false,
       void Function(ReelPlayback)? onPlayer,
+      AppTheme? appearance,
     }) => MaterialApp(
       home: AppThemeScope(
-        theme: AppThemes.legacy,
+        theme: appearance ?? AppThemes.legacy,
         child: Scaffold(
           body: ReelsScreen(
             feed: feed,
@@ -936,6 +938,47 @@ void main() {
         expect(playing(first), findsOneWidget);
       },
     );
+
+    testWidgets('frosted recovery remains legible and retry reopens playback', (
+      tester,
+    ) async {
+      final glass = AppThemes.byId('glass');
+      var recover = false;
+      String? failedKey;
+      await tester.pumpWidget(
+        host(
+          feedFor(FakeTmdb()),
+          appearance: glass,
+          resolver: (key) async {
+            failedKey ??= key;
+            return recover || key != failedKey ? _clip : null;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      final error = tester.widget<Text>(find.text('Clip unavailable'));
+      expect(error.style?.color, glass.core.tx);
+      final panels = tester.widgetList<Container>(
+        find.ancestor(
+          of: find.text('Clip unavailable'),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(
+        panels.any((panel) {
+          final decoration = panel.decoration;
+          return decoration is BoxDecoration &&
+              decoration.color == GlassChrome.fill(glass, raised: true);
+        }),
+        isTrue,
+      );
+      final first = activeId(tester)!;
+      recover = true;
+      await tester.tap(find.text('Retry clip'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clip unavailable'), findsNothing);
+      expect(playing(first), findsOneWidget);
+    });
 
     testWidgets(
       'long and fast gestures move exactly one page in both directions',
