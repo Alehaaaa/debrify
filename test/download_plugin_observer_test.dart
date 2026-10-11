@@ -45,4 +45,78 @@ void main() {
     expect(delivered, hasLength(2));
     expect(delivered.last.progress, .8);
   });
+
+  test(
+    'detaching an observer invalidates an authorization callback in flight',
+    () async {
+      final service = DownloadService.instance;
+      final updates = StreamController<TaskUpdate>.broadcast(sync: true);
+      final delivered = <TaskProgressUpdate>[];
+      final subscription = service.progressStream.listen(delivered.add);
+      addTearDown(() async {
+        await service.debugDetachPluginUpdates();
+        await subscription.cancel();
+        await updates.close();
+      });
+
+      service.debugObservePluginUpdates(updates.stream);
+      updates.add(
+        TaskProgressUpdate(
+          DownloadTask(
+            taskId: 'detached-in-flight',
+            url: 'https://example.com/video.mkv',
+            filename: 'video.mkv',
+          ),
+          .5,
+        ),
+      );
+      // The listener is awaiting its authorization decision. Canceling the
+      // subscription cannot cancel an async callback that has already begun.
+      await service.debugDetachPluginUpdates();
+      await Future<void>.delayed(Duration.zero);
+      expect(delivered, isEmpty);
+    },
+  );
+
+  test('profile handoff rejects a callback from the previous view', () async {
+    final service = DownloadService.instance;
+    final updates = StreamController<TaskUpdate>.broadcast(sync: true);
+    final delivered = <TaskProgressUpdate>[];
+    final subscription = service.progressStream.listen(delivered.add);
+    addTearDown(() async {
+      service.finishProfileSwitch();
+      await service.debugDetachPluginUpdates();
+      await subscription.cancel();
+      await updates.close();
+    });
+
+    service.debugObservePluginUpdates(updates.stream);
+    updates.add(
+      TaskProgressUpdate(
+        DownloadTask(
+          taskId: 'previous-profile-event',
+          url: 'https://example.com/video.mkv',
+          filename: 'video.mkv',
+        ),
+        .2,
+      ),
+    );
+    await service.prepareProfileSwitch();
+    service.finishProfileSwitch();
+    await Future<void>.delayed(Duration.zero);
+    expect(delivered, isEmpty);
+
+    updates.add(
+      TaskProgressUpdate(
+        DownloadTask(
+          taskId: 'new-profile-event',
+          url: 'https://example.com/new.mkv',
+          filename: 'new.mkv',
+        ),
+        .8,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    expect(delivered.single.progress, .8);
+  });
 }

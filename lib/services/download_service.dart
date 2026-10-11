@@ -118,6 +118,8 @@ class DownloadService {
   bool _profileSwitchInProgress = false;
   StreamSubscription<Map<String, dynamic>>? _androidEventsSub;
   StreamSubscription<TaskUpdate>? _pluginUpdatesSub;
+  int _pluginObserverGeneration = 0;
+  int _profileViewGeneration = 0;
   bool _batteryCheckShown = false;
   ConnectivityResult _net = ConnectivityResult.wifi; // default optimistic
   StreamSubscription<List<ConnectivityResult>>? _netSub;
@@ -126,9 +128,22 @@ class DownloadService {
   /// screen or an individual initialization attempt. A native/plugin failure
   /// after subscription registration can make initialize() retry.
   void _observePluginUpdates(Stream<TaskUpdate> updates) {
-    _pluginUpdatesSub ??= updates.listen((update) async {
+    if (_pluginUpdatesSub != null) return;
+    final observerGeneration = ++_pluginObserverGeneration;
+    _pluginUpdatesSub = updates.listen((update) async {
       if (!_profileViewAttached || !_ownsPluginTask(update.task)) return;
-      if (!await _pluginAuthorizationValid(update.task)) {
+      final viewGeneration = _profileViewGeneration;
+      final authorized = await _pluginAuthorizationValid(update.task);
+      // StreamSubscription.cancel() doesn't cancel callbacks already inside an
+      // await. A detached observer or switched profile cannot publish its old
+      // task into a newly attached profile's download UI.
+      if (observerGeneration != _pluginObserverGeneration ||
+          viewGeneration != _profileViewGeneration ||
+          !_profileViewAttached ||
+          !_ownsPluginTask(update.task)) {
+        return;
+      }
+      if (!authorized) {
         try {
           await FileDownloader().cancel(update.task);
         } catch (_) {}
@@ -196,6 +211,7 @@ class DownloadService {
 
   @visibleForTesting
   Future<void> debugDetachPluginUpdates() async {
+    _pluginObserverGeneration++;
     final subscription = _pluginUpdatesSub;
     _pluginUpdatesSub = null;
     await subscription?.cancel();
@@ -955,6 +971,7 @@ class DownloadService {
   /// Unlike the ordinary profile-facing clear, this intentionally cancels
   /// and removes every owner's plugin/native execution record.
   Future<void> clearDeviceStateForReset() async {
+    _profileViewGeneration++;
     _profileViewAttached = false;
     final downloader = FileDownloader();
     final records = await downloader.database.allRecords();
@@ -4595,6 +4612,7 @@ class DownloadService {
   /// Detaches only the active profile's process-local projection. Platform
   /// workers and plugin tasks continue running under their immutable owner.
   Future<void> prepareProfileSwitch() async {
+    _profileViewGeneration++;
     _profileViewWasStarted = _started || _libraryInitialization != null;
     _profileSwitchInProgress = true;
     final local = _libraryInitialization;
@@ -4625,6 +4643,7 @@ class DownloadService {
   /// captured scope. This does not register a second plugin/native listener.
   Future<void> activateProfileView() async {
     if (!_profileSwitchInProgress || !_profileViewWasStarted) return;
+    _profileViewGeneration++;
     _profileViewAttached = false;
     _pending.clear();
     _pendingById.clear();

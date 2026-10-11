@@ -201,8 +201,12 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   /// Preload the selected month and the next one (shared by initial load and
   /// source switching).
   Future<void> _loadCurrentAndNextMonth() async {
+    final generation = _sourceGen;
     final currentMonth = _selectedMonthStart;
     await _ensureMonthLoaded(currentMonth);
+    // A newer tracker selection owns the next request now. The previous load
+    // must not issue an extra request in the new profile/source's scope.
+    if (!mounted || generation != _sourceGen) return;
     await _ensureMonthLoaded(
       DateTime(currentMonth.year, currentMonth.month + 1, 1),
     );
@@ -223,8 +227,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       _isLoading = true;
     });
     _lastSource = source; // survive the detail round-trip's remount
+    final generation = _sourceGen;
     await _loadCurrentAndNextMonth();
-    if (!mounted) return;
+    if (!mounted || generation != _sourceGen) return;
     setState(() => _isLoading = false);
   }
 
@@ -614,23 +619,26 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final isWide = MediaQuery.of(context).size.width >= 900;
+    final frosted = GlassChrome.enabled(app);
 
     return CalendarTimeFormatScope(
       format: _timeFormat,
       child: Scaffold(
-        backgroundColor: app.calendar.bg,
+        backgroundColor: frosted ? app.core.pane : app.calendar.bg,
         body: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                const Color(0xFF171B30),
-                const Color(0xFF0B1020),
-                app.calendar.bg,
-              ],
-            ),
-          ),
+          decoration: frosted
+              ? BoxDecoration(color: GlassChrome.fill(app))
+              : BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      const Color(0xFF171B30),
+                      const Color(0xFF0B1020),
+                      app.calendar.bg,
+                    ],
+                  ),
+                ),
           // No app bar: the page header (month, chevrons, filters) is the
           // top of the page, so it keeps clear of the status bar itself.
           child: SafeArea(top: !_isTelevision, child: _buildBody(isWide, app)),
@@ -678,13 +686,13 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     if (!_isAuth) {
       // Only reachable when neither tracker is connected (the default source is
       // whichever IS connected), so phrase it for both.
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
+          padding: const EdgeInsets.all(32),
           child: Text(
             'Connect Trakt, Simkl, or MDBList to see your calendar.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 16),
+            style: TextStyle(color: app.fade(app.core.tx, 0.72), fontSize: 16),
           ),
         ),
       );

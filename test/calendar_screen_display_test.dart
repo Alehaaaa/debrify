@@ -95,6 +95,19 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.text('Today episode'), findsOneWidget);
           expect(find.text('Earlier episode'), findsNothing);
+          final calendarScaffold = tester.widget<Scaffold>(
+            find.byType(Scaffold),
+          );
+          final calendarGround =
+              (calendarScaffold.body! as Container).decoration!
+                  as BoxDecoration;
+          if (frosted != null) {
+            expect(calendarScaffold.backgroundColor, frosted.core.pane);
+            expect(calendarGround.color, GlassChrome.fill(frosted));
+            expect(calendarGround.gradient, isNull);
+          } else {
+            expect(calendarGround.gradient, isA<LinearGradient>());
+          }
           if (layout.tv) {
             final header = tester.widget<Container>(
               find
