@@ -99,6 +99,49 @@ void main() {
       expect(started.length, 4);
     });
     test(
+      'foreground deduplication promotes a queued preview automatically',
+      () async {
+        final gates = [
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+          Completer<({YoutubeResolvedStreams streams, String client})?>(),
+        ];
+        final started = <String>[];
+        YoutubeService.cobaltResolverOverride = (_, _) async => null;
+        YoutubeService.streamResolverOverride =
+            (id, height, cc, vp9, meta, muxed, client) {
+              started.add(id);
+              if (started.length <= 2) return gates[started.length - 1].future;
+              return Future.value((streams: stream, client: 'androidVr'));
+            };
+        Future<YoutubeResolvedStreams?> resolve(
+          String id, {
+          bool visible = false,
+        }) => YoutubeService.resolvePreviewStreams(
+          id,
+          maxHeightOverride: 1080,
+          foreground: visible,
+        );
+        final a = resolve('aaaaaaaaaaa');
+        final b = resolve('bbbbbbbbbbb');
+        await Future<void>.delayed(Duration.zero);
+        final olderPreload = resolve('ccccccccccc');
+        final newlyVisible = resolve('ddddddddddd');
+        final foregroundConsumer = resolve('ddddddddddd', visible: true);
+        gates[0].complete((streams: stream, client: 'androidVr'));
+        await a;
+        await Future<void>.delayed(Duration.zero);
+        final firstThree = started.take(3).toList();
+        gates[1].complete((streams: stream, client: 'androidVr'));
+        await Future.wait([b, olderPreload, newlyVisible, foregroundConsumer]);
+        expect(firstThree, ['aaaaaaaaaaa', 'bbbbbbbbbbb', 'ddddddddddd']);
+        expect(
+          started.length,
+          4,
+          reason: 'Visible and preload consumers share extraction',
+        );
+      },
+    );
+    test(
       'reverse swipe demotes obsolete extraction without losing its result',
       () async {
         final gates = [

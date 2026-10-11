@@ -9,6 +9,7 @@ import 'package:debrify/models/profiles/connection_resource.dart';
 import 'package:debrify/models/profiles/profile_avatar.dart';
 import 'package:debrify/services/debrify_tv_database.dart';
 import 'package:debrify/services/profiles/profile_bootstrap.dart';
+import 'package:debrify/services/profiles/profile_avatar_storage.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_remote_lease.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
@@ -171,7 +172,7 @@ void main() {
           isA<RemoteTransferException>().having(
             (error) => error.toString(),
             'message',
-            contains('Update Debrify'),
+            contains('Update Nextup'),
           ),
         ),
       );
@@ -585,8 +586,15 @@ void main() {
       ProfileAvatar.tryParse(profile.avatarKey)?.kind,
       ProfileAvatarKind.image,
     );
-    final avatars = Directory('${root.path}/docs/profiles/$profileId/avatars');
+    // Avatars are private profile data in Application Support, not Documents.
+    final avatars = await ProfileAvatarStorage.directoryFor(profileId);
     expect(await avatars.list().length, 1);
+    final saved = await ProfileAvatarStorage.fileFor(
+      profileId,
+      ProfileAvatar.tryParse(profile.avatarKey)!,
+    );
+    expect(await saved.exists(), isTrue);
+    expect(await saved.length(), greaterThan(0));
   });
 
   test(

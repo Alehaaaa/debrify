@@ -699,7 +699,15 @@ class YoutubeService {
       return Future.value(cached.streams);
     }
     final inFlight = _resolveInFlight[key];
-    if (inFlight != null) return inFlight;
+    if (inFlight != null) {
+      // A visible consumer can arrive after a speculative prefetch for the
+      // same stream. Share its extraction but move a still-queued job ahead
+      // of other previews; otherwise the visible player waits behind them.
+      if (foreground || includeMetadata || withCaptions) {
+        _resolutionQueue.promote(inFlight);
+      }
+      return inFlight;
+    }
     final generation = _resolveGeneration[videoId] ?? 0;
     final future = _resolutionQueue.run<YoutubeResolvedStreams?>(
       () {
