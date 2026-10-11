@@ -922,11 +922,15 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
                   vertical: 8,
                 ),
                 decoration: BoxDecoration(
-                  color: app.cloud.dialogSurface,
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app, raised: true)
+                      : app.cloud.dialogSurface,
                   borderRadius: app.shape.br(20),
                   border: Border.all(
                     color: _addButtonFocused
                         ? app.downloads.addAccent
+                        : GlassChrome.enabled(app)
+                        ? GlassChrome.edge(app)
                         : app.downloads.addAccent.withValues(alpha: 0.5),
                     width: _addButtonFocused ? 2 : 1,
                   ),
@@ -972,9 +976,15 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: app.cloud.dialogSurface,
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : app.cloud.dialogSurface,
         borderRadius: app.shape.brPill,
-        border: Border.all(color: app.downloads.line),
+        border: Border.all(
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.edge(app)
+              : app.downloads.line,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2365,15 +2375,21 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
     final Color fg = foreground ?? theme.colorScheme.onSurfaceVariant;
     final Color bg =
         background ??
-        theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4);
+        (GlassChrome.enabled(app)
+            ? GlassChrome.fill(app)
+            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
+        border: GlassChrome.enabled(app)
+            ? Border.all(color: GlassChrome.edge(app))
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

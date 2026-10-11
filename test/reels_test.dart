@@ -706,6 +706,42 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     });
 
+    testWidgets(
+      'an obsolete extraction cannot overwrite a rapid return to its reel',
+      (tester) async {
+        final stale = Completer<YoutubeResolvedStreams?>();
+        String? firstKey;
+        final attempts = <String, int>{};
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb(pages: 3)),
+            resolver: (key) {
+              firstKey ??= key;
+              attempts.update(key, (count) => count + 1, ifAbsent: () => 1);
+              if (key == firstKey && attempts[key] == 1) {
+                return stale.future;
+              }
+              return Future.value(_clip);
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final controller = tester
+            .widget<PageView>(find.byType(PageView))
+            .controller!;
+        controller.jumpToPage(4);
+        await tester.pumpAndSettle();
+        controller.jumpToPage(0);
+        await tester.pumpAndSettle();
+        expect(attempts[firstKey], 2);
+        expect(playing(activeId(tester)!), findsOneWidget);
+        stale.complete(null);
+        await tester.pumpAndSettle();
+        expect(find.text('Retry clip'), findsNothing);
+        expect(playing(activeId(tester)!), findsOneWidget);
+      },
+    );
+
     testWidgets('tapping the video pauses and resumes; a new reel plays', (
       tester,
     ) async {

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/platform_util.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// Design tokens for the cinematic Home screen.
 ///
@@ -100,13 +102,13 @@ class HomeTheme {
   // snapping in. A short fade is the soft landing at negligible cost.
   static Duration imageFadeIn(bool isTelevision) => isTelevision
       ? (PlatformUtil.isAndroidTvCached
-          ? const Duration(milliseconds: 220)
-          : const Duration(milliseconds: 150))
+            ? const Duration(milliseconds: 220)
+            : const Duration(milliseconds: 150))
       : const Duration(milliseconds: 500);
   static Duration imageFadeOut(bool isTelevision) => isTelevision
       ? (PlatformUtil.isAndroidTvCached
-          ? const Duration(milliseconds: 180)
-          : const Duration(milliseconds: 150))
+            ? const Duration(milliseconds: 180)
+            : const Duration(milliseconds: 150))
       : const Duration(milliseconds: 1000);
 
   // ── Responsive ────────────────────────────────────────────────────────────
@@ -183,10 +185,13 @@ class HomeSectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = HomeTheme.metricsOf(context, isTelevision: isTelevision);
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     final fontSize = m.headerFontSize + 4;
 
     return Padding(
-      padding: padding ??
+      padding:
+          padding ??
           EdgeInsets.fromLTRB(
             m.sectionHPadding,
             m.sectionVPadding + 18,
@@ -201,7 +206,7 @@ class HomeSectionHeader extends StatelessWidget {
             child: Text(
               title,
               style: TextStyle(
-                color: Colors.white,
+                color: frosted ? app.core.tx : Colors.white,
                 fontSize: fontSize,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -0.6,
@@ -216,7 +221,9 @@ class HomeSectionHeader extends StatelessWidget {
             Text(
               '$count',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.32),
+                color: frosted
+                    ? app.core.tx.withValues(alpha: 0.52)
+                    : Colors.white.withValues(alpha: 0.32),
                 fontSize: fontSize - 6,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.2,

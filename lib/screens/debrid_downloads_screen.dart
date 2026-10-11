@@ -9,6 +9,7 @@ import '../models/rd_torrent.dart';
 import '../models/rd_file_node.dart';
 import '../models/debrid_download.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/debrid_service.dart';
 import '../services/series_source_service.dart';
 import '../services/storage_service.dart';
@@ -950,8 +951,12 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         builder: (context, dialogStateSetter) {
           setDialogState = dialogStateSetter;
           return AlertDialog(
-            backgroundColor: app.cloud.dialogSurface,
-            shape: RoundedRectangleBorder(borderRadius: app.shape.br(16)),
+            backgroundColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : app.cloud.dialogSurface,
+            shape: GlassChrome.enabled(app)
+                ? GlassChrome.shape(app)
+                : RoundedRectangleBorder(borderRadius: app.shape.br(16)),
             title: const Text(
               'Deleting All Torrents',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -1150,8 +1155,12 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         builder: (context, dialogStateSetter) {
           setDialogState = dialogStateSetter;
           return AlertDialog(
-            backgroundColor: app.cloud.dialogSurface,
-            shape: RoundedRectangleBorder(borderRadius: app.shape.br(16)),
+            backgroundColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : app.cloud.dialogSurface,
+            shape: GlassChrome.enabled(app)
+                ? GlassChrome.shape(app)
+                : RoundedRectangleBorder(borderRadius: app.shape.br(16)),
             title: const Text(
               'Deleting All Downloads',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -1493,8 +1502,12 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         builder: (dialogContext, dialogStateSetter) {
           setDialogState = dialogStateSetter;
           return AlertDialog(
-            backgroundColor: app.cloud.dialogSurface,
-            shape: RoundedRectangleBorder(borderRadius: app.shape.br(16)),
+            backgroundColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : app.cloud.dialogSurface,
+            shape: GlassChrome.enabled(app)
+                ? GlassChrome.shape(app)
+                : RoundedRectangleBorder(borderRadius: app.shape.br(16)),
             title: Text(
               'Deleting ${isTorrents ? 'Torrents' : 'Downloads'}',
               style: const TextStyle(fontWeight: FontWeight.bold),
@@ -1641,7 +1654,9 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
             ),
           ],
         ),
-        backgroundColor: app.cloud.dialogSurface,
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : app.cloud.dialogSurface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: app.shape.br(12)),
         margin: const EdgeInsets.all(16),
@@ -2476,14 +2491,23 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
                     final isFocused = Focus.of(context).hasFocus;
                     return Container(
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B),
+                        color: GlassChrome.enabled(app)
+                            ? GlassChrome.fill(app)
+                            : const Color(0xFF1E293B),
                         borderRadius: app.shape.br(8),
                         border: isFocused
                             // Pinned with the slate fill above, which does
                             // not follow the palette: a paper theme's
                             // near-black ring on dark slate is a ring you
                             // cannot see.
-                            ? Border.all(color: Colors.white, width: 2)
+                            ? Border.all(
+                                color: GlassChrome.enabled(app)
+                                    ? GlassChrome.edge(app, active: true)
+                                    : Colors.white,
+                                width: 2,
+                              )
+                            : GlassChrome.enabled(app)
+                            ? Border.all(color: GlassChrome.edge(app))
                             : null,
                       ),
                       child: IconButton(
@@ -3266,14 +3290,17 @@ class _DebridDownloadsScreenState extends State<DebridDownloadsScreen> {
         ),
       );
     } else {
+      final app = AppThemeScope.of(context);
       body = RefreshIndicator(
         onRefresh: () async {
           if (_apiKey != null) {
             await _fetchTorrents(_apiKey!, reset: true);
           }
         },
-        color: Colors.white,
-        backgroundColor: const Color(0xFF1E293B),
+        color: GlassChrome.enabled(app) ? app.core.accent : Colors.white,
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : const Color(0xFF1E293B),
         strokeWidth: 3,
         child: ListView.builder(
           scrollCacheExtent: ScrollCacheExtent.pixels(200.0),

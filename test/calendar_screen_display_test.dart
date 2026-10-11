@@ -49,7 +49,7 @@ void main() {
         // as labelled fields beside the list.
         final compact = layout.name == 'phone';
         final now = DateTime.now();
-        Map<String, Object> entry(int day, String title) => {
+        Map<String, Object> entry(int day, String title, [int? traktId]) => {
           'first_aired': DateTime(
             now.year,
             now.month,
@@ -60,7 +60,7 @@ void main() {
           'episode': {'season': 1, 'number': 1},
           'show': {
             'title': title,
-            'ids': <String, Object>{'trakt': day},
+            'ids': <String, Object>{'trakt': traktId ?? day},
           },
         };
         final client = MockClient(
@@ -68,6 +68,9 @@ void main() {
             jsonEncode([
               if (now.day > 1) entry(now.day - 1, 'Earlier episode'),
               entry(now.day, 'Today episode'),
+              entry(now.day, 'Another episode', 1001),
+              entry(now.day, 'Third episode', 1002),
+              entry(now.day, 'Fourth episode', 1003),
             ]),
             200,
           ),
@@ -88,18 +91,33 @@ void main() {
                 : find.byType(DropdownButtonFormField<CalendarTimeFormat>),
           );
           await tester.pumpAndSettle();
-          await tester.tap(find.text('12-hour').last);
+          await tester.tap(
+            compact
+                ? find.ancestor(
+                    of: find.text('12-hour').last,
+                    matching: find.byType(
+                      CheckedPopupMenuItem<CalendarTimeFormat>,
+                    ),
+                  )
+                : find.text('12-hour').last,
+          );
           await tester.pumpAndSettle();
-          expect(find.text('5:05 PM'), findsOneWidget);
+          expect(find.text('5:05 PM'), findsWidgets);
           expect(
             (await ProfilePreferences.instance()).getString(
               'calendar_time_format',
             ),
             'twelveHour',
           );
-          await tester.ensureVisible(find.text('Today episode'));
+          // Desktop/phone episode rows open the series detail directly. The
+          // day sheet is reached via the remaining-episodes row; on TV the
+          // focused day card opens the day sheet with OK.
+          final dayTrigger = layout.tv
+              ? find.text('Today episode')
+              : find.text('1 more episode');
+          await tester.ensureVisible(dayTrigger);
           await tester.pumpAndSettle();
-          await tester.tap(find.text('Today episode'));
+          await tester.tap(dayTrigger);
           await tester.pumpAndSettle();
           expect(find.byType(TraktCalendarDaySheet), findsOneWidget);
           expect(
@@ -107,7 +125,7 @@ void main() {
               of: find.byType(TraktCalendarDaySheet),
               matching: find.textContaining('5:05 PM'),
             ),
-            findsOneWidget,
+            findsWidgets,
           );
           Navigator.of(tester.element(find.text('Today episode').last)).pop();
           await tester.pumpAndSettle();
@@ -136,7 +154,7 @@ void main() {
             await Future<void>.delayed(const Duration(milliseconds: 100));
           });
           await tester.pumpAndSettle();
-          expect(find.text('5:05 PM'), findsOneWidget);
+          expect(find.text('5:05 PM'), findsWidgets);
           expect(find.text('Earlier episode'), findsNothing);
           await tester.pumpWidget(const SizedBox.shrink());
         }, () => client);

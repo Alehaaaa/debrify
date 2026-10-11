@@ -345,7 +345,15 @@ class _ReelsScreenState extends State<ReelsScreen> {
   /// Independent requests: a slow lookup for a reel already swiped past
   /// must never hold up the current reel or the rest of the look-ahead window.
   void _prepare() {
-    for (var i = _index; i <= _index + _streamsAhead; i++) {
+    // Resolve the visible reel first, then the forward feed, and finally the
+    // immediately preceding clip. That last request improves quick reversals
+    // after a failed/expired old stream without competing for the next slot
+    // ahead of the current player.
+    final candidates = <int>[
+      for (var i = _index; i <= _index + _streamsAhead; i++) i,
+      if (_index > 0) _index - 1,
+    ];
+    for (final i in candidates) {
       if (i < _reels.length) {
         final item = _reels[i].item;
         final still = item.background ?? item.poster;
@@ -540,11 +548,35 @@ class _ReelsScreenState extends State<ReelsScreen> {
     });
     if (!pageChanged) return;
     HapticFeedback.selectionClick();
+    _retireObsoleteResolutions();
     // Stream resolution and image decoding can be expensive on low-end
     // devices. Start them after, never during, the page animation.
     unawaited(_fill());
     _prepare();
     WidgetsBinding.instance.addPostFrameCallback((_) => _trimHistory());
+  }
+
+  /// A fast run of swipes can leave several unstarted YouTube extractions
+  /// behind the viewport. They must not occupy scarce connection slots after
+  /// the visible clip changes, while the adjacent reverse target stays warm.
+  void _retireObsoleteResolutions() {
+    final first = (_index - 1).clamp(0, _reels.length);
+    final end = (_index + _streamsAhead + 1).clamp(0, _reels.length);
+    final usefulKeys = _reels
+        .getRange(first, end)
+        .map((reel) => reel.title.clipKey)
+        .toSet();
+    for (final reel in _reels) {
+      if (reel.state != _ClipState.resolving ||
+          usefulKeys.contains(reel.title.clipKey)) {
+        continue;
+      }
+      reel.revision++;
+      reel.state = _ClipState.idle;
+      if (widget.resolver == null) {
+        YoutubeService.invalidateStreams(reel.title.clipKey);
+      }
+    }
   }
 
   void _trimHistory() {

@@ -559,12 +559,18 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   }
 
   void _openDaySheet(DateTime day, List<TraktCalendarEntry> entries) {
+    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: AppThemeScope.of(context).calendar.sheetBg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.calendar.sheetBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        side: GlassChrome.enabled(app)
+            ? BorderSide(color: GlassChrome.edge(app))
+            : BorderSide.none,
       ),
       builder: (_) => CalendarTimeFormatScope(
         format: _timeFormat,
@@ -1210,7 +1216,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
               tooltip: 'Source',
               initialValue: _source,
               icon: Icon(Icons.swap_horiz_rounded, size: 21, color: t.dim),
-              color: const Color(0xFF12182B),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : const Color(0xFF12182B),
               onSelected: _onSourceChanged,
               itemBuilder: (_) => [
                 if (_traktAuthed)
@@ -1248,7 +1256,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             tooltip: 'Time format',
             initialValue: _timeFormat,
             icon: Icon(Icons.schedule_rounded, size: 21, color: t.dim),
-            color: const Color(0xFF12182B),
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : const Color(0xFF12182B),
             onSelected: (value) async {
               setState(() => _timeFormat = value);
               await _displayPreferences?.setString(_timeFormatKey, value.name);
