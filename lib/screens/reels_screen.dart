@@ -281,6 +281,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     if (_filling || _exhausted) return;
     _filling = true;
     var rejectedReplays = 0;
+    var sparseWindows = 0;
     try {
       while (_current && !_exhausted) {
         final need = _index + 1 + _ahead - _reels.length;
@@ -303,6 +304,12 @@ class _ReelsScreenState extends State<ReelsScreen> {
         ]);
         if (!_current) return;
         final playable = [for (final title in unseen) ?title];
+        if (playable.isNotEmpty) sparseWindows = 0;
+        if (titles.isEmpty && !_feed.lastRequestFailed && !_feed.exhausted) {
+          // A scan window can be sparse without exhausting TMDB. Avoid
+          // immediately launching another 64-detail scan in a tight loop.
+          sparseWindows++;
+        }
         // If every known title has been watched/saved, a replaying feed can
         // otherwise cycle through the same rejected candidates indefinitely.
         if (playable.isNotEmpty) rejectedReplays = 0;
@@ -311,9 +318,13 @@ class _ReelsScreenState extends State<ReelsScreen> {
         }
         setState(() {
           _reels.addAll(playable.map(_Reel.new));
-          if (titles.isEmpty || rejectedReplays >= 24) {
+          if (titles.isEmpty || rejectedReplays >= 24 || sparseWindows >= 6) {
             _exhausted = _feed.lastRequestFailed || _feed.exhausted;
-            if (rejectedReplays >= 24) _exhausted = true;
+            if (rejectedReplays >= 24 || sparseWindows >= 6) {
+              // Retry is explicit after six empty catalog windows. This is a
+              // temporary discovery pause, not a permanent feed exhaustion.
+              _exhausted = true;
+            }
           }
         });
         for (final title in playable) {
@@ -321,9 +332,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
         }
         _prepare();
         if (titles.isEmpty && !_exhausted) {
-          // Yield between bounded search windows without declaring a sparse
-          // page to be the end of the catalog.
-          await Future<void>.delayed(const Duration(milliseconds: 100));
+          final backoffMs =
+              250 * (1 << (sparseWindows - 1).clamp(0, 4).toInt());
+          await Future<void>.delayed(Duration(milliseconds: backoffMs));
         }
       }
     } finally {
@@ -1047,10 +1058,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
                   ),
                 ),
               ),
-            if (_reels.isNotEmpty &&
-                _index == _reels.length - 1 &&
-                _exhausted &&
-                _feed.lastRequestFailed)
+            if (_reels.isNotEmpty && _index == _reels.length - 1 && _exhausted)
               Positioned(
                 top: MediaQuery.paddingOf(context).top + 16,
                 left: 24,
@@ -1058,7 +1066,11 @@ class _ReelsScreenState extends State<ReelsScreen> {
                 child: FilledButton.icon(
                   onPressed: _retryFeed,
                   icon: const Icon(Icons.refresh_rounded),
-                  label: const Text('Retry loading more clips'),
+                  label: Text(
+                    _feed.lastRequestFailed
+                        ? 'Retry loading more clips'
+                        : 'Find more clips',
+                  ),
                 ),
               ),
             // Pull-to-refresh on the first reel.

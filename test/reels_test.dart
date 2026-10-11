@@ -1144,6 +1144,64 @@ void main() {
       },
     );
 
+    testWidgets(
+      'many sparse scan windows pause discovery until explicit retry',
+      (tester) async {
+        var details = 0;
+        var scenesAvailable = false;
+        final feed = ReelsFeed(
+          configured: true,
+          language: 'en-US',
+          random: math.Random(1),
+          get: (path, query) async {
+            if (path.endsWith('/popular')) {
+              final page = int.parse(query['page']!);
+              final base = path.startsWith('movie') ? 10000 : 20000;
+              return {
+                'total_pages': 300,
+                'results': [
+                  for (var i = 0; i < 8; i++) {'id': base + page * 10 + i},
+                ],
+              };
+            }
+            details++;
+            return {
+              'title': scenesAvailable ? 'New scene' : 'No scene',
+              'external_ids': {'imdb_id': 'tt1234567'},
+              'videos': {
+                'results': scenesAvailable
+                    ? [
+                        {
+                          'site': 'YouTube',
+                          'type': 'Clip',
+                          'key': 'abcdefghijk',
+                          'official': true,
+                        },
+                      ]
+                    : [],
+              },
+            };
+          },
+        );
+        await tester.pumpWidget(host(feed));
+        await tester.pumpAndSettle();
+        expect(find.text('No clips right now'), findsOneWidget);
+        expect(find.text('Retry feed'), findsOneWidget);
+        final completed = details;
+        expect(completed, greaterThan(64));
+        await tester.pump(const Duration(seconds: 30));
+        expect(
+          details,
+          completed,
+          reason: 'exhausted sparse windows must stop polling',
+        );
+        scenesAvailable = true;
+        await tester.tap(find.text('Retry feed'));
+        await tester.pumpAndSettle();
+        expect(find.byType(PageView), findsOneWidget);
+      },
+    );
+
     testWidgets('without TMDB it says so instead of spinning', (tester) async {
       await tester.pumpWidget(host(feedFor(FakeTmdb(), configured: false)));
       await tester.pumpAndSettle();

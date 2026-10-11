@@ -69,24 +69,42 @@ void main() {
     name: 'A',
     poster: 'tmdb',
   );
-  testWidgets('same-title refresh keeps artwork until replacement resolves', (tester) async {
+  testWidgets('same-title refresh keeps artwork until replacement resolves', (
+    tester,
+  ) async {
     final refresh = Completer<MetadataPresentation>();
     final other = Completer<MetadataPresentation>();
-    final provider = Provider((n) => n == 1
-        ? Future.value(const MetadataPresentation(selected))
-        : n == 2 ? refresh.future : other.future);
+    final provider = Provider(
+      (n) => n == 1
+          ? Future.value(const MetadataPresentation(selected))
+          : n == 2
+          ? refresh.future
+          : other.future,
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pumpAndSettle();
     expect(find.text('tmdb'), findsOneWidget);
-    final updated = StremioMeta(id: original.id, type: original.type,
-        name: 'Updated', poster: 'new-addon');
+    final updated = StremioMeta(
+      id: original.id,
+      type: original.type,
+      name: 'Updated',
+      poster: 'new-addon',
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(updated, provider)));
     await tester.pump();
     expect(provider.calls, 2);
     expect(find.text('loading'), findsNothing);
     expect(find.text('tmdb'), findsOneWidget);
-    refresh.complete(MetadataPresentation(StremioMeta(id: original.id,
-        type: original.type, name: 'Updated', poster: 'new-tmdb')));
+    refresh.complete(
+      MetadataPresentation(
+        StremioMeta(
+          id: original.id,
+          type: original.type,
+          name: 'Updated',
+          poster: 'new-tmdb',
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('new-tmdb'), findsOneWidget);
     const different = StremioMeta(id: 'different', type: 'movie', name: 'B');
@@ -99,18 +117,31 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('current-provider refresh replaces retained metadata', (tester) async {
-    await MetadataPreferencesService.save(MetadataPreferences(providers: {
-      for (final category in MetadataCategory.values)
-        category: MetadataPreferences.current,
-    }));
+  testWidgets('current-provider refresh replaces retained metadata', (
+    tester,
+  ) async {
+    await MetadataPreferencesService.save(
+      MetadataPreferences(
+        providers: {
+          for (final category in MetadataCategory.values)
+            category: MetadataPreferences.current,
+        },
+      ),
+    );
     final refresh = Completer<MetadataPresentation>();
-    final provider = Provider((n) => n == 1
-        ? Future.value(const MetadataPresentation(original)) : refresh.future);
+    final provider = Provider(
+      (n) => n == 1
+          ? Future.value(const MetadataPresentation(original))
+          : refresh.future,
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pumpAndSettle();
-    final updated = StremioMeta(id: original.id, type: original.type,
-        name: 'Updated', poster: 'updated-addon');
+    final updated = StremioMeta(
+      id: original.id,
+      type: original.type,
+      name: 'Updated',
+      poster: 'updated-addon',
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(updated, provider)));
     await tester.pump();
     expect(find.text('addon'), findsOneWidget);
@@ -122,10 +153,16 @@ void main() {
   });
 
   testWidgets('hero retry recovers and becomes reusable', (tester) async {
-    final provider = Provider((n) async => MetadataPresentation(selected, retryable: n == 2));
+    final provider = Provider(
+      (n) async => MetadataPresentation(selected, retryable: n == 2),
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pump();
-    const next = StremioMeta(id: 'recover-preload', type: 'movie', name: 'Hero');
+    const next = StremioMeta(
+      id: 'recover-preload',
+      type: 'movie',
+      name: 'Hero',
+    );
     final state = tester.state<ProbeState>(find.byType(CardProbe));
     final preload = state.preloadMetadata(const [next], (_, _) async {});
     await tester.pump();
@@ -140,80 +177,123 @@ void main() {
   });
 
   testWidgets('disposing cancels a delayed hero retry', (tester) async {
-    final provider = Provider((n) async => MetadataPresentation(selected, retryable: n > 1));
+    final provider = Provider(
+      (n) async => MetadataPresentation(selected, retryable: n > 1),
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pump();
     final state = tester.state<ProbeState>(find.byType(CardProbe));
     final preload = state.preloadMetadata(const [
-      StremioMeta(id: 'cancel-retry', type: 'movie', name: 'Hero')], (_, _) async {});
+      StremioMeta(id: 'cancel-retry', type: 'movie', name: 'Hero'),
+    ], (_, _) async {});
     await tester.pump();
     await tester.pumpWidget(const SizedBox());
     await preload;
     expect(provider.calls, 2);
   });
 
-  testWidgets('failed hero preloads retry twice then stop', (tester) async {
-    final provider = Provider((n) async => n == 1
-        ? const MetadataPresentation(selected)
-        : const MetadataPresentation(selected, retryable: true));
+  testWidgets('failed hero preloads complete their bounded retry budget', (
+    tester,
+  ) async {
+    final provider = Provider(
+      (n) async => n == 1
+          ? const MetadataPresentation(selected)
+          : const MetadataPresentation(selected, retryable: true),
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pump();
     final state = tester.state<ProbeState>(find.byType(CardProbe));
     final preload = state.preloadMetadata(const [
-      StremioMeta(id: 'retry-preload', type: 'movie', name: 'Hero')], (_, _) async {});
+      StremioMeta(id: 'retry-preload', type: 'movie', name: 'Hero'),
+    ], (_, _) async {});
     await tester.pump();
     expect(provider.calls, 2);
     await tester.pump(const Duration(seconds: 2));
     expect(provider.calls, 3);
-    await tester.pump(const Duration(seconds: 4));
-    await preload;
-    expect(provider.calls, 4);
-    await tester.pump(const Duration(seconds: 20));
-    expect(provider.calls, 4);
-    await tester.pumpWidget(const SizedBox());
-  });
-
-  testWidgets('entire hero reel preloads with bounded concurrency and navigation reuse', (tester) async {
-    final pending = <Completer<MetadataPresentation>>[];
-    final provider = Provider((n) {
-      if (n == 1) return Future.value(const MetadataPresentation(selected));
-      final ready = Completer<MetadataPresentation>();
-      pending.add(ready);
-      return ready.future;
-    });
-    await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
-    await tester.pump();
-    final state = tester.state<ProbeState>(find.byType(CardProbe));
-    final heroes = List.generate(8, (i) => StremioMeta(id: 'preload-$i', type: 'movie', name: 'Hero'));
-    var warmed = 0;
-    final loading = state.preloadMetadata(heroes, (_, _) async { warmed++; });
-    await tester.pump();
-    expect(pending.length, 2);
-    for (var i = 0; i < heroes.length; i++) {
-      pending[i].complete(const MetadataPresentation(selected));
-      await tester.pump();
-      expect(pending.length - i - 1, lessThanOrEqualTo(2));
+    // The next retry timer is scheduled after the prior asynchronous
+    // presentation completes. Keep advancing the fake clock until the
+    // worker settles; awaiting it before pumping deadlocks this widget test.
+    var completed = false;
+    preload.then((_) => completed = true);
+    for (var i = 0; i < 20 && !completed; i++) {
+      await tester.pump(const Duration(seconds: 2));
     }
-    await loading;
-    expect(warmed, heroes.length);
-    expect(provider.calls, heroes.length + 1);
-    await tester.pumpWidget(MaterialApp(home: CardProbe(heroes.last, provider)));
-    await tester.pump();
-    expect(find.text('tmdb'), findsOneWidget);
-    expect(provider.calls, heroes.length + 1);
+    expect(
+      completed,
+      isTrue,
+      reason:
+          'hero retries must finish within the budget (calls: ${provider.calls})',
+    );
+    await preload;
+    expect(provider.calls, 6);
+    await tester.pump(const Duration(seconds: 20));
+    expect(provider.calls, 6);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('disposed hero preload does not publish or start further work', (tester) async {
+  testWidgets(
+    'entire hero reel preloads with bounded concurrency and navigation reuse',
+    (tester) async {
+      final pending = <Completer<MetadataPresentation>>[];
+      final provider = Provider((n) {
+        if (n == 1) return Future.value(const MetadataPresentation(selected));
+        final ready = Completer<MetadataPresentation>();
+        pending.add(ready);
+        return ready.future;
+      });
+      await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
+      await tester.pump();
+      final state = tester.state<ProbeState>(find.byType(CardProbe));
+      final heroes = List.generate(
+        8,
+        (i) => StremioMeta(id: 'preload-$i', type: 'movie', name: 'Hero'),
+      );
+      var warmed = 0;
+      final loading = state.preloadMetadata(heroes, (_, _) async {
+        warmed++;
+      });
+      await tester.pump();
+      expect(pending.length, 2);
+      for (var i = 0; i < heroes.length; i++) {
+        pending[i].complete(const MetadataPresentation(selected));
+        await tester.pump();
+        expect(pending.length - i - 1, lessThanOrEqualTo(2));
+      }
+      await loading;
+      expect(warmed, heroes.length);
+      expect(provider.calls, heroes.length + 1);
+      await tester.pumpWidget(
+        MaterialApp(home: CardProbe(heroes.last, provider)),
+      );
+      await tester.pump();
+      expect(find.text('tmdb'), findsOneWidget);
+      expect(provider.calls, heroes.length + 1);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets('disposed hero preload does not publish or start further work', (
+    tester,
+  ) async {
     final ready = Completer<MetadataPresentation>();
-    final provider = Provider((n) => n == 1
-        ? Future.value(const MetadataPresentation(selected)) : ready.future);
+    final provider = Provider(
+      (n) => n == 1
+          ? Future.value(const MetadataPresentation(selected))
+          : ready.future,
+    );
     await tester.pumpWidget(MaterialApp(home: CardProbe(original, provider)));
     await tester.pump();
     final state = tester.state<ProbeState>(find.byType(CardProbe));
     var warmed = 0;
-    final loading = state.preloadMetadata(List.generate(5, (i) =>
-      StremioMeta(id: 'disposed-$i', type: 'movie', name: 'Hero')), (_, _) async { warmed++; });
+    final loading = state.preloadMetadata(
+      List.generate(
+        5,
+        (i) => StremioMeta(id: 'disposed-$i', type: 'movie', name: 'Hero'),
+      ),
+      (_, _) async {
+        warmed++;
+      },
+    );
     await tester.pump();
     await tester.pumpWidget(const SizedBox());
     ready.complete(const MetadataPresentation(selected));

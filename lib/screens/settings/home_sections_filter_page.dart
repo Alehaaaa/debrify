@@ -862,13 +862,15 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       onPressed: _arranging ? () => _setArrangeMode(false) : _saveAndClose,
       icon: Icon(
         Icons.arrow_back_rounded,
-        color: Colors.white.withValues(alpha: 0.7),
+        color: GlassChrome.enabled(app)
+            ? app.settings.dim
+            : Colors.white.withValues(alpha: 0.7),
       ),
     );
     final title = Text(
       _arranging ? 'Arrange Home Rows' : 'Home Screen',
-      style: const TextStyle(
-        color: Colors.white,
+      style: TextStyle(
+        color: GlassChrome.enabled(app) ? app.core.tx : Colors.white,
         fontSize: 19,
         fontWeight: FontWeight.w800,
         letterSpacing: -0.2,
@@ -896,7 +898,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
           ],
         ),
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.65),
+          color: GlassChrome.enabled(app)
+              ? app.settings.dim
+              : Colors.white.withValues(alpha: 0.65),
           fontSize: 12.5,
         ),
       ),
@@ -1150,7 +1154,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                 padding: const EdgeInsets.all(4),
                                 child: Icon(
                                   Icons.drag_indicator_rounded,
-                                  color: Colors.white.withValues(alpha: 0.45),
+                                  color: GlassChrome.enabled(app)
+                                      ? app.settings.dim
+                                      : Colors.white.withValues(alpha: 0.45),
                                 ),
                               ),
                             ),
@@ -1161,7 +1167,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                 '${i + 1}',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.42),
+                                  color: GlassChrome.enabled(app)
+                                      ? app.settings.dim
+                                      : Colors.white.withValues(alpha: 0.42),
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
                                   ],
@@ -1177,8 +1185,10 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                     entry.item.label,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: GlassChrome.enabled(app)
+                                          ? app.core.tx
+                                          : Colors.white,
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1189,9 +1199,11 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.45,
-                                      ),
+                                      color: GlassChrome.enabled(app)
+                                          ? app.settings.dim
+                                          : Colors.white.withValues(
+                                              alpha: 0.45,
+                                            ),
                                       fontSize: 11.5,
                                     ),
                                   ),

@@ -61,8 +61,20 @@ void main() {
     final frosted = PremiumLooks.glass.build();
     await tester.pumpWidget(host(frosted));
     expect(actionDecoration(tester).color, GlassChrome.fill(frosted));
+    expect(
+      tester.widget<Text>(find.text('Home Screen')).style!.color,
+      frosted.core.tx,
+    );
+    expect(
+      tester.widget<Icon>(find.byIcon(Icons.arrow_back_rounded)).color,
+      frosted.settings.dim,
+    );
 
     await tester.pumpWidget(host(AppThemes.legacy));
     expect(actionDecoration(tester).color, isNull);
+    expect(
+      tester.widget<Text>(find.text('Home Screen')).style!.color,
+      Colors.white,
+    );
   });
 }

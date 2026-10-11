@@ -12,6 +12,8 @@ import '../addons_screen.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import '../../theme/app_motion.dart' show kMenuSheetAnimation;
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 /// Page for managing Stremio addons (with Scaffold wrapper)
 class StremioAddonsPage extends StatefulWidget {
@@ -642,30 +644,37 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
 
   Widget _buildHeroCard() {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.06),
-            Colors.white.withValues(alpha: 0.02),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.08),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFED1C24).withValues(alpha: 0.08),
-            blurRadius: 32,
-            spreadRadius: -8,
-          ),
-        ],
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(
+              app,
+              raised: true,
+              radius: BorderRadius.circular(20),
+            )
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.06),
+                  Colors.white.withValues(alpha: 0.02),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.08),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFED1C24).withValues(alpha: 0.08),
+                  blurRadius: 32,
+                  spreadRadius: -8,
+                ),
+              ],
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -710,10 +719,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     const SizedBox(height: 2),
                     Text(
                       'Paste a manifest URL to install',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
-                        fontSize: 12.5,
-                      ),
+                      style: TextStyle(color: app.settings.dim, fontSize: 12.5),
                     ),
                   ],
                 ),
@@ -754,14 +760,20 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
   }
 
   Widget _buildUrlField() {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: _urlFieldFocused ? 0.45 : 0.3),
+        color: frosted
+            ? GlassChrome.field(app)
+            : Colors.black.withValues(alpha: _urlFieldFocused ? 0.45 : 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _urlFieldFocused
               ? const Color(0xFFED1C24).withValues(alpha: 0.9)
+              : frosted
+              ? GlassChrome.edge(app)
               : Colors.white.withValues(alpha: 0.1),
           width: _urlFieldFocused ? 2 : 1,
         ),
@@ -781,17 +793,14 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           hintText: 'https://addon.example.com/manifest.json',
-          hintStyle: TextStyle(
-            color: Colors.white.withValues(alpha: 0.35),
-            fontSize: 13.5,
-          ),
+          hintStyle: TextStyle(color: app.settings.dim, fontSize: 13.5),
           border: InputBorder.none,
           focusedBorder: InputBorder.none,
           enabledBorder: InputBorder.none,
           prefixIcon: Icon(
             Icons.link_rounded,
             size: 18,
-            color: Colors.white.withValues(alpha: 0.5),
+            color: app.settings.dim,
           ),
           prefixIconConstraints: const BoxConstraints(
             minWidth: 38,
@@ -866,24 +875,27 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
 
   Widget _buildImportActionsCard() {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: 0.04),
-            Colors.white.withValues(alpha: 0.015),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-          width: 1,
-        ),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app, radius: BorderRadius.circular(18))
+          : BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Colors.white.withValues(alpha: 0.04),
+                  Colors.white.withValues(alpha: 0.015),
+                ],
+              ),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.06),
+                width: 1,
+              ),
+            ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 560;
@@ -929,7 +941,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     Text(
                       'Bulk-import from a Stremio JSON export, or clear all installed addons.',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55),
+                        color: app.settings.dim,
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -2035,6 +2047,7 @@ class _AddonTileState extends State<_AddonTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
     final enabled = widget.addon.enabled;
 
     return FocusTraversalOrder(
@@ -2060,37 +2073,46 @@ class _AddonTileState extends State<_AddonTile> {
               1.0,
             ),
           transformAlignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: _isFocused
-                  ? [
-                      const Color(0xFFED1C24).withValues(alpha: 0.18),
-                      const Color(0xFFED1C24).withValues(alpha: 0.06),
-                    ]
-                  : [
-                      Colors.white.withValues(alpha: 0.05),
-                      Colors.white.withValues(alpha: 0.02),
-                    ],
-            ),
-            border: Border.all(
-              color: _isFocused
-                  ? const Color(0xFFED1C24).withValues(alpha: 0.9)
-                  : Colors.white.withValues(alpha: 0.07),
-              width: _isFocused ? 2 : 1,
-            ),
-            boxShadow: _isFocused
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFED1C24).withValues(alpha: 0.3),
-                      blurRadius: 22,
-                      spreadRadius: -4,
-                    ),
-                  ]
-                : null,
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(
+                  app,
+                  raised: _isFocused,
+                  active: _isFocused,
+                  radius: BorderRadius.circular(16),
+                )
+              : BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: _isFocused
+                        ? [
+                            const Color(0xFFED1C24).withValues(alpha: 0.18),
+                            const Color(0xFFED1C24).withValues(alpha: 0.06),
+                          ]
+                        : [
+                            Colors.white.withValues(alpha: 0.05),
+                            Colors.white.withValues(alpha: 0.02),
+                          ],
+                  ),
+                  border: Border.all(
+                    color: _isFocused
+                        ? const Color(0xFFED1C24).withValues(alpha: 0.9)
+                        : Colors.white.withValues(alpha: 0.07),
+                    width: _isFocused ? 2 : 1,
+                  ),
+                  boxShadow: _isFocused
+                      ? [
+                          BoxShadow(
+                            color: const Color(
+                              0xFFED1C24,
+                            ).withValues(alpha: 0.3),
+                            blurRadius: 22,
+                            spreadRadius: -4,
+                          ),
+                        ]
+                      : null,
+                ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -2151,9 +2173,7 @@ class _AddonTileState extends State<_AddonTile> {
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               letterSpacing: -0.1,
-                              color: enabled
-                                  ? Colors.white
-                                  : Colors.white.withValues(alpha: 0.6),
+                              color: enabled ? app.core.tx : app.settings.dim,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -2163,7 +2183,9 @@ class _AddonTileState extends State<_AddonTile> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.white.withValues(alpha: 0.5),
+                              color: GlassChrome.enabled(app)
+                                  ? app.settings.dim
+                                  : Colors.white.withValues(alpha: 0.5),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -2176,7 +2198,9 @@ class _AddonTileState extends State<_AddonTile> {
                     const SizedBox(width: 6),
                     Icon(
                       Icons.chevron_right_rounded,
-                      color: Colors.white.withValues(alpha: 0.35),
+                      color: GlassChrome.enabled(app)
+                          ? app.settings.dim
+                          : Colors.white.withValues(alpha: 0.35),
                       size: 20,
                     ),
                   ],
@@ -2290,98 +2314,106 @@ class _AddonOptionsSheetState extends State<_AddonOptionsSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
 
     return FocusTraversalGroup(
       policy: OrderedTraversalPolicy(),
       child: Container(
         decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
+          color: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : theme.colorScheme.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          border: GlassChrome.enabled(app)
+              ? Border(top: BorderSide(color: GlassChrome.edge(app)))
+              : null,
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: widget.addon.enabled
-                        ? const Color(0xFFED1C24).withValues(alpha: 0.2)
-                        : theme.colorScheme.onSurface.withValues(alpha: 0.1),
-                    child: Icon(
-                      Icons.extension,
-                      color: widget.addon.enabled
-                          ? const Color(0xFFED1C24)
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      widget.addon.displayName,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: widget.addon.enabled
+                          ? const Color(0xFFED1C24).withValues(alpha: 0.2)
+                          : theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                      child: Icon(
+                        Icons.extension,
+                        color: widget.addon.enabled
+                            ? const Color(0xFFED1C24)
+                            : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        widget.addon.displayName,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Divider(
+                height: 1,
+                color: theme.dividerColor.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 8),
+              // Options
+              FocusTraversalOrder(
+                order: const NumericFocusOrder(0),
+                child: _OptionTile(
+                  focusNode: _toggleFocusNode,
+                  icon: widget.addon.enabled
+                      ? Icons.toggle_off_outlined
+                      : Icons.toggle_on_outlined,
+                  label: widget.addon.enabled ? 'Disable' : 'Enable',
+                  onTap: widget.onToggle,
+                ),
+              ),
+              if (widget.addon.canManage &&
+                  !widget.addon.connectionResourceSecretPending) ...[
+                FocusTraversalOrder(
+                  order: const NumericFocusOrder(1),
+                  child: _OptionTile(
+                    focusNode: _updateFocusNode,
+                    icon: Icons.refresh,
+                    label: 'Update',
+                    onTap: widget.onUpdate,
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Divider(
-              height: 1,
-              color: theme.dividerColor.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 8),
-            // Options
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(0),
-              child: _OptionTile(
-                focusNode: _toggleFocusNode,
-                icon: widget.addon.enabled
-                    ? Icons.toggle_off_outlined
-                    : Icons.toggle_on_outlined,
-                label: widget.addon.enabled ? 'Disable' : 'Enable',
-                onTap: widget.onToggle,
-              ),
-            ),
-            if (widget.addon.canManage &&
-                !widget.addon.connectionResourceSecretPending) ...[
+                ),
+              ],
               FocusTraversalOrder(
-                order: const NumericFocusOrder(1),
+                order: const NumericFocusOrder(2),
                 child: _OptionTile(
-                  focusNode: _updateFocusNode,
-                  icon: Icons.refresh,
-                  label: 'Update',
-                  onTap: widget.onUpdate,
+                  focusNode: _detailsFocusNode,
+                  icon: Icons.info_outline,
+                  label: 'View Details',
+                  onTap: widget.onDetails,
                 ),
               ),
+              if (widget.addon.canManage)
+                FocusTraversalOrder(
+                  order: const NumericFocusOrder(3),
+                  child: _OptionTile(
+                    focusNode: _deleteFocusNode,
+                    icon: Icons.delete_outline,
+                    label: 'Remove',
+                    isDestructive: true,
+                    onTap: widget.onDelete,
+                  ),
+                ),
+              const SizedBox(height: 8),
             ],
-            FocusTraversalOrder(
-              order: const NumericFocusOrder(2),
-              child: _OptionTile(
-                focusNode: _detailsFocusNode,
-                icon: Icons.info_outline,
-                label: 'View Details',
-                onTap: widget.onDetails,
-              ),
-            ),
-            if (widget.addon.canManage)
-              FocusTraversalOrder(
-                order: const NumericFocusOrder(3),
-                child: _OptionTile(
-                  focusNode: _deleteFocusNode,
-                  icon: Icons.delete_outline,
-                  label: 'Remove',
-                  isDestructive: true,
-                  onTap: widget.onDelete,
-                ),
-              ),
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
@@ -2435,6 +2467,7 @@ class _OptionTileState extends State<_OptionTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final app = AppThemeScope.of(context);
     final color = widget.isDestructive
         ? Colors.red.shade400
         : theme.colorScheme.onSurface;
@@ -2453,20 +2486,32 @@ class _OptionTileState extends State<_OptionTile> {
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: _isFocused
-              ? theme.colorScheme.onSurface.withValues(alpha: 0.1)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: _isFocused
-              ? Border.all(color: const Color(0xFFED1C24), width: 2)
-              : null,
-        ),
-        child: ListTile(
-          leading: Icon(widget.icon, color: color),
-          title: Text(widget.label, style: TextStyle(color: color)),
-          onTap: widget.onTap,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        decoration: GlassChrome.enabled(app)
+            ? GlassChrome.decoration(
+                app,
+                raised: _isFocused,
+                active: _isFocused,
+                radius: BorderRadius.circular(8),
+              )
+            : BoxDecoration(
+                color: _isFocused
+                    ? theme.colorScheme.onSurface.withValues(alpha: 0.1)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                border: _isFocused
+                    ? Border.all(color: const Color(0xFFED1C24), width: 2)
+                    : null,
+              ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: ListTile(
+            leading: Icon(widget.icon, color: color),
+            title: Text(widget.label, style: TextStyle(color: color)),
+            onTap: widget.onTap,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
         ),
       ),
     );
