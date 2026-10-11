@@ -14975,6 +14975,10 @@ class _SearchScreenState extends State<SearchScreen>
       // flow — _refreshAfterPlayback covers the tracker rows too, and
       // sequences the bound-source pass after the CW reloads.
       .then((_) {
+        // Replacing Search (profile switch, tab teardown, test host removal)
+        // may dispose this State before the pushed detail route finishes.
+        // Its return callback must not restart requests for a dead screen.
+        if (!mounted) return;
         unawaited(_refreshAfterPlayback());
         _refreshTraktAuthState();
         _refreshSimklAuthState();

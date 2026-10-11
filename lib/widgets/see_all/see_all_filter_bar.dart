@@ -112,10 +112,15 @@ class _SeeAllFilterBarState extends State<SeeAllFilterBar> {
     await showModalBottomSheet<void>(
       sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: app.seeAll.panel,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : app.seeAll.panel,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+        side: GlassChrome.enabled(app)
+            ? BorderSide(color: GlassChrome.edge(app))
+            : BorderSide.none,
       ),
       builder: (sheetContext) {
         return StatefulBuilder(

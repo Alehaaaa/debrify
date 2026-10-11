@@ -1847,15 +1847,14 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     final revision = MetadataPreferencesService.revision.value;
     String? chosen;
     if (_trailerCandidates.length > 1) {
+      final app = AppThemeScope.of(context);
       chosen = await showDialog<String>(
         context: context,
         builder: (context) => SimpleDialog(
-          backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
-              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
               : null,
-          shape: GlassChrome.enabled(AppThemeScope.of(context))
-              ? GlassChrome.shape(AppThemeScope.of(context))
-              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           title: const Text('Choose trailer'),
           children: [
             for (final video in _trailerCandidates)

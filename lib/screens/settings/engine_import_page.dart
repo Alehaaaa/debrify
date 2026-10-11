@@ -11,6 +11,27 @@ import '../../utils/tv_keys.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/glass_chrome.dart';
 
+/// Both the embedded Settings route and standalone import page open the same
+/// dialogs. Resolve appearance from the invoking page, outside the overlay
+/// route, so the panel stays frosted through confirmation and progress states.
+@visibleForTesting
+AlertDialog buildEngineImportDialog(
+  BuildContext pageContext, {
+  Widget? title,
+  required Widget content,
+  List<Widget>? actions,
+}) {
+  final app = AppThemeScope.of(pageContext);
+  final frosted = GlassChrome.enabled(app);
+  return AlertDialog(
+    backgroundColor: frosted ? GlassChrome.fill(app, raised: true) : null,
+    shape: frosted ? GlassChrome.shape(app) : null,
+    title: title,
+    content: content,
+    actions: actions,
+  );
+}
+
 /// Page for importing and managing torrent search engines (with Scaffold wrapper)
 class EngineImportPage extends StatefulWidget {
   const EngineImportPage({super.key});
@@ -21,7 +42,16 @@ class EngineImportPage extends StatefulWidget {
 
 /// Content widget for embedding in tabs (without Scaffold)
 class EngineImportPageContent extends StatefulWidget {
-  const EngineImportPageContent({super.key});
+  const EngineImportPageContent({
+    super.key,
+    this.remoteManager,
+    this.localStorage,
+  });
+
+  @visibleForTesting
+  final RemoteEngineManager? remoteManager;
+  @visibleForTesting
+  final LocalEngineStorage? localStorage;
 
   @override
   State<EngineImportPageContent> createState() =>
@@ -29,10 +59,13 @@ class EngineImportPageContent extends StatefulWidget {
 }
 
 class _EngineImportPageContentState extends State<EngineImportPageContent> {
-  final RemoteEngineManager _remoteManager = RemoteEngineManager();
-  final LocalEngineStorage _localStorage = LocalEngineStorage.instance;
+  late final RemoteEngineManager _remoteManager =
+      widget.remoteManager ?? RemoteEngineManager();
+  late final LocalEngineStorage _localStorage =
+      widget.localStorage ?? LocalEngineStorage.instance;
 
   bool _isLoading = true;
+  int _loadGeneration = 0;
   String? _error;
 
   List<ImportedEngineMetadata> _importedEngines = [];
@@ -72,15 +105,19 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
   }
 
   Future<void> _loadEngines() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      _importedEngines = await _localStorage.getImportedEngines();
+      final imported = await _localStorage.getImportedEngines();
+      if (!mounted || generation != _loadGeneration) return;
       final remoteEngines = await _remoteManager.fetchAvailableEngines();
-      final importedIds = _importedEngines.map((e) => e.id).toSet();
+      if (!mounted || generation != _loadGeneration) return;
+      _importedEngines = imported;
+      final importedIds = imported.map((e) => e.id).toSet();
       _availableEngines = remoteEngines
           .where((e) => !importedIds.contains(e.id))
           .toList();
@@ -109,6 +146,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _isLoading = false;
         _error = e.toString();
@@ -120,7 +158,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         content: Row(
           children: [
             const CircularProgressIndicator(),
@@ -176,7 +215,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
   Future<void> _deleteEngine(ImportedEngineMetadata engine) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         title: const Text('Delete Engine'),
         content: Text('Are you sure you want to delete ${engine.displayName}?'),
         actions: [
@@ -272,7 +312,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
         final confirmed = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             title: const Text('Engine Already Exists'),
             content: Text(
               'An engine with ID "$engineId" already exists. Do you want to replace it?',
@@ -297,7 +338,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             content: Row(
               children: [
                 const CircularProgressIndicator(),
@@ -875,6 +917,7 @@ class _EngineImportPageState extends State<EngineImportPage> {
   final LocalEngineStorage _localStorage = LocalEngineStorage.instance;
 
   bool _isLoading = true;
+  int _loadGeneration = 0;
   String? _error;
 
   List<ImportedEngineMetadata> _importedEngines = [];
@@ -913,6 +956,7 @@ class _EngineImportPageState extends State<EngineImportPage> {
   }
 
   Future<void> _loadEngines() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _isLoading = true;
       _error = null;
@@ -920,13 +964,16 @@ class _EngineImportPageState extends State<EngineImportPage> {
 
     try {
       // Load imported engines from local storage
-      _importedEngines = await _localStorage.getImportedEngines();
+      final imported = await _localStorage.getImportedEngines();
+      if (!mounted || generation != _loadGeneration) return;
 
       // Fetch available engines from GitLab
       final remoteEngines = await _remoteManager.fetchAvailableEngines();
+      if (!mounted || generation != _loadGeneration) return;
+      _importedEngines = imported;
 
       // Filter out already imported engines
-      final importedIds = _importedEngines.map((e) => e.id).toSet();
+      final importedIds = imported.map((e) => e.id).toSet();
       _availableEngines = remoteEngines
           .where((e) => !importedIds.contains(e.id))
           .toList();
@@ -970,6 +1017,7 @@ class _EngineImportPageState extends State<EngineImportPage> {
         }
       });
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _isLoading = false;
         _error = e.toString();
@@ -988,7 +1036,8 @@ class _EngineImportPageState extends State<EngineImportPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         content: Row(
           children: [
             const CircularProgressIndicator(),
@@ -1056,7 +1105,8 @@ class _EngineImportPageState extends State<EngineImportPage> {
     // Confirm deletion
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         title: const Text('Delete Engine'),
         content: Text('Are you sure you want to delete ${engine.displayName}?'),
         actions: [
@@ -1162,7 +1212,8 @@ class _EngineImportPageState extends State<EngineImportPage> {
         // Confirm overwrite
         final confirmed = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             title: const Text('Engine Already Exists'),
             content: Text(
               'An engine with ID "$engineId" already exists. Do you want to replace it?',
@@ -1188,7 +1239,8 @@ class _EngineImportPageState extends State<EngineImportPage> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             content: Row(
               children: [
                 const CircularProgressIndicator(),

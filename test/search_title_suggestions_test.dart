@@ -17,6 +17,7 @@ import 'package:debrify/widgets/tv_text_field.dart';
 import 'package:debrify/widgets/home/spotlight_board.dart';
 import 'package:debrify/widgets/home/spotlight_card_trailer.dart';
 import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/downloaded_media_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,10 +32,19 @@ void main() {
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
     StremioService.instance.invalidateCache();
+    // A Search suggestion test only exercises title routing. Merged details
+    // watch the local downloads library, whose default scan initializes the
+    // native background-downloader runtime outside this test's control.
+    DownloadedMediaService.debugRecords = () async => [];
+    DownloadedMediaService.debugFolders = () async => [];
+    DownloadedMediaService.debugResetCache();
   });
   tearDown(() {
     MainPageBridge.setActiveTab(null);
     StremioService.instance.invalidateCache();
+    DownloadedMediaService.debugRecords = null;
+    DownloadedMediaService.debugFolders = null;
+    DownloadedMediaService.debugResetCache();
     ProfileRuntime.debugReset();
   });
 
@@ -370,6 +380,8 @@ void main() {
     expect(detail.item.id, 'tt1160419');
     expect(detail.item.year, '2021');
     expect(fixture.search.value, isEmpty);
+    Navigator.of(tester.element(find.byType(MergedDetailScreen))).pop();
+    await tester.pumpAndSettle();
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 

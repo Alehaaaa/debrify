@@ -94,4 +94,63 @@ void main() {
       await tester.pumpWidget(const SizedBox());
     },
   );
+
+  testWidgets('pending download actions use frosted chrome after reopening', (
+    tester,
+  ) async {
+    Widget host(AppTheme app) => MaterialApp(
+      home: AppThemeScope(
+        theme: app,
+        child: Scaffold(
+          body: DownloadsScreen(loadDownloads: () async => const []),
+        ),
+      ),
+    );
+    var canceled = 0;
+    PendingTitleDownloads.begin(
+      PendingTitleDownload(
+        id: 'tt42',
+        title: 'Pending Movie',
+        type: 'movie',
+        phase: PendingDownloadPhase.searching,
+        onCancel: () => canceled++,
+      ),
+    );
+    final frosted = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(frosted));
+    await tester.pump();
+    for (var i = 0; i < 2; i++) {
+      await tester.tap(find.byType(CatalogItemTile));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+      expect(sheet.backgroundColor, GlassChrome.fill(frosted, raised: true));
+      expect(
+        (sheet.shape! as RoundedRectangleBorder).side.color,
+        GlassChrome.edge(frosted),
+      );
+      if (i == 0) {
+        Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+      } else {
+        await tester.tap(find.text('Stop download'));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(BottomSheet), findsNothing);
+    }
+    expect(canceled, 1);
+    await tester.pumpWidget(host(AppThemes.legacy));
+    await tester.pump();
+    await tester.tap(find.byType(CatalogItemTile));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    final sheetContext = tester.element(find.byType(BottomSheet));
+    expect(
+      tester.widget<BottomSheet>(find.byType(BottomSheet)).backgroundColor,
+      Theme.of(sheetContext).colorScheme.surfaceContainerLow,
+    );
+    Navigator.of(tester.element(find.byType(BottomSheet))).pop();
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpWidget(const SizedBox());
+  });
 }

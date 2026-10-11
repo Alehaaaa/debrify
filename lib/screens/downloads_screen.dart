@@ -118,8 +118,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   Future<void> _showPendingOptions(PendingTitleDownload pending) async {
     final cancel = pending.onCancel;
     if (cancel == null) return;
+    final app = AppThemeScope.of(context);
     final stop = await showModalBottomSheet<bool>(
       context: context,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : null,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
       builder: (sheetContext) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
