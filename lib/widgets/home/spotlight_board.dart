@@ -19,6 +19,7 @@ import '../../services/debrify_image_cache.dart';
 import '../../theme/app_focus.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../theme/widgets/focus_expression.dart';
 import '../../theme/widgets/parallax_focus.dart';
 import '../../utils/artwork_url.dart';
@@ -3742,36 +3743,46 @@ class _LogoOrTitle extends StatelessWidget {
   }
 }
 
-/// The compact hero's one button — white pill, black glyph, the phone idiom.
+/// The compact hero's primary action. Keep the classic white pill while Glass
+/// uses the same translucent chrome as Home's other contextual controls.
 class _HeroOpenPill extends StatelessWidget {
   final VoidCallback onTap;
   const _HeroOpenPill({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 26),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(21),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.play_arrow_rounded, size: 20, color: Colors.black),
-            SizedBox(width: 6),
-            Text(
-              'Play',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
+    final ink = frosted ? app.core.tx : Colors.black;
+    final radius = BorderRadius.circular(21);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        focusColor: app.core.accent.withValues(alpha: 0.24),
+        hoverColor: app.core.accent.withValues(alpha: 0.14),
+        child: Ink(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 26),
+          decoration: frosted
+              ? GlassChrome.decoration(app, raised: true, radius: radius)
+              : BoxDecoration(color: Colors.white, borderRadius: radius),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.play_arrow_rounded, size: 20, color: ink),
+              const SizedBox(width: 6),
+              Text(
+                'Play',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: ink,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

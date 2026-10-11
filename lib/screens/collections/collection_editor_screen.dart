@@ -655,40 +655,51 @@ Widget _orderedTile<T>({
         );
       },
     ),
-    Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        IconButton(
-          tooltip: 'Move up',
-          onPressed: index == 0
-              ? null
-              : () {
-                  final item = values.removeAt(index);
-                  values.insert(index - 1, item);
+    Builder(
+      builder: (context) {
+        final app = AppThemeScope.of(context);
+        return Container(
+          margin: const EdgeInsets.only(top: 4, bottom: 8),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(app, radius: app.shape.br(12))
+              : null,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                tooltip: 'Move up',
+                onPressed: index == 0
+                    ? null
+                    : () {
+                        final item = values.removeAt(index);
+                        values.insert(index - 1, item);
+                        onChanged();
+                      },
+                icon: const Icon(Icons.arrow_upward),
+              ),
+              IconButton(
+                tooltip: 'Move down',
+                onPressed: index == values.length - 1
+                    ? null
+                    : () {
+                        final item = values.removeAt(index);
+                        values.insert(index + 1, item);
+                        onChanged();
+                      },
+                icon: const Icon(Icons.arrow_downward),
+              ),
+              IconButton(
+                tooltip: 'Remove',
+                onPressed: () {
+                  values.removeAt(index);
                   onChanged();
                 },
-          icon: const Icon(Icons.arrow_upward),
-        ),
-        IconButton(
-          tooltip: 'Move down',
-          onPressed: index == values.length - 1
-              ? null
-              : () {
-                  final item = values.removeAt(index);
-                  values.insert(index + 1, item);
-                  onChanged();
-                },
-          icon: const Icon(Icons.arrow_downward),
-        ),
-        IconButton(
-          tooltip: 'Remove',
-          onPressed: () {
-            values.removeAt(index);
-            onChanged();
-          },
-          icon: const Icon(Icons.delete_outline),
-        ),
-      ],
+                icon: const Icon(Icons.delete_outline),
+              ),
+            ],
+          ),
+        );
+      },
     ),
   ],
 );

@@ -180,6 +180,14 @@ void main() {
       copyButton().style?.shape?.resolve({}),
       GlassChrome.shape(app, active: true),
     );
+    expect(
+      tester.widget<Text>(find.text('Share title')).style?.color,
+      app.core.tx,
+    );
+    expect(
+      tester.widget<SelectableText>(find.byType(SelectableText)).style?.color,
+      app.core.tx,
+    );
     expect(find.text('Open in IMDb'), findsOneWidget);
   });
 }

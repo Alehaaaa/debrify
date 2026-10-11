@@ -13,6 +13,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+    'nested collection action rail follows appearance after reopening',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(940, 760));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final collection = HomeCollection(
+        id: 'collection',
+        title: 'My Collection',
+        folders: [
+          HomeCollectionFolder(id: 'folder', title: 'Folder', sources: []),
+        ],
+      );
+      Widget host(AppTheme app) => MaterialApp(
+        builder: (context, child) => AppThemeScope(theme: app, child: child!),
+        home: CollectionEditorScreen(collection: collection, addons: const []),
+      );
+      final frosted = AppThemes.byId('glass');
+      await tester.pumpWidget(host(frosted));
+      await tester.pumpAndSettle();
+      final move = find.byTooltip('Move up').first;
+      final rail = find
+          .ancestor(of: move, matching: find.byType(Container))
+          .first;
+      expect(
+        tester.widget<Container>(rail).decoration,
+        GlassChrome.decoration(frosted, radius: frosted.shape.br(12)),
+      );
+      await tester.tap(find.text('Folder'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit folder'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Move up'), findsWidgets);
+
+      await tester.pumpWidget(host(AppThemes.legacy));
+      await tester.pumpAndSettle();
+      final classicRail = find
+          .ancestor(
+            of: find.byTooltip('Move up').first,
+            matching: find.byType(Container),
+          )
+          .first;
+      expect(tester.widget<Container>(classicRail).decoration, isNull);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final appearance in ['glass', 'legacy']) {
     testWidgets('nested collection dropdown follows $appearance appearance', (
       tester,

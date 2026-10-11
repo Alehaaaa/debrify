@@ -184,10 +184,10 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Share title',
             style: TextStyle(
-              color: Colors.white,
+              color: glass ? app.core.tx : Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.w700,
             ),
@@ -195,8 +195,8 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
           const SizedBox(height: 20),
           Text(
             content.title,
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: glass ? app.core.tx : Colors.white,
               fontSize: 17,
               fontWeight: FontWeight.w600,
             ),
@@ -214,7 +214,10 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
               padding: const EdgeInsets.all(16),
               child: SelectableText(
                 '${content.url}',
-                style: const TextStyle(color: Colors.white, fontSize: 14),
+                style: TextStyle(
+                  color: glass ? app.core.tx : Colors.white,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -248,7 +251,9 @@ class _ReelShareSheetState extends State<_ReelShareSheet> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 _error!,
-                style: const TextStyle(color: Colors.white70),
+                style: TextStyle(
+                  color: glass ? app.settings.danger : Colors.white70,
+                ),
               ),
             ),
         ],

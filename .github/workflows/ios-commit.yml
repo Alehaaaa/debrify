@@ -159,7 +159,7 @@ jobs:
         if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
           gh release create "$RELEASE_TAG" --prerelease --target "$GITHUB_SHA" \
             --title "Nextup build #$GITHUB_RUN_NUMBER (${GITHUB_SHA::7})" \
-            --notes "Commit $GITHUB_SHA on $GITHUB_REF_NAME. Android and Android TV APKs are attached when their build finishes."
+            --notes "Commit $GITHUB_SHA on $GITHUB_REF_NAME. iOS IPA and SideStore source publication is in progress. Automatic Android and Android TV builds are paused pending a stable release signing key."
         fi
 
         # Each build's release tag and IPA name are unique and stay addressable.
