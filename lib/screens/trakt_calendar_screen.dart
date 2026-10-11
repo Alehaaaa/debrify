@@ -1219,6 +1219,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
               color: GlassChrome.enabled(app)
                   ? GlassChrome.fill(app, raised: true)
                   : const Color(0xFF12182B),
+              shape: GlassChrome.enabled(app)
+                  ? GlassChrome.shape(app, radius: 14)
+                  : null,
               onSelected: _onSourceChanged,
               itemBuilder: (_) => [
                 if (_traktAuthed)
@@ -1259,6 +1262,9 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             color: GlassChrome.enabled(app)
                 ? GlassChrome.fill(app, raised: true)
                 : const Color(0xFF12182B),
+            shape: GlassChrome.enabled(app)
+                ? GlassChrome.shape(app, radius: 14)
+                : null,
             onSelected: (value) async {
               setState(() => _timeFormat = value);
               await _displayPreferences?.setString(_timeFormatKey, value.name);
@@ -1552,36 +1558,43 @@ class _AiringDayCard extends StatelessWidget {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOutCubic,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isFocused
-                    ? const Color(0xFFE85A63)
-                    : Colors.white.withValues(alpha: 0.06),
-                width: isFocused ? 2 : 1,
-              ),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  app.fade(app.calendar.card, 0.98),
-                  app.fade(app.calendar.card2, 0.98),
-                ],
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.22),
-                  blurRadius: 18,
-                  offset: const Offset(0, 12),
-                ),
-                if (isFocused)
-                  BoxShadow(
-                    color: app.fade(app.calendar.accent, 0.22),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+            decoration: GlassChrome.enabled(app)
+                ? GlassChrome.decoration(
+                    app,
+                    radius: BorderRadius.circular(16),
+                    raised: isFocused,
+                    active: isFocused,
+                  )
+                : BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isFocused
+                          ? const Color(0xFFE85A63)
+                          : Colors.white.withValues(alpha: 0.06),
+                      width: isFocused ? 2 : 1,
+                    ),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        app.fade(app.calendar.card, 0.98),
+                        app.fade(app.calendar.card2, 0.98),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 18,
+                        offset: const Offset(0, 12),
+                      ),
+                      if (isFocused)
+                        BoxShadow(
+                          color: app.fade(app.calendar.accent, 0.22),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                    ],
                   ),
-              ],
-            ),
             // The frosted press on touch, the ring for a TV hold.
             child: HoldFeedback(
               controller: hold?.ring,

@@ -53,6 +53,11 @@ class _Reel {
   /// broken source cannot loop through players and network requests forever.
   int reconnectAttempts = 0;
 
+  /// A failed relay belonging to a look-ahead player should retry through
+  /// direct extraction only if the user actually opens that Reel. Otherwise
+  /// it competes for the current video's limited resolution slots.
+  bool relayRetryOnActivation = false;
+
   StremioMeta get item => title.item;
 }
 
@@ -399,6 +404,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   Future<void> _resolve(int index) async {
     if (index < 0 || index >= _reels.length) return;
     final reel = _reels[index];
+    if (reel.relayRetryOnActivation && index != _index) return;
     if (reel.state == _ClipState.resolving &&
         index == _index &&
         widget.resolver == null) {
@@ -549,6 +555,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() {
       _index = index;
       _paused = false;
+      next.relayRetryOnActivation = false;
     });
     // Ownership changes at the midpoint: the prepared incoming player starts
     // while the swipe is still moving, rather than after the spring settles.
@@ -664,8 +671,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
         reel.streams = null;
         reel.framed = false;
         reel.state = _ClipState.idle;
+        reel.relayRetryOnActivation = page != _index;
       });
-      unawaited(_resolve(_reels.indexOf(reel)));
+      if (page == _index) unawaited(_resolve(page));
       return;
     }
     if (page == _index && reel.framed && reel.reconnectAttempts == 0) {

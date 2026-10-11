@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/trakt/trakt_calendar_entry.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import 'calendar_display_preferences.dart';
 import 'card_action_menu.dart';
 import 'hold_feedback.dart';
@@ -137,6 +138,12 @@ class _EpisodeRow extends StatelessWidget {
       child: InkWell(
         splashFactory: NoSplash.splashFactory,
         highlightColor: Colors.transparent,
+        hoverColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        focusColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
         onTap: onTap,
         onLongPress: withHoldHaptic(onLongPress),
         onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),

@@ -995,6 +995,57 @@ void main() {
     );
 
     testWidgets(
+      'a failed relay preload waits for visibility before direct extraction',
+      (tester) async {
+        final attempts = <String, int>{};
+        ReelPlayback? upcoming;
+        await tester.pumpWidget(
+          host(
+            feedFor(FakeTmdb()),
+            resolver: (key) async {
+              final count = attempts[key] = (attempts[key] ?? 0) + 1;
+              return count == 1
+                  ? const YoutubeResolvedStreams(
+                      playUrl: 'https://relay.example/preload',
+                      isRelay: true,
+                    )
+                  : _clip;
+            },
+            onPlayer: (playback) {
+              if (playback.prewarm &&
+                  !playback.active &&
+                  playback.streams?.isRelay == true) {
+                upcoming = playback;
+              }
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        final first = activeId(tester)!;
+        final next = upcoming!;
+        final key =
+            'clip${int.parse(next.item.id.substring(2)).toString().padLeft(7, '0')}';
+        expect(attempts[key], 1);
+
+        next.onPlaybackFailed!();
+        await tester.pumpAndSettle();
+        expect(activeId(tester), first);
+        expect(playing(first), findsOneWidget);
+        expect(
+          attempts[key],
+          1,
+          reason: 'The failed look-ahead relay must not consume a new slot',
+        );
+
+        await tester.fling(find.byType(PageView), const Offset(0, -500), 2000);
+        await tester.pumpAndSettle();
+        expect(activeId(tester), next.item.id);
+        expect(attempts[key], 2);
+        expect(playing(next.item.id), findsOneWidget);
+      },
+    );
+
+    testWidgets(
       'a relay clip that fails in the player is re-resolved, not discarded',
       (tester) async {
         final attempts = <String, int>{};

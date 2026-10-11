@@ -5,13 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 // Complements the executable projection/Activity tests and device smoke test:
 // guard the caller routing, especially terminal failures versus fallback.
 void main() {
-  final bridge = File(
-    'lib/services/android_tv_player_bridge.dart',
-  ).readAsStringSync();
-  final launcher = File(
-    'lib/services/video_player_launcher.dart',
-  ).readAsStringSync();
-  final magic = File('lib/screens/magic_tv_screen.dart').readAsStringSync();
+  // Source guards inspect Dart statements, not the checkout's line endings.
+  // On Windows the same verified catch/return block is often CRLF.
+  String readSource(String path) =>
+      File(path).readAsStringSync().replaceAll('\r\n', '\n');
+  final bridge = readSource('lib/services/android_tv_player_bridge.dart');
+  final launcher = readSource('lib/services/video_player_launcher.dart');
+  final magic = readSource('lib/screens/magic_tv_screen.dart');
 
   test(
     'all three bridge launches bind profile ownership and refresh before handoff',

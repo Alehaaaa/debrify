@@ -8,6 +8,9 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/trakt/trakt_calendar_service.dart';
 import 'package:debrify/widgets/calendar_display_preferences.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -16,9 +19,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   for (final layout in [
-    (name: 'desktop', size: const Size(1200, 900), tv: false),
-    (name: 'phone', size: const Size(390, 844), tv: false),
-    (name: 'TV', size: const Size(1280, 720), tv: true),
+    (name: 'desktop', size: const Size(1200, 900), tv: false, glass: false),
+    (name: 'phone', size: const Size(390, 844), tv: false, glass: false),
+    (name: 'TV', size: const Size(1280, 720), tv: true, glass: false),
+    (name: 'phone glass', size: const Size(390, 844), tv: false, glass: true),
+    (name: 'TV glass', size: const Size(1280, 720), tv: true, glass: true),
   ]) {
     testWidgets(
       '${layout.name}: today-first calendar with saved time format and sheet',
@@ -47,7 +52,14 @@ void main() {
         addTearDown(tester.view.reset);
         // Phone keeps its options in icon buttons; desktop and TV show them
         // as labelled fields beside the list.
-        final compact = layout.name == 'phone';
+        final compact = layout.size.width < 600;
+        final frosted = layout.glass ? PremiumLooks.glass.build() : null;
+        Widget host() => frosted == null
+            ? const MaterialApp(home: TraktCalendarScreen())
+            : AppThemeScope(
+                theme: frosted,
+                child: const MaterialApp(home: TraktCalendarScreen()),
+              );
         final now = DateTime.now();
         Map<String, Object> entry(int day, String title, [int? traktId]) => {
           'first_aired': DateTime(
@@ -77,14 +89,34 @@ void main() {
         );
         await http.runWithClient(() async {
           await tester.runAsync(() async {
-            await tester.pumpWidget(
-              const MaterialApp(home: TraktCalendarScreen()),
-            );
+            await tester.pumpWidget(host());
             await Future<void>.delayed(const Duration(milliseconds: 100));
           });
           await tester.pumpAndSettle();
           expect(find.text('Today episode'), findsOneWidget);
           expect(find.text('Earlier episode'), findsNothing);
+          if (frosted != null && layout.tv) {
+            // The TV card used to paint an almost-opaque gradient and a white
+            // inactive border even when the surrounding Calendar was glass.
+            expect(
+              tester
+                  .widgetList<AnimatedContainer>(find.byType(AnimatedContainer))
+                  .any(
+                    (card) =>
+                        card.decoration is BoxDecoration &&
+                        (card.decoration! as BoxDecoration).color ==
+                            GlassChrome.fill(frosted),
+                  ),
+              isTrue,
+            );
+          }
+          if (frosted != null && compact) {
+            final popup = tester.widget<PopupMenuButton<CalendarTimeFormat>>(
+              find.byType(PopupMenuButton<CalendarTimeFormat>),
+            );
+            expect(popup.color, GlassChrome.fill(frosted, raised: true));
+            expect(popup.shape, GlassChrome.shape(frosted, radius: 14));
+          }
           await tester.tap(
             compact
                 ? find.byTooltip('Time format')
@@ -120,6 +152,18 @@ void main() {
           await tester.tap(dayTrigger);
           await tester.pumpAndSettle();
           expect(find.byType(TraktCalendarDaySheet), findsOneWidget);
+          if (frosted != null) {
+            final row = tester.widget<InkWell>(
+              find
+                  .descendant(
+                    of: find.byType(TraktCalendarDaySheet),
+                    matching: find.byType(InkWell),
+                  )
+                  .first,
+            );
+            expect(row.hoverColor, GlassChrome.fill(frosted, raised: true));
+            expect(row.focusColor, GlassChrome.fill(frosted, raised: true));
+          }
           expect(
             find.descendant(
               of: find.byType(TraktCalendarDaySheet),
@@ -148,9 +192,7 @@ void main() {
           }
           await tester.pumpWidget(const SizedBox.shrink());
           await tester.runAsync(() async {
-            await tester.pumpWidget(
-              const MaterialApp(home: TraktCalendarScreen()),
-            );
+            await tester.pumpWidget(host());
             await Future<void>.delayed(const Duration(milliseconds: 100));
           });
           await tester.pumpAndSettle();

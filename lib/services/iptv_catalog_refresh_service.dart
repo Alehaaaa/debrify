@@ -95,6 +95,10 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    // An observer callback may already be in flight while the service is
+    // stopping. Disposed (or never-started) instances must not discover new
+    // jobs against a profile or source whose lifetime has ended.
+    if (!_started) return;
     if (_foreground) {
       unawaited(refreshDue());
       unawaited(_pump());

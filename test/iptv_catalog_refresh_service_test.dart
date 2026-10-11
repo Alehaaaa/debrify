@@ -61,6 +61,12 @@ void main() {
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
     SecretVault.debugReset(deviceIdOverride: 'iptv-refresh-queue-test');
+    service.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    expect(
+      await StorageService.getIptvPlaylists(forSettings: false),
+      isEmpty,
+      reason: 'Each catalog-refresh test must begin with no saved sources',
+    );
     root = await Directory.systemTemp.createTemp('iptv-refresh-queue-test-');
     downloads = await Directory('${root.path}/downloads').create();
     XtreamCodesService.debugDownloadDirectory = downloads.path;
@@ -138,7 +144,6 @@ void main() {
   });
 
   tearDown(() async {
-    service.didChangeAppLifecycleState(AppLifecycleState.resumed);
     PlayerVisibility.settleDuration = const Duration(seconds: 30);
     PlayerVisibility.closed(player);
     if (held != null && !held!.isCompleted) held!.complete();
@@ -156,6 +161,27 @@ void main() {
     SecretVault.debugReset();
     await root.delete(recursive: true);
   });
+
+  test(
+    'a stopped catalog refresher ignores lifecycle resume discovery',
+    () async {
+      await StorageService.setIptvPlaylists([xtream]);
+      expect(await StorageService.getIptvPlaylists(), hasLength(1));
+
+      // A late lifecycle notification can outlive the observer's registration.
+      // It must not start a serialized background download against an obsolete
+      // source after the screen/profile fixture has been torn down.
+      service.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(requests, isEmpty);
+
+      service.start();
+      service.dispose();
+      service.didChangeAppLifecycleState(AppLifecycleState.resumed);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(requests, isEmpty);
+    },
+  );
 
   test(
     'first movie search discovers saved legacy source and downloads missing catalog',
