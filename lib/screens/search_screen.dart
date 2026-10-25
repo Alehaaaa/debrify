@@ -1144,6 +1144,12 @@ class _SearchScreenState extends State<SearchScreen>
   /// one SharedPreferences round-trip per item) can't finish after a newer one
   /// and dispose the focus nodes / state the newer run just installed.
   int _cwLoadToken = 0;
+  // Signature of the last committed Continue Watching list (imdbId/type/
+  // updatedAt per item + progress source). A resume-position tick writes the
+  // playback-state store, not this list, yet still rings this reload through
+  // WebDAV sync; when the signature is unchanged we skip the per-item playback
+  // lookups and the setState entirely. Null forces the next load to run.
+  String? _cwLastSig;
 
   /// Set when a real content player launches (any path — in-app route, native
   /// TV activity, external app; never trailers), consumed by
@@ -3898,10 +3904,29 @@ class _SearchScreenState extends State<SearchScreen>
         _cwEpisodeArtwork.clear();
         _cwAddonId.clear();
       });
+      _cwLastSig = null;
       return;
     }
 
     final raw = await StorageService.getContinueWatchingItems();
+    // Cheap skip: if the row's contents are byte-for-byte what we last
+    // committed (same items, order, updatedAt and progress source), do not
+    // re-run a playback lookup per card or rebuild. This absorbs the frequent
+    // resume-write ripples (WebDAV sync → HomeRowRefresh.playback) that do not
+    // actually change the list. A real change (reorder, new episode, removal,
+    // settings) bumps updatedAt/the source and falls through.
+    final sigBuf = StringBuffer()..write(progressSource)..write(';');
+    for (final m in raw) {
+      sigBuf
+        ..write(m['imdbId'])
+        ..write('/')
+        ..write(m['contentType'])
+        ..write('@')
+        ..write(m['updatedAt'])
+        ..write('|');
+    }
+    final sig = sigBuf.toString();
+    if (_cwEnabled && sig == _cwLastSig) return;
     final configuredAddons =
         raw.any((m) => CustomSeriesIdentity.isCustom(m['imdbId'] as String?))
         ? await _stremio.getEnabledAddons()
@@ -4009,6 +4034,7 @@ class _SearchScreenState extends State<SearchScreen>
     // Bail if a newer load superseded this one while we were awaiting — never
     // dispose/replace nodes or state a later run already committed.
     if (!mounted || token != _cwLoadToken) return;
+    _cwLastSig = sig;
 
     // Split into two recency-ordered rows; `items` is already most-recent-first.
     final movies = items.where((m) => m.type != 'series').toList();
@@ -4550,7 +4576,8 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     MainPageBridge.notifyDebrifyTvChannelToAutoPlay(channel.id);
-    MainPageBridge.switchTab?.call(MainTab.debrifyTv);
+    // Nextup TV lives behind the Watch hub now — open it as a pushed route.
+    MainPageBridge.openFeed?.call('debrify_tv');
   }
 
   /// Load the user's starred Stremio TV channels for the leading favourites row.
@@ -4627,7 +4654,8 @@ class _SearchScreenState extends State<SearchScreen>
       return;
     }
     MainPageBridge.notifyStremioTvChannelToAutoPlay(channel.id);
-    MainPageBridge.switchTab?.call(MainTab.stremioTv);
+    // Stremio TV lives behind the Watch hub now — open it as a pushed route.
+    MainPageBridge.openFeed?.call('stremio_tv');
   }
 
   /// Load the user's starred IPTV channels for the leading favourites row.
@@ -17605,6 +17633,8 @@ class _SearchScreenState extends State<SearchScreen>
                   child: Column(
                     children: [
                       _buildHeader(),
+                      if (!widget.searchMode && !widget.searchPage)
+                        _buildHomeJourneyStrip(),
                       _buildUnifiedCatalogSourcesBar(),
                       Expanded(child: _buildAnimatedBody()),
                     ],
@@ -17647,6 +17677,57 @@ class _SearchScreenState extends State<SearchScreen>
       ),
     ),
   );
+
+  /// Immediate task destinations without another hub or an extra tap.
+  /// Home remains recommendations/resume; Search is the field above; Explore
+  /// opens the existing source browser and Library links open their actual
+  /// on-device / cloud destinations. Stable MainTab identities preserve pins,
+  /// tab state, deep links and policy filtering.
+  Widget _buildHomeJourneyStrip({bool compact = false}) {
+    final app = AppThemeScope.of(context);
+    final actions = <({String label, IconData icon, int tab})>[
+      if (ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery))
+        (label: 'Explore catalogs', icon: Icons.explore_rounded, tab: MainTab.discover),
+      if (!compact && ProfilePolicyGuard.allowsSync(ProfileFeature.downloads))
+        (label: 'On device', icon: Icons.download_done_rounded, tab: MainTab.downloads),
+      if (!compact && ProfilePolicyGuard.allowsSync(ProfileFeature.cloudFiles))
+        (label: 'Cloud files', icon: Icons.cloud_outlined, tab: MainTab.cloud),
+    ];
+    if (actions.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(compact ? 0 : 20, 0, compact ? 0 : 20, compact ? 0 : 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          for (final action in actions)
+            OutlinedButton.icon(
+              key: ValueKey('home-journey-${action.tab}'),
+              onPressed: () => MainPageBridge.switchTab?.call(action.tab),
+              icon: Icon(action.icon, size: compact ? 15 : 17),
+              label: Text(action.label),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: app.core.tx,
+                backgroundColor: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app)
+                    : app.core.pane.withValues(alpha: 0.82),
+                side: BorderSide(
+                  color: GlassChrome.enabled(app)
+                      ? GlassChrome.edge(app)
+                      : app.core.hair,
+                ),
+                shape: RoundedRectangleBorder(borderRadius: app.shape.br(14)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 14,
+                  vertical: compact ? 8 : 10,
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 
   /// Off-TV Home while Spotlight is selected: one branch, two states.
   ///
@@ -17746,6 +17827,13 @@ class _SearchScreenState extends State<SearchScreen>
             child: _buildClosedSpotlightShell(),
           ),
         ),
+        if (!_searchSheetOpen && !widget.searchPage)
+          Positioned(
+            top: topInset + _SpotlightSearchButton.topInset +
+                _SpotlightSearchButton.diameter + 10,
+            right: 20,
+            child: _buildHomeJourneyStrip(compact: true),
+          ),
         if (openSheet != null)
           TweenAnimationBuilder<double>(
             key: const ValueKey('spotlight-search-sheet-enter'),
@@ -19872,7 +19960,41 @@ class _SearchScreenState extends State<SearchScreen>
       },
       child: _buildDiscoverContent(),
     );
-    if (!_fixedDiscover) return content;
+    if (!_fixedDiscover) {
+      final app = AppThemeScope.of(context);
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(widget.isTelevision ? 24 : 20, 14, 20, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Explore', style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: widget.isTelevision ? 25 : 22,
+                        color: app.core.tx,
+                      )),
+                      Text('Browse catalogs and connected sources',
+                        style: TextStyle(color: app.fade(app.core.tx, 0.64))),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => MainPageBridge.switchTab?.call(MainTab.home),
+                  icon: const Icon(Icons.home_outlined, size: 18),
+                  label: const Text('Home'),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: content),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

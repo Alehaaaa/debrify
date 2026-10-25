@@ -53,16 +53,18 @@ void main() {
     expect(find.text('40%'), findsOneWidget);
     await tester.tap(find.byType(CatalogItemTile));
     await tester.pumpAndSettle();
-    expect(find.text('Downloading'), findsOneWidget);
-    expect(find.text('DOWNLOAD IN PROGRESS'), findsOneWidget);
     // Nothing finished yet, so there is nothing to play.
     expect(find.byType(DetailPrimaryButton), findsNothing);
   });
 
-  test('only catalog titles with a finished file open the Home detail page', () {
+  test('catalog titles open the Home detail page while still downloading', () {
     LocalDownload item(String id, TaskStatus status) => LocalDownload(
       TaskRecord(
-        DownloadTask(taskId: '$id-$status', url: 'https://e.com/v', filename: 'f.mkv'),
+        DownloadTask(
+          taskId: '$id-$status',
+          url: 'https://e.com/v',
+          filename: 'f.mkv',
+        ),
         status,
         status == TaskStatus.complete ? 1 : .5,
         1,
@@ -71,7 +73,7 @@ void main() {
       status == TaskStatus.complete ? '/tmp/f.mkv' : '',
     );
     expect(opensHomeDetail([item('tt1', TaskStatus.complete)]), isTrue);
-    expect(opensHomeDetail([item('tt1', TaskStatus.running)]), isFalse);
+    expect(opensHomeDetail([item('tt1', TaskStatus.running)]), isTrue);
     expect(
       opensHomeDetail([item('download-file:x', TaskStatus.complete)]),
       isFalse,

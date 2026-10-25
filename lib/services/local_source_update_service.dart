@@ -60,10 +60,10 @@ if ! /usr/bin/git merge --no-edit --autostash upstream/main; then
 fi
 /usr/bin/git push origin HEAD:nextup || true
 PATH=$quotedPods:\$PATH $quotedFlutter build macos --release --build-name 0.10.0-nextup --build-number 1 --dart-define=DEBRIFY_LOCAL_VALIDATION=false || exit 1
-app=build/macos/Build/Products/Release/debrify.app
+app=build/macos/Build/Products/Release/Nextup.app
 /usr/bin/xattr -cr "\$app"
 /usr/bin/codesign --force --deep --sign - "\$app"
-/usr/bin/killall debrify || true
+/usr/bin/killall Nextup || true
 /usr/bin/ditto "\$app" /Applications/Debrify.app
 /usr/bin/xattr -cr /Applications/Debrify.app
 /usr/bin/codesign --force --deep --sign - /Applications/Debrify.app

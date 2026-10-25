@@ -95,6 +95,24 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
   /// Hosts position the chip by its TOP-RIGHT corner (`top` + `right`): the
   /// overlay copy hangs leftwards from that point.
   final OverlayPortalController _portal = OverlayPortalController();
+  final LayerLink _overlayAnchor = LayerLink();
+  bool _portalSyncQueued = false;
+
+  void _showPortalAfterFrame() {
+    if (_portal.isShowing || _portalSyncQueued) return;
+    _portalSyncQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _portalSyncQueued = false;
+      if (!mounted ||
+          (widget.onSoundToggle == null && widget.onOpen == null) ||
+          _portal.isShowing) {
+        return;
+      }
+      // OverlayPortal.show() dirties route overlay elements. Do not call it
+      // while another route or the window is rebuilding/layouting.
+      _portal.show();
+    });
+  }
 
   @override
   void initState() {
@@ -104,6 +122,9 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
       duration: const Duration(milliseconds: 1100),
     );
     _syncWave();
+    // Initial visibility is only a controller flag until OverlayPortal mounts;
+    // no overlay element exists yet to mark dirty during initState. Showing it
+    // eagerly also paints the chip on frame zero rather than one frame late.
     if (widget.onSoundToggle != null || widget.onOpen != null) _portal.show();
   }
 
@@ -114,7 +135,7 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
     if (!_interactive) _hovered = false;
     if ((widget.onSoundToggle != null || widget.onOpen != null) &&
         !_portal.isShowing) {
-      _portal.show();
+      _showPortalAfterFrame();
     }
     _syncWave();
   }
@@ -345,26 +366,32 @@ class _TrailerStatusChipState extends State<TrailerStatusChip>
         child: chip,
       ),
     );
-    // The in-place anchor is zero-sized at the slot's top-right corner (the
-    // host positions this widget by `top`/`right`); the overlay copy hangs
-    // leftwards from it, exactly where the in-place chip used to paint.
-    // Positioned from LAYOUT info, not a CompositedTransformFollower: the
-    // chip's Tooltip needs its paint transform during layout, which a
-    // follower only establishes at paint time.
-    return OverlayPortal.overlayChildLayoutBuilder(
+    // Avoid OverlayPortal.overlayChildLayoutBuilder entirely. That variant's
+    // deferred theater-size assertion failed during a Retina window resize
+    // while a trailer was running; later GlobalKey/Overlay errors were a
+    // consequence of the broken layout pass. LayerLink tracks this chip's
+    // actual painted location and survives route animations/resizes without
+    // triggering a layout callback from within the route Overlay.
+    return OverlayPortal(
       controller: _portal,
-      overlayChildBuilder: (context, info) {
-        final anchor = MatrixUtils.transformPoint(
-          info.childPaintTransform,
-          Offset.zero,
-        );
-        return Positioned(
-          top: anchor.dy,
-          right: info.overlaySize.width - anchor.dx,
-          child: live,
-        );
-      },
-      child: const SizedBox.shrink(),
+      overlayChildBuilder: (context) => Positioned.fill(
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CompositedTransformFollower(
+              link: _overlayAnchor,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.topRight,
+              followerAnchor: Alignment.topRight,
+              child: live,
+            ),
+          ],
+        ),
+      ),
+      child: CompositedTransformTarget(
+        link: _overlayAnchor,
+        child: const SizedBox.shrink(),
+      ),
     );
   }
 }

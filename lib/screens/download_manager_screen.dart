@@ -24,10 +24,7 @@ class DownloadManagerScreen extends StatefulWidget {
   State<DownloadManagerScreen> createState() => _DownloadManagerScreenState();
 }
 
-class _DownloadManagerScreenState extends State<DownloadManagerScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
-
+class _DownloadManagerScreenState extends State<DownloadManagerScreen> {
   StreamSubscription<TaskProgressUpdate>? _progressSub;
   StreamSubscription<TaskStatusUpdate>? _statusSub;
   StreamSubscription? _bytesSub;
@@ -58,7 +55,6 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     _init();
 
     // Register TV content focus handler (tab index 2 = Downloads)
@@ -275,41 +271,50 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
     await _refresh();
   }
 
-  Widget _buildFinishedTab(List<TorrentDownloadGroup> groups) {
-    if (groups.isEmpty) {
-      return const Center(child: Text('No downloads'));
-    }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Row(
-            children: [
-              const Text(
-                'Finished',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _busyGroupIds.isEmpty
-                    ? () => _handleClearFinished(groups)
-                    : null,
-                icon: const Icon(Icons.delete_sweep_rounded),
-                label: const Text('Clear All'),
-              ),
-            ],
+  /// A section divider for the merged scroll — a quiet uppercase label with a
+  /// glass count pill and an optional trailing action, themed like the rest of
+  /// the app rather than a hard tab bar.
+  Widget _sectionHeader(String label, {int? count, Widget? trailing}) {
+    final app = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(app);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 10, 10),
+      child: Row(
+        children: [
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: app.core.tx.withValues(alpha: 0.92),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _TorrentGroupList(
-            groups: groups,
-            busyGroupIds: _busyGroupIds,
-            isFinishedTab: true,
-            onOpenGroup: _openGroupDetail,
-          ),
-        ),
-      ],
+          if (count != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: glass
+                    ? GlassChrome.fill(app)
+                    : app.core.accent.withValues(alpha: 0.2),
+                borderRadius: app.shape.br(999),
+                border: glass ? Border.all(color: GlassChrome.edge(app)) : null,
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  color: app.core.tx.withValues(alpha: 0.8),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+          const Spacer(),
+          ?trailing,
+        ],
+      ),
     );
   }
 
@@ -322,7 +327,6 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       );
     }
     _addButtonFocusNode.dispose();
-    _tabController.dispose();
     _progressSub?.cancel();
     _statusSub?.cancel();
     _bytesSub?.cancel();
@@ -784,48 +788,6 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
       children: [
         Column(
           children: [
-            Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: GlassChrome.enabled(app)
-                    ? GlassChrome.fill(app)
-                    : Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: app.shape.br(12),
-                border: GlassChrome.enabled(app)
-                    ? Border.all(color: GlassChrome.edge(app))
-                    : null,
-              ),
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: false,
-                dividerColor: Colors.transparent,
-                indicatorSize: TabBarIndicatorSize.tab,
-                indicatorPadding: const EdgeInsets.all(6),
-                labelPadding: const EdgeInsets.symmetric(vertical: 10),
-                overlayColor: WidgetStateProperty.all(Colors.transparent),
-                indicator: BoxDecoration(
-                  color: GlassChrome.enabled(app)
-                      ? app.core.accent.withValues(alpha: 0.24)
-                      : Theme.of(context).colorScheme.primary,
-                  borderRadius: app.shape.br(10),
-                  border: GlassChrome.enabled(app)
-                      ? Border.all(color: GlassChrome.edge(app))
-                      : null,
-                ),
-                labelColor: GlassChrome.enabled(app)
-                    ? app.core.tx
-                    : Theme.of(context).colorScheme.onPrimaryContainer,
-                unselectedLabelColor: GlassChrome.enabled(app)
-                    ? app.core.tx.withValues(alpha: 0.7)
-                    : Theme.of(
-                        context,
-                      ).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                tabs: const [
-                  Tab(text: 'In Progress'),
-                  Tab(text: 'Finished'),
-                ],
-              ),
-            ),
             Expanded(
               child: _loading
                   ? ListView.builder(
@@ -876,28 +838,61 @@ class _DownloadManagerScreenState extends State<DownloadManagerScreen>
                         ),
                       ),
                     )
-                  : TabBarView(
-                      controller: _tabController,
+                  : (inProgressGroups.isEmpty && finishedGroups.isEmpty)
+                  ? const Center(child: Text('No downloads'))
+                  : ListView(
+                      padding: const EdgeInsets.only(top: 4, bottom: 96),
                       children: [
-                        _TorrentGroupList(
-                          groups: inProgressGroups,
-                          busyGroupIds: _busyGroupIds,
-                          isFinishedTab: false,
-                          onOpenGroup: _openGroupDetail,
-                          onPauseAll: (group) => _runGroupAction(
-                            group.id,
-                            () => _pauseGroup(group),
+                        // One scroll: active transfers first (with their live
+                        // progress), finished downloads below — no tab swap.
+                        if (inProgressGroups.isNotEmpty) ...[
+                          _sectionHeader(
+                            'Downloading',
+                            count: inProgressGroups.length,
                           ),
-                          onResumeAll: (group) => _runGroupAction(
-                            group.id,
-                            () => _resumeGroup(group),
+                          _TorrentGroupList(
+                            groups: inProgressGroups,
+                            busyGroupIds: _busyGroupIds,
+                            isFinishedTab: false,
+                            embedded: true,
+                            onOpenGroup: _openGroupDetail,
+                            onPauseAll: (group) => _runGroupAction(
+                              group.id,
+                              () => _pauseGroup(group),
+                            ),
+                            onResumeAll: (group) => _runGroupAction(
+                              group.id,
+                              () => _resumeGroup(group),
+                            ),
+                            onCancelAll: (group) => _runGroupAction(
+                              group.id,
+                              () => _cancelGroup(group),
+                            ),
                           ),
-                          onCancelAll: (group) => _runGroupAction(
-                            group.id,
-                            () => _cancelGroup(group),
+                        ],
+                        if (finishedGroups.isNotEmpty) ...[
+                          _sectionHeader(
+                            'Downloaded',
+                            count: finishedGroups.length,
+                            trailing: TextButton.icon(
+                              onPressed: _busyGroupIds.isEmpty
+                                  ? () => _handleClearFinished(finishedGroups)
+                                  : null,
+                              icon: const Icon(
+                                Icons.delete_sweep_rounded,
+                                size: 18,
+                              ),
+                              label: const Text('Clear all'),
+                            ),
                           ),
-                        ),
-                        _buildFinishedTab(finishedGroups),
+                          _TorrentGroupList(
+                            groups: finishedGroups,
+                            busyGroupIds: _busyGroupIds,
+                            isFinishedTab: true,
+                            embedded: true,
+                            onOpenGroup: _openGroupDetail,
+                          ),
+                        ],
                       ],
                     ),
             ),
@@ -1886,6 +1881,11 @@ class _TorrentGroupList extends StatefulWidget {
   final Future<void> Function(TorrentDownloadGroup)? onResumeAll;
   final Future<void> Function(TorrentDownloadGroup)? onCancelAll;
 
+  /// Rendered as a section inside a larger scroll (the merged manager): no
+  /// scrolling or padding of its own, and no "No downloads" placeholder — the
+  /// host owns the empty state and only mounts this when the section has rows.
+  final bool embedded;
+
   const _TorrentGroupList({
     required this.groups,
     required this.busyGroupIds,
@@ -1894,6 +1894,7 @@ class _TorrentGroupList extends StatefulWidget {
     this.onPauseAll,
     this.onResumeAll,
     this.onCancelAll,
+    this.embedded = false,
   });
 
   @override
@@ -1913,11 +1914,17 @@ class _TorrentGroupListState extends State<_TorrentGroupList> {
   @override
   Widget build(BuildContext context) {
     if (widget.groups.isEmpty) {
-      return const Center(child: Text('No downloads'));
+      return widget.embedded
+          ? const SizedBox.shrink()
+          : const Center(child: Text('No downloads'));
     }
 
     return ListView.separated(
-      padding: const EdgeInsets.all(12),
+      padding: widget.embedded
+          ? const EdgeInsets.symmetric(horizontal: 12)
+          : const EdgeInsets.all(12),
+      shrinkWrap: widget.embedded,
+      physics: widget.embedded ? const NeverScrollableScrollPhysics() : null,
       itemCount: widget.groups.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (context, index) {

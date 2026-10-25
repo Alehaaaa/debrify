@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 
 import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 import '../services/playback_ui_clock.dart';
@@ -57,7 +58,7 @@ class GlassDock extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [Color(0x8C000000), Color(0x00000000)],
+                  colors: [Color(0x70000000), Color(0x00000000)],
                 ),
               ),
             ),
@@ -74,7 +75,7 @@ class GlassDock extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [Color(0x99000000), Color(0x00000000)],
+                  colors: [Color(0x78000000), Color(0x00000000)],
                 ),
               ),
             ),
@@ -97,13 +98,13 @@ class GlassDock extends StatelessWidget {
         ),
       ],
     );
-    // One shared backdrop read for every glass piece on screen, and the
-    // sampled frame brightness for the dynamic ones.
-    final grouped = BackdropGroup(child: stack);
+    // Each individual glass control owns its local backdrop sampling and
+    // curvature. A shared BackdropGroup used to turn all buttons into masks
+    // cut out of one screen-wide filter (noticeable on moving frames).
     final brightness = c.glassBrightness;
     return brightness == null
-        ? grouped
-        : GlassBrightnessScope(brightness: brightness, child: grouped);
+        ? stack
+        : GlassBrightnessScope(brightness: brightness, child: stack);
   }
 
   // ── Top ────────────────────────────────────────────────────────────────
@@ -312,6 +313,11 @@ class GlassDock extends StatelessWidget {
                 if (infoPanel != null && hasPanel) const SizedBox(height: 10),
                 if (hasPanel)
                   GlassSurface(
+                    allowLegacyRefraction: true,
+                    // No rim outline: on this wide panel the specular stroke
+                    // reads as a hard border, which the round transport buttons
+                    // don't have. Frost + tint carry the edge instead.
+                    borderless: true,
                     variant: GlassVariant.dynamic,
                     radius: BorderRadius.circular(
                       compact
@@ -542,18 +548,11 @@ class GlassDock extends StatelessWidget {
         );
         final showLabels = constraints.maxWidth >= 520;
 
-        // Trailing cluster: volume (desktop), fullscreen, More.
+        // Trailing cluster: volume (desktop), then More, then Fullscreen as the
+        // very last (right-most) control.
         final showVolume =
             c.onVolumeChanged != null && constraints.maxWidth >= 640;
-        final trailing = <Widget>[
-          if (showVolume) _volume(context),
-          if (c.showFullscreen && c.onFullscreen != null)
-            GlassGhostButton(
-              icon: Icons.fullscreen_rounded,
-              tooltip: 'Fullscreen',
-              onPressed: c.onFullscreen!,
-            ),
-        ];
+        final trailing = <Widget>[if (showVolume) _volume(context)];
         final trailingW =
             (showVolume ? 140.0 : 0.0) +
             (c.showFullscreen && c.onFullscreen != null ? 44.0 : 0.0) +
@@ -606,6 +605,10 @@ class GlassDock extends StatelessWidget {
                   tooltip: 'More',
                   onPressed: () => _GlassMoreSheet.show(context, overflow),
                 ),
+              // Fullscreen sits at the far right (desktop only); its icon
+              // reflects the live window state (maximise ↔ minimise).
+              if (c.showFullscreen && c.onFullscreen != null)
+                _FullscreenButton(onPressed: c.onFullscreen!),
             ],
           ),
         );
@@ -712,6 +715,11 @@ class GlassCircleButton extends StatelessWidget {
         child: SizedBox.square(
           dimension: size,
           child: GlassSurface(
+            allowLegacyRefraction: true,
+            // Same borderless glass recipe the bottom-bar buttons use, so every
+            // player control renders identically — the rim is a no-op on a
+            // circle anyway.
+            borderless: true,
             radius: BorderRadius.circular(size / 2),
             strong: strong,
             variant: variant,
@@ -724,6 +732,7 @@ class GlassCircleButton extends StatelessWidget {
                 splashColor: const Color(0x26FFFFFF),
                 highlightColor: const Color(0x14FFFFFF),
                 hoverColor: const Color(0x14FFFFFF),
+                focusColor: const Color(0x42FFFFFF),
                 child: Center(
                   child: Icon(
                     icon,
@@ -740,8 +749,14 @@ class GlassCircleButton extends StatelessWidget {
   }
 }
 
-/// A borderless icon (+ optional label) button that sits on a glass panel.
+/// A local optical lens for an icon (+ optional label) inside the larger dock.
+/// The action itself now refracts the moving pixels behind its own rounded
+/// boundary instead of sharing the big parent panel's screen-wide sampling.
 class GlassGhostButton extends StatelessWidget {
+  /// Fixed control height; the glass rounds to [_height] / 2 so a square button
+  /// is a circle and a labelled one is a pill.
+  static const double _height = 44;
+
   final IconData icon;
   final String? label;
   final String tooltip;
@@ -764,11 +779,11 @@ class GlassGhostButton extends StatelessWidget {
     final color = tint ?? GlassDock._ink;
     final content = label == null
         ? SizedBox.square(
-            dimension: 44,
+            dimension: _height,
             child: Center(child: Icon(icon, size: 21, color: color)),
           )
         : Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -793,18 +808,90 @@ class GlassGhostButton extends StatelessWidget {
         button: true,
         label: tooltip,
         excludeSemantics: true,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(12),
-            splashColor: const Color(0x1FFFFFFF),
-            highlightColor: const Color(0x14FFFFFF),
-            hoverColor: const Color(0x14FFFFFF),
-            child: SizedBox(height: 44, child: content),
+        child: GlassSurface(
+          allowLegacyRefraction: true,
+          // Exactly the floating transport buttons' look: clear frosted
+          // `dynamic` glass, borderless (no rim), FULLY rounded — a 44-tall
+          // button rounds to a circle when square and a pill when it has a
+          // label. Shadow uses the same size/160 rule as GlassCircleButton.
+          variant: GlassVariant.dynamic,
+          borderless: true,
+          radius: BorderRadius.circular(_height / 2),
+          shadowScale: _height / 160,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onPressed,
+              customBorder: const StadiumBorder(),
+              splashColor: const Color(0x26FFFFFF),
+              highlightColor: const Color(0x14FFFFFF),
+              hoverColor: const Color(0x14FFFFFF),
+              focusColor: const Color(0x42FFFFFF),
+              child: SizedBox(height: _height, child: content),
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Desktop fullscreen toggle whose icon tracks the live window state: a
+/// maximise glyph when windowed, a minimise glyph when full screen — updated
+/// even when the OS changes it (the green button, Esc, a shortcut).
+class _FullscreenButton extends StatefulWidget {
+  const _FullscreenButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  State<_FullscreenButton> createState() => _FullscreenButtonState();
+}
+
+class _FullscreenButtonState extends State<_FullscreenButton>
+    with WindowListener {
+  bool _full = false;
+
+  @override
+  void initState() {
+    super.initState();
+    windowManager.addListener(this);
+    _sync();
+  }
+
+  Future<void> _sync() async {
+    try {
+      final full = await windowManager.isFullScreen();
+      if (mounted && full != _full) setState(() => _full = full);
+    } catch (_) {
+      // Non-desktop or an unavailable window: leave the maximise glyph.
+    }
+  }
+
+  @override
+  void onWindowEnterFullScreen() {
+    if (mounted) setState(() => _full = true);
+  }
+
+  @override
+  void onWindowLeaveFullScreen() {
+    if (mounted) setState(() => _full = false);
+  }
+
+  @override
+  void dispose() {
+    windowManager.removeListener(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassGhostButton(
+      icon: _full
+          ? Icons.fullscreen_exit_rounded
+          : Icons.fullscreen_rounded,
+      tooltip: _full ? 'Exit full screen' : 'Full screen',
+      onPressed: widget.onPressed,
     );
   }
 }
@@ -835,6 +922,7 @@ class _GlassMoreSheet extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         child: GlassSurface(
+          allowLegacyRefraction: true,
           variant: GlassVariant.frosted,
           radius: BorderRadius.circular(GlassTokens.current.radiusSheet),
           padding: const EdgeInsets.symmetric(vertical: 8),

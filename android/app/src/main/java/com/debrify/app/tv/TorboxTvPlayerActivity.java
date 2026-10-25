@@ -2784,7 +2784,7 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
                 }
                 if (dtvChannelBug != null) {
                     dtvChannelBug.setText(
-                            num2.isEmpty() ? "DEBRIFY" : "DEBRIFY · CH " + num2);
+                            num2.isEmpty() ? "NEXTUP" : "NEXTUP · CH " + num2);
                 }
                 break;
             }
@@ -5611,7 +5611,7 @@ public class TorboxTvPlayerActivity extends AppCompatActivity {
         } else if (!resolvedName.isEmpty()) {
             resolvedTitle = resolvedName;
         } else {
-            resolvedTitle = "Debrify TV";
+            resolvedTitle = "Nextup TV";
         }
 
         return new ChannelSwitchData(firstUrl, resolvedTitle, resolvedNumber, resolvedName, provider);

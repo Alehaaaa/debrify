@@ -72,18 +72,18 @@ void main() {
       final glass = PremiumLooks.glass.build();
       await render(glass);
       DropdownButton<String> type() => tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>),
+        find.byType(DropdownButton<String>).first,
       );
       expect(type().dropdownColor, GlassChrome.fill(glass, raised: true));
       final chip = tester.widget<FilterChip>(find.byType(FilterChip));
       expect(chip.backgroundColor, GlassChrome.fill(glass));
       expect(chip.side?.color, GlassChrome.edge(glass));
-      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.tap(find.byType(DropdownButton<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('TV shows').last);
       await tester.pumpAndSettle();
       expect(service.requests.last.type, 'tv');
-      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.tap(find.byType(DropdownButton<String>).first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Movies').last);
       await tester.pumpAndSettle();
@@ -192,6 +192,7 @@ void main() {
     expect(service.requests.last.filters, {
       'with_runtime.lte': '120',
       'with_original_language': 'hi',
+      'sort_by': 'popularity',
     });
     expect(service.pages, [1, 1, 1, 1]);
     final scroll = tester
@@ -304,7 +305,7 @@ void main() {
         );
         source.requestFocus();
         await tester.pumpAndSettle();
-        for (final label in ['Type', 'Runtime', 'Language']) {
+        for (final label in ['Type', 'Sort', 'Runtime', 'Language']) {
           await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
           await tester.pumpAndSettle();
           expect(

@@ -6,12 +6,12 @@
     "sheet": 26
   },
   "rim": {
-    "width": 1.0,
-    "highlight": "#8CFFFFFF",
+    "width": 1.3,
+    "highlight": "#C2FFFFFF",
     "mid": "#12FFFFFF",
     "lowlight": "#33FFFFFF"
   },
-  "sheen": "#26FFFFFF",
+  "sheen": "#14FFFFFF",
   "shadow": {
     "color": "#33000000",
     "blur": 36,
@@ -46,6 +46,15 @@
   "dynamic": {
     "defaultBrightness": 0.35,
     "transitionMs": 400
+  },
+  "optics": {
+    "refractionPx": 14.0,
+    "strongRefractionPx": 18.0,
+    "dispersionPx": 4.0,
+    "strongDispersionPx": 5.0,
+    "shaderBlurFraction": 0.14,
+    "shaderMaxBlur": 3.0,
+    "fallbackMaxBlur": 16.0
   },
   "reducedTransparency": {
     "shade": "#E6141418"

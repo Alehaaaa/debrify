@@ -58,6 +58,14 @@ import '../utils/series_parser.dart';
 import '../utils/movie_parser.dart';
 import '../utils/iptv_player_paging.dart';
 import '../services/movie_metadata_service.dart';
+import '../services/metadata_details_service.dart';
+import '../services/metadata_provider_service.dart';
+import '../services/metadata_preferences_service.dart';
+import '../models/hero_metadata_presentation.dart';
+import '../models/metadata_preferences.dart';
+import '../services/finished_movie_reconciliation_service.dart';
+import '../services/watched_status_service.dart';
+import 'video_player/widgets/player_media_details.dart';
 import '../models/iptv_playlist.dart';
 import '../services/stremio_iptv_service.dart';
 import '../services/iptv_epg_service.dart';
@@ -123,6 +131,7 @@ import 'video_player/widgets/spotlight_dialog.dart';
 import 'video_player/widgets/debrify_tv_banner.dart';
 import '../models/stremio_subtitle.dart';
 import '../models/stremio_addon.dart';
+import '../models/play_loader_art.dart';
 import '../models/torrent.dart';
 import '../models/android_video_renderer_mode.dart';
 import '../models/content_display_match_mode.dart';
@@ -314,6 +323,9 @@ class VideoPlayerScreen extends StatefulWidget {
   final String? contentTitle; // Clean display name (IMDB title)
   // Artwork for the OS media controls (lock screen, SMTC, Now Playing).
   final String? posterUrl;
+
+  /// Catalog media identity carried through the loader into frame zero.
+  final PlayLoaderArt? initialArt;
   final PlaybackResumePolicy resumePolicy;
   // IPTV channel list for in-player channel switching
   final List<IptvChannel>? iptvChannels;
@@ -398,6 +410,7 @@ class VideoPlayerScreen extends StatefulWidget {
     this.contentEpisode,
     this.contentTitle,
     this.posterUrl,
+    this.initialArt,
     this.resumePolicy = PlaybackResumePolicy.sourceSpecific,
     this.iptvChannels,
     this.iptvStartIndex,
@@ -1480,6 +1493,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   bool _currentEpisodeMarkedAsFinished = false;
   bool _currentMovieMarkedAsFinished = false;
   bool _currentMovieRewatchStarted = false;
+  Future<void>? _movieRewatchReset;
+  String? _mediaDetailsLookupKey;
+  int _mediaDetailsGeneration = 0;
+  StremioMeta? _playerMediaMeta;
+  bool _playerMetahubLogoFallbackAllowed = false;
+  bool _creditsVisible = false;
+  bool _creditsRecommendationsLoading = false;
+  bool _creditsRecommendationsLoaded = false;
+  List<StremioMeta> _creditsRecommendations = const [];
   int _movieCompletionThreshold =
       StorageService.defaultLocalCompletionThreshold;
   int _episodeCompletionThreshold =
@@ -1699,6 +1721,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   @override
   void initState() {
     super.initState();
+    MetadataPreferencesService.revision.addListener(
+      _onPlayerMetadataPolicyChanged,
+    );
+    ProfileRuntime.scope.addListener(_onPlayerMetadataPolicyChanged);
     unawaited(GlassTokens.load());
     _controlsVisible.addListener(_syncGlassProbe);
     _continuousShuffleEnabled = widget.initialContinuousShuffle;
@@ -1807,6 +1833,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     unawaited(_loadTrackingPolicy());
     unawaited(_loadSkipSegmentSettings());
     unawaited(_loadLocalCompletionThresholds());
+    _refreshPlayerMediaDetails();
     MediaKitInit.ensureInitialized();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     // The player opens landscape — a video wants the long edge — unless the
@@ -1919,6 +1946,311 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _currentEpisodeMarkedAsFinished = false;
     _currentMovieMarkedAsFinished = false;
     _currentMovieRewatchStarted = false;
+    _movieRewatchReset = null;
+    // A queued playlist episode may replace the one showing its credits.
+    _creditsVisible = false;
+    _creditsRecommendations = const [];
+    _creditsRecommendationsLoaded = false;
+  }
+
+  void _onPlayerMetadataPolicyChanged() {
+    // The source snapshot belongs to both this title and the current profile/
+    // metadata-provider policy. A late TMDb/addon reply must never repaint an
+    // old title, profile or information-provider choice.
+    _mediaDetailsLookupKey = null;
+    ++_mediaDetailsGeneration;
+    if (!mounted) return;
+    setState(() {
+      _playerMediaMeta = null;
+      _playerMetahubLogoFallbackAllowed = false;
+    });
+    _refreshPlayerMediaDetails();
+  }
+
+  /// Metadata must follow the ACTUAL playing identity, not the launcher title:
+  /// a series pack changes episode within this same widget. No remote request
+  /// for live channels, unknown identities, or a forbidden discovery surface.
+  void _refreshPlayerMediaDetails() {
+    final id = _effectiveContentImdbId?.trim();
+    final type = _effectiveContentType;
+    final key = '$type:$id';
+    if (_mediaDetailsLookupKey == key) return;
+    _mediaDetailsLookupKey = key;
+    final generation = ++_mediaDetailsGeneration;
+    _playerMediaMeta = null;
+    _playerMetahubLogoFallbackAllowed = false;
+    _creditsRecommendations = const [];
+    _creditsRecommendationsLoading = false;
+    _creditsRecommendationsLoaded = false;
+    _creditsVisible = false;
+    if (id == null ||
+        !RegExp(r'^tt\d+$').hasMatch(id) ||
+        (type != 'movie' && type != 'series') ||
+        !ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery)) {
+      return;
+    }
+    final scope = ProfileRuntime.scope.value;
+    final metadataRevision = MetadataPreferencesService.revision.value;
+    bool relevant() =>
+        mounted &&
+        generation == _mediaDetailsGeneration &&
+        scope == ProfileRuntime.scope.value &&
+        metadataRevision == MetadataPreferencesService.revision.value &&
+        _effectiveContentImdbId?.trim() == id &&
+        _effectiveContentType == type &&
+        ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery);
+    unawaited(() async {
+      try {
+        // Metadata preferences are profile-local and usually available from
+        // memory immediately. Resolve artwork fallback BEFORE the slower
+        // Stremio/TMDb network lookup so the first loading frames can already
+        // paint a logo without violating the selected provider's policy.
+        final prefs = await MetadataPreferencesService.load();
+        if (!relevant()) return;
+        setState(() {
+          _playerMetahubLogoFallbackAllowed =
+              prefs.provider(MetadataCategory.backgrounds) ==
+                  MetadataPreferences.current ||
+              prefs.fallback;
+        });
+        final seed = StremioMeta(
+          id: id,
+          imdbId: id,
+          type: type!,
+          name: _effectiveContentTitle ?? _getCurrentEpisodeTitle(),
+        );
+        // Home's real hero pipeline, not an approximate metadata shortcut:
+        // first enrich the original /meta title, then apply configured
+        // information + artwork providers (TMDb or selected addon).
+        final original = await StremioService.instance.fetchMetaDetails(
+          imdbId: id,
+          type: type,
+        );
+        if (!relevant()) return;
+        final source = mergeHeroMetadata(seed, original);
+        setState(() => _playerMediaMeta = source);
+        if (_creditsVisible) unawaited(_loadCreditsRecommendations());
+        if (!relevant()) return;
+        final presentation = await MetadataProviderService.instance.present(
+          source,
+          preferences: prefs,
+          isRelevant: relevant,
+        );
+        if (!relevant()) return;
+        setState(() {
+          _playerMediaMeta = prefs.isCurrent ? source : presentation.item;
+          // Home uses the public IMDb-keyed metahub logo as a fallback.
+          // Respect an explicit selected artwork provider with fallback OFF:
+          // a missing provider logo must not secretly switch to metahub.
+          _playerMetahubLogoFallbackAllowed =
+              prefs.provider(MetadataCategory.backgrounds) ==
+                  MetadataPreferences.current ||
+              prefs.fallback;
+        });
+      } catch (_) {
+        // Artwork/rating must never block playback or its transport controls.
+      }
+    }());
+  }
+
+  PlayerMediaIdentity get _playerMediaIdentity {
+    // The series-wide catalog overview is NOT an episode synopsis. Only the
+    // current episode's authoritative plot is displayed for a series.
+    final isSeries = _effectiveContentType == 'series';
+    final episode = isSeries ? _currentSeasonEpisodeForIdentity() : null;
+    final episodeMetadata = isSeries
+        ? _getEnhancedMetadata()
+        : const <String, dynamic>{};
+    final episodePlot = episodeMetadata['plot'];
+    final meta = _playerMediaMeta;
+    final launchedId = widget.contentImdbId?.trim();
+    final currentId = _effectiveContentImdbId?.trim();
+    // A source/episode switch must not borrow the previous title's logo or
+    // synopsis. Episode plots remain episode-specific (never series overview).
+    final launchIdentityIsCurrent =
+        launchedId == currentId && _effectiveContentType == widget.contentType;
+    final seed = launchIdentityIsCurrent ? widget.initialArt : null;
+    final info = PlayerMediaIdentity.fromMeta(
+      meta,
+      fallbackTitle: _effectiveContentTitle ?? _getCurrentEpisodeTitle(),
+      initialArt: seed,
+      fallbackImdbId: currentId,
+      episodePlot: episodePlot is String ? episodePlot : null,
+      season: episode?.season,
+      episode: episode?.episode,
+      episodeYear: episodeMetadata['year']?.toString(),
+      episodeRuntime: episodeMetadata['runtime']?.toString(),
+      useMetahubLogoFallback: _playerMetahubLogoFallbackAllowed,
+      requireEpisodePlot: isSeries,
+    );
+    return info;
+  }
+
+  /// Rich catalog identity is anchored once beside the transport, not
+  /// duplicated in the upper control bar. Do not depend on showVideoTitle:
+  /// launchers hide the OLD bar title but still need the Spotlight identity.
+  bool get _usesSpotlightIdentity =>
+      (_effectiveContentType == 'movie' || _effectiveContentType == 'series') &&
+      !widget.showChannelName &&
+      !_iptvZapBannerOwnsIdentity &&
+      _currentIptvChannel?.isLive != true;
+
+  void _updateCreditsAtPosition() {
+    _refreshPlayerMediaDetails();
+    final isVOD =
+        !_validationGateActive &&
+        !_isTransitioning &&
+        _currentIptvChannel?.isLive != true &&
+        !_isPipActive &&
+        (_effectiveContentType == 'movie' || _effectiveContentType == 'series');
+    // A known outro segment is stronger evidence than a duration estimate;
+    // the conservative final-window rule covers media with no segment data.
+    final knownOutro =
+        _skipSegments.segmentAt(_position)?.type == SkipSegmentType.outro;
+    final shouldShow =
+        isVOD &&
+        (knownOutro || PlayerCreditsPolicy.atCredits(_position, _duration));
+    if (shouldShow == _creditsVisible) return;
+    _creditsVisible = shouldShow;
+    if (mounted) setState(() {});
+    if (shouldShow) unawaited(_loadCreditsRecommendations());
+  }
+
+  bool get _hasConfirmedSeriesFinale {
+    if (_effectiveContentType != 'series' ||
+        _hasIptvNext ||
+        _hasStremioTvNext ||
+        _findNextEpisodeIndex() != -1 ||
+        widget.requestMagicNext != null) {
+      return false;
+    }
+    final current = _currentSeasonEpisodeForIdentity();
+    if (current == null) return false;
+    final guide = _seriesPlaylist?.fullTvmazeEpisodes.isNotEmpty == true
+        ? _seriesPlaylist!.fullTvmazeEpisodes
+        : (_syntheticGuidePlaylist?.fullTvmazeEpisodes ??
+              const <Map<String, dynamic>>[]);
+    final containsCurrent = guide.any(
+      (row) =>
+          row['season'] == current.season &&
+          (row['episode'] ?? row['number']) == current.episode,
+    );
+    final next = _adjacentEpisode(
+      current.season,
+      current.episode,
+      1,
+      allowResolverFallback: true,
+    );
+    return PlayerCreditsPolicy.canSuggestAfterSeriesFinale(
+      guideContainsCurrent: containsCurrent,
+      hasActualNext: next != null,
+    );
+  }
+
+  bool get _creditsHasConfirmedNext {
+    if (_hasIptvNext || _findNextEpisodeIndex() != -1) return true;
+    if (_effectiveContentType != 'series') return false;
+    final current = _currentSeasonEpisodeForIdentity();
+    return current != null &&
+        _adjacentEpisode(
+              current.season,
+              current.episode,
+              1,
+              allowResolverFallback: true,
+            ) !=
+            null;
+  }
+
+  Future<void> _loadCreditsRecommendations() async {
+    final current = _playerMediaMeta;
+    if (!_creditsVisible ||
+        current == null ||
+        _creditsRecommendationsLoading ||
+        _creditsRecommendationsLoaded ||
+        !ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery)) {
+      return;
+    }
+    _creditsRecommendationsLoading = true;
+    final generation = _mediaDetailsGeneration;
+    final scope = ProfileRuntime.scope.value;
+    try {
+      final suggestions = await MetadataDetailsService.instance.recommendations(
+        current,
+        () => StremioService.instance.getRecommendations(
+          imdbId: current.imdbId ?? current.id,
+          type: current.type,
+        ),
+      );
+      final filtered = <StremioMeta>[];
+      // Respect the same configured tracker sources that Home uses for
+      // watched ticks. Local persisted checks cover a cold snapshot.
+      final watched = WatchedStatusService.instance;
+      watched.ensureStarted();
+      final watchedSeries =
+          await StorageService.getExplicitlyWatchedSeriesIds();
+      for (final item in suggestions.take(24)) {
+        if (generation != _mediaDetailsGeneration ||
+            scope != ProfileRuntime.scope.value) {
+          return;
+        }
+        final id = item.imdbId ?? item.id;
+        if (watched.hasSnapshot && watched.isWatchedForTicks(id, item.type)) {
+          continue;
+        }
+        if (item.type == 'series' &&
+            watchedSeries.contains(id.trim().toLowerCase())) {
+          continue;
+        }
+        if (item.type == 'movie' && await StorageService.isMovieFinished(id)) {
+          continue;
+        }
+        filtered.add(item);
+      }
+      if (!mounted ||
+          generation != _mediaDetailsGeneration ||
+          scope != ProfileRuntime.scope.value ||
+          !ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery)) {
+        return;
+      }
+      setState(() {
+        _creditsRecommendations = PlayerCreditsPolicy.unwatchedRecommendations(
+          current,
+          filtered,
+          const <String>{},
+        );
+        _creditsRecommendationsLoaded = true;
+      });
+    } catch (_) {
+      // No recommendation card is preferable to a fictitious title.
+    } finally {
+      if (generation == _mediaDetailsGeneration) {
+        _creditsRecommendationsLoading = false;
+      }
+    }
+  }
+
+  void _openCreditsRecommendation(StremioMeta item) {
+    if (_validationGateActive ||
+        !ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery) ||
+        !mounted) {
+      return;
+    }
+    final id = item.imdbId ?? item.id;
+    if (!RegExp(r'^tt\d+$').hasMatch(id)) return;
+    final navigator = Navigator.of(context);
+    if (!navigator.canPop()) return;
+    // Pop the PLAYER before the host tab's detail handoff, or the player can
+    // cover the destination / the tab switch may dismiss the wrong route.
+    navigator.pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      MainPageBridge.requestCatalogDetailOpen({
+        'imdbId': id,
+        'type': item.type,
+        'title': item.name,
+        'poster': item.poster,
+        'year': int.tryParse(item.year ?? ''),
+      });
+    });
   }
 
   ({String imdbId, int season, int episode, Duration duration, String key})?
@@ -3834,10 +4166,21 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         _loadPlaylistIndex(_currentIndex, autoplay: false);
       }
     }
-    _autosaveTimer = Timer.periodic(
-      const Duration(seconds: 6),
-      (_) => _saveResume(debounced: true),
-    );
+    // Resume is persisted on every meaningful action (pause, seek, episode
+    // change, exit, lifecycle). This timer is only a crash-safety net, so it
+    // runs infrequently and skips entirely unless playback has actually
+    // advanced since the last tick. A paused/idle player used to re-write the
+    // same resume position every 6s, which rippled through WebDAV sync into
+    // full Continue Watching reloads.
+    _autosaveTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      if (!_isPlaying) return;
+      final posMs = _position.inMilliseconds;
+      if (_lastAutosaveMs >= 0 && (posMs - _lastAutosaveMs).abs() < 15000) {
+        return;
+      }
+      _lastAutosaveMs = posMs;
+      _saveResume(debounced: true);
+    });
 
     // Preload episode information if this is a series
     _episodeMetadataReady ??= _preloadEpisodeInfo();
@@ -4025,6 +4368,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       _syncSkipSegmentsForCurrentContent();
       _syncActiveSkipSegmentUi();
       _checkAndApplyLocalCompletion();
+      _updateCreditsAtPosition();
     });
     if (_subtitleAutoSyncEnabled || _hasSubtitlePolicy) {
       var lastAudioTrackId = player.state.track.audio.id;
@@ -5498,6 +5842,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       return;
     }
 
+    // Standalone movies have no next episode to resolve; don't leave a
+    // completed black/last frame open under keep-open. In particular a movie
+    // launched without a playlist must return to its originating detail.
+    if (PlayerCreditsPolicy.shouldAutoReturnMovie(
+      isMovie: _effectiveContentType == 'movie',
+      hasQueue:
+          (_activePlaylist?.length ?? 0) > 1 ||
+          widget.requestNextChannel != null ||
+          widget.requestChannelById != null ||
+          _effectiveIptvChannels != null,
+      hasNext:
+          _hasAnyNext ||
+          _hasIptvNext ||
+          _hasStremioTvNext ||
+          widget.requestMagicNext != null,
+      isLive: _currentIptvChannel?.isLive == true || _iptvZapBannerOwnsIdentity,
+      isPip: _isPipActive,
+      sleepStopped: _sleepStopLatched,
+    )) {
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
     // Match manual Next for direct links and exhausted packs: keep the player
     // alive while resolving the following episode.
     if (await _fetchNextEpisodeInPlayer(autoAdvance: true)) return;
@@ -5545,10 +5914,16 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // Find the current episode info
       if (_currentIndex >= 0 && _currentIndex < _activePlaylist!.length) {
         try {
-          final currentEpisode = seriesPlaylist.allEpisodes.firstWhere(
+          final matchingEpisodes = seriesPlaylist.allEpisodes.where(
             (episode) => episode.originalIndex == _currentIndex,
-            orElse: () => seriesPlaylist.allEpisodes.first,
           );
+          if (matchingEpisodes.isEmpty) {
+            return (
+              title: _activePlaylist![_currentIndex].title,
+              fetched: false,
+            );
+          }
+          final currentEpisode = matchingEpisodes.first;
 
           // Return episode title if available, otherwise use the playlist entry title
           if (currentEpisode.episodeInfo?.title != null &&
@@ -5733,10 +6108,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
       // Find the current episode info
       if (_currentIndex >= 0 && _currentIndex < _activePlaylist!.length) {
         try {
-          final currentEpisode = seriesPlaylist.allEpisodes.firstWhere(
+          final matchingEpisodes = seriesPlaylist.allEpisodes.where(
             (episode) => episode.originalIndex == _currentIndex,
-            orElse: () => seriesPlaylist.allEpisodes.first,
           );
+          if (matchingEpisodes.isEmpty) return {};
+          final currentEpisode = matchingEpisodes.first;
 
           if (currentEpisode.episodeInfo != null) {
             final episodeInfo = currentEpisode.episodeInfo!;
@@ -10598,30 +10974,56 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   Future<void> _markCurrentMovieAsFinished() async {
     final imdbId = _currentLocalMovieImdbId;
-    if (!_usesLocalCompletionTracking ||
+    if (imdbId == null ||
         _currentMovieMarkedAsFinished ||
-        imdbId == null) {
+        !PlayerCreditsPolicy.canReconcileMovie(
+          isMovie: _effectiveContentType == 'movie',
+          hasIdentity: true,
+          hasQueue:
+              (_activePlaylist?.length ?? 0) > 1 ||
+              _effectiveIptvChannels != null ||
+              widget.stremioTvChannels != null,
+          isLive: _currentIptvChannel?.isLive == true,
+          validating: _validationGateActive || _isTransitioning || !_isReady,
+        )) {
       return;
     }
     // Set this before the await: position events are frequent and completion
     // must perform one cleanup/write, not queue one per frame.
     _currentMovieMarkedAsFinished = true;
-    try {
-      await Future.wait([
-        StorageService.markMovieAsFinished(imdbId),
-        StorageService.removeVideoResume(_resumeKey, playbackCheckpoint: true),
-      ]);
-    } catch (_) {
-      // Playback remains usable if local storage is temporarily unavailable.
-    }
+    // The reconciliation service persists local completion first, then
+    // performs independent best-effort remote cleanup. EOF must NOT block
+    // navigation while remote trackers are offline or time out.
+    unawaited(() async {
+      try {
+        // A rewatch may have just unmarked an older completion. Serialize
+        // unmark before marking the new watch, never in reverse order.
+        try {
+          await _movieRewatchReset;
+        } catch (_) {
+          // A failed unmark must not suppress this NEW real completion.
+        }
+        await Future.wait([
+          FinishedMovieReconciliationService.recordWatchedMovie(imdbId),
+          StorageService.removeVideoResume(
+            _resumeKey,
+            playbackCheckpoint: true,
+          ),
+        ]);
+      } catch (_) {
+        // Watching continues even if a remote provider cannot be reached.
+      }
+    }());
   }
 
-  /// Apply the local, user-configured completion rule. This is synchronous on
-  /// purpose because it runs for every position update; actual writes stay
-  /// unawaited and are guarded one-shot above/in [_markCurrentEpisodeAsFinished].
+  /// Movie completion reconciles finished state across trackers and local
+  /// shelves at the configured threshold, regardless of selected progress
+  /// source. Episode-only local ticks still obey the user's tracking policy.
+  /// Frequent position updates must not queue duplicate completion writes.
   void _checkAndApplyLocalCompletion() {
     if (_validationGateActive ||
-        !_usesLocalCompletionTracking ||
+        !_isReady ||
+        _isTransitioning ||
         _duration <= Duration.zero ||
         _position <= Duration.zero) {
       return;
@@ -10629,16 +11031,31 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
     final percent = _position.inMicroseconds * 100 / _duration.inMicroseconds;
     final movieImdbId = _currentLocalMovieImdbId;
-    if (movieImdbId != null) {
+    if (movieImdbId != null &&
+        PlayerCreditsPolicy.canReconcileMovie(
+          isMovie: _effectiveContentType == 'movie',
+          hasIdentity: true,
+          hasQueue:
+              (_activePlaylist?.length ?? 0) > 1 ||
+              _effectiveIptvChannels != null ||
+              widget.stremioTvChannels != null,
+          isLive: _currentIptvChannel?.isLive == true,
+          validating: _validationGateActive || _isTransitioning,
+        )) {
       if (!_currentMovieRewatchStarted && percent < _movieCompletionThreshold) {
         // The title was finished during an earlier session. A real new play
         // below its threshold is a rewatch, so restore it to normal local
         // Continue Watching behavior before the next resume save.
         _currentMovieRewatchStarted = true;
-        unawaited(StorageService.unmarkMovieAsFinished(movieImdbId));
+        _movieRewatchReset = StorageService.unmarkMovieAsFinished(movieImdbId);
+        unawaited(_movieRewatchReset!);
       }
       if (!_currentMovieMarkedAsFinished &&
-          percent >= _movieCompletionThreshold) {
+          PlayerCreditsPolicy.reachedCompletionThreshold(
+            _position,
+            _duration,
+            _movieCompletionThreshold,
+          )) {
         unawaited(_markCurrentMovieAsFinished());
       }
       return;
@@ -10646,7 +11063,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
     final isSeries =
         _effectiveContentType == 'series' || _seriesPlaylist?.isSeries == true;
-    if (!isSeries) return;
+    if (!isSeries || !_usesLocalCompletionTracking) return;
     if (_currentEpisodeMarkedAsFinished ||
         percent < _episodeCompletionThreshold) {
       return;
@@ -12069,6 +12486,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   @override
   void dispose() {
+    MetadataPreferencesService.revision.removeListener(
+      _onPlayerMetadataPolicyChanged,
+    );
+    ProfileRuntime.scope.removeListener(_onPlayerMetadataPolicyChanged);
     MediaSessionService.instance.detach(this);
     _framingZoom.dispose();
     _lockButtonTimer?.cancel();
@@ -12162,8 +12583,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
     _mdblistStop();
     unawaited(_mdblistSession?.close() ?? Future.value());
 
-    // Save the current state before disposing
-    _saveResume();
+    // Save the current state before disposing. RouteAware.didPopNext can run
+    // before this async checkpoint reaches storage, especially after several
+    // in-player episode advances. Publish a second, authoritative refresh only
+    // after the write commits so the revealed show page cannot keep the
+    // previous episode's progress/ticks.
+    final finalCheckpoint = _saveResume();
+    unawaited(
+      finalCheckpoint.whenComplete(MainPageBridge.notifyPlaybackDataChanged),
+    );
     // Every in-app player route converges here, including callers that push
     // VideoPlayerScreen directly. The sync trigger is debounced, so the async
     // resume write above settles before its hot-state snapshot is built.
@@ -12280,6 +12708,10 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
   }
 
   Timer? _autosaveTimer;
+  // Position (ms) persisted by the last autosave TICK. The periodic timer is
+  // only a crash-safety net — every real action already saves — so it skips
+  // unless playback has advanced meaningfully since this mark.
+  int _lastAutosaveMs = -1;
 
   String get _resumeKey {
     final customKey = CustomSeriesIdentity.resumeBookmarkKey(
@@ -13357,7 +13789,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
         child: Builder(
           builder: (_) {
             final showIdentity =
-                widget.showVideoTitle && !widget.showChannelName;
+                widget.showVideoTitle &&
+                !widget.showChannelName &&
+                !_usesSpotlightIdentity;
             final titleInfo = showIdentity
                 ? _getCurrentEpisodeTitleInfo()
                 : null;
@@ -15998,12 +16432,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                   // duplication this redesign set out to remove.
                                   title:
                                       widget.showVideoTitle &&
-                                          !widget.showChannelName
+                                          !widget.showChannelName &&
+                                          !_usesSpotlightIdentity
                                       ? _getCurrentEpisodeTitle()
                                       : '',
                                   subtitle:
                                       widget.showVideoTitle &&
-                                          !widget.showChannelName
+                                          !widget.showChannelName &&
+                                          !_usesSpotlightIdentity
                                       ? _getCurrentEpisodeSubtitle()
                                       : null,
                                   // Merged into the dock: the channel panel rides on
@@ -16041,11 +16477,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                             (v * 100).clamp(0.0, 100.0),
                                           );
                                         },
-                                  // windowManager drives fullscreen only on
-                                  // Windows/Linux; macOS and mobile leave it
-                                  // to the OS, so the button would be a lie.
+                                  // windowManager drives fullscreen on every
+                                  // desktop (macOS included); mobile/TV leave it
+                                  // to the OS, so the button only shows there.
                                   showFullscreen:
-                                      Platform.isWindows || Platform.isLinux,
+                                      !kIsWeb &&
+                                      (Platform.isWindows ||
+                                          Platform.isLinux ||
+                                          Platform.isMacOS),
                                   onFullscreen: () async {
                                     final isFull = await windowManager
                                         .isFullScreen();
@@ -16069,7 +16508,12 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                       _dockExtent.value = h;
                                     }
                                   },
-                                  enhancedMetadata: _getEnhancedMetadata(),
+                                  // Legacy's top-right rating badge is a
+                                  // second copy for Spotlight movie/episodes;
+                                  // the shared identity owns the rating now.
+                                  enhancedMetadata: _usesSpotlightIdentity
+                                      ? const {}
+                                      : _getEnhancedMetadata(),
                                   clock: _playbackUiClock,
                                   isPlaying: _isPlaying,
                                   isReady: isReady,
@@ -16242,6 +16686,97 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                         ),
                       );
                     },
+                  ),
+                // Context sits ABOVE the subtitle and transport-safe band.
+                // No overlay when playback is PiP, hidden or unvalidated. The
+                // active dock retains unchanged input, shader and layout code.
+                // Spotlight identity is presentation, not proof of a playable
+                // source. Keep it visible from the FIRST route frame, including
+                // while mpv starts/buffers/validates, so loading isn't empty.
+                if (!inPip && _usesSpotlightIdentity)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _controlsVisible,
+                    builder: (context, visible, _) {
+                      if (!visible) return const SizedBox.shrink();
+                      final viewport = MediaQuery.sizeOf(context);
+                      final placement = PlayerSpotlightPlacement.forViewport(
+                        viewport: viewport,
+                        dockHeight: _dockBand(72.0),
+                        bottomSafeArea: MediaQuery.paddingOf(context).bottom,
+                        leftSafeArea: MediaQuery.paddingOf(context).left,
+                        rightSafeArea: MediaQuery.paddingOf(context).right,
+                      );
+                      return Positioned(
+                        // Home's left-aligned hero, not a 560dp box centered
+                        // in the video frame. Centering it caused the huge
+                        // visual gap from the actual title-detail Spotlight.
+                        left: placement.left,
+                        bottom: placement.bottom,
+                        child: SizedBox(
+                          width: placement.width,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxHeight: placement.maxHeight,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.bottomLeft,
+                              child: SizedBox(
+                                width: placement.width,
+                                child: PlayerMediaDetails(
+                                  media: _playerMediaIdentity,
+                                  compact: placement.compact,
+                                  scale: placement.scale,
+                                  // Increase visual weight of the logo only;
+                                  // its IMDb row and episode plot stay at
+                                  // Home's restrained readable text size.
+                                  logoScale: placement.compact
+                                      ? placement.scale
+                                      : placement.scale * 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                // A modest, optional end-credits suggestion surface. It does
+                // NOT dim/pause/skip the actual credits, and never launches a
+                // recommendation unless explicitly selected.
+                if (!inPip &&
+                    isReady &&
+                    _creditsVisible &&
+                    !_validationGateActive &&
+                    !widget.hideOptions)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _controlsVisible,
+                    builder: (context, visible, _) => visible
+                        ? Positioned(
+                            right: 24,
+                            top: MediaQuery.paddingOf(context).top + 80,
+                            child: PlayerCreditsSuggestions(
+                              // Real, known next episodes take priority. A
+                              // series with a pending metadata lookup must not
+                              // offer random films as if they were next.
+                              items:
+                                  _effectiveContentType == 'movie' ||
+                                      _hasConfirmedSeriesFinale
+                                  ? _creditsRecommendations
+                                  : const <StremioMeta>[],
+                              onSelect: _openCreditsRecommendation,
+                              onNextEpisode: _creditsHasConfirmedNext
+                                  ? () => _hasIptvNext
+                                        ? unawaited(
+                                            _switchToIptvChannel(
+                                              _currentIptvIndex + 1,
+                                            ),
+                                          )
+                                        : unawaited(_goToNextEpisode())
+                                  : null,
+                            ),
+                          )
+                        : const SizedBox.shrink(),
                   ),
                 // Manual OTT-style skip action. It stays available even when
                 // the main controls are hidden, and lifts above the dock when

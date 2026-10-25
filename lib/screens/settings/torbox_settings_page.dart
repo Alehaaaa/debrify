@@ -134,7 +134,13 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
       // focus back on it. Not the TextField — that pops the soft keyboard.
       _refocusOnTv(_saveButtonFocusNode);
       debugPrint('TorboxSettingsPage: Validation failed for provided key.');
-      _snack('Invalid API key. Please check and try again.', err: true);
+      // Timeouts/5xx during today's TorBox outage must not be presented as a
+      // definite invalid API key or prompt users to replace working secrets.
+      _snack(
+        TorboxAccountService.lastValidationError ??
+            'Could not verify Torbox right now. Please try again.',
+        err: true,
+      );
       return;
     }
 

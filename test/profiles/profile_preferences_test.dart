@@ -54,20 +54,38 @@ void main() {
     },
   );
 
-  test('Midnight rain persists and validates as a portable animation choice', () async {
-    ProfileRuntime.initializeLegacy();
-    await StorageService.setHomeAnimationStyle('moonlit_ocean');
-    expect(await StorageService.getHomeAnimationStyle(), 'moonlit_ocean');
-    expect(SanitizedProfilePreferences.allowsEntry('home_animation_style', 'moonlit_ocean'), isTrue);
-    await StorageService.setHomeAnimationStyle('midnight_rain');
-    expect(await StorageService.getHomeAnimationStyle(), 'midnight_rain');
-    expect(SanitizedProfilePreferences.allowsEntry('home_animation_style', 'midnight_rain'), isTrue);
-    await expectLater(StorageService.setHomeAnimationStyle('unknown'), throwsArgumentError);
-    expect(await StorageService.getHomeAnimationStyle(), 'midnight_rain');
-    final prefs = await ProfilePreferences.instance();
-    await prefs.setString('home_animation_style', 'future-style');
-    expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
-  });
+  test(
+    'Midnight rain persists and validates as a portable animation choice',
+    () async {
+      ProfileRuntime.initializeLegacy();
+      for (final style in const [
+        'snowy_mountain',
+        'midnight_rain',
+        'moonlit_ocean',
+        'northern_lights',
+        'ember_dusk',
+        'meteor_night',
+      ]) {
+        await StorageService.setHomeAnimationStyle(style);
+        expect(await StorageService.getHomeAnimationStyle(), style);
+        expect(
+          SanitizedProfilePreferences.allowsEntry(
+            'home_animation_style',
+            style,
+          ),
+          isTrue,
+        );
+      }
+      await expectLater(
+        StorageService.setHomeAnimationStyle('unknown'),
+        throwsArgumentError,
+      );
+      expect(await StorageService.getHomeAnimationStyle(), 'meteor_night');
+      final prefs = await ProfilePreferences.instance();
+      await prefs.setString('home_animation_style', 'future-style');
+      expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
+    },
+  );
 
   test('Home animations default off, persist per profile and reset', () async {
     ProfileRuntime.initializeLegacy();
@@ -76,15 +94,20 @@ void main() {
     await StorageService.setHomeAnimationsEnabled(true);
     await StorageService.setHomeAnimationStyle('snowy_mountain');
     expect(await StorageService.getHomeAnimationsEnabled(), isTrue);
-    ProfileRuntime.initializeCommitted(ProfileScope(
-      profileId: 'one', dataGeneration: 1, sessionEpoch: 1,
-    ));
+    ProfileRuntime.initializeCommitted(
+      ProfileScope(profileId: 'one', dataGeneration: 1, sessionEpoch: 1),
+    );
     expect(await StorageService.getHomeAnimationsEnabled(), isFalse);
     await StorageService.setHomeAnimationsEnabled(true);
     await StorageService.clearAllHomePageSettings();
     expect(await StorageService.getHomeAnimationsEnabled(), isFalse);
     expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
-    expect((await SharedPreferences.getInstance()).getBool('home_animations_enabled'), isTrue);
+    expect(
+      (await SharedPreferences.getInstance()).getBool(
+        'home_animations_enabled',
+      ),
+      isTrue,
+    );
   });
 
   test('legacy mode is byte-compatible with existing keys', () async {

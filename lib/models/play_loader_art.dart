@@ -27,6 +27,9 @@ class PlayLoaderArt {
   /// judging luminance would need to decode the image first.
   final String? logoUrl;
 
+  /// Source IMDb title ID enables the same critic/list signals as Showcase.
+  final String? imdbId;
+
   /// Already-formatted display strings — the loader never re-formats.
   final String? yearLabel; // e.g. '2024'
   final String? ratingLabel; // e.g. '8.5'
@@ -34,15 +37,21 @@ class PlayLoaderArt {
   final String? certificate; // e.g. 'PG-13'
   final String? genreLabel; // e.g. 'Sci-Fi · Adventure'
 
+  /// Synopsis provided by the selected catalog title (or episode), if any.
+  /// Kept as authored rather than manufacturing descriptive copy in the loader.
+  final String? description;
+
   const PlayLoaderArt({
     this.backdropUrl,
     this.posterUrl,
     this.logoUrl,
+    this.imdbId,
     this.yearLabel,
     this.ratingLabel,
     this.runtimeLabel,
     this.certificate,
     this.genreLabel,
+    this.description,
   });
 
   /// True when there is nothing worth carrying — callers skip attaching it.
@@ -50,11 +59,13 @@ class PlayLoaderArt {
       backdropUrl == null &&
       posterUrl == null &&
       logoUrl == null &&
+      imdbId == null &&
       yearLabel == null &&
       ratingLabel == null &&
       runtimeLabel == null &&
       certificate == null &&
-      genreLabel == null;
+      genreLabel == null &&
+      description == null;
 
   /// Build from a catalog/detail meta. [certificate] comes from the IMDb
   /// enrichment, which [StremioMeta] does not carry.
@@ -72,12 +83,14 @@ class PlayLoaderArt {
     final genres = meta.genres;
     final imdb =
         meta.effectiveImdbId ?? (meta.id.startsWith('tt') ? meta.id : null);
-    String? derived(String kind) =>
-        imdb == null ? null : 'https://images.metahub.space/$kind/medium/$imdb/img';
+    String? derived(String kind) => imdb == null
+        ? null
+        : 'https://images.metahub.space/$kind/medium/$imdb/img';
     return PlayLoaderArt(
       backdropUrl: _clean(meta.background) ?? derived('background'),
       posterUrl: _clean(meta.poster) ?? derived('poster'),
       logoUrl: _clean(meta.logo) ?? derived('logo'),
+      imdbId: imdb,
       yearLabel: _clean(meta.year),
       ratingLabel: meta.imdbRating?.toStringAsFixed(1),
       runtimeLabel: _clean(meta.runtimeDisplay),
@@ -86,6 +99,7 @@ class PlayLoaderArt {
           ? null
           // Two is all the meta line has room for on a phone.
           : genres.take(2).join(' · '),
+      description: _clean(meta.description),
     );
   }
 

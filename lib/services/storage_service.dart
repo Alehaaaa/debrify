@@ -1918,6 +1918,7 @@ class StorageService {
     'imprint',
     'frost',
     'trace',
+    'fold',
   };
 
   /// Exposed so a test can assert this set and `kLaunchIdents` agree in BOTH
@@ -2975,7 +2976,10 @@ class StorageService {
   /// Mark a locally tracked movie finished, remove it from Continue Watching,
   /// and clear its resumable state. The finished record itself remains so the
   /// detail action can accurately read "Rewatch".
-  static Future<void> markMovieAsFinished(String imdbId, {bool preserveResume = false}) async {
+  static Future<void> markMovieAsFinished(
+    String imdbId, {
+    bool preserveResume = false,
+  }) async {
     imdbId = MediaIdentity.progressId(imdbId, 'movie');
     final normalized = imdbId.trim().toLowerCase();
     if (normalized.isEmpty) return;
@@ -3070,7 +3074,10 @@ class StorageService {
   }
 
   /// Remove all playback state entries (series progress, video progress) for an IMDB ID.
-  static Future<void> clearPlaybackStateByImdbId(String imdbId, {bool preserveFinishedEpisodes = false}) async {
+  static Future<void> clearPlaybackStateByImdbId(
+    String imdbId, {
+    bool preserveFinishedEpisodes = false,
+  }) async {
     final normalized = imdbId.trim().toLowerCase();
     if (normalized.isEmpty) return;
     final map = await _getPlaybackStateMap();
@@ -3082,8 +3089,10 @@ class StorageService {
               normalized) {
         final record = entry.value as Map<String, dynamic>;
         final completed = record['finishedEpisodes'];
-        if (preserveFinishedEpisodes && record['type'] == 'series' &&
-            completed is Map && completed.isNotEmpty) {
+        if (preserveFinishedEpisodes &&
+            record['type'] == 'series' &&
+            completed is Map &&
+            completed.isNotEmpty) {
           // A Continue Watching dismissal clears bookmarks, not watched history.
           record['seasons'] = <String, dynamic>{};
           preserved = true;
@@ -3748,8 +3757,12 @@ class StorageService {
         for (final episode in (season.value as Map).entries) {
           final ep = int.tryParse(episode.key.toString());
           if (ep == null) continue;
-          result.add({'id': id, 'season': sn, 'episode': ep,
-            'at': episode.value is Map ? episode.value['finishedAt'] : null});
+          result.add({
+            'id': id,
+            'season': sn,
+            'episode': ep,
+            'at': episode.value is Map ? episode.value['finishedAt'] : null,
+          });
         }
       }
     }
@@ -6865,6 +6878,9 @@ class StorageService {
       'midnight_rain' => 'midnight_rain',
       'moonlit_ocean' => 'moonlit_ocean',
       'snowy_mountain' => 'snowy_mountain',
+      'northern_lights' => 'northern_lights',
+      'ember_dusk' => 'ember_dusk',
+      'meteor_night' => 'meteor_night',
       _ => 'snowy_mountain',
     };
   }
@@ -6874,6 +6890,9 @@ class StorageService {
       'snowy_mountain',
       'midnight_rain',
       'moonlit_ocean',
+      'northern_lights',
+      'ember_dusk',
+      'meteor_night',
     }.contains(value)) {
       throw ArgumentError.value(value);
     }
@@ -7076,8 +7095,7 @@ class StorageService {
     final stored = prefs.getStringList(homeTickSourcesKey);
     if (stored == null) return Set<TrackingSource>.of(_allTrackingSources);
     return <TrackingSource>{
-      for (final value in stored)
-        ?TrackingSourceStorageName.parse(value),
+      for (final value in stored) ?TrackingSourceStorageName.parse(value),
     };
   }
 

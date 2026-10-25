@@ -466,42 +466,35 @@ abstract final class TorrentDownloads {
             : DownloadOutcome.missed(miss, filterSummary: summary);
       }
 
-      // Episodes: the first search usually finds a pack that has several;
-      // only the ones still missing afterwards get their own search.
+      // Queue the requested episodes as one batch. Searching sequentially
+      // made episode 2 and 3 invisible until the earlier lookup had fully
+      // resolved; running the exact episode lookups together lets all three
+      // become real queue entries (and report progress) independently.
       final wanted = {for (var i = 0; i < count; i++) episode + i};
-      DownloadMiss? firstMiss;
-      var downloadedAny = false;
-      for (final ep in wanted.toList()..sort()) {
-        if (cancelled || live() == null) break;
-        final here = await _episodesOnDevice(meta);
-        if (here.contains((season: season!, episode: ep))) continue;
-        final remaining = {
-          for (final w in wanted)
-            if (w >= ep && !here.contains((season: season, episode: w))) w,
-        };
-        final miss = await one(
-          ep: ep,
-          wanted: remaining,
-          itemMeta: PlaybackMeta(
-            imdbId: meta.imdbId,
-            contentType: meta.contentType,
-            title: meta.title,
-            posterUrl: meta.posterUrl,
-            year: meta.year,
-            catalogItem: meta.catalogItem,
-            season: season,
-            episode: ep,
+      final here = await _episodesOnDevice(meta);
+      final missing = (wanted.toList()..sort())
+          .where((ep) => !here.contains((season: season!, episode: ep)))
+          .toList();
+      final misses = await Future.wait([
+        for (final ep in missing)
+          one(
+            ep: ep,
+            wanted: {ep},
+            itemMeta: PlaybackMeta(
+              imdbId: meta.imdbId,
+              contentType: meta.contentType,
+              title: meta.title,
+              posterUrl: meta.posterUrl,
+              year: meta.year,
+              catalogItem: meta.catalogItem,
+              season: season,
+              episode: ep,
+            ),
           ),
-        );
-        if (miss == null) {
-          downloadedAny = true;
-        } else {
-          firstMiss ??= miss;
-          // Later episodes rarely fare better once the first had nothing.
-          if (!downloadedAny) break;
-        }
-      }
+      ]);
       closeOverlay();
+      final downloadedAny = misses.any((miss) => miss == null);
+      final firstMiss = misses.whereType<DownloadMiss>().firstOrNull;
       if (downloadedAny || firstMiss == null) return done;
       return DownloadOutcome.missed(firstMiss, filterSummary: summary);
     } catch (e) {

@@ -9572,7 +9572,7 @@ class AndroidTvTorrentPlayerActivity : AppCompatActivity() {
             // the background — refuse rather than schedule something doomed.
             Toast.makeText(
                 this,
-                "Allow \"Alarms & reminders\" for Debrify in system settings to schedule recordings",
+                "Allow \"Alarms & reminders\" for Nextup in system settings to schedule recordings",
                 Toast.LENGTH_LONG,
             ).show()
             return

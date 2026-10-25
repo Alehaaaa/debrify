@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../screens/downloads_screen.dart' show DownloadedTitleScreen;
+import '../../screens/downloads_screen.dart' show openDownloadedItem;
 import '../downloaded_media_service.dart';
 import '../main_page_bridge.dart';
 
@@ -90,18 +90,17 @@ abstract final class DownloadFeedback {
       );
   }
 
-  /// A title's download page when it has downloads, else the Downloads tab.
+  /// A title's detail page when it has downloads, else the Downloads tab.
+  /// Routes through [openDownloadedItem] so View lands on the very same detail
+  /// surface Home opens — a catalog title on its Showcase page (with its
+  /// transfers manageable from there), not a separate downloads-only screen.
   static Future<void> openTitle(BuildContext context, String? titleId) async {
     if (titleId != null && titleId.isNotEmpty) {
       try {
         final all = await DownloadedMediaService.load(includeTransfers: true);
         final items = all.where((e) => e.media?.id == titleId).toList();
         if (items.isNotEmpty && context.mounted) {
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => DownloadedTitleScreen(items: items),
-            ),
-          );
+          await openDownloadedItem(context, items);
           return;
         }
       } catch (_) {}

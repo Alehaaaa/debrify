@@ -249,8 +249,10 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       final hideCatalogAddonNames =
           await StorageService.getHomeHideCatalogAddonNames();
       final heroSource = await StorageService.getHomeHeroSource();
-      final spotlightFocusDetails = await StorageService.getSpotlightFocusDetails();
-      final homeAnimationsEnabled = await StorageService.getHomeAnimationsEnabled();
+      final spotlightFocusDetails =
+          await StorageService.getSpotlightFocusDetails();
+      final homeAnimationsEnabled =
+          await StorageService.getHomeAnimationsEnabled();
       final homeAnimationStyle = await StorageService.getHomeAnimationStyle();
 
       // Only the two views that the current Home screen can render are valid.
@@ -387,7 +389,9 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
   Future<void> _setHomeAnimation({bool? enabled, String? style}) async {
     try {
       if (style != null) await StorageService.setHomeAnimationStyle(style);
-      if (enabled != null) await StorageService.setHomeAnimationsEnabled(enabled);
+      if (enabled != null) {
+        await StorageService.setHomeAnimationsEnabled(enabled);
+      }
       if (!mounted) return;
       setState(() {
         if (enabled != null) _homeAnimationsEnabled = enabled;
@@ -396,9 +400,9 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       MainPageBridge.notifyHomeSettingsChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save setting: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save setting: $e')));
     }
   }
 
@@ -410,9 +414,9 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       MainPageBridge.notifyHomeSettingsChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save setting: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save setting: $e')));
     }
   }
 
@@ -607,7 +611,8 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       SettingsToggleTile(
                         icon: Icons.ac_unit_rounded,
                         title: 'Enable animations',
-                        subtitle: 'Animate Home and Spotlight collection backgrounds. '
+                        subtitle:
+                            'Animate Home and Spotlight collection backgrounds. '
                             'Keep this off on low-end TVs or devices with limited memory, '
                             'as animations may slow down Home.',
                         subtitleMaxLines: 6,
@@ -637,9 +642,23 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                                 value: 'moonlit_ocean',
                                 child: Text('Moonlit ocean'),
                               ),
+                              DropdownMenuItem(
+                                value: 'northern_lights',
+                                child: Text('Northern lights'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'ember_dusk',
+                                child: Text('Ember dusk'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'meteor_night',
+                                child: Text('Meteor night'),
+                              ),
                             ],
                             onChanged: (value) {
-                              if (value != null) _setHomeAnimation(style: value);
+                              if (value != null) {
+                                _setHomeAnimation(style: value);
+                              }
                             },
                           ),
                         ),
@@ -650,15 +669,17 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                 SettingsSection(
                   title: 'Home Cards',
                   children: [
-                    if (_spotlightLayoutActive && spotlightUsesRichCards(
-                      viewport: MediaQuery.sizeOf(context),
-                      platform: Theme.of(context).platform,
-                      dpad: PlatformUtil.isTelevision,
-                    ))
+                    if (_spotlightLayoutActive &&
+                        spotlightUsesRichCards(
+                          viewport: MediaQuery.sizeOf(context),
+                          platform: Theme.of(context).platform,
+                          dpad: PlatformUtil.isTelevision,
+                        ))
                       SettingsToggleTile(
                         icon: Icons.description_outlined,
                         title: 'Expand Focused Card',
-                        subtitle: 'Widen the active card and show its description while scrolling, hovering, or using the remote',
+                        subtitle:
+                            'Widen the active card and show its description while scrolling, hovering, or using the remote',
                         value: _spotlightFocusDetails,
                         onChanged: _setSpotlightFocusDetails,
                       ),

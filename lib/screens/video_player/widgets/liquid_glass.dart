@@ -1,10 +1,157 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+
+import '../../../theme/app_theme_scope.dart';
+
+/// Loads one Impeller runtime effect per app process, not one per moving
+/// control. The engine owns the backdrop sampler and size floats. No screenshot
+/// is captured: the filter sees whatever Flutter has actually composited
+/// behind the glass on each rasterized frame. Platform video overlays that
+/// bypass Flutter composition cannot be promised as filter input.
+class _GlassRefractionProgram {
+  static const asset = 'assets/shaders/player_liquid_glass.frag';
+  static final ValueNotifier<ui.FragmentProgram?> ready = ValueNotifier(null);
+  static bool _started = false;
+  static bool _failed = false;
+
+  static void warm() {
+    if (_started || !ui.ImageFilter.isShaderFilterSupported) return;
+    _started = true;
+    unawaited(_load());
+  }
+
+  static Future<void> _load() async {
+    try {
+      ready.value = await ui.FragmentProgram.fromAsset(asset);
+    } catch (error) {
+      _failed = true;
+      debugPrint(
+        'GlassSurface: Impeller shader failed ($error); '
+        'using Skia-compatible blur and subtle chromatic rim',
+      );
+    }
+  }
+
+  static ui.ImageFilter? filter({
+    required double physicalRadius,
+    required double physicalRefraction,
+    required double physicalDispersion,
+    required double saturation,
+    required double phase,
+    required Offset physicalOrigin,
+    required Size physicalSize,
+  }) {
+    final program = ready.value;
+    if (_failed || !ui.ImageFilter.isShaderFilterSupported || program == null) {
+      return null;
+    }
+    try {
+      final shader = program.fragmentShader();
+      // 0,1 = u_size, set by Flutter's image-filter backend.
+      // sampler 0 = live input, also bound by Flutter. Never set these.
+      shader.setFloat(2, physicalRadius);
+      shader.setFloat(3, physicalRefraction);
+      shader.setFloat(4, physicalDispersion);
+      shader.setFloat(5, saturation);
+      // A bounded angle, updated at 10 Hz only while primary player glass is
+      // mounted and motion is enabled. Each instance has its OWN filter, not
+      // a shared screen-wide distortion clipped into button-shaped masks.
+      shader.setFloat(6, phase);
+      // Filter input may contain a larger window-aligned snapshot even though
+      // this control owns a small clip. Locate the lens using this control's
+      // *own* paint bounds; never assume u_size is the control itself.
+      shader.setFloat(7, physicalOrigin.dx);
+      shader.setFloat(8, physicalOrigin.dy);
+      shader.setFloat(9, physicalSize.width);
+      shader.setFloat(10, physicalSize.height);
+      return ui.ImageFilter.shader(shader);
+    } on UnsupportedError catch (error) {
+      _failed = true;
+      debugPrint('GlassSurface: shader backend unavailable ($error)');
+      return null;
+    } on StateError catch (error) {
+      _failed = true;
+      debugPrint('GlassSurface: invalid shader input ($error)');
+      return null;
+    }
+  }
+
+  static String get diagnostic {
+    if (!ui.ImageFilter.isShaderFilterSupported) {
+      return 'Skia/non-Impeller fallback: Gaussian frost and painted chromatic rim';
+    }
+    if (_failed) return 'Impeller shader load failed: fallback blur/rim';
+    if (ready.value == null) {
+      return 'Impeller shader loading: fallback blur/rim';
+    }
+    return 'Impeller refracted live Flutter backdrop (video texture unverified)';
+  }
+}
+
+/// One lightweight motion clock for the entire player. The moving video is
+/// sampled by the compositor on every rendered frame regardless of this clock;
+/// this clock only makes the *shape* of the edge lens flex subtly. Never read
+/// pixels from the video, never tick on Skia, and stop when the last primary
+/// surface leaves the tree or the application is backgrounded.
+class _GlassMotionClock extends ValueNotifier<double>
+    with WidgetsBindingObserver {
+  _GlassMotionClock() : super(0);
+
+  static final instance = _GlassMotionClock();
+  static const cadence = Duration(milliseconds: 100); // at most 10 updates/s
+  int _subscribers = 0;
+  int _step = 0;
+  Timer? _timer;
+  bool _foreground = true;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    if (_subscribers++ == 0) {
+      WidgetsBinding.instance.addObserver(this);
+      _updateTimer();
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    if (_subscribers > 0 && --_subscribers == 0) {
+      _timer?.cancel();
+      _timer = null;
+      WidgetsBinding.instance.removeObserver(this);
+      _step = 0;
+      value = 0;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
+    _updateTimer();
+  }
+
+  void _updateTimer() {
+    _timer?.cancel();
+    _timer = null;
+    if (_subscribers == 0 || !_foreground) return;
+    _timer = Timer.periodic(cadence, (_) {
+      // 8-second loop; bounded shader angles avoid precision drift during
+      // long-running playback and never allocate a backdrop capture.
+      _step = (_step + 1) % 80;
+      value = _step * (2 * math.pi / 80);
+    });
+  }
+
+  @visibleForTesting
+  int get activeConsumers => _subscribers;
+}
 
 /// Liquid glass for the Glass player controls and the trailer chrome.
 ///
@@ -19,10 +166,12 @@ import 'package:flutter/services.dart' show rootBundle;
 ///    it ([GlassBrightnessScope]): clear and saturated over dark scenes,
 ///    denser and darker over bright ones so white controls stay legible.
 ///
-/// The "liquid" part is what plain frosted glass lacks: the backdrop is
-/// saturated as well as blurred (colour seems to pool in the glass), a top
-/// sheen catches light, and a gradient rim gives a bright specular edge at
-/// the top-left fading to a faint one at the bottom-right.
+/// On Impeller, the loaded fragment shader actually refracts the composited
+/// moving backdrop, splitting red/blue only at the glass boundary. On Skia,
+/// inaccessible contrast or unrelated Legacy surfaces, the safe fallback
+/// retains Gaussian frost and a restrained painted rim. The player always
+/// has a frozen Legacy boundary, so only its glass controls opt in to lensing
+/// without changing the route's original theme/other TV chrome.
 enum GlassVariant { frosted, translucent, dynamic }
 
 /// One resolved look: what a [GlassSurface] actually paints.
@@ -88,6 +237,15 @@ class GlassTokens {
   final Duration transition;
   final Color reducedTransparencyShade;
 
+  /// Optical tuning in logical pixels; shader uniforms use physical pixels.
+  final double refractionPx;
+  final double strongRefractionPx;
+  final double dispersionPx;
+  final double strongDispersionPx;
+  final double shaderBlurFraction;
+  final double shaderMaxBlur;
+  final double fallbackMaxBlur;
+
   const GlassTokens({
     required this.radiusPanel,
     required this.radiusPanelCompact,
@@ -107,6 +265,13 @@ class GlassTokens {
     required this.defaultBrightness,
     required this.transition,
     required this.reducedTransparencyShade,
+    required this.refractionPx,
+    required this.strongRefractionPx,
+    required this.dispersionPx,
+    required this.strongDispersionPx,
+    required this.shaderBlurFraction,
+    required this.shaderMaxBlur,
+    required this.fallbackMaxBlur,
   });
 
   static const String asset = 'assets/design/glass_tokens.json';
@@ -115,11 +280,11 @@ class GlassTokens {
     radiusPanel: 24,
     radiusPanelCompact: 20,
     radiusSheet: 26,
-    rimWidth: 1.0,
-    rimHighlight: Color(0x8CFFFFFF),
+    rimWidth: 1.3,
+    rimHighlight: Color(0xC2FFFFFF),
     rimMid: Color(0x12FFFFFF),
     rimLowlight: Color(0x33FFFFFF),
-    sheen: Color(0x26FFFFFF),
+    sheen: Color(0x14FFFFFF),
     shadowColor: Color(0x33000000),
     shadowBlur: 36,
     shadowOffsetY: 14,
@@ -150,6 +315,13 @@ class GlassTokens {
     defaultBrightness: 0.35,
     transition: Duration(milliseconds: 400),
     reducedTransparencyShade: Color(0xE6141418),
+    refractionPx: 14.0,
+    strongRefractionPx: 18.0,
+    dispersionPx: 4.0,
+    strongDispersionPx: 5.0,
+    shaderBlurFraction: 0.14,
+    shaderMaxBlur: 3.0,
+    fallbackMaxBlur: 16.0,
   );
 
   factory GlassTokens.fromJson(Map<String, dynamic> j) {
@@ -160,6 +332,7 @@ class GlassTokens {
     final dyn = variants['dynamic'] as Map<String, dynamic>;
     final dynCfg = j['dynamic'] as Map<String, dynamic>;
     final reduced = j['reducedTransparency'] as Map<String, dynamic>;
+    final optics = j['optics'] as Map<String, dynamic>;
     return GlassTokens(
       radiusPanel: (radius['panel'] as num).toDouble(),
       radiusPanelCompact: (radius['panelCompact'] as num).toDouble(),
@@ -181,6 +354,13 @@ class GlassTokens {
       defaultBrightness: (dynCfg['defaultBrightness'] as num).toDouble(),
       transition: Duration(milliseconds: dynCfg['transitionMs'] as int),
       reducedTransparencyShade: _hex(reduced['shade'] as String),
+      refractionPx: (optics['refractionPx'] as num).toDouble(),
+      strongRefractionPx: (optics['strongRefractionPx'] as num).toDouble(),
+      dispersionPx: (optics['dispersionPx'] as num).toDouble(),
+      strongDispersionPx: (optics['strongDispersionPx'] as num).toDouble(),
+      shaderBlurFraction: (optics['shaderBlurFraction'] as num).toDouble(),
+      shaderMaxBlur: (optics['shaderMaxBlur'] as num).toDouble(),
+      fallbackMaxBlur: (optics['fallbackMaxBlur'] as num).toDouble(),
     );
   }
 
@@ -234,6 +414,13 @@ class GlassTokens {
     defaultBrightness,
     transition.inMilliseconds,
     _argb(reducedTransparencyShade),
+    refractionPx,
+    strongRefractionPx,
+    dispersionPx,
+    strongDispersionPx,
+    shaderBlurFraction,
+    shaderMaxBlur,
+    fallbackMaxBlur,
   ].join('|');
 }
 
@@ -255,8 +442,104 @@ class GlassBrightnessScope extends InheritedNotifier<ValueListenable<double>> {
       ?.value;
 }
 
+/// Tracks where ONE glass pane is composited. ImageFilter.shader receives a
+/// renderer-owned u_size, which on Impeller may include a whole-screen-sized
+/// backdrop texture; centering a lens on that texture makes small buttons
+/// mere masks over a single screen-centered distortion. This measurement is
+/// fed to each independent shader in *physical pixels* after layout.
+///
+/// Measurement is post-frame (never setState during layout/build), creates no
+/// GlobalKeys/overlays and updates only if the actual geometry changes.
+class _LocalGlassGeometry extends StatefulWidget {
+  const _LocalGlassGeometry({required this.builder});
+
+  final Widget Function(BuildContext context, Rect? bounds) builder;
+
+  @override
+  State<_LocalGlassGeometry> createState() => _LocalGlassGeometryState();
+}
+
+class _LocalGlassGeometryState extends State<_LocalGlassGeometry> {
+  Rect? _bounds;
+  bool _measureQueued = false;
+
+  void _measureLater() {
+    if (_measureQueued) return;
+    _measureQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _measureQueued = false;
+      if (!mounted) return;
+      final render = context.findRenderObject();
+      if (render is! RenderBox || !render.hasSize) return;
+      final next = render.localToGlobal(Offset.zero) & render.size;
+      if (!next.isFinite || next.width <= 0 || next.height <= 0) return;
+      final prev = _bounds;
+      if (prev != null &&
+          (next.left - prev.left).abs() < 0.5 &&
+          (next.top - prev.top).abs() < 0.5 &&
+          (next.width - prev.width).abs() < 0.5 &&
+          (next.height - prev.height).abs() < 0.5) {
+        return;
+      }
+      setState(() => _bounds = next);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    _measureLater();
+    return widget.builder(context, _bounds);
+  }
+}
+
 /// A piece of liquid glass.
 class GlassSurface extends StatelessWidget {
+  /// The refraction shader is shared with the whole player and registered
+  /// under flutter.shaders. Existing callers need no integration changes.
+  static const String liquidShaderAsset = _GlassRefractionProgram.asset;
+
+  /// Renderer diagnostic, never an assertion that native video textures were
+  /// included in Flutter's composited backdrop.
+  @visibleForTesting
+  static String get shaderBackendDiagnostic =>
+      _GlassRefractionProgram.diagnostic;
+
+  @visibleForTesting
+  static bool canRefractBackdrop({
+    required bool impeller,
+    required bool shaderReady,
+    required bool highContrast,
+    required bool legacy,
+    bool playerChrome = false,
+  }) => impeller && shaderReady && !highContrast && (!legacy || playerChrome);
+
+  /// Motion belongs to primary, player-only chrome. Secondary controls keep
+  /// static lens geometry and still refract the *moving* composited backdrop.
+  @visibleForTesting
+  static bool shouldAnimateLens({
+    required bool impeller,
+    required bool shaderReady,
+    required bool highContrast,
+    required bool reduceMotion,
+    required bool legacy,
+    required bool playerChrome,
+    required bool primary,
+  }) =>
+      primary &&
+      !reduceMotion &&
+      playerChrome &&
+      canRefractBackdrop(
+        impeller: impeller,
+        shaderReady: shaderReady,
+        highContrast: highContrast,
+        legacy: legacy,
+        playerChrome: playerChrome,
+      );
+
+  @visibleForTesting
+  static int get activeMotionConsumers =>
+      _GlassMotionClock.instance.activeConsumers;
+
   final Widget child;
   final BorderRadius radius;
   final EdgeInsetsGeometry padding;
@@ -269,6 +552,16 @@ class GlassSurface extends StatelessWidget {
   /// shadow would otherwise sit far below them.
   final double shadowScale;
 
+  /// Player routes are intentionally FrozenLegacyPageRoute even when a live
+  /// theme was selected. Opt in just this player chrome, never its siblings.
+  final bool allowLegacyRefraction;
+
+  /// Skips the specular rim stroke. The rim reads as a soft light-catch on a
+  /// small circle but as a hard continuous outline ("border") on a large
+  /// straight-edged rectangle, so wide panels opt out and rely on frost + tint
+  /// for their edge, matching the borderless look of the floating buttons.
+  final bool borderless;
+
   const GlassSurface({
     super.key,
     required this.child,
@@ -277,37 +570,143 @@ class GlassSurface extends StatelessWidget {
     this.variant = GlassVariant.frosted,
     this.strong = false,
     this.shadowScale = 1,
+    this.allowLegacyRefraction = false,
+    this.borderless = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final tokens = GlassTokens.current;
+    final reduced = MediaQuery.maybeHighContrastOf(context) ?? false;
+    final app = AppThemeScope.of(context);
+    if (!reduced && (!app.isLegacy || allowLegacyRefraction)) {
+      _GlassRefractionProgram.warm();
+    }
+    // The program arrives asynchronously. One notification rebuilds the glass
+    // to switch from safe blur to shader; subsequent moving video frames are
+    // sampled by the engine, not by a Dart animation or screenshot loop.
+    return _LocalGlassGeometry(
+      builder: (context, lensBounds) =>
+          ValueListenableBuilder<ui.FragmentProgram?>(
+            valueListenable: _GlassRefractionProgram.ready,
+            builder: (context, program, child) {
+              final motion = shouldAnimateLens(
+                impeller: ui.ImageFilter.isShaderFilterSupported,
+                shaderReady: program != null,
+                highContrast: reduced,
+                reduceMotion:
+                    MediaQuery.maybeOf(context)?.disableAnimations ?? false,
+                legacy: app.isLegacy,
+                playerChrome: allowLegacyRefraction,
+                primary: strong || variant == GlassVariant.dynamic,
+              );
+              if (!motion) {
+                return _buildResolved(context, tokens, 0, lensBounds);
+              }
+              return ValueListenableBuilder<double>(
+                valueListenable: _GlassMotionClock.instance,
+                builder: (context, phase, child) =>
+                    _buildResolved(context, tokens, phase, lensBounds),
+              );
+            },
+          ),
+    );
+  }
+
+  Widget _buildResolved(
+    BuildContext context,
+    GlassTokens tokens,
+    double phase,
+    Rect? lensBounds,
+  ) {
     if (variant != GlassVariant.dynamic) {
-      return _paint(context, tokens, tokens.look(variant, 0));
+      return _paint(
+        context,
+        tokens,
+        tokens.look(variant, 0),
+        phase,
+        lensBounds,
+      );
     }
     final brightness =
         GlassBrightnessScope.of(context) ?? tokens.defaultBrightness;
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(end: brightness),
-      duration: tokens.transition,
+      duration: (MediaQuery.maybeOf(context)?.disableAnimations ?? false)
+          ? Duration.zero
+          : tokens.transition,
       curve: Curves.easeOut,
       builder: (context, b, _) =>
-          _paint(context, tokens, tokens.look(variant, b)),
+          _paint(context, tokens, tokens.look(variant, b), phase, lensBounds),
     );
   }
 
-  Widget _paint(BuildContext context, GlassTokens t, GlassLook look) {
+  Widget _paint(
+    BuildContext context,
+    GlassTokens t,
+    GlassLook look,
+    double phase,
+    Rect? lensBounds,
+  ) {
     // "Reduce transparency" / high contrast: a solid, legible plate, no blur.
     final reduced = MediaQuery.maybeHighContrastOf(context) ?? false;
+    final legacy = AppThemeScope.of(context).isLegacy;
+    final physical = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    final corners = radius.resolve(Directionality.of(context));
+    final minRadius = [
+      corners.topLeft.x,
+      corners.topRight.x,
+      corners.bottomRight.x,
+      corners.bottomLeft.x,
+    ].reduce((a, b) => a < b ? a : b);
+    final shaderFilter =
+        canRefractBackdrop(
+          impeller: ui.ImageFilter.isShaderFilterSupported,
+          shaderReady: _GlassRefractionProgram.ready.value != null,
+          highContrast: reduced,
+          legacy: legacy,
+          playerChrome: allowLegacyRefraction,
+        )
+        ? _GlassRefractionProgram.filter(
+            physicalRadius: minRadius * physical,
+            physicalRefraction:
+                (strong ? t.strongRefractionPx : t.refractionPx) * physical,
+            physicalDispersion:
+                (strong ? t.strongDispersionPx : t.dispersionPx) * physical,
+            saturation: look.saturation,
+            phase: phase,
+            physicalOrigin: (lensBounds?.topLeft ?? Offset.zero) * physical,
+            physicalSize: (lensBounds?.size ?? Size.zero) * physical,
+          )
+        : null;
+    final refracting = shaderFilter != null;
+    // Skia on macOS cannot run ImageFilter.shader. There is no honest way to
+    // refract or split the backdrop per-channel on Skia, so the fallback keeps
+    // the backdrop registered 1:1 and relies on frost + the specular rim; the
+    // real lensing, edge blur ramp and radial dispersion are the Impeller
+    // shader's job.
+    final playerFallback = allowLegacyRefraction && !refracting && !reduced;
     final sheen = strong
         ? t.sheen.withValues(alpha: (t.sheen.a * 1.8).clamp(0.0, 1.0))
         : t.sheen;
-    final tintTop = Color.alphaBlend(sheen, look.tint);
+    // A restrained neutral-gray veil: the backdrop's actual colors still pass
+    // through instead of being buried under an opaque milky plate.
+    final tint = (refracting || playerFallback)
+        ? Color.lerp(look.tint, const Color(0x161B1D22), 0.62)!
+        : look.tint;
+    final shade = (refracting || playerFallback)
+        ? Color.lerp(
+            look.shade,
+            const Color(0x1F171A20),
+            variant == GlassVariant.translucent ? 0.48 : 0.76,
+          )!
+        : look.shade;
+    final tintTop = Color.alphaBlend(sheen, tint);
 
     Widget body = DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: radius,
-        color: reduced ? t.reducedTransparencyShade : look.shade,
+        color: reduced ? t.reducedTransparencyShade : shade,
       ),
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -315,27 +714,46 @@ class GlassSurface extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [tintTop, look.tint, look.tint],
+            colors: [tintTop, tint, tint],
             stops: const [0.0, 0.5, 1.0],
           ),
         ),
         child: CustomPaint(
-          foregroundPainter: _RimPainter(radius: radius, tokens: t),
+          foregroundPainter: borderless
+              ? null
+              : _RimPainter(radius: radius, tokens: t),
           child: Padding(padding: padding, child: child),
         ),
       ),
     );
 
     if (!reduced && look.blur > 0) {
+      final blur = refracting
+          ? (look.blur * t.shaderBlurFraction)
+                .clamp(1.5, t.shaderMaxBlur)
+                .toDouble()
+          : playerFallback
+          ? (look.blur * 0.13).clamp(1.0, 2.8).toDouble()
+          : (legacy
+                ? look.blur
+                : look.blur.clamp(4.0, t.fallbackMaxBlur).toDouble());
+      final frost = ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur);
+      // Skia cannot run the refraction shader, and an affine magnification only
+      // slides the backdrop out of register, so the glass looks like an offset
+      // copy of the video rather than a window onto it. The fallback therefore
+      // samples the real backdrop 1:1 — frost + saturation — and sells the glass
+      // with the specular rim, not a fake lens or a painted colour fringe.
       final filter = ui.ImageFilter.compose(
-        outer: ColorFilter.matrix(_saturation(look.saturation)),
-        inner: ui.ImageFilter.blur(sigmaX: look.blur, sigmaY: look.blur),
+        outer: refracting
+            ? shaderFilter
+            : ColorFilter.matrix(_saturation(look.saturation)),
+        inner: frost,
       );
-      // Inside a BackdropGroup the surfaces share one backdrop read, which is
-      // what keeps several glass pieces on screen affordable.
-      body = BackdropGroup.of(context) != null
-          ? BackdropFilter.grouped(filter: filter, child: body)
-          : BackdropFilter(filter: filter, child: body);
+      // Never use BackdropFilter.grouped here: its shared backdrop key makes
+      // neighbouring controls sample one common effect instead of each local
+      // curved pane. Every pane gets an independent image-filter layer and
+      // clipped sampling bounds. The child's icon/text sits ABOVE the filter.
+      body = BackdropFilter(filter: filter, child: body);
     }
 
     return DecoratedBox(
@@ -379,6 +797,10 @@ class _RimPainter extends CustomPainter {
     final w = tokens.rimWidth;
     final rect = Offset.zero & size;
     final rrect = radius.toRRect(rect).deflate(w / 2);
+    // A neutral white specular edge only — no painted colour. A coloured fringe
+    // reads as green/red edges over dark video (additive light doesn't cancel
+    // to white over a dark backdrop); real chromatic dispersion is the Impeller
+    // shader's job, sampled from the backdrop, never painted on Skia.
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = w

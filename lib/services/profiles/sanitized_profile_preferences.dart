@@ -95,7 +95,10 @@ abstract final class SanitizedProfilePreferences {
       case 'home_animation_style':
         return value == 'snowy_mountain' ||
             value == 'midnight_rain' ||
-            value == 'moonlit_ocean';
+            value == 'moonlit_ocean' ||
+            value == 'northern_lights' ||
+            value == 'ember_dusk' ||
+            value == 'meteor_night';
       case 'home_card_orientation':
         return value is String &&
             const <String>{'portrait', 'landscape'}.contains(value);
@@ -320,6 +323,7 @@ abstract final class SanitizedProfilePreferences {
     'imprint',
     'frost',
     'trace',
+    'fold',
   };
 
   static const Set<String> _iptvPlayerGuideStyles = <String>{

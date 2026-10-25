@@ -95,6 +95,21 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
   String? _apiKey;
   TorboxTorrent? _pendingInitialTorrent;
   bool _initialActionHandled = false;
+  // A TV remote's double press and overlapping Cloud card/folder actions used
+  // to dispatch the SAME TorBox requestdl multiple times, and could even push
+  // duplicate players when the API eventually responded. This gate covers
+  // entire user-initiated launches (the service also coalesces HTTP requests).
+  bool _playbackLaunchInProgress = false;
+
+  Future<void> _singlePlaybackLaunch(Future<void> Function() run) async {
+    if (_playbackLaunchInProgress) return;
+    _playbackLaunchInProgress = true;
+    try {
+      await run();
+    } finally {
+      _playbackLaunchInProgress = false;
+    }
+  }
 
   // Web Downloads state
   final List<TorboxWebDownload> _webDownloads = [];
@@ -493,7 +508,10 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
     }
   }
 
-  Future<void> _handlePlayTorrent(TorboxTorrent torrent) async {
+  Future<void> _handlePlayTorrent(TorboxTorrent torrent) =>
+      _singlePlaybackLaunch(() => _handlePlayTorrentOnce(torrent));
+
+  Future<void> _handlePlayTorrentOnce(TorboxTorrent torrent) async {
     final key = _apiKey;
     if (key == null || key.isEmpty) {
       _showComingSoon('Add Torbox API key');
@@ -2725,7 +2743,10 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
   }
 
   /// Play a single video file
-  Future<void> _playVideoFile(RDFileNode fileNode) async {
+  Future<void> _playVideoFile(RDFileNode fileNode) =>
+      _singlePlaybackLaunch(() => _playVideoFileOnce(fileNode));
+
+  Future<void> _playVideoFileOnce(RDFileNode fileNode) async {
     if ((_currentTorrent == null && _currentWebDownload == null) ||
         fileNode.isFolder) {
       return;
@@ -3210,6 +3231,11 @@ class _TorboxDownloadsScreenState extends State<TorboxDownloadsScreen> {
 
   /// Helper: Play torbox files (reuse existing logic)
   Future<void> _playTorboxFiles(
+    List<TorboxFile> files,
+    String collectionName,
+  ) => _singlePlaybackLaunch(() => _playTorboxFilesOnce(files, collectionName));
+
+  Future<void> _playTorboxFilesOnce(
     List<TorboxFile> files,
     String collectionName,
   ) async {

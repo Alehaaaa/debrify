@@ -19,6 +19,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/webdav_item.dart';
+import '../models/sidebar_configuration.dart';
 import '../models/android_video_renderer_mode.dart';
 import '../models/profiles/profile_policy.dart';
 import '../models/profiles/connection_resource.dart';
@@ -144,6 +145,44 @@ bool shouldApplyPendingCredentialOverride({
   required Set<ConnectionResourceType> providerTypes,
   required bool ownCredentialPresent,
 }) => !ownCredentialPresent && pendingTypes.any(providerTypes.contains);
+
+/// Navigation chrome is chosen for the layout currently on screen, not for
+/// every device that might use the same profile later. The saved values use
+/// different vocabularies on compact and wide layouts.
+@visibleForTesting
+String storedNavigationStyleForChoice({
+  required bool wide,
+  required String choice,
+}) => wide
+    ? (choice == 'floating' ? 'pill' : 'rail')
+    : (choice == 'floating' ? 'floating' : 'classic');
+
+@visibleForTesting
+String navigationChoiceForStoredStyle(String style) =>
+    style == 'pill' || style == 'floating' ? 'floating' : 'tabs';
+
+@visibleForTesting
+String navigationItemsScopeDescription({required bool wide}) => wide
+    ? 'Order and names apply to TV and desktop; visibility also applies to phones'
+    : 'Hide items on this phone; order and names apply to TV and desktop';
+
+/// The only write path for the shared navigation picker. Keeping it separate
+/// from the dialog makes the cross-device non-mutation contract testable.
+@visibleForTesting
+Future<void> saveNavigationChoiceForCurrentLayout({
+  required bool wide,
+  required String choice,
+}) async {
+  final style = storedNavigationStyleForChoice(wide: wide, choice: choice);
+  if (wide) {
+    await StorageService.setDesktopSidebarStyle(style);
+    MainPageBridge.desktopSidebarStyleChanged?.call();
+  } else {
+    MainPageBridge.phoneNavStyleCached = style;
+    MainPageBridge.navPrefsChanged?.call();
+    await StorageService.setPhoneNavStyle(style);
+  }
+}
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, this.summaryReadOverrides = const {}});
@@ -1474,8 +1513,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ? 'Floating button'
           : 'Tab bar',
       desktopSidebarStyleLabel: _desktopSidebarStyle == 'pill'
-          ? 'Floating button'
-          : 'Tab bar',
+          ? 'Floating dock'
+          : 'Sidebar rail',
       onOpenSidebarCustomization: _openSidebarCustomization,
       profileAppearanceLabel: ProfileGateStyle.labelFor(
         ProfileGateStyle.cached,
@@ -1502,8 +1541,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// entries read/write the same state fields as their inline rows.
   ///
   /// Top-level destinations live here; in-page options are appended by
-  /// [_leafSearchEntries] and deep-link to the page that hosts them (no
-  /// scroll-to-highlight yet). [SettingsSearchEntry.keywords] carry the
+  /// [_leafSearchEntries] and deep-link to the page that hosts them. Sidebar
+  /// options can focus their actual controls; unrelated subpages still open at
+  /// their normal entry point. [SettingsSearchEntry.keywords] carry the
   /// concepts a row's copy doesn't say out loud (sd card, 4k, epg, scrobble…).
   /// A few pages reachable only from outside Settings — Stremio TV's channel
   /// settings, the Addons tab — are indexed here too, since a settings search
@@ -2865,7 +2905,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// Sublevel settings that live *inside* a subpage (cache checks, post-torrent
   /// action, filters, subtitle options…). Each is grouped under its owning
-  /// page's name and deep-links to that page (no scroll-to-highlight yet), so a
+  /// page's name and deep-links to that page, so a
   /// search like "cache" or "post torrent" surfaces every provider's option.
   /// Titles mirror the real in-page labels — keep them in sync if a page's copy
   /// changes.
@@ -3858,7 +3898,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       leaf(
         'Sidebar',
         'Order & Names',
-        'Reorder and rename navigation destinations',
+        'Reorder and rename destinations on TV and desktop',
         const [
           'sidebar items',
           'navigation',
@@ -3869,7 +3909,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
           'restore default order and names',
           'reset sidebar',
         ],
+        onTap: () => _openSidebarCustomization(focusDestinationId: 'search'),
       ),
+      // The editor owns these controls, so unlike most cross-page leaf hits we
+      // can land on the exact toggle and scroll to it. Do not index Home and
+      // Settings: those two cannot be hidden.
+      for (final destination in sidebarDestinations)
+        if (destination.id != 'home' && destination.id != 'settings')
+          leaf(
+            'Sidebar',
+            'Show or hide ${destination.defaultLabel}',
+            'Visibility on phone, TV and desktop navigation',
+            [
+              destination.id,
+              destination.defaultLabel.toLowerCase(),
+              'show',
+              'hide',
+              'visibility',
+              'navigation items',
+              'pin',
+              'sidebar',
+            ],
+            onTap: () => _openSidebarCustomization(
+              focusDestinationId: destination.id,
+              focusVisibility: true,
+            ),
+          ),
       for (final option in advancedAppearanceOptions)
         leaf('Advanced', option.title, option.subtitle, option.keywords),
       leaf(
@@ -3937,15 +4002,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
         },
       ),
       // Player Settings
-      leaf('Playback', 'Default Player', 'Which player plays videos', const [
-        'default player',
-        'debrify player',
-        'external',
-        'external player',
-        'built-in',
-        'system app chooser',
-        'deovr',
-      ], onTap: () => _openPlaybackSection(PlaybackSettingsSection.player)),
+      leaf(
+        'Playback',
+        'Default Player',
+        'Which player plays videos',
+        const [
+          'default player',
+          'debrify player',
+          'external',
+          'external player',
+          'built-in',
+          'system app chooser',
+          'deovr',
+        ],
+        onTap: () => _openPlaybackSection(PlaybackSettingsSection.player),
+      ),
       leaf(
         'Playback',
         'Default Subtitle language',
@@ -4999,21 +5070,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await _loadSummaries();
   }
 
-  /// The single non-TV navigation choice. Both layout implementations share
-  /// the selection, and each swaps its chrome live.
+  /// Compact and wide-screen chrome have independent preferences: selecting
+  /// a style here changes ONLY the layout currently being edited.
   Future<void> _openNavigationSettings() async {
     final isWide = MediaQuery.sizeOf(context).width >= 600;
     final current = isWide
         ? await StorageService.getDesktopSidebarStyle()
         : await StorageService.getPhoneNavStyle();
     if (!mounted) return;
-    final currentChoice = current == 'pill' || current == 'floating'
-        ? 'floating'
-        : 'tabs';
+    final currentChoice = navigationChoiceForStoredStyle(current);
     final chosen = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Navigation'),
+        title: Text(isWide ? 'Wide-screen navigation' : 'Compact navigation'),
         contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -5022,39 +5091,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
               dialogContext,
               currentChoice: currentChoice,
               value: 'tabs',
-              icon: Icons.call_to_action_rounded,
-              title: 'Tab bar',
-              subtitle: 'A persistent tab bar',
+              icon: isWide
+                  ? Icons.view_sidebar_rounded
+                  : Icons.call_to_action_rounded,
+              title: isWide ? 'Sidebar rail' : 'Tab bar',
+              subtitle: isWide
+                  ? 'Persistent navigation beside the content'
+                  : 'A persistent bar on compact screens',
             ),
             _navigationChoice(
               dialogContext,
               currentChoice: currentChoice,
               value: 'floating',
               icon: Icons.blur_on_rounded,
-              title: 'Floating button',
-              subtitle: 'A floating button that opens the menu',
+              title: isWide ? 'Floating dock' : 'Floating button',
+              subtitle: isWide
+                  ? 'A floating navigation dock on wide screens'
+                  : 'A floating button that opens the menu',
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Text(
+                isWide
+                    ? 'Changes wide-screen navigation only. Compact navigation keeps its own setting.'
+                    : 'Changes compact navigation only. TV and desktop sidebars keep their own styles.',
+                style: TextStyle(
+                  color: AppThemeScope.of(dialogContext).settings.dim,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
     if (chosen == null || chosen == currentChoice || !mounted) return;
-    final desktopStyle = chosen == 'floating' ? 'pill' : 'rail';
-    final phoneStyle = chosen == 'floating' ? 'floating' : 'classic';
-
-    // Publish both synchronous mirrors before their writes complete so the
-    // current layout switches in this frame.
-    MainPageBridge.phoneNavStyleCached = phoneStyle;
-    MainPageBridge.navPrefsChanged?.call();
-    await Future.wait<void>([
-      StorageService.setDesktopSidebarStyle(desktopStyle),
-      StorageService.setPhoneNavStyle(phoneStyle),
-    ]);
-    MainPageBridge.desktopSidebarStyleChanged?.call();
+    final newStyle = storedNavigationStyleForChoice(
+      wide: isWide,
+      choice: chosen,
+    );
+    await saveNavigationChoiceForCurrentLayout(wide: isWide, choice: chosen);
     if (!mounted) return;
     setState(() {
-      _desktopSidebarStyle = desktopStyle;
-      _phoneNavStyle = phoneStyle;
+      if (isWide) {
+        _desktopSidebarStyle = newStyle;
+      } else {
+        _phoneNavStyle = newStyle;
+      }
     });
   }
 
@@ -5067,8 +5150,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String subtitle,
   }) {
     final selected = currentChoice == value;
+    final colors = AppThemeScope.of(dialogContext).settings;
     return ListTile(
-      leading: Icon(icon, color: selected ? const Color(0xFFC7BFFF) : null),
+      key: ValueKey('navigation-choice-$value'),
+      autofocus: selected,
+      selected: selected,
+      selectedColor: colors.accent2,
+      focusColor: colors.accent.withValues(alpha: 0.12),
+      leading: Icon(icon, color: selected ? colors.accent2 : null),
       title: Text(
         title,
         style: TextStyle(
@@ -5077,7 +5166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
       trailing: selected
-          ? const Icon(Icons.check_rounded, color: Color(0xFFC7BFFF))
+          ? Icon(Icons.check_rounded, color: colors.accent2)
           : null,
       onTap: () => Navigator.of(dialogContext).pop(value),
     );
@@ -7091,8 +7180,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ),
   );
 
-  Future<void> _openSidebarCustomization() async {
-    await pushSettingsPage(context, const SidebarCustomizationPage());
+  Future<void> _openSidebarCustomization({
+    String? focusDestinationId,
+    bool focusVisibility = false,
+  }) async {
+    await pushSettingsPage(
+      context,
+      SidebarCustomizationPage(
+        initialFocusDestinationId: focusDestinationId,
+        focusVisibilityToggle: focusVisibility,
+      ),
+    );
     if (!mounted) return;
     setState(() {});
   }
@@ -7893,7 +7991,9 @@ class _SettingsLayout extends StatelessWidget {
                 SettingsTile(
                   icon: Icons.tune_rounded,
                   title: 'Navigation items',
-                  subtitle: 'Choose the order, names and visibility',
+                  subtitle: navigationItemsScopeDescription(
+                    wide: MediaQuery.sizeOf(context).width >= 600,
+                  ),
                   onTap: onOpenSidebarCustomization,
                 ),
               ],
@@ -8490,12 +8590,15 @@ class _SettingsLayout extends StatelessWidget {
                 const SizedBox(height: 24),
                 SettingsSection(
                   title: 'Navigation items',
-                  blurb: 'Arrange navigation items and labels.',
+                  blurb:
+                      'Order and names are shared by TV and desktop; visibility applies to phones too.',
                   children: [
                     SettingsTile(
                       icon: Icons.tune_rounded,
                       title: 'Navigation items',
-                      subtitle: 'Order, names and visibility',
+                      subtitle: navigationItemsScopeDescription(
+                        wide: MediaQuery.sizeOf(context).width >= 600,
+                      ),
                       onTap: onOpenSidebarCustomization,
                     ),
                   ],

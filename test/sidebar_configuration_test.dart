@@ -22,13 +22,10 @@ void main() {
       'home',
       'reels',
       'discover',
+      'watch',
       'calendar',
       'downloads',
-      'iptv',
-      'youtube',
       'cloud',
-      'debrify_tv',
-      'stremio_tv',
       'addons',
       'settings',
     ]);
@@ -89,7 +86,7 @@ void main() {
   test('phone navigation drops hidden destinations but keeps its order', () {
     final configuration = SidebarConfiguration(
       order: const <String>['settings', 'cloud', 'home'],
-      hiddenDestinationIds: const <String>['downloads', 'iptv'],
+      hiddenDestinationIds: const <String>['downloads', 'calendar'],
     );
 
     expect(
@@ -97,7 +94,7 @@ void main() {
         MainTab.home,
         MainTab.downloads,
         MainTab.cloud,
-        MainTab.iptv,
+        MainTab.calendar,
         MainTab.settings,
       ]),
       <int>[MainTab.home, MainTab.cloud, MainTab.settings],

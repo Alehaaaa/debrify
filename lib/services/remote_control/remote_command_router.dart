@@ -1770,7 +1770,7 @@ class RemoteCommandRouter {
               'not overwritten; only the unused automatic setup profile is '
               'removed. Profiles keep their PINs when the transfer '
               'carries them.'
-              '${debrifyTvOmission?.isEmpty == false ? '\n\nDebrify TV was '
+              '${debrifyTvOmission?.isEmpty == false ? '\n\nNextup TV was '
                         'excluded when this transfer was compacted '
                         '(${debrifyTvOmission!.contentsLabel}). No empty '
                         'channels will be created. After importing, restore '
@@ -1936,7 +1936,7 @@ class RemoteCommandRouter {
             'TV imported ${report.profilesImported} profiles and '
             '${report.resourcesImported} connections'
             '${syncRestorePending ? '; WebDAV sync reconnection is pending' : ''}'
-            '${debrifyTvOmission?.isEmpty == false ? '; Debrify TV channels were not included' : ''}',
+            '${debrifyTvOmission?.isEmpty == false ? '; Nextup TV channels were not included' : ''}',
       );
       if (!acknowledged) {
         RemoteTransferDiagnostics.record(
@@ -1970,7 +1970,7 @@ class RemoteCommandRouter {
         'Imported ${report.profilesImported} profiles and '
         '${report.resourcesImported} connections from $sender.'
         '${report.pinResetsRequired == 0 ? '' : ' ${report.pinResetsRequired} profile(s) need a new PIN.'}'
-        '${debrifyTvOmission?.isEmpty == false ? ' Debrify TV channels were not included; import a channel ZIP or send them separately from Remote.' : ''}',
+        '${debrifyTvOmission?.isEmpty == false ? ' Nextup TV channels were not included; import a channel ZIP or send them separately from Remote.' : ''}',
       );
       if (receivingDuringOnboarding) {
         try {

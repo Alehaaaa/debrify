@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Debrify Top Shelf</string>
+	<string>Nextup Top Shelf</string>
 	<key>DebrifyAppGroup</key>
 	<string>$(DEBRIFY_APP_GROUP)</string>
 	<key>CFBundleExecutable</key>

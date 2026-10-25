@@ -43,6 +43,7 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
     section: 'Main',
     icon: Icons.home_rounded,
   ),
+  // Reels remains a separate, pinnable destination rather than a Watch feed.
   SidebarDestination(
     id: 'reels',
     tabIndex: MainTab.reels,
@@ -53,9 +54,17 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
   SidebarDestination(
     id: 'discover',
     tabIndex: MainTab.discover,
-    defaultLabel: 'Discover',
+    defaultLabel: 'Explore',
     section: 'Main',
     icon: Icons.explore_rounded,
+  ),
+  // The four channel/TV feeds are consolidated behind this Watch hub.
+  SidebarDestination(
+    id: 'watch',
+    tabIndex: MainTab.watch,
+    defaultLabel: 'Watch',
+    section: 'Main',
+    icon: Icons.live_tv_rounded,
   ),
   SidebarDestination(
     id: 'calendar',
@@ -72,39 +81,11 @@ const List<SidebarDestination> sidebarDestinations = <SidebarDestination>[
     icon: Icons.download_for_offline_rounded,
   ),
   SidebarDestination(
-    id: 'iptv',
-    tabIndex: MainTab.iptv,
-    defaultLabel: 'IPTV',
-    section: 'Browse',
-    icon: Icons.live_tv_rounded,
-  ),
-  SidebarDestination(
-    id: 'youtube',
-    tabIndex: MainTab.youtube,
-    defaultLabel: 'YouTube',
-    section: 'Browse',
-    icon: Icons.ondemand_video_rounded,
-  ),
-  SidebarDestination(
     id: 'cloud',
     tabIndex: MainTab.cloud,
     defaultLabel: 'Cloud',
     section: 'Library',
     icon: Icons.cloud_rounded,
-  ),
-  SidebarDestination(
-    id: 'debrify_tv',
-    tabIndex: MainTab.debrifyTv,
-    defaultLabel: 'Nextup TV',
-    section: 'TV',
-    icon: Icons.tv_rounded,
-  ),
-  SidebarDestination(
-    id: 'stremio_tv',
-    tabIndex: MainTab.stremioTv,
-    defaultLabel: 'Stremio TV',
-    section: 'TV',
-    icon: Icons.smart_display_rounded,
   ),
   SidebarDestination(
     id: 'addons',
@@ -142,6 +123,22 @@ class SidebarConfiguration {
   static const int maxLabelRunes = 24;
   static const int maxSerializedBytes = 4096;
 
+  // The v1 catalog in HEAD had these four separate destinations. Retain their
+  // exact stable IDs as recognized *stored* preferences: existing users may
+  // have named or hidden individual feeds. The new catalog shows one Watch
+  // entry, but round-tripping settings must not erase those choices. Reels is
+  // still a standalone destination in sidebarDestinations.
+  static const Map<String, String> _retiredFeedDefaultLabels = {
+    'iptv': 'IPTV',
+    'youtube': 'YouTube',
+    'debrify_tv': 'Nextup TV',
+    'stremio_tv': 'Stremio TV',
+  };
+
+  static bool _isStoredDestinationId(String id) =>
+      sidebarDestinationById.containsKey(id) ||
+      _retiredFeedDefaultLabels.containsKey(id);
+
   final List<String> order;
   final Map<String, String> labels;
   final Set<String> hiddenDestinationIds;
@@ -176,15 +173,15 @@ class SidebarConfiguration {
       final rawHidden = decoded['hidden'];
       if (rawHidden != null && rawHidden is! List) return null;
 
-      final order = <String>[];
+      final storedOrder = <String>[];
       final seen = <String>{};
       for (final value in rawOrder) {
         if (value is! String ||
-            !sidebarDestinationById.containsKey(value) ||
+            !_isStoredDestinationId(value) ||
             !seen.add(value)) {
           return null;
         }
-        order.add(value);
+        storedOrder.add(value);
       }
 
       final labels = <String, String>{};
@@ -193,7 +190,7 @@ class SidebarConfiguration {
         final value = entry.value;
         if (key is! String ||
             value is! String ||
-            !sidebarDestinationById.containsKey(key)) {
+            !_isStoredDestinationId(key)) {
           return null;
         }
         final normalized = normalizeLabel(value);
@@ -202,10 +199,59 @@ class SidebarConfiguration {
       }
       final hidden = <String>[];
       for (final value in rawHidden ?? const <dynamic>[]) {
-        if (value is! String || !sidebarDestinationById.containsKey(value)) {
+        if (value is! String || !_isStoredDestinationId(value)) {
           return null;
         }
         hidden.add(value);
+      }
+
+      // A previously saved v1 order can contain several of the four feed IDs.
+      // Collapse at the FIRST feed's position, retaining all other relative
+      // positions; an explicitly ordered Watch entry from a newer v1 save wins
+      // over old feed positions. Reels keeps its own position either way.
+      final hasWatch = storedOrder.contains('watch');
+      final order = <String>[];
+      var addedWatch = false;
+      for (final id in storedOrder) {
+        if (_retiredFeedDefaultLabels.containsKey(id)) {
+          if (!hasWatch && !addedWatch) {
+            order.add('watch');
+            addedWatch = true;
+          }
+        } else {
+          order.add(id);
+        }
+      }
+
+      if (addedWatch) {
+        // Prefer the custom name of the first still-visible feed, then the
+        // first hidden one. An explicit Watch label always takes precedence.
+        // Keep original per-feed labels as latent metadata in case the user
+        // later restores a standalone feed entry.
+        if (!labels.containsKey('watch')) {
+          final feeds = storedOrder.where(
+            _retiredFeedDefaultLabels.containsKey,
+          );
+          final candidates = [
+            ...feeds.where((id) => !hidden.contains(id)),
+            ...feeds.where(hidden.contains),
+          ];
+          for (final id in candidates) {
+            final label = labels[id];
+            if (label != null && label != _retiredFeedDefaultLabels[id]) {
+              labels['watch'] = label;
+              break;
+            }
+          }
+        }
+
+        // Hiding only one old feed must never make the whole Watch hub vanish.
+        // All four explicitly hidden means the user intended no channel/TV
+        // feeds in the navigation. Availability/disabled integrations are
+        // handled by MainPage; they cannot be inferred from sidebar settings.
+        if (_retiredFeedDefaultLabels.keys.every(hidden.contains)) {
+          hidden.add('watch');
+        }
       }
       return SidebarConfiguration(
         order: order,
@@ -316,9 +362,11 @@ class SidebarConfiguration {
     for (final entry in raw.entries) {
       final destination = sidebarDestinationById[entry.key];
       final label = normalizeLabel(entry.value);
-      if (destination == null ||
+      final defaultLabel =
+          destination?.defaultLabel ?? _retiredFeedDefaultLabels[entry.key];
+      if (defaultLabel == null ||
           label == null ||
-          label == destination.defaultLabel) {
+          label == defaultLabel) {
         continue;
       }
       result[entry.key] = label;
@@ -328,7 +376,7 @@ class SidebarConfiguration {
 
   static Set<String> _normalizeHiddenDestinationIds(Iterable<String> raw) => {
     for (final id in raw)
-      if (sidebarDestinationById.containsKey(id) &&
+      if (_isStoredDestinationId(id) &&
           id != 'home' &&
           id != 'settings')
         id,

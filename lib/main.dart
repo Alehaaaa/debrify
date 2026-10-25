@@ -24,6 +24,7 @@ import 'services/app_route_observer.dart';
 // import 'screens/torrent_search_screen.dart';
 import 'screens/browse_screen.dart';
 import 'screens/cloud_screen.dart';
+import 'screens/watch_hub_screen.dart';
 import 'screens/search_screen.dart';
 import 'widgets/iptv/iptv_results_view.dart';
 import 'widgets/youtube/youtube_results_view.dart';
@@ -86,6 +87,7 @@ import 'services/startup_connection.dart';
 
 import 'widgets/animated_background.dart';
 import 'services/main_page_bridge.dart';
+import 'services/navigation_destination_compat.dart';
 import 'services/discover_credits_handoff.dart';
 import 'services/profiles/profile_policy_guard.dart';
 import 'theme/app_surfaces.dart';
@@ -1298,7 +1300,17 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   late final _SectionNavigatorObserver _sectionNavigatorObserver =
       _SectionNavigatorObserver(
         (playerOpen) {
-          if (mounted) setState(() => _playerRouteOpen = playerOpen);
+          if (!mounted) return;
+          if (_selectedIndex == MainTab.iptv && _iptvStartupPlaybackLaunched) {
+            if (playerOpen) {
+              _iptvStartupPlayerRouteSeen = true;
+            } else if (_iptvStartupPlayerRouteSeen) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _finishIptvStartup();
+              });
+            }
+          }
+          setState(() => _playerRouteOpen = playerOpen);
         },
         onCoveredChanged: (covered) {
           if (!mounted || _sectionRouteCovering == covered) return;
@@ -1323,10 +1335,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   bool _sectionRouteCovering = false;
 
   // Home (the Stremio board; old index-0 Home retired) — unless a startup
-  // channel is pending, in which case boot straight to IPTV (13) so the page
-  // that owns the launch is the one that mounts. Resolved in main() before
-  // runApp precisely so this initializer can read it; tab 13 is unconditional
-  // in _computeVisibleNavIndices, so it can never be swallowed.
+  // channel is pending, in which case boot straight to transient IPTV (13)
+  // until it consumes the channel. It is intentionally absent from ordinary
+  // nav; profile and integration refreshes must preserve this boot handoff.
   late int _selectedIndex =
       widget.initialTab ??
       (MainPageBridge.hasPendingIptvStartup ? MainTab.iptv : MainTab.home);
@@ -1363,22 +1374,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// providers are configured — sidebar layouts carry it, phones don't.
   static const int _kSearchTabIndex = 17;
 
-  /// Backfill order when picks are missing/invalid: Discover, IPTV, Cloud,
-  /// Downloads, YouTube, Debrify TV, Stremio TV, Calendar, Addons, Settings.
+  /// Backfill order when picks are missing/invalid. Reels remains separately
+  /// pinnable alongside Watch; all numbers are stable tab IDs.
   /// Deliberately without [_kSearchTabIndex]: the classic bar's three slots
   /// are all spoken for, and the phone reaches search from the Home board.
   static const List<int> _phoneNavDefaultOrder = [
-    18,
-    MainTab.reels,
-    13,
-    16,
-    2,
-    14,
-    3,
-    9,
-    19,
-    7,
-    8,
+    18, // Discover
+    MainTab.reels, // 20: independently pinnable clips
+    MainTab.watch, // 21: hub for clips and TV feeds
+    16, // Cloud
+    2, // Downloads
+    19, // Calendar
+    7, // Addons
+    8, // Settings
   ];
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -1414,6 +1422,25 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// Torn down by [MainPageBridge.notifyPlayerLaunching] (which every playback
   /// path already calls) or by cancellation.
   bool _showIptvStartupOverlay = false;
+  bool _iptvStartupPlaybackLaunched = false;
+  bool _iptvStartupPlayerRouteSeen = false;
+
+  void _onIptvStartupPlayerLaunching() {
+    if (mounted && _selectedIndex == MainTab.iptv && !_showIptvStartupOverlay) {
+      _iptvStartupPlaybackLaunched = true;
+    }
+  }
+
+  void _finishIptvStartup() {
+    if (!mounted || _selectedIndex != MainTab.iptv) return;
+    _iptvStartupPlaybackLaunched = false;
+    _iptvStartupPlayerRouteSeen = false;
+    _selectTab(MainTab.watch);
+  }
+
+  void _onIptvStartupPlaybackReturned() {
+    if (_iptvStartupPlaybackLaunched) _finishIptvStartup();
+  }
 
   void _hideIptvStartupOverlay() {
     if (!mounted) {
@@ -1422,6 +1449,17 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     }
     if (_showIptvStartupOverlay) {
       setState(() => _showIptvStartupOverlay = false);
+      // Cancellation may originate in the IPTV page itself. A successful
+      // launch synchronously publishes its player event after hiding this
+      // overlay; resolve an unsuccessful attempt on the following frame.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _selectedIndex == MainTab.iptv &&
+            !_showIptvStartupOverlay &&
+            !_iptvStartupPlaybackLaunched) {
+          _finishIptvStartup();
+        }
+      });
     }
   }
 
@@ -1431,6 +1469,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   void _cancelIptvStartup() {
     MainPageBridge.cancelIptvStartupChannel();
     _hideIptvStartupOverlay();
+    _finishIptvStartup();
   }
 
   // Back button press tracking for Android TV exit
@@ -1468,6 +1507,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// a duplicate deep link doesn't stack a second identical provider route.
   bool _cloudProviderRouteOpen = false;
 
+  /// True while a Watch-hub feed route is on the stack (mirrors
+  /// [_cloudProviderRouteOpen]) — a rapid re-tap doesn't stack a duplicate.
+  bool _feedRouteOpen = false;
+  int? _activePushedFeedIndex;
+
   /// Tabs whose pages keep their own content clear of the status bar and the
   /// tab bar (their own SafeArea, AppBar or CloudScaffold), so on iOS the
   /// shell lets them draw edge-to-edge. Every other tab stays inset by the
@@ -1480,6 +1524,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     15, 17, 18, // Home, Search, Discover (SearchScreen)
     MainTab.reels, // full-bleed clips; keeps its own text clear of insets
     16, // Cloud hub
+    MainTab.watch, // Watch hub (own SafeArea, like the Cloud hub)
   };
 
   final List<Widget> _pages = [
@@ -1524,9 +1569,10 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     // deprecated). Built on demand in _buildPage as SearchScreen().
     'Cloud', // 16: consolidated cloud-provider hub (RD/Torbox/PikPak/…/WebDAV)
     'Search', // 17: dedicated search tab (TV + sidebar layouts)
-    'Discover', // 18: source-dropdown browser (Continue Watching / Trakt / …)
+    'Explore', // 18: browsable catalogs and connected sources (stable ID)
     'Calendar', // 19: Trakt/Simkl calendar (visible when either is connected)
     'Reels', // 20: vertical feed of trailer clips
+    'Watch', // 21: consolidated lean-back hub (Reels/IPTV/YouTube/Nextup/Stremio)
   ];
 
   final List<IconData> _icons = [
@@ -1551,6 +1597,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     Icons.explore_rounded, // 18: Discover
     Icons.calendar_month_rounded, // 19: Calendar (Trakt/Simkl)
     Icons.slow_motion_video_rounded, // 20: Reels
+    Icons.live_tv_rounded, // 21: Watch (lean-back hub)
   ];
 
   /// Tab index → bridge back-handler key, in ONE place. Every path that
@@ -1589,6 +1636,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    MainPageBridge.addPlayerLaunchListener(_onIptvStartupPlayerLaunching);
+    MainPageBridge.addPlaybackReturnListener(_onIptvStartupPlaybackReturned);
     unawaited(_loadProfilePolicy());
     // Active-surface signal: the initializer above picked the boot tab before
     // any tap could, so system-bar ownership needs it published explicitly.
@@ -1650,38 +1699,26 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       if (!mounted) return;
       final visibleIndices = _computeVisibleNavIndices();
       if (!visibleIndices.contains(index)) {
-        if (index == MainTab.realDebrid) {
-          _showMissingApiKeySnack('Real Debrid');
-        } else if (index == MainTab.torbox) {
-          _showMissingApiKeySnack('Torbox');
-        } else if (index == MainTab.pikPak) {
-          // PikPak tab - check if enabled but hidden vs not configured
-          if (_pikpakEnabled && _pikpakHiddenFromNav) {
-            _showTabHiddenSnack('PikPak');
-          } else {
-            _showMissingApiKeySnack('PikPak');
-          }
-        } else if (index == MainTab.webDav) {
-          if (_webDavEnabled && _webDavHiddenFromNav) {
-            _showTabHiddenSnack('WebDAV');
-          } else {
-            _showMissingApiKeySnack('WebDAV');
-          }
-        } else if (index == MainTab.premiumize) {
-          if (_premiumizeEnabled && _premiumizeHiddenFromNav) {
-            _showTabHiddenSnack('Premiumize');
-          } else {
-            _showMissingApiKeySnack('Premiumize');
-          }
-        } else if (index == MainTab.allDebrid) {
-          if (_allDebridEnabled && _allDebridHiddenFromNav) {
-            _showTabHiddenSnack('AllDebrid');
-          } else {
-            _showMissingApiKeySnack('AllDebrid');
-          }
-        } else {
-          _showIntegrationRequiredSnack();
+        // Old callers still use the stable numeric IDs. Only the four TV
+        // feeds became child routes; Reels (20) stays a real root destination.
+        final feed = NavigationDestinationCompat.isCollapsedFeedTab(index)
+            ? NavigationDestinationCompat.feedForLegacyTab(index)
+            : null;
+        if (feed != null) {
+          _openFeed(feed);
+          return;
         }
+        final cloud = NavigationDestinationCompat.cloudForLegacyTab(index);
+        if (cloud != null) {
+          _openCloudProvider(cloud);
+          return;
+        }
+        if (index == MainTab.reels &&
+            !_allowsProfileFeature(ProfileFeature.trackersAndDiscovery)) {
+          _showPolicyDeniedSnack();
+          return;
+        }
+        _showIntegrationRequiredSnack();
         return;
       }
       _onItemTapped(index);
@@ -1805,6 +1842,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       );
     };
     MainPageBridge.openCloudProvider = _openCloudProvider;
+    MainPageBridge.openFeed = _openFeed;
     MainPageBridge.addIntegrationListener(_handleIntegrationChanged);
     _loadIntegrationState();
     _animationController = AnimationController(
@@ -1874,10 +1912,23 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     final profile = await ProfileBootstrap.registry.getProfile(scope.profileId);
     if (!mounted || ProfileRuntime.capture() != scope) return;
     ProfilePolicyGuard.updateActiveProfile(profile);
+    final retainIptv = NavigationDestinationCompat.retainAuthorizedIptvStartup(
+      selectedTab: _selectedIndex,
+      overlayOpen: _showIptvStartupOverlay || _iptvStartupPlaybackLaunched,
+      profileAllowsIptv:
+          profile != null &&
+          profile.isEnabled &&
+          profile.allows(ProfileFeature.iptv),
+    );
+    if (_selectedIndex == MainTab.iptv &&
+        _showIptvStartupOverlay &&
+        !retainIptv) {
+      MainPageBridge.cancelIptvStartupChannel();
+    }
     setState(() {
       _profilePolicy = profile;
       final visible = _computeVisibleNavIndices();
-      if (!visible.contains(_selectedIndex)) {
+      if (!visible.contains(_selectedIndex) && !retainIptv) {
         _selectedIndex = visible.contains(MainTab.home)
             ? MainTab.home
             : visible.first;
@@ -1936,6 +1987,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    MainPageBridge.removePlayerLaunchListener(_onIptvStartupPlayerLaunching);
+    MainPageBridge.removePlaybackReturnListener(_onIptvStartupPlaybackReturned);
     MainPageBridge.removeIntegrationListener(_handleIntegrationChanged);
     MainPageBridge.switchTab = null;
     MainPageBridge.navPrefsChanged = null;
@@ -1949,6 +2002,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     MainPageBridge.openPremiumizeFolder = null;
     MainPageBridge.openAllDebridFolder = null;
     MainPageBridge.openCloudProvider = null;
+    MainPageBridge.openFeed = null;
     MainPageBridge.focusTvSidebar = null;
     MainPageBridge.isTvSidebarFocused = null;
     MainPageBridge.tvDirectionalLeft = null;
@@ -2767,16 +2821,34 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadPhoneNavPrefs() async {
+    final startingScope = ProfileRuntime.isProfileCommitted
+        ? ProfileRuntime.capture()
+        : null;
     final style = await StorageService.getPhoneNavStyle();
     final picks = await StorageService.getPhoneNavBarIndices();
     final tvSidebar = await StorageService.getTvSidebarStyle();
     final desktopSidebar = await StorageService.getDesktopSidebarStyle();
     final sidebarConfiguration = await StorageService.getSidebarConfiguration();
-    if (!mounted) return;
+    if (!mounted ||
+        (startingScope != null && ProfileRuntime.capture() != startingScope)) {
+      return;
+    }
+    final migrated = picks == null
+        ? null
+        : NavigationDestinationCompat.migratePhonePicks(picks);
+    if (picks != null && !listEquals(picks, migrated)) {
+      // Save once for this profile. Repeated startup should not rewrite prefs.
+      await StorageService.setPhoneNavBarIndices(migrated!);
+      if (!mounted ||
+          (startingScope != null &&
+              ProfileRuntime.capture() != startingScope)) {
+        return;
+      }
+    }
     MainPageBridge.phoneNavStyleCached = style;
     setState(() {
       _phoneNavStyle = style;
-      _phoneNavBarPicks = picks;
+      _phoneNavBarPicks = migrated;
       _tvSidebarStyle = tvSidebar;
       _desktopSidebarStyle = desktopSidebar;
       _sidebarConfiguration = sidebarConfiguration;
@@ -2975,7 +3047,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
 
     int nextIndex = _selectedIndex;
-    if (!newVisible.contains(nextIndex)) {
+    if (!newVisible.contains(nextIndex) &&
+        !NavigationDestinationCompat.retainAuthorizedIptvStartup(
+          selectedTab: nextIndex,
+          overlayOpen: _showIptvStartupOverlay || _iptvStartupPlaybackLaunched,
+          profileAllowsIptv: ProfilePolicyGuard.allowsSync(ProfileFeature.iptv),
+        )) {
       // The current tab disappeared — land on a Home board rather than the first
       // visible tab, which on TV is now the dedicated (blank) Search tab.
       nextIndex = newVisible.contains(15)
@@ -3068,76 +3145,25 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     // returns false while its rollout flag is disabled.
     final calendar = trakt || simkl || mdblist;
     if (_isAndroidTv) {
-      final rd = hasRealDebrid ?? _hasRealDebridKey;
-      final rdHidden = realDebridHidden ?? _rdHiddenFromNav;
-      final tb = hasTorbox ?? _hasTorboxKey;
-      final tbHidden = torboxHidden ?? _tbHiddenFromNav;
-      final pikpak = pikpakEnabled ?? _pikpakEnabled;
-      final ppHidden = pikpakHidden ?? _pikpakHiddenFromNav;
-      final webDav = webDavEnabled ?? _webDavEnabled;
-      final wdHidden = webDavHidden ?? _webDavHiddenFromNav;
-      final premiumize = premiumizeEnabled ?? _premiumizeEnabled;
-      final pmHidden = premiumizeHidden ?? _premiumizeHiddenFromNav;
-      final allDebrid = allDebridEnabled ?? _allDebridEnabled;
-      final adHidden = allDebridHidden ?? _allDebridHiddenFromNav;
       final indices = <int>[
         MainTab.search,
         MainTab.home,
         MainTab.reels,
         MainTab.discover,
+        MainTab.watch,
         MainTab.downloads,
-        MainTab.iptv,
-        MainTab.youtube,
-        MainTab.debrifyTv,
-        MainTab.stremioTv,
-      ]; // Search, Home, Reels, Discover, Downloads, IPTV, YouTube,
-      // Debrify TV, Stremio TV. The dedicated Search tab (17) is no longer
+      ]; // Reels is still an independent pinnable section and also appears in
+      // Watch. The other four TV feeds live in Watch (21). Search is no longer
       // TV-only — every non-TV layout WIDE enough for a sidebar carries it
       // too (see the phone gate where nonTvIndices is built). The Home board
       // (15) keeps its own persistent search bar regardless; the tab is an
       // additional way in, not a replacement.
-      // Consolidated Cloud tab: one entry when ANY provider is enabled & not
-      // hidden (replaces the former per-provider RD/Torbox/PikPak/Premiumize/
-      // AllDebrid/WebDAV tabs). The in-tab hub lists the available providers.
-      if ((rd && !rdHidden) ||
-          (tb && !tbHidden) ||
-          (pikpak && !ppHidden) ||
-          (premiumize && !pmHidden) ||
-          (allDebrid && !adHidden) ||
-          (webDav && !wdHidden)) {
-        indices.add(MainTab.cloud);
-      }
+      // Cloud is a destination even before the first provider is connected.
+      // Hiding all provider tiles must not strand the restore/connect journey.
+      // ProfilePolicy and saved sidebar visibility still gate this hub.
+      indices.add(MainTab.cloud);
       indices.add(MainTab.addons);
       indices.add(MainTab.settings);
-      _insertTraktCalendarTab(indices, calendar);
-      return _applyProfilePolicy(indices);
-    }
-
-    final rd = hasRealDebrid ?? _hasRealDebridKey;
-    final rdHidden = realDebridHidden ?? _rdHiddenFromNav;
-    final tb = hasTorbox ?? _hasTorboxKey;
-    final tbHidden = torboxHidden ?? _tbHiddenFromNav;
-    final pikpak = pikpakEnabled ?? _pikpakEnabled;
-    final ppHidden = pikpakHidden ?? _pikpakHiddenFromNav;
-    final webDav = webDavEnabled ?? _webDavEnabled;
-    final wdHidden = webDavHidden ?? _webDavHiddenFromNav;
-    final premiumize = premiumizeEnabled ?? _premiumizeEnabled;
-    final pmHidden = premiumizeHidden ?? _premiumizeHiddenFromNav;
-    final allDebrid = allDebridEnabled ?? _allDebridEnabled;
-    final adHidden = allDebridHidden ?? _allDebridHiddenFromNav;
-    if (!rd && !tb && !pikpak && !webDav && !premiumize && !allDebrid) {
-      final indices = <int>[
-        MainTab.search,
-        MainTab.home,
-        MainTab.reels,
-        MainTab.discover,
-        MainTab.downloads,
-        MainTab.iptv,
-        MainTab.youtube,
-        MainTab.stremioTv,
-        MainTab.addons,
-        MainTab.settings,
-      ]; // Search, Home, Reels, Discover, Downloads, IPTV, YouTube, Stremio TV, Addons, Settings
       _insertTraktCalendarTab(indices, calendar);
       return _applyProfilePolicy(indices);
     }
@@ -3147,22 +3173,12 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       MainTab.home,
       MainTab.reels,
       MainTab.discover,
+      MainTab.watch,
       MainTab.downloads,
-      MainTab.iptv,
-      MainTab.youtube,
-      MainTab.debrifyTv,
-      MainTab.stremioTv,
-    ];
-    // Consolidated Cloud tab (see TV branch above): one entry when any provider
-    // is enabled & not hidden.
-    if ((rd && !rdHidden) ||
-        (tb && !tbHidden) ||
-        (pikpak && !ppHidden) ||
-        (premiumize && !pmHidden) ||
-        (allDebrid && !adHidden) ||
-        (webDav && !wdHidden)) {
-      indices.add(MainTab.cloud);
-    }
+    ]; // The four TV feeds live behind Watch; Reels remains standalone.
+    // Reachable even if credentials are missing or every provider tile has
+    // been hidden. CloudScreen owns useful setup and restore actions.
+    indices.add(MainTab.cloud);
     indices.add(MainTab.addons);
     indices.add(MainTab.settings);
     _insertTraktCalendarTab(indices, calendar);
@@ -3179,7 +3195,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 0: // Home
       case 2: // Downloads
       case 19: // Trakt/Simkl Calendar
-      case MainTab.reels:
+      case MainTab.watch: // Watch (consolidated lean-back hub)
+      case MainTab.reels: // independent pinnable Reels, also in Watch
         return 'Main';
       case 13: // IPTV
       case 14: // YouTube
@@ -3276,7 +3293,10 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case MainTab.reels:
         return ReelsScreen(
           isTelevision: _isAndroidTv,
-          isActive: _selectedIndex == MainTab.reels && !_playerRouteOpen,
+          isActive:
+              ((_activePushedFeedIndex == MainTab.reels) ||
+                  (_selectedIndex == MainTab.reels && !_feedRouteOpen)) &&
+              !_playerRouteOpen,
           floatingNav:
               !_isAndroidTv &&
               ((_phoneNavLoaded &&
@@ -3289,6 +3309,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   (_desktopSidebarStyle == 'pill' &&
                       MediaQuery.sizeOf(context).width >= 600)),
         );
+      case MainTab.watch: // Watch (consolidated lean-back feed hub)
+        return WatchHubScreen(isTelevision: _isAndroidTv);
       default:
         return _pages[index];
     }
@@ -3308,6 +3330,21 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// Touch layouts: one continuous horizontal surface across the visible
   /// tabs (see [ShellTabPager]).
   Widget _buildSwipeableTabs(List<int> visible, {required bool iosEdge}) {
+    // An authorized IPTV cold start temporarily selects old tab 13 to
+    // consume the requested channel. Its ID is deliberately absent from the
+    // ordinary nav, so the pager would otherwise fall back to Home before
+    // the IPTV view could mount. Keep this transient root until navigation
+    // selects a regular tab or the startup is cancelled.
+    if (_selectedIndex == MainTab.iptv && !visible.contains(MainTab.iptv)) {
+      final edge = iosEdge && _kEdgeToEdgeTabs.contains(MainTab.iptv);
+      return SafeArea(
+        left: false,
+        right: false,
+        top: !edge,
+        bottom: !edge,
+        child: _buildPage(MainTab.iptv),
+      );
+    }
     // Settings is a destination in the navigation controls, not another
     // discoverable page in the horizontal content carousel.
     if (_selectedIndex == MainTab.settings) {
@@ -3499,6 +3536,82 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         });
   }
 
+  /// Open a Watch feed as a child route, including the independently pinnable
+  /// Reels. Its stable tab identity determines permissions and TV focus.
+  void _openFeed(String feedKey) {
+    if (!mounted) return;
+    final index = NavigationDestinationCompat.tabForFeed(feedKey);
+    final feature = NavigationDestinationCompat.permissionForFeed(feedKey);
+    if (index == null || feature == null) return;
+    if (!ProfilePolicyGuard.allowsSync(feature)) {
+      _showPolicyDeniedSnack();
+      return;
+    }
+    if (_feedRouteOpen) return;
+    _feedRouteOpen = true;
+    _activePushedFeedIndex = index;
+
+    void back(BuildContext ctx) {
+      if (!MainPageBridge.handleBackNavigation()) {
+        Navigator.of(ctx).pop();
+      }
+    }
+
+    // Tab pages in [_kEdgeToEdgeTabs] draw to the screen edges and manage their
+    // own insets; the others rely on the shell to inset them, which a pushed
+    // route doesn't do — so add the top inset back for those.
+    Widget content = _buildTabContent(index);
+    if (!_kEdgeToEdgeTabs.contains(index)) {
+      content = SafeArea(bottom: false, child: content);
+    }
+
+    if (_isAndroidTv) {
+      // The pushed screen registers focus under its original tab ID (3, 9,
+      // 13, 14). Hand off after it mounts, and restore the hub on return.
+      MainPageBridge.setActiveTvTab(index);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _activePushedFeedIndex != index) return;
+        MainPageBridge.setActiveTvTab(index);
+        MainPageBridge.requestTvContentFocus();
+      });
+    }
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            settings: RouteSettings(name: 'watch_feed/$feedKey'),
+            builder: (ctx) => PopScope(
+              canPop: false,
+              onPopInvokedWithResult: (didPop, result) {
+                if (didPop) return;
+                back(ctx);
+              },
+              child: CallbackShortcuts(
+                bindings: {
+                  const SingleActivator(LogicalKeyboardKey.escape): () =>
+                      back(ctx),
+                },
+                child: content,
+              ),
+            ),
+          ),
+        )
+        .then((_) {
+          if (!mounted) return;
+          _feedRouteOpen = false;
+          _activePushedFeedIndex = null;
+          setState(() {});
+          if (_isAndroidTv) {
+            MainPageBridge.setActiveTvTab(_selectedIndex);
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && !_feedRouteOpen) {
+                MainPageBridge.setActiveTvTab(_selectedIndex);
+                MainPageBridge.requestTvContentFocus();
+              }
+            });
+          }
+        });
+  }
+
   /// Root-level BACK/Menu handler for the MainPage PopScope below. Runs only
   /// when the press wasn't already meaningful somewhere deeper: the startup
   /// cover, per-tab folder handlers, pushed routes and the non-Home tab-walk
@@ -3659,7 +3772,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   // actually being rendered — startup and integration-driven tab
                   // changes set _selectedIndex without routing through
                   // _onNavItemSelected, so a screen can't otherwise trust it.
-                  MainPageBridge.setActiveTvTab(_selectedIndex);
+                  MainPageBridge.setActiveTvTab(
+                    _activePushedFeedIndex ?? _selectedIndex,
+                  );
                   final tvIndices = _sidebarOrderedIndices(visibleIndices);
                   final tvSelected = tvIndices.indexOf(_selectedIndex);
                   // The scope regular tab content lives in — the left-edge

@@ -10,6 +10,9 @@ import '../services/downloaded_media_service.dart';
 import '../services/downloads/title_download_summary.dart';
 import '../services/offline_title_store.dart';
 import '../services/storage_service.dart';
+import '../services/main_page_bridge.dart';
+import '../models/profiles/profile_policy.dart';
+import '../services/profiles/profile_policy_guard.dart';
 import '../services/stremio_service.dart';
 import '../services/trakt/trakt_episode_model.dart';
 import '../services/watched_action_coordinator.dart';
@@ -646,6 +649,15 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     icon: Icons.refresh_rounded,
                     onTap: _refresh,
                   ),
+                  if (ProfilePolicyGuard.allowsSync(ProfileFeature.cloudFiles)) ...[
+                    const SizedBox(width: 10),
+                    _GlassIconButton(
+                      tooltip: 'Browse cloud files',
+                      icon: Icons.cloud_outlined,
+                      onTap: () =>
+                          MainPageBridge.switchTab?.call(MainTab.cloud),
+                    ),
+                  ],
                   const SizedBox(width: 10),
                   _GlassIconButton(
                     tooltip: 'Manage downloads',
@@ -806,11 +818,11 @@ Future<void> openDownloadManager(BuildContext context) =>
       ),
     );
 
-/// Whether a library entry opens the full Home detail page (a catalog title
-/// with at least one finished file) rather than the download page.
+/// Whether a library entry opens the full Home detail page. Catalog-linked
+/// titles use it immediately, including while every file is still queued.
 @visibleForTesting
 bool opensHomeDetail(List<LocalDownload> group) =>
-    group.first.media?.isCatalogLinked == true && group.any((e) => e.isReady);
+    group.first.media?.isCatalogLinked == true;
 
 /// Opens a library entry. A catalog title with a finished download gets the
 /// same detail page Home opens, with Play wired to the local files; its
@@ -830,6 +842,7 @@ Future<void> openDownloadedItem(
   }
   final media = group.first.media!;
   final ready = sortDownloads(group.where((e) => e.isReady));
+  final all = sortDownloads(group);
   final addon = await _metadataAddon();
   // The library only knows the small shelf poster the download was started
   // with. The page's hero wants the title's full art, which is kept with the
@@ -877,6 +890,14 @@ Future<void> openDownloadedItem(
       );
       return;
     }
+    if (ready.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('This download is not ready to play yet.'),
+        ),
+      );
+      return;
+    }
     await DownloadedMediaService.play(ctx, ready.first);
   }
 
@@ -898,8 +919,19 @@ Future<void> openDownloadedItem(
               year: media.year,
             ),
         addon: addon,
+        // A downloaded series supplies its episodes from the device, but it
+        // still belongs on the same detail surface Home uses — opt its
+        // direct-source list into the user's configured style instead of the
+        // Classic pin that made downloaded shows look like a separate page.
+        directSourceUsesConfiguredStyle: true,
+        // Offline-first: skip the network metadata prefetch and the ambient
+        // trailer. The trailer's player would otherwise fight the tapped
+        // episode for media_kit's single video-output slot (a native mpv
+        // crash on hand-off), and a downloaded title should open the same
+        // with or without a connection.
+        localOnly: true,
         seasonsLoader: media.type == 'series'
-            ? () => downloadedSeasons(ready)
+            ? () => downloadedSeasons(all)
             : null,
         watchProgressLoader: () =>
             StorageService.getEpisodeWatchProgressByImdbId(media.id),
@@ -916,8 +948,37 @@ Future<void> openDownloadedItem(
                 (e) => e.media?.season == season && e.media?.episode == episode,
               )
             : null,
-        initialSeason: ready.first.media?.season,
-        initialEpisode: ready.first.media?.episode,
+        // Inline per-episode delete: the trash control on the episode row
+        // removes that episode's downloaded file(s) right here, no separate
+        // manager. Keeps the captured lists in step so a re-read sees the
+        // deletion too.
+        onDeleteEpisodeDownload: media.type == 'series'
+            ? (episode) async {
+                final matches = all
+                    .where(
+                      (e) =>
+                          e.media?.season == episode.season &&
+                          e.media?.episode == episode.number,
+                    )
+                    .toList();
+                if (matches.isEmpty || !routeContext.mounted) return false;
+                final ok = await _confirmDeleteEpisodeDownload(
+                  routeContext,
+                  matches,
+                );
+                if (ok) {
+                  all.removeWhere(matches.contains);
+                  ready.removeWhere(matches.contains);
+                }
+                return ok;
+              }
+            : null,
+        // The under-title "Downloaded" button opens the download manager
+        // (queue + transfers), the real manage-downloads surface — not a
+        // second per-title detail page.
+        onManageDownloads: () => openDownloadManager(routeContext),
+        initialSeason: all.first.media?.season,
+        initialEpisode: all.first.media?.episode,
         // Read from this device only, so the button says "Continue 21:44"
         // in airplane mode exactly as it does online.
         resumeInfoLoader: () => downloadedResumeInfo(media, ready),
@@ -948,6 +1009,59 @@ Future<void> openDownloadedItem(
       ),
     ),
   );
+}
+
+/// Confirms and deletes one episode's downloaded file(s) from the inline trash
+/// control on a downloaded show's detail page. Returns true when the files were
+/// removed, so the caller can drop the row from the list.
+Future<bool> _confirmDeleteEpisodeDownload(
+  BuildContext context,
+  List<LocalDownload> items,
+) async {
+  if (items.isEmpty) return false;
+  final label = items.first.media?.episodeLabel ?? items.first.title;
+  final app = AppThemeScope.of(context);
+  final glass = GlassChrome.enabled(app);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: glass ? GlassChrome.fill(app, raised: true) : null,
+      shape: glass ? GlassChrome.shape(app) : null,
+      title: const Text('Delete download?'),
+      content: Text(
+        'Delete $label from this device? You can download it again later.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Keep'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return false;
+  try {
+    for (final item in items) {
+      await DownloadedMediaService.remove(item);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Couldn’t delete this download.')),
+      );
+    }
+    return false;
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted $label')),
+    );
+  }
+  return true;
 }
 
 /// Where a downloaded title's Continue button lands, from progress saved on

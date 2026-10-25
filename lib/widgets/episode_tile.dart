@@ -30,6 +30,11 @@ class EpisodeTile extends StatefulWidget {
   final void Function(TraktEpisodeMenuAction action)? onMenuAction;
   final VoidCallback? onTrackerOptions;
 
+  /// Downloads library: delete this episode's downloaded file, inline on the
+  /// row. Null everywhere else, so the trash action only appears for a
+  /// downloaded episode.
+  final VoidCallback? onDeleteDownload;
+
   const EpisodeTile({
     super.key,
     required this.episode,
@@ -43,6 +48,7 @@ class EpisodeTile extends StatefulWidget {
     this.focusNode,
     this.onMenuAction,
     this.onTrackerOptions,
+    this.onDeleteDownload,
   });
 
   @override
@@ -117,6 +123,13 @@ class _EpisodeTileState extends State<EpisodeTile> {
           label: 'Trackers',
           iconOnly: true,
           onTap: widget.onTrackerOptions!,
+        ),
+      if (widget.onDeleteDownload != null)
+        _EpAction(
+          icon: Icons.delete_outline_rounded,
+          label: 'Delete download',
+          iconOnly: true,
+          onTap: widget.onDeleteDownload!,
         ),
     ];
   }

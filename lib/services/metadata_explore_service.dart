@@ -41,6 +41,20 @@ class MetadataExploreService {
   static final instance = MetadataExploreService();
   final TmdbMetadataRepository repository;
 
+  /// The default TMDB source can order by popularity and vote average. Data
+  /// sources which only expose a fixed cursor order override this to false.
+  bool get supportsBrowseSorting => true;
+
+  static const String sortRelevance = 'relevance';
+  static const String sortPopularity = 'popularity';
+  static const String sortRating = 'rating';
+
+  static String normalizeSort(String? value) => switch (value) {
+    sortRelevance => sortRelevance,
+    sortRating => sortRating,
+    _ => sortPopularity,
+  };
+
   Future<MetadataExploreData> details(
     StremioMeta item,
     MetadataPreferences prefs,
@@ -172,12 +186,24 @@ class MetadataExploreService {
           unique.putIfAbsent('${row['media_type']}:${row['id']}', () => row);
         }
       }
-      final rows = unique.values.toList()
-        ..sort((a, b) {
-          num popularity(Map<String, dynamic> r) =>
-              r['popularity'] is num ? r['popularity'] as num : 0;
-          return popularity(b).compareTo(popularity(a));
+      // combined_credits mixes movies and series, so constrain the complete
+      // set BEFORE sorting and slicing. Otherwise a Movies page can fill up
+      // with series (and its following pages will be incorrect too).
+      final rows = unique.values.where((row) => row['media_type'] == type).toList();
+      final sort = normalizeSort(filters['sort_by']);
+      num metric(Map<String, dynamic> row, String key) =>
+          row[key] is num ? row[key] as num : -1;
+      if (sort != sortRelevance) {
+        rows.sort((a, b) {
+          final key = sort == sortRating ? 'vote_average' : 'popularity';
+          final primary = metric(b, key).compareTo(metric(a, key));
+          if (primary != 0) return primary;
+          // Vote counts settle equal ratings; popularity settles equal count.
+          final votes = metric(b, 'vote_count').compareTo(metric(a, 'vote_count'));
+          if (votes != 0) return votes;
+          return metric(b, 'popularity').compareTo(metric(a, 'popularity'));
         });
+      }
       final start = (page - 1) * 20;
       return MetadataBrowseResult(
         MetadataDetailsService.titles(
@@ -189,15 +215,19 @@ class MetadataExploreService {
       );
     }
     final media = kind == 'network' || type == 'tv' ? 'tv' : 'movie';
+    final sort = normalizeSort(filters['sort_by']);
     final data = await repository.get('discover/$media', {
       'language': preferences.language,
       'page': '$page',
-      'sort_by': 'popularity.desc',
+      // Discover has no relevance-ranked query, so default to TMDB's
+      // popularity order. The relevance option preserves that source order.
+      'sort_by': sort == sortRating ? 'vote_average.desc' : 'popularity.desc',
       'include_adult': 'false',
       if (kind == 'company' && id != null) 'with_companies': '$id',
       if (kind == 'network' && id != null) 'with_networks': '$id',
       'watch_region': preferences.region,
-      ...filters,
+      for (final entry in filters.entries)
+        if (entry.key != 'sort_by') entry.key: entry.value,
     });
     return MetadataBrowseResult(
       MetadataDetailsService.titles(data['results'], media),

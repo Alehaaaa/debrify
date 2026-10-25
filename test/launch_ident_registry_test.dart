@@ -1,3 +1,6 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/animation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,13 +16,36 @@ void main() {
 
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('every built-in ident uses the Nextup wordmark', () {
+    expect(kIdentWord, 'NEXTUP');
+    expect(kNextupDisplayFont, 'Poppins');
+  });
+
+  test('every built-in ident paints its completed Nextup frame', () {
+    for (final ident in kLaunchIdents) {
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final painter = ident.createPainter(
+        const AlwaysStoppedAnimation<double>(1),
+        isTelevision: () => false,
+      );
+      expect(
+        () => painter.paint(canvas, const ui.Size(1280, 720)),
+        returnsNormally,
+        reason: '${ident.label} must support the six-letter Nextup wordmark',
+      );
+      recorder.endRecording();
+    }
+  });
+
   test('every registered ident id round-trips through the pref', () async {
     for (final ident in kLaunchIdents) {
       await StorageService.setLaunchAnimation(ident.id);
       expect(
         StorageService.launchAnimationCached,
         ident.id,
-        reason: '"${ident.id}" (${ident.label}) is missing from '
+        reason:
+            '"${ident.id}" (${ident.label}) is missing from '
             'StorageService._launchAnimationValues',
       );
       expect(await StorageService.getLaunchAnimation(), ident.id);
@@ -35,16 +61,21 @@ void main() {
   test('ids are unique and stable-looking', () {
     final ids = kLaunchIdents.map((i) => i.id).toList();
     expect(ids.toSet().length, ids.length, reason: 'duplicate ident id');
-    expect(kLaunchIdents.first.id, 'trace',
-        reason: 'the first entry is the default; changing it moves every '
-            'unset/unknown pref onto a different splash');
+    expect(
+      kLaunchIdents.first.id,
+      'trace',
+      reason:
+          'the first entry is the default; changing it moves every '
+          'unset/unknown pref onto a different splash',
+    );
   });
 
   test('registry and storage agree in both directions', () {
     expect(
       StorageService.launchAnimationValues,
       kLaunchIdents.map((i) => i.id).toSet(),
-      reason: 'an id accepted by storage but absent from the registry is dead '
+      reason:
+          'an id accepted by storage but absent from the registry is dead '
           'config; an id in the registry but not accepted by storage cannot '
           'be saved',
     );
@@ -57,6 +88,7 @@ void main() {
     // add an ident; only edit an existing entry with a migration.
     expect(kLaunchIdents.map((i) => i.id).toList(), [
       'trace',
+      'fold',
       'collider',
       'horizon',
       'drop',
@@ -87,10 +119,10 @@ void main() {
     // this file would catch it.
     for (final ident in kLaunchIdents) {
       expect(
-        SanitizedProfilePreferences.allowsEntry(
-            'launch_animation', ident.id),
+        SanitizedProfilePreferences.allowsEntry('launch_animation', ident.id),
         isTrue,
-        reason: '"${ident.id}" (${ident.label}) is missing from '
+        reason:
+            '"${ident.id}" (${ident.label}) is missing from '
             'SanitizedProfilePreferences._launchAnimations',
       );
     }

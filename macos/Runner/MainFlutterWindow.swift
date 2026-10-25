@@ -325,14 +325,15 @@ class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
     // Keep the native window logo-free and on the same base as Flutter's
-    // splash until its first frame. The launch ident is the only logo shown.
-    flutterViewController.view.wantsLayer = true
-    flutterViewController.view.layer?.backgroundColor = NSColor(
+    // splash until its first frame. Let Flutter own its rendering layers:
+    // controller.view is a wrapper, not the Metal-backed FlutterView, and
+    // forcing a layer on the wrapper can desynchronise Retina presentation.
+    flutterViewController.backgroundColor = NSColor(
       red: 2 / 255,
       green: 6 / 255,
       blue: 23 / 255,
       alpha: 1
-    ).cgColor
+    )
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)

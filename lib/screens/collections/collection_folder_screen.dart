@@ -1,6 +1,7 @@
 import '../../widgets/home/snowy_mountain_background.dart';
 import '../../widgets/home/midnight_rain_background.dart';
 import '../../widgets/home/moonlit_ocean_background.dart';
+import '../../widgets/home/procedural_spotlight_background.dart';
 import 'package:flutter/foundation.dart';
 import '../../widgets/collections/collection_category_tabs.dart';
 import '../../widgets/see_all/see_all_header.dart';
@@ -1152,6 +1153,18 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                 lowPower: widget.isTelevision,
               ),
               'midnight_rain' => MidnightRainBackground(
+                lowPower: widget.isTelevision,
+              ),
+              'northern_lights' => ProceduralSpotlightBackground(
+                atmosphere: SpotlightAtmosphere.northernLights,
+                lowPower: widget.isTelevision,
+              ),
+              'ember_dusk' => ProceduralSpotlightBackground(
+                atmosphere: SpotlightAtmosphere.emberDusk,
+                lowPower: widget.isTelevision,
+              ),
+              'meteor_night' => ProceduralSpotlightBackground(
+                atmosphere: SpotlightAtmosphere.meteorNight,
                 lowPower: widget.isTelevision,
               ),
               _ => SnowyMountainBackground(lowPower: widget.isTelevision),

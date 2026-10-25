@@ -241,6 +241,7 @@ flutter:
 
   shaders:
     - assets/shaders/moonlit_ocean.frag
+    - assets/shaders/player_liquid_glass.frag
 
   assets:
     # PackageInfo loses prerelease labels in iOS/macOS bundles. Keep the

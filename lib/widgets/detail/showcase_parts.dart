@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math' show Random, min;
+import 'dart:math' show Random;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -16,13 +16,13 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../theme/widgets/parallax_focus.dart';
 import '../../theme/widgets/themed_skeleton.dart';
-import '../rotten_tomatoes_score.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../card_action_menu.dart' show CardMenuGesture;
 import '../hold_feedback.dart';
 import '../../utils/wide_touch_scale.dart';
-import '../optical_logo.dart';
+import '../home/spotlight_media_identity.dart';
+import '../home/spotlight_editorial_signals.dart';
 import '../episodes_panel.dart';
 import '../season_action_region.dart';
 import '../tracker_brand_marks.dart';
@@ -876,22 +876,7 @@ class ShowcaseIdentity extends StatelessWidget {
         children: [
           // No Film/Series chip above the logo: the meta line right below
           // already leads with the type.
-          _LogoOrTitle(url: m.logo, name: m.name, centered: true),
-          const SizedBox(height: 10),
-          _MetaLine(model: m),
-          const SizedBox(height: 8),
-          if (_hasHonors(m)) ...[
-            _HonorsLine(model: m),
-            const SizedBox(height: 8),
-          ],
-          if ((m.synopsis ?? '').isNotEmpty) ...[
-            ExpandableSynopsis(text: m.synopsis!),
-            const SizedBox(height: 10),
-          ] else if (m.detailsLoading) ...[
-            const _TextSkeleton(lines: 2, centered: true),
-            const SizedBox(height: 10),
-          ],
-          _TechLine(model: m),
+          _sharedIdentity(context, m, compact: true),
           const SizedBox(height: 12),
           // Wrap, not Row: a Resume pill plus four circles can pass 390
           // logical on a long episode code, and a phone identity that
@@ -946,31 +931,7 @@ class ShowcaseIdentity extends StatelessWidget {
         children: [
           // No Film/Series chip above the logo: the meta line right below
           // already leads with the type.
-          _LogoOrTitle(url: m.logo, name: m.name),
-          const SizedBox(height: 10),
-          _MetaLine(model: m),
-          const SizedBox(height: 8),
-          if (_hasHonors(m)) ...[
-            _HonorsLine(model: m),
-            const SizedBox(height: 8),
-          ],
-          if ((m.synopsis ?? '').isNotEmpty)
-            SizedBox(
-              width: 410 * metrics.k,
-              child: Text(
-                m.synopsis!,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-                style: _t(10.5 * metrics.k, a: 0.74).copyWith(height: 1.42),
-              ),
-            )
-          else if (m.detailsLoading)
-            SizedBox(
-              width: 410 * metrics.k,
-              child: const _TextSkeleton(lines: 3),
-            ),
-          const SizedBox(height: 11),
-          _TechLine(model: m),
+          _sharedIdentity(context, m, compact: false),
           const SizedBox(height: 11),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -990,6 +951,74 @@ class ShowcaseIdentity extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Actual Home/Detail/Loader/Player identity component. Showcase owns the
+  /// controls and scrolling, not its own competing logo or metadata grammar.
+  /// The wrapper preserves the trailer's precise "above logo" tap boundary.
+  Widget _sharedIdentity(
+    BuildContext context,
+    DetailModel m, {
+    required bool compact,
+  }) {
+    final scale = ShowcaseMetrics.of(context).k;
+    final hasSynopsis = (m.synopsis ?? '').trim().isNotEmpty;
+    return SpotlightMediaIdentity(
+      title: m.name,
+      logoUrl: m.logo,
+      imdbId: m.item.effectiveImdbId,
+      imdbEnrichment: m.imdbExtra,
+      logoScale: compact ? 1 : scale,
+      scale: scale,
+      compact: compact,
+      textAlign: compact ? TextAlign.center : TextAlign.left,
+      kindLabel: m.isMovie ? 'Film' : 'Series',
+      ratingLabel: m.rating?.toString(),
+      yearLabel: m.year,
+      runtimeLabel: m.runtime,
+      certificate: m.certificate,
+      genreLabel: m.genres.take(2).join(' · '),
+      metadataTrailing: m.hasMdblist
+          ? SpotlightOutlinedSignal(
+              key: const ValueKey('spotlight-mdblist-status'),
+              label: m.mdblistTracked
+                  ? 'MDBList · Saved'
+                  : 'MDBList · Not saved',
+              scale: scale,
+              editorial: true,
+            )
+          : null,
+      description: m.synopsis,
+      logoWrapper: (logo) => _LogoAnchorTarget(child: logo),
+      descriptionChild: !hasSynopsis
+          ? null
+          : compact
+          ? ExpandableSynopsis(
+              text: m.synopsis!,
+              style: SpotlightMediaIdentity.synopsisStyle(
+                scale: scale,
+                compact: true,
+              ),
+            )
+          : ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: 410 * scale),
+              child: Text(
+                m.synopsis!,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: SpotlightMediaIdentity.synopsisStyle(scale: scale),
+              ),
+            ),
+      afterDescription: !hasSynopsis && m.detailsLoading
+          ? Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: 410 * scale),
+                child: _TextSkeleton(lines: compact ? 2 : 3, centered: compact),
+              ),
+            )
+          : null,
     );
   }
 }
@@ -1082,95 +1111,6 @@ class _LogoAnchorTargetState extends State<_LogoAnchorTarget> {
   void dispose() {
     if (_anchor?._logo == context) _anchor!._logo = null;
     super.dispose();
-  }
-}
-
-class _LogoOrTitle extends StatelessWidget {
-  final String? url;
-  final String name;
-
-  /// Compact identity centers its whole stack; the logo art follows.
-  final bool centered;
-
-  const _LogoOrTitle({
-    required this.url,
-    required this.name,
-    this.centered = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final m = ShowcaseMetrics.of(context);
-    final alignment = centered ? Alignment.bottomCenter : Alignment.bottomLeft;
-    // Metahub ships some logos as BLACK wordmarks, invisible on ink — roughly
-    // one title in four. The text fallback is not a degraded path, it is the
-    // other half of the design.
-    final text = Text(
-      name,
-      maxLines: 2,
-      textAlign: centered ? TextAlign.center : TextAlign.start,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: centered ? 32 : 39 * m.k,
-        height: 1,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.8,
-        color: _ink,
-      ),
-    );
-    // Keep one stable title-art viewport from the first frame. A loose
-    // ConstrainedBox let CachedNetworkImage adopt its placeholder's intrinsic
-    // width and then relayout around the decoded logo, which made the wordmark
-    // visibly slide into place on slower TVs.
-    //
-    // Inside it the logo is sized OPTICALLY, exactly as the Home Spotlight
-    // does ([OpticalLogo]): equal visual weight for long wordmarks and
-    // compact marks alike, instead of a fixed box that left long ones tiny.
-    // Capped to the available width so the centred phone identity never
-    // overflows.
-    return _LogoAnchorTarget(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final slotWidth = min(
-            OpticalLogo.defaultMaxWidth * m.k,
-            constraints.maxWidth,
-          );
-          final slotHeight = OpticalLogo.defaultMaxHeight * m.k;
-          return SizedBox(
-            width: slotWidth,
-            height: slotHeight,
-            child: Align(
-              alignment: alignment,
-              child: (url == null || url!.isEmpty)
-                  ? FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: alignment,
-                      child: text,
-                    )
-                  : CachedNetworkImage(
-                      imageUrl: url!,
-                      cacheManager: DebrifyImageCache.manager,
-                      // ~2x the widest slot so long logos stay crisp on HiDPI.
-                      memCacheWidth: 960,
-                      imageBuilder: (context, image) => OpticalLogo(
-                        image: image,
-                        alignment: alignment,
-                        maxWidth: slotWidth,
-                        maxHeight: slotHeight,
-                        area: OpticalLogo.defaultArea * m.k * m.k,
-                      ),
-                      placeholder: (_, _) => const SizedBox.expand(),
-                      errorWidget: (_, _, _) => FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: alignment,
-                        child: text,
-                      ),
-                    ),
-            ),
-          );
-        },
-      ),
-    );
   }
 }
 
@@ -1294,112 +1234,6 @@ class _ExpandableSynopsisState extends State<ExpandableSynopsis> {
   }
 }
 
-/// The meta line — and where the trackers live.
-///
-/// Trakt and Simkl are READOUT here, not buttons: filled when tracked, hollow
-/// when not, never focusable. Tracker state describes what a title is to you;
-/// it is not an errand you came to the page to run, and a row of verbs is the
-/// wrong place for it. The branded tracker buttons open their matching sheet.
-class _MetaLine extends StatelessWidget {
-  final DetailModel model;
-
-  const _MetaLine({required this.model});
-
-  @override
-  Widget build(BuildContext context) {
-    final m = model;
-    final scale = ShowcaseMetrics.of(context).k;
-    final bits = <String>[
-      if (m.isMovie) 'Film' else 'Series',
-      ...m.genres.take(2),
-    ];
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(bits.join(' · '), style: _t(10.5 * scale, a: 0.86)),
-        if (m.rating != null) ...[
-          const SizedBox(width: 7),
-          DetailRatingBox(value: m.rating!),
-        ],
-        // RT + Metacritic from OMDb as twin outlined boxes (and IMDb when the
-        // model has none). Async, so each box carries its own leading gap.
-        OmdbRatingsBuilder(
-          imdbId: m.item.effectiveImdbId,
-          builder: (context, r) {
-            if (r == null) return const SizedBox.shrink();
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (m.rating == null && r.imdb != null) ...[
-                  const SizedBox(width: 7),
-                  DetailRatingBox(value: r.imdb!),
-                ],
-                if (r.score != null) ...[
-                  SizedBox(width: m.rating == null && r.imdb == null ? 7 : 5),
-                  DetailGlyphBox(
-                    glyph: (size, color) =>
-                        TomatoGlyph(size: size, color: color),
-                    label: '${r.score}%',
-                  ),
-                ],
-                if (r.metacritic != null) ...[
-                  const SizedBox(width: 5),
-                  DetailGlyphBox(
-                    glyph: (size, color) =>
-                        MetacriticGlyph(size: size, color: color),
-                    label: '${r.metacritic}',
-                  ),
-                ],
-              ],
-            );
-          },
-        ),
-        if (m.hasMdblist) ...[
-          const SizedBox(width: 5),
-          _TrackerMark(letter: 'M', on: m.mdblistTracked, tint: kMdblistPurple),
-        ],
-      ],
-    );
-  }
-}
-
-class _TrackerMark extends StatelessWidget {
-  final String letter;
-  final bool on;
-  final Color tint;
-
-  const _TrackerMark({
-    required this.letter,
-    required this.on,
-    required this.tint,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final k = ShowcaseMetrics.of(context).k;
-    return Container(
-      width: 15 * k,
-      height: 15 * k,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: on ? tint : null,
-        border: on
-            ? null
-            : Border.all(color: _ink.withValues(alpha: 0.34), width: 0.75),
-      ),
-      child: Text(
-        letter,
-        style: TextStyle(
-          fontSize: 7 * k,
-          fontWeight: FontWeight.w800,
-          color: on ? _ink : _ink.withValues(alpha: 0.5),
-        ),
-      ),
-    );
-  }
-}
-
 /// Shared outlined rating readout for detail-adjacent metadata.
 class DetailRatingBox extends StatelessWidget {
   final double value;
@@ -1456,117 +1290,8 @@ class DetailGlyphBox extends StatelessWidget {
   }
 }
 
-bool _hasHonors(DetailModel m) =>
-    m.imdbExtra?.top250Rank != null || m.imdbExtra?.meterRank != null;
-
-/// The honors row — IMDb Top 250 position and the popularity meter, as
-/// hairline small-caps chips in the family of [DetailRatingBox]. Readout, never
-/// focusable; monochrome so it sits under the artwork instead of on top of it.
-class _HonorsLine extends StatelessWidget {
-  final DetailModel model;
-
-  const _HonorsLine({required this.model});
-
-  @override
-  Widget build(BuildContext context) {
-    final x = model.imdbExtra;
-    if (x == null) return const SizedBox.shrink();
-    final m = ShowcaseMetrics.of(context);
-    final compact = m.compact;
-    final chips = <Widget>[
-      if (x.top250Rank != null)
-        _honorChip(m, 'IMDb TOP 250', '№${x.top250Rank}'),
-      if (x.meterRank != null)
-        _honorChip(
-          m,
-          'TRENDING',
-          '№${x.meterRank}',
-          drift: switch (x.meterDelta) {
-            null || 0 => null,
-            final d when d > 0 => '▴$d',
-            final d => '▾${-d}',
-          },
-        ),
-    ];
-    if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(
-      alignment: compact ? WrapAlignment.center : WrapAlignment.start,
-      spacing: 6,
-      runSpacing: 6,
-      children: chips,
-    );
-  }
-
-  Widget _honorChip(
-    ShowcaseMetrics m,
-    String label,
-    String rank, {
-    String? drift,
-  }) {
-    final compact = m.compact;
-    final size = compact ? 9.5 : 7.5 * m.k;
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 8 : 6 * m.k,
-        vertical: compact ? 3.5 : 2.5 * m.k,
-      ),
-      decoration: BoxDecoration(
-        border: Border.all(color: _ink.withValues(alpha: 0.30), width: 0.75),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '$label ',
-            style: _t(
-              size,
-              w: FontWeight.w700,
-              a: 0.62,
-            ).copyWith(letterSpacing: 0.8),
-          ),
-          Text(
-            rank,
-            style: _t(
-              size,
-              w: FontWeight.w700,
-              a: 0.95,
-            ).copyWith(letterSpacing: 0.4),
-          ),
-          if (drift != null)
-            Text(' $drift', style: _t(size, w: FontWeight.w700, a: 0.45)),
-        ],
-      ),
-    );
-  }
-}
-
 /// Year · seasons/runtime. NOT Dolby/CC/HDR badges: nothing is fetched at page
 /// open, so those could only ever be decoration pretending to be data.
-class _TechLine extends StatelessWidget {
-  final DetailModel model;
-
-  const _TechLine({required this.model});
-
-  @override
-  Widget build(BuildContext context) {
-    final bits = <String>[
-      if ((model.year ?? '').isNotEmpty) model.year!,
-      if ((model.runtime ?? '').isNotEmpty) model.runtime!,
-      if ((model.certificate ?? '').isNotEmpty) model.certificate!,
-    ];
-    if (bits.isEmpty) {
-      return model.detailsLoading
-          ? _SkeletonBar(width: 130 * ShowcaseMetrics.of(context).k)
-          : const SizedBox.shrink();
-    }
-    return Text(
-      bits.join('  ·  '),
-      style: _t(9.5 * ShowcaseMetrics.of(context).k, a: 0.7),
-    );
-  }
-}
-
 /// One rounded, animated placeholder bar, sized to a line of Showcase text.
 /// The animation is the theme's own wait style ([ThemedSkeleton]) — a
 /// travelling gradient shimmer in the default look.
@@ -2159,6 +1884,10 @@ class ShowcaseEpisodeCell extends StatelessWidget {
   /// stand-in for hold-OK. TV passes null and renders exactly as before.
   final VoidCallback? onOptions;
 
+  /// Downloads library: delete this episode's downloaded file inline, from a
+  /// trash over the still. Null everywhere else.
+  final VoidCallback? onDeleteDownload;
+
   const ShowcaseEpisodeCell({
     super.key,
     required this.episode,
@@ -2170,6 +1899,7 @@ class ShowcaseEpisodeCell extends StatelessWidget {
     this.stillWidth,
     this.stillHeight,
     this.onOptions,
+    this.onDeleteDownload,
   });
 
   @override
@@ -2262,6 +1992,12 @@ class ShowcaseEpisodeCell extends StatelessWidget {
                         bottom: 5,
                         child: _KebabButton(onTap: onOptions!),
                       ),
+                    if (onDeleteDownload != null)
+                      Positioned(
+                        right: 5,
+                        top: 5,
+                        child: _TrashButton(onTap: onDeleteDownload!),
+                      ),
                   ],
                 ),
               ),
@@ -2337,6 +2073,10 @@ class ShowcaseEpisodeCardCompact extends StatelessWidget {
   final String? fallbackImage;
   final VoidCallback onOptions;
 
+  /// Downloads library: delete this episode's downloaded file inline. Null
+  /// everywhere else, so the trash button shows only for a downloaded episode.
+  final VoidCallback? onDeleteDownload;
+
   const ShowcaseEpisodeCardCompact({
     super.key,
     required this.episode,
@@ -2345,6 +2085,7 @@ class ShowcaseEpisodeCardCompact extends StatelessWidget {
     required this.isNext,
     required this.fallbackImage,
     required this.onOptions,
+    this.onDeleteDownload,
   });
 
   @override
@@ -2508,6 +2249,10 @@ class ShowcaseEpisodeCardCompact extends StatelessWidget {
                           ),
                         ],
                         const Spacer(),
+                        if (onDeleteDownload != null) ...[
+                          _TrashButton(onTap: onDeleteDownload!),
+                          const SizedBox(width: 4),
+                        ],
                         _KebabButton(onTap: onOptions),
                       ],
                     ),
@@ -2516,6 +2261,30 @@ class ShowcaseEpisodeCardCompact extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small trash target mirroring [_KebabButton], for deleting a downloaded
+/// episode's file straight from its card in the downloads library.
+class _TrashButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _TrashButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final k = ShowcaseMetrics.of(context).k;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.all(4 * k),
+        child: Icon(
+          Icons.delete_outline_rounded,
+          size: 18 * k,
+          color: Colors.white.withValues(alpha: 0.75),
         ),
       ),
     );

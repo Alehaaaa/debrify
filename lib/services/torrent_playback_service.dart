@@ -86,6 +86,64 @@ import 'video_player_launcher.dart';
 
 part 'downloads/torrent_downloads.dart';
 
+/// Per-play authorization circuit. One fatal TorBox refusal stops all further
+/// TorBox acquisition requests for this play (including pack → episode search)
+/// while leaving genuine direct streams and other configured providers eligible.
+/// The circuit is intentionally NOT global: a repaired account works next play.
+class QuickPlayProviderAttempt {
+  final Set<String> _authorizationFailed = <String>{};
+
+  bool isBlocked(String provider) => _authorizationFailed.contains(provider);
+  bool get torboxAuthorizationFailed => isBlocked('torbox');
+
+  /// The null result is exclusively a provider-level authorization block.
+  /// Ordinary not-cached/transient errors still propagate to their existing
+  /// cleanup and retry policy.
+  Future<T?> run<T>(String provider, Future<T> Function() resolve) async {
+    if (isBlocked(provider)) return null;
+    try {
+      return await resolve();
+    } on TorboxAuthorizationException {
+      if (provider != 'torbox') rethrow;
+      _authorizationFailed.add(provider);
+      debugPrint(
+        '[QuickPlay] TorBox authorization denied; suppressing retries for this play',
+      );
+      return null;
+    }
+  }
+
+  String get torboxRemedy =>
+      'TorBox denied access (403 / AUTH_ERROR). Check your TorBox API key, account status and permissions in Settings.';
+
+  /// Eligible only after the chosen provider was refused. A configured but
+  /// unplayable alternative is skipped; PikPak would queue a real download
+  /// during a probe, so it is never an automatic fallback.
+  Future<(T, String)?> tryAuthorizedAlternatives<T>(
+    String failedProvider,
+    Iterable<String> configuredProviders,
+    Future<T?> Function(String provider) probe, {
+    bool Function()? cancelled,
+  }) async {
+    if (!isBlocked(failedProvider)) return null;
+    for (final candidate in configuredProviders) {
+      if (candidate == failedProvider ||
+          candidate == 'pikpak' ||
+          isBlocked(candidate) ||
+          (cancelled?.call() ?? false)) {
+        continue;
+      }
+      try {
+        final found = await probe(candidate);
+        if (found != null) return (found, candidate);
+      } catch (_) {
+        // Independent provider errors cannot block a different account.
+      }
+    }
+    return null;
+  }
+}
+
 /// Content identity for a playback, so the player can record Continue Watching,
 /// fetch subtitles, and drive the Episodes button (matching Home).
 class PlaybackMeta {
@@ -597,7 +655,9 @@ class TorrentPlaybackService {
     // "Load more sources" backend for the player's series source tabs; rides
     // through to the launch untouched. Null ⇒ flat source list (unchanged).
     SeriesSourceFetcher? seriesFetcher,
+    QuickPlayProviderAttempt? authorizationAttempt,
   }) async {
+    final authAttempt = authorizationAttempt ?? QuickPlayProviderAttempt();
     if (rules != null) {
       torrents = orderCandidatesForRules(
         torrents,
@@ -658,8 +718,11 @@ class TorrentPlaybackService {
           resolveSourceToPlaylist:
               (torrents.length > 1 || seriesFetcher != null)
               ? (resolverProvider == null
-                    ? _lazyProviderResolver()
-                    : _resolverFor(resolverProvider))
+                    ? _lazyProviderResolver(authorizationAttempt: authAttempt)
+                    : _resolverFor(
+                        resolverProvider,
+                        authorizationAttempt: authAttempt,
+                      ))
               : null,
           startupFailoverEnabled: true,
           startupResolverProvider: resolverProvider,
@@ -902,6 +965,7 @@ class TorrentPlaybackService {
         // not consume the result budget or hide a provider-free direct link
         // later in the exact returned order.
         if (strictProvider == null) continue;
+        if (authAttempt.isBlocked(strictProvider)) continue;
 
         if (!providerPrepared) {
           var preparedTorrents = exactSources
@@ -984,6 +1048,7 @@ class TorrentPlaybackService {
           episode: meta?.episode,
           rules: rules.copyWith(tryNextOnFailure: false, maxAttempts: 1),
           isCancelled: cancelled,
+          authorizationAttempt: authAttempt,
         );
         if (!context.mounted) {
           closeLoading();
@@ -1006,11 +1071,51 @@ class TorrentPlaybackService {
         );
         return;
       }
+      if (authAttempt.torboxAuthorizationFailed &&
+          strictProvider != null &&
+          !cancelled() &&
+          context.mounted) {
+        final candidates = exactSources
+            .where(
+              (source) =>
+                  source.streamType == StreamType.torrent &&
+                  _hasAcquisition(source),
+            )
+            .toList();
+        final alternate = await _tryAuthorizedTorrentAlternatives(
+          strictProvider,
+          candidates,
+          authAttempt,
+          season: meta?.season,
+          episode: meta?.episode,
+          cancelled: cancelled,
+          rules: rules,
+        );
+        if (alternate != null && !cancelled() && context.mounted) {
+          final (resolved, winner, actualProvider) = alternate;
+          ov?.setStage(PlayLoadStage.starting);
+          await _launch(
+            context,
+            resolved,
+            winner.displayTitle,
+            provider: actualProvider,
+            meta: meta,
+            sources: exactSources,
+            sourceIndex: exactSources.indexOf(winner),
+            seriesFetcher: seriesFetcher,
+            overlay: ov,
+            startupFailoverEnabled: true,
+          );
+          return;
+        }
+      }
       if (ov != null) closeLoading();
       if (context.mounted) {
         _snack(
           context,
-          providerUnavailable
+          authAttempt.torboxAuthorizationFailed
+              ? authAttempt.torboxRemedy
+              : providerUnavailable
               ? 'No direct stream played. Add a debrid provider in Settings for torrent sources.'
               : 'No source in the selected order was instantly playable.',
         );
@@ -1187,9 +1292,9 @@ class TorrentPlaybackService {
                 );
               }
             },
+      authorizationAttempt: authAttempt,
     );
     if (cancelled()) return; // dismissed by the Cancel tap; nothing more to do
-    loader.setStage(PlayLoadStage.starting);
     if (!context.mounted) {
       closeLoading();
       return;
@@ -1199,16 +1304,54 @@ class TorrentPlaybackService {
       // the play the pre-ladder flow would have delivered (playDirect keeps
       // the loader up and hands its dismissal to the launcher).
       if (await playFirstAliveDirect()) return;
+      if (authAttempt.torboxAuthorizationFailed) {
+        final alternate = await _tryAuthorizedTorrentAlternatives(
+          prov,
+          candidates,
+          authAttempt,
+          season: meta?.season,
+          episode: meta?.episode,
+          cancelled: cancelled,
+          rules: rules,
+        );
+        if (alternate != null) {
+          final (resolved, selected, actualProvider) = alternate;
+          if (cancelled() || !context.mounted) {
+            closeLoading();
+            return;
+          }
+          loader.setNote(
+            'TorBox unavailable — playing via ${_label(actualProvider)}',
+          );
+          loader.setStage(PlayLoadStage.starting);
+          await _launch(
+            context,
+            resolved,
+            selected.displayTitle,
+            provider: actualProvider,
+            meta: meta,
+            sources: torrents,
+            sourceIndex: torrents.indexOf(selected),
+            seriesFetcher: seriesFetcher,
+            overlay: loader,
+            startupFailoverEnabled: true,
+          );
+          return;
+        }
+      }
       closeLoading();
       if (context.mounted) {
         _snack(
           context,
-          'No instantly-playable source found. Open Sources to pick or download one.',
+          authAttempt.torboxAuthorizationFailed
+              ? authAttempt.torboxRemedy
+              : 'No instantly-playable source found. Open Sources to pick or download one.',
         );
       }
       return;
     }
     final idx = torrents.indexOf(winner!);
+    loader.setStage(PlayLoadStage.starting);
     await _launch(
       context,
       res,
@@ -1347,7 +1490,9 @@ class TorrentPlaybackService {
     int minAttempts = 1,
     // Called as each candidate is about to be probed (ladder narration).
     void Function(Torrent t)? onCandidate,
+    QuickPlayProviderAttempt? authorizationAttempt,
   }) async {
+    final authAttempt = authorizationAttempt ?? QuickPlayProviderAttempt();
     bool cancelled() => isCancelled?.call() ?? false;
     final tryMultiple =
         rules?.tryNextOnFailure ??
@@ -1361,7 +1506,7 @@ class TorrentPlaybackService {
       minAttempts: minAttempts,
     );
     for (final t in candidates.take(maxAttempts)) {
-      if (cancelled()) return (null, null);
+      if (cancelled() || authAttempt.isBlocked(prov)) return (null, null);
       logSourceSelection(
         'quick_play_probe',
         source: t,
@@ -1380,7 +1525,8 @@ class TorrentPlaybackService {
           continue;
         }
         if (cancelled()) return (null, null);
-        final r = await _add(prov, magnet, t);
+        final r = await authAttempt.run(prov, () => _add(prov, magnet, t));
+        if (r == null) return (null, null);
         if (r.playUrl != null && r.playUrl!.isNotEmpty) {
           // For a series episode, don't accept a pack that resolved fine but
           // doesn't actually contain the requested episode (mislabeled or
@@ -1455,6 +1601,62 @@ class TorrentPlaybackService {
     return (null, null);
   }
 
+  /// Exercises the actual Quick Play acquisition/probe loop with a test TorBox
+  /// multipart transport, so a mocked 403 covers the real retry cutoff.
+  @visibleForTesting
+  static Future<bool> debugProbeTorboxCandidatesForAuthorization(
+    List<Torrent> candidates, {
+    required QuickPlayRules rules,
+    QuickPlayProviderAttempt? authorizationAttempt,
+  }) async {
+    final (resolved, _) = await _probeCandidates(
+      'torbox',
+      candidates,
+      rules: rules,
+      authorizationAttempt: authorizationAttempt,
+    );
+    return resolved != null && resolved.playUrl?.isNotEmpty == true;
+  }
+
+  /// A genuinely unusable account may fall back to another configured debrid
+  /// account. PikPak is excluded because merely probing queues downloads.
+  /// Each alternative gets one real cache-safe acquisition, not speculative
+  /// playback or a cross-account authorization bypass.
+  static Future<(_Resolved, Torrent, String)?>
+  _tryAuthorizedTorrentAlternatives(
+    String failedProvider,
+    List<Torrent> candidates,
+    QuickPlayProviderAttempt attempt, {
+    int? season,
+    int? episode,
+    bool Function()? cancelled,
+    QuickPlayRules? rules,
+  }) async {
+    if (!attempt.isBlocked(failedProvider) || candidates.isEmpty) return null;
+    final (configured, _) = await _configuredProviders();
+    final selected = await attempt
+        .tryAuthorizedAlternatives<(_Resolved, Torrent)>(
+          failedProvider,
+          configured,
+          (alternative) async {
+            final (resolved, winner) = await _probeCandidates(
+              alternative,
+              candidates,
+              season: season,
+              episode: episode,
+              rules: rules?.copyWith(tryNextOnFailure: false, maxAttempts: 1),
+              isCancelled: cancelled,
+              authorizationAttempt: attempt,
+            );
+            if (resolved == null || winner == null) return null;
+            return (resolved, winner);
+          },
+          cancelled: cancelled,
+        );
+    if (selected == null) return null;
+    return (selected.$1.$1, selected.$1.$2, selected.$2);
+  }
+
   /// Delete only the acquisition identified by the provider's not-ready error.
   /// A failed cleanup must not prevent trying another playable source.
   @visibleForTesting
@@ -1502,6 +1704,7 @@ class TorrentPlaybackService {
     // post-failure recovery keep their existing no-prompt contract for free.
     VoidCallback? openSourcePicker,
   }) async {
+    final authorizationAttempt = QuickPlayProviderAttempt();
     logSourceSelection(
       'play_selection_start',
       season: season,
@@ -1642,6 +1845,7 @@ class TorrentPlaybackService {
           label: label,
           meta: meta,
           preferredProvider: preferredProvider,
+          authorizationAttempt: authorizationAttempt,
         );
         if (played) return;
         if (!context.mounted) return;
@@ -1824,6 +2028,7 @@ class TorrentPlaybackService {
           season: season,
           episode: episode,
           rules: activeRules,
+          authorizationAttempt: authorizationAttempt,
           isCancelled: () => cancel.cancelled,
         );
         if (cancel.cancelled) return null;
@@ -1860,7 +2065,7 @@ class TorrentPlaybackService {
       // above). Remember it — but only when the search actually SUCCEEDED with
       // no playable pack (not a transient failure) — so the next episode of
       // this season skips the pack search until the TTL lapses.
-      if (searchOk) {
+      if (searchOk && !authorizationAttempt.isBlocked(provider)) {
         _markNoPack(
           imdbId,
           season,
@@ -1878,6 +2083,7 @@ class TorrentPlaybackService {
         season != null &&
         episode != null &&
         provider != 'pikpak' &&
+        !authorizationAttempt.isBlocked(provider) &&
         !_recentlyNoPack(imdbId, season, provider, activeRules) &&
         activeRules.packPreference != QuickPlayPackPreference.exactEpisodeOnly;
 
@@ -2084,26 +2290,36 @@ class TorrentPlaybackService {
       return;
     }
     _applyLadderNote(overlay, ladder, torrents);
-    await playBest(
-      context,
-      torrents,
-      provider: provider,
-      title: label,
-      meta: meta,
-      overlay: overlay,
-      isCancelled: () => cancel.cancelled,
-      ladder: ladder,
-      rules: activeRules,
-      // The dedicated episode fetch just ran; the pack tab stays fetchable
-      // even when the pack-first search ran earlier — its results were
-      // discarded (nothing instantly playable), so "Load more" re-lists
-      // them for a manual pick.
-      seriesFetcher: seriesFetcherFor(
-        meta: meta,
+    try {
+      await playBest(
+        context,
+        torrents,
         provider: provider,
-        episodesFetched: true,
-      ),
-    );
+        title: label,
+        meta: meta,
+        overlay: overlay,
+        isCancelled: () => cancel.cancelled,
+        ladder: ladder,
+        rules: activeRules,
+        // The episode fetch ran; the pack tab remains manually fetchable.
+        seriesFetcher: seriesFetcherFor(
+          meta: meta,
+          provider: provider,
+          episodesFetched: true,
+        ),
+        authorizationAttempt: authorizationAttempt,
+      );
+    } catch (error) {
+      closeLoading();
+      if (context.mounted && !cancel.cancelled) {
+        _snack(
+          context,
+          authorizationAttempt.torboxAuthorizationFailed
+              ? authorizationAttempt.torboxRemedy
+              : 'Quick Play could not prepare a playable source. Check provider connections in Settings.',
+        );
+      }
+    }
   }
 
   /// Loads the quick-play ladder: inactive (a no-op) when the user disabled
@@ -4980,7 +5196,9 @@ class TorrentPlaybackService {
     required PlaybackMeta meta,
     String? preferredProvider,
     bool skipLinkCache = false,
+    QuickPlayProviderAttempt? authorizationAttempt,
   }) async {
+    final authAttempt = authorizationAttempt ?? QuickPlayProviderAttempt();
     final usable = sources
         .where((s) => _boundProviderSupported(s.debridService))
         .toList();
@@ -5392,6 +5610,7 @@ class TorrentPlaybackService {
       }
 
       final prov = _providerFromStored(source.debridService);
+      if (authAttempt.isBlocked(prov)) continue;
       final nativeCloud = source.isProviderNativeCloud;
       final t = nativeCloud ? null : _torrentFromSource(source);
       _Resolved? res;
@@ -5408,7 +5627,7 @@ class TorrentPlaybackService {
           final magnet = await _magnetFor(t!);
           if (magnet == null) continue;
           if (cancel.cancelled) return true;
-          r = await _add(prov, magnet, t);
+          r = await authAttempt.run(prov, () => _add(prov, magnet, t));
         }
         if (r != null && r.playUrl != null && r.playUrl!.isNotEmpty) {
           if (season != null &&
@@ -5459,6 +5678,11 @@ class TorrentPlaybackService {
         } catch (_) {}
         fallbackHint =
             'Saved source is not ready on AllDebrid. Falling back to search.';
+      } on TorboxAuthorizationException {
+        // A native-cloud path can also signal 403. Leave the pin intact;
+        // account access, not the pinned media itself, is broken.
+        authAttempt._authorizationFailed.add('torbox');
+        fallbackHint = authAttempt.torboxRemedy;
       } catch (_) {
         // TorBox/Premiumize uncached or transient — keep binding, try next.
       }
@@ -6313,6 +6537,11 @@ class TorrentPlaybackService {
     contentEpisode: meta?.episode,
     contentTitle: meta?.title,
     posterUrl: meta?.posterUrl,
+    initialArt:
+        meta?.art ??
+        (meta?.catalogItem == null
+            ? null
+            : PlayLoaderArt.fromMeta(meta!.catalogItem!)),
     contentYear: meta?.year,
     addonId: meta?.addonId,
     suppressTrackerAutoSync: meta?.hasStremioEpisodeIdentity ?? false,
@@ -6393,8 +6622,10 @@ class TorrentPlaybackService {
   /// one; a torrent switch silently uses the default/first-configured provider
   /// (matching Home's _createSourcePlaylistResolver) and fails gracefully
   /// (null) when none is configured.
-  static Future<List<PlaylistEntry>?> Function(Torrent)
-  _lazyProviderResolver() {
+  static Future<List<PlaylistEntry>?> Function(Torrent) _lazyProviderResolver({
+    QuickPlayProviderAttempt? authorizationAttempt,
+  }) {
+    final authAttempt = authorizationAttempt ?? QuickPlayProviderAttempt();
     return (Torrent t) async {
       if (IptvSourceSearch.isDeferredXtreamSeries(t)) {
         final resolution = await IptvSourceSearch.resolveXtreamSeriesEpisode(t);
@@ -6418,7 +6649,7 @@ class TorrentPlaybackService {
       }
       final provider = await _defaultConfiguredProvider();
       if (provider == null) return null;
-      return _resolverFor(provider)(t);
+      return _resolverFor(provider, authorizationAttempt: authAttempt)(t);
     };
   }
 
@@ -7048,8 +7279,10 @@ class TorrentPlaybackService {
   /// user picked, add it to [provider] and return its playlist (so switching
   /// sources works without leaving the player).
   static Future<List<PlaylistEntry>?> Function(Torrent) _resolverFor(
-    String provider,
-  ) {
+    String provider, {
+    QuickPlayProviderAttempt? authorizationAttempt,
+  }) {
+    final authAttempt = authorizationAttempt ?? QuickPlayProviderAttempt();
     return (Torrent t) async {
       if (IptvSourceSearch.isDeferredXtreamSeries(t)) {
         final resolution = await IptvSourceSearch.resolveXtreamSeriesEpisode(t);
@@ -7074,7 +7307,11 @@ class TorrentPlaybackService {
       final magnet = await _magnetFor(t);
       if (magnet == null) return null;
       try {
-        final r = await _add(provider, magnet, t);
+        final r = await authAttempt.run(
+          provider,
+          () => _add(provider, magnet, t),
+        );
+        if (r == null) return null;
         if (r.playlist != null && r.playlist!.isNotEmpty) return r.playlist;
         if (r.playUrl != null && r.playUrl!.isNotEmpty) {
           return [PlaylistEntry(url: r.playUrl!, title: t.displayTitle)];

@@ -47,6 +47,11 @@ abstract final class MainTab {
   static const int discover = 18;
   static const int calendar = 19;
   static const int reels = 20;
+
+  /// The consolidated "Watch" hub: one top-level entry that opens the five
+  /// lean-back feeds (Reels, IPTV, YouTube, Nextup TV, Stremio TV) as pushed
+  /// routes — the same consolidation [cloud] does for the debrid providers.
+  static const int watch = 21;
 }
 
 class MainPageBridge {
@@ -185,6 +190,12 @@ class MainPageBridge {
   /// Shows the same missing-key / hidden-tab snackbar as [switchTab] did when
   /// the provider isn't available. Set by main.dart.
   static void Function(String providerKey)? openCloudProvider;
+
+  /// Opens one of the lean-back feeds from the consolidated Watch hub, as a
+  /// pushed route (mirrors [openCloudProvider]). [feedKey] is one of:
+  /// 'reels' | 'iptv' | 'youtube' | 'debrify_tv' | 'stremio_tv'. The five
+  /// feeds no longer have their own top-level nav entries. Set by main.dart.
+  static void Function(String feedKey)? openFeed;
 
   /// Flag to track if user came from torrent search "Open in xxx" flow.
   /// When true, back navigation should return to torrent search instead of folder navigation.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:debrify/models/play_loader_art.dart';
+import 'package:debrify/widgets/home/spotlight_media_identity.dart';
 import 'package:debrify/widgets/pipeline_loading_overlay.dart';
 
 void main() {
@@ -225,7 +226,9 @@ void main() {
     expect(find.text('PREPARE'), findsOneWidget);
     expect(find.text('START'), findsOneWidget);
     // Meta line from the detail page's data.
-    expect(find.text('IMDb 8.5'), findsOneWidget);
+    expect(find.text('★ 8.5'), findsOneWidget);
+    expect(find.byKey(const ValueKey('spotlight-media-rating')),
+        findsOneWidget);
     expect(find.text('2h 46m'), findsOneWidget);
     expect(find.text('PG-13'), findsOneWidget);
     // Title as type (no logo art on this play) and the provider chip.
@@ -374,22 +377,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('marquee logo art still announces the title to a screen reader',
+  testWidgets('marquee uses the Spotlight logo slot and title fallback',
       (tester) async {
     await showOverlay(
       tester,
       style: PlayLoaderStyle.marquee,
       art: const PlayLoaderArt(logoUrl: 'https://art.example/logo.png'),
     );
-    // The image never loads under the test binding (every request 400s), so
-    // this asserts the property rather than the rendered semantics tree: when
-    // the logo DOES load it replaces the title Text outright, and without this
-    // label the plate would announce no title at all.
+    // The shared identity uses a reserved optical slot and Semantics on its
+    // successful image; under the test binding the URL fails and fallback
+    // title text remains accessible inside the reserved slot.
+    expect(find.byType(SpotlightMediaIdentity), findsOneWidget);
     expect(
-      tester.widget<Image>(find.byType(Image)).semanticLabel,
-      'The Last of Us',
+      find.byKey(const ValueKey('spotlight-media-logo-slot')),
+      findsOneWidget,
     );
-    // The failed load falls back to the title as type — also announced.
     expect(find.text('The Last of Us'), findsOneWidget);
   });
 

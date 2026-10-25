@@ -22,7 +22,8 @@ class DropBounceIdent extends LaunchIdent {
   @override
   String get label => 'Drop & Bounce';
   @override
-  String get subtitle => 'The original — the mark lands with weight and '
+  String get subtitle =>
+      'The original — the mark lands with weight and '
       'shakes the letters loose';
   @override
   Duration get revealDuration => const Duration(milliseconds: 1100);
@@ -30,26 +31,24 @@ class DropBounceIdent extends LaunchIdent {
   Color get baseColor => const Color(0xFF020617);
   @override
   BoxDecoration get backdrop => const BoxDecoration(
-        // Subtle radial lift in the backdrop reads richer than flat black —
-        // verbatim the DecoratedBox the splash has always drawn.
-        gradient: RadialGradient(
-          center: Alignment.center,
-          radius: 1.1,
-          colors: [Color(0xFF0B1026), Color(0xFF020617)],
-          stops: [0.0, 0.9],
-        ),
-      );
+    // Subtle radial lift in the backdrop reads richer than flat black —
+    // verbatim the DecoratedBox the splash has always drawn.
+    gradient: RadialGradient(
+      center: Alignment.center,
+      radius: 1.1,
+      colors: [Color(0xFF0B1026), Color(0xFF020617)],
+      stops: [0.0, 0.9],
+    ),
+  );
   @override
-  List<Color> get sweepColors =>
-      const [Color(0xFF7B5CFF), Color(0xFF818CF8)];
+  List<Color> get sweepColors => const [Color(0xFF7B5CFF), Color(0xFF818CF8)];
 
   @override
   CustomPainter createPainter(
     Animation<double> animation, {
     required bool Function() isTelevision,
     IdentPalette? palette,
-  }) =>
-      DropBouncePainter(animation, isTelevision: isTelevision);
+  }) => DropBouncePainter(animation, isTelevision: isTelevision);
 }
 
 class DropBouncePainter extends CustomPainter {
@@ -60,10 +59,10 @@ class DropBouncePainter extends CustomPainter {
   _DropBounceLayout? _cachedLayout;
 
   DropBouncePainter(this.animation, {required this.isTelevision})
-      : super(repaint: animation);
+    : super(repaint: animation);
 
   static const LinearGradient _glyphGradient = LinearGradient(
-    colors: [Color(0xFF1EEBFD), Color(0xFF06AAFD), Color(0xFF0A5BEA)],
+    colors: [kNextupCyan, Color(0xff08b9ee), kNextupBlue],
     stops: [0, 0.5, 1],
   );
 
@@ -74,7 +73,8 @@ class DropBouncePainter extends CustomPainter {
           text: ch,
           style: TextStyle(
             fontSize: fontSize,
-            fontWeight: FontWeight.w700,
+            fontFamily: kNextupDisplayFont,
+            fontWeight: FontWeight.w800,
             color: const Color(0xFFE9EDFF),
             height: 1.0,
           ),
@@ -244,23 +244,35 @@ class DropBouncePainter extends CustomPainter {
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = glyphSize * 0.075
-            ..color =
-                Color.fromRGBO(110, 120, 255, 0.10 * identClamp(glow, 0, 1)),
+            ..color = Color.fromRGBO(
+              110,
+              120,
+              255,
+              0.10 * identClamp(glow, 0, 1),
+            ),
         );
         canvas.drawPath(
           path,
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = glyphSize * 0.035
-            ..color =
-                Color.fromRGBO(134, 139, 255, 0.20 * identClamp(glow, 0, 1)),
+            ..color = Color.fromRGBO(
+              134,
+              139,
+              255,
+              0.20 * identClamp(glow, 0, 1),
+            ),
         );
       } else {
         canvas.drawPath(
           path,
           Paint()
-            ..color =
-                Color.fromRGBO(110, 120, 255, 0.55 * identClamp(glow, 0, 1))
+            ..color = Color.fromRGBO(
+              110,
+              120,
+              255,
+              0.55 * identClamp(glow, 0, 1),
+            )
             ..maskFilter = MaskFilter.blur(
               BlurStyle.normal,
               glyphSize * 0.12 * glow,

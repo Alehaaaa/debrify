@@ -6,7 +6,7 @@ import '../recoverable_network_image.dart';
 import '../../models/metadata_preferences.dart';
 import '../metadata_presentation_mixin.dart';
 import 'dart:async';
-import 'dart:math' show max, min;
+import 'dart:math' show max;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -35,13 +35,14 @@ import 'spotlight_card_trailer.dart';
 import 'snowy_mountain_background.dart';
 import 'midnight_rain_background.dart';
 import 'moonlit_ocean_background.dart';
+import 'procedural_spotlight_background.dart';
 import '../collections/collection_focus_glow.dart';
 import '../collections/collection_focus_art.dart';
 import '../movie_watched_badge.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/wide_touch_scale.dart';
 import '../../utils/spotlight_interaction_policy.dart';
-import '../optical_logo.dart';
+import 'spotlight_media_identity.dart';
 import '../rotten_tomatoes_score.dart';
 
 /// What a card is, once a shelf stops being a list of TITLES.
@@ -2396,6 +2397,18 @@ class SpotlightBoardState extends State<SpotlightBoard>
                         'midnight_rain' => MidnightRainBackground(
                           lowPower: widget.dpad,
                         ),
+                        'northern_lights' => ProceduralSpotlightBackground(
+                          atmosphere: SpotlightAtmosphere.northernLights,
+                          lowPower: widget.dpad,
+                        ),
+                        'ember_dusk' => ProceduralSpotlightBackground(
+                          atmosphere: SpotlightAtmosphere.emberDusk,
+                          lowPower: widget.dpad,
+                        ),
+                        'meteor_night' => ProceduralSpotlightBackground(
+                          atmosphere: SpotlightAtmosphere.meteorNight,
+                          lowPower: widget.dpad,
+                        ),
                         _ => SnowyMountainBackground(lowPower: widget.dpad),
                       },
                       builder: (context, child) {
@@ -2718,24 +2731,18 @@ class SpotlightBoardState extends State<SpotlightBoard>
       children: [
         GestureDetector(
           onTap: _openHero,
-          child: Center(
-            child: _LogoOrTitle(
-              url: item.logo,
-              name: item.name,
-              align: TextAlign.center,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          [
-            item.type == 'series' ? 'Series' : 'Film',
-            ...(item.genres ?? const []).take(2),
-          ].join(' · '),
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: Colors.white.withValues(alpha: 0.86),
+          child: SpotlightMediaIdentity(
+            title: item.name,
+            logoUrl: item.logo,
+            imdbId: item.effectiveImdbId,
+            kindLabel: item.type == 'series' ? 'Series' : 'Film',
+            ratingLabel: item.imdbRating?.toString(),
+            yearLabel: item.year,
+            runtimeLabel: item.runtimeDisplay,
+            genreLabel: (item.genres ?? const <String>[]).take(2).join(' · '),
+            description: item.description,
+            textAlign: TextAlign.center,
+            compact: true,
           ),
         ),
         const SizedBox(height: 12),
@@ -3157,40 +3164,18 @@ class SpotlightBoardState extends State<SpotlightBoard>
   }
 
   Widget _identity(StremioMeta item, bool flip, _M m) {
-    final cross = flip ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final align = flip ? TextAlign.right : TextAlign.left;
-    return Column(
-      crossAxisAlignment: cross,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _LogoOrTitle(url: item.logo, name: item.name, align: align, scale: m.k),
-        const SizedBox(height: 9),
-        Text(
-          [
-            item.type == 'series' ? 'Series' : 'Film',
-            ...(item.genres ?? const []).take(2),
-          ].join(' · '),
-          textAlign: align,
-          style: TextStyle(
-            fontSize: 10.5 * m.k,
-            color: Colors.white.withValues(alpha: 0.86),
-          ),
-        ),
-        if ((item.description ?? '').isNotEmpty) ...[
-          const SizedBox(height: 7),
-          Text(
-            item.description!,
-            maxLines: 2,
-            textAlign: align,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10.5 * m.k,
-              height: 1.42,
-              color: Colors.white.withValues(alpha: 0.74),
-            ),
-          ),
-        ],
-      ],
+    return SpotlightMediaIdentity(
+      title: item.name,
+      logoUrl: item.logo,
+      imdbId: item.effectiveImdbId,
+      kindLabel: item.type == 'series' ? 'Series' : 'Film',
+      ratingLabel: item.imdbRating?.toString(),
+      yearLabel: item.year,
+      runtimeLabel: item.runtimeDisplay,
+      genreLabel: (item.genres ?? const <String>[]).take(2).join(' · '),
+      description: item.description,
+      scale: m.k,
+      textAlign: flip ? TextAlign.right : TextAlign.left,
     );
   }
 
@@ -3629,114 +3614,6 @@ class _ShelfTitleLinkState extends State<_ShelfTitleLink> {
               color: chevron,
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Logo art when it exists and is light enough to see; the title otherwise.
-class _LogoOrTitle extends StatelessWidget {
-  final String? url;
-  final String name;
-  final TextAlign align;
-
-  /// `_M.k` — 1.0 on TV and compact, the wide-touch correction elsewhere.
-  final double scale;
-
-  const _LogoOrTitle({
-    required this.url,
-    required this.name,
-    required this.align,
-    this.scale = 1.0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Text(
-      name,
-      maxLines: 2,
-      textAlign: align,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: 39 * scale,
-        height: 1,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.8,
-        color: Colors.white,
-      ),
-    );
-    if (url == null || url!.isEmpty) return text;
-    final corner = align == TextAlign.right
-        ? Alignment.bottomRight
-        : align == TextAlign.center
-        ? Alignment.bottomCenter
-        : Alignment.bottomLeft;
-    // A RESERVED slot, not a maximum.
-    //
-    // This was a `ConstrainedBox(maxWidth: 235, maxHeight: 60)`, which sizes
-    // itself to whatever is inside it. Before the art lands there is nothing
-    // inside it, so the slot collapsed and the identity below sat higher up;
-    // when the logo arrived a second or two later the block reflowed and
-    // everything settled into a different place. The column is anchored by its
-    // BOTTOM, so the whole identity moved, not just the logo.
-    //
-    // Holding the box at full size from the first frame means the art fades
-    // into a space already shaped for it and nothing else moves.
-    //
-    // Inside it, the logo is sized OPTICALLY (see [OpticalLogo]): a fixed
-    // box made long wordmarks width-bound and tiny while square marks filled
-    // it. The slot is capped to the available width so the centred compact
-    // hero never overflows a narrow phone.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final slotWidth = min(_logoMaxWidth * scale, constraints.maxWidth);
-        final slotHeight = _logoMaxHeight * scale;
-        return SizedBox(
-          width: slotWidth,
-          height: slotHeight,
-          child: _image(corner, text, slotWidth, slotHeight),
-        );
-      },
-    );
-  }
-
-  static const double _logoMaxWidth = OpticalLogo.defaultMaxWidth;
-  static const double _logoMaxHeight = OpticalLogo.defaultMaxHeight;
-  static const double _logoArea = OpticalLogo.defaultArea;
-
-  Widget _image(
-    Alignment corner,
-    Widget text,
-    double slotWidth,
-    double slotHeight,
-  ) {
-    return CachedNetworkImage(
-      imageUrl: url!,
-      cacheManager: DebrifyImageCache.manager,
-      // ~2x the widest slot so long logos stay crisp on HiDPI screens.
-      memCacheWidth: 960,
-      imageBuilder: (context, image) => OpticalLogo(
-        image: image,
-        alignment: corner,
-        maxWidth: slotWidth,
-        maxHeight: slotHeight,
-        area: _logoArea * scale * scale,
-      ),
-      placeholder: (_, _) => const SizedBox.shrink(),
-      // The title has to earn its way into the same slot rather than
-      // resizing it — scaleDown only shrinks, so short titles keep their
-      // intended weight.
-      //
-      // The inner width is what makes that bearable: FittedBox offers its
-      // child unbounded width, so without it `maxLines: 2` never wraps and a
-      // long title is scaled down as one very long line.
-      errorWidget: (_, _, _) => Align(
-        alignment: corner,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: corner,
-          child: SizedBox(width: 235 * scale, child: text),
         ),
       ),
     );

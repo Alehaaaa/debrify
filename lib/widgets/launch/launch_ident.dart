@@ -14,6 +14,7 @@ import 'constellation_ident.dart';
 import 'drop_bounce_ident.dart';
 import 'ember_ident.dart';
 import 'frost_ident.dart';
+import 'fold_ident.dart';
 import 'horizon_ident.dart';
 import 'imprint_ident.dart';
 import 'marquee_ident.dart';
@@ -50,12 +51,12 @@ abstract class LaunchIdent {
   /// The ident's own colours, and the door through which a theme replaces
   /// them. See [IdentPalette].
   IdentPalette get palette => IdentPalette(
-        base: baseColor,
-        backdrop: backdrop,
-        accent: sweepColors.first,
-        ink: sweepColors.last,
-        sweep: sweepColors,
-      );
+    base: baseColor,
+    backdrop: backdrop,
+    accent: sweepColors.first,
+    ink: sweepColors.last,
+    sweep: sweepColors,
+  );
 
   /// This ident's world rebuilt in [p]'s colours.
   ///
@@ -201,6 +202,7 @@ const List<LaunchIdent> kLaunchIdents = [
   // Collider. Only installs that never CHOSE move: an explicitly stored
   // 'collider' is a value and keeps playing Collider.
   TraceIdent(),
+  FoldIdent(),
   // Horizon's premise, built out: the collapse becomes a merger, and the
   // wordmark takes its cadence from the blast front instead of a stagger.
   // Was the default from 2026-08-17 until Trace replaced it.
@@ -244,6 +246,10 @@ String launchIdentLabel(String? id) => launchIdentFor(id).label;
 // ─────────────────────────────────────────────────────────────────────────
 
 const String kIdentWord = 'NEXTUP';
+const String kNextupDisplayFont = 'Poppins';
+const Color kNextupCyan = Color(0xff0cdae6);
+const Color kNextupBlue = Color(0xff1265ed);
+const Color kNextupNavy = Color(0xff071936);
 
 double identClamp(double v, double a, double b) => v < a ? a : (v > b ? b : v);
 double identLerp(double a, double b, double t) => a + (b - a) * t;
@@ -282,7 +288,7 @@ double identNoise(double x) {
   return v - v.floorToDouble();
 }
 
-/// The Debrify mark centred at the origin, inscribed in ±s/2: a ribbon of
+/// The Nextup mark centred at the origin, inscribed in ±s/2: a ribbon of
 /// constant width folded into a play symbol, sized like the triangle it
 /// replaced (±0.40·s tall, left edge at -0.30·s, so lockups that butt the
 /// wordmark against that edge keep working). Every ident paints this in its
@@ -294,18 +300,18 @@ double identNoise(double x) {
 /// at any size (a traced outline smoothed through its points overshot at the
 /// corners).
 Path identPlayPath(double s) => Path()
-    ..moveTo(-0.1278 * s, 0.1061 * s)
-    ..arcTo(_c(-0.2139, 0.1061, 0.0861, s), 0.0000, 3.1416, false)
-    ..lineTo(-0.3000 * s, -0.2339 * s)
-    ..arcTo(_c(-0.1336, -0.2339, 0.1664, s), -3.1416, 2.1943, false)
-    ..lineTo(0.2638 * s, -0.1530 * s)
-    ..arcTo(_c(0.1569, -0.0044, 0.1830, s), -0.9473, 1.9188, false)
-    ..lineTo(-0.0891 * s, 0.3852 * s)
-    ..arcTo(_c(-0.1377, 0.3141, 0.0861, s), 0.9715, 3.1416, false)
-    ..lineTo(0.1630 * s, 0.0046 * s)
-    ..arcTo(_c(0.1569, -0.0044, 0.0108, s), 0.9715, -1.9188, false)
-    ..lineTo(-0.1278 * s, -0.2225 * s)
-    ..close();
+  ..moveTo(-0.1278 * s, 0.1061 * s)
+  ..arcTo(_c(-0.2139, 0.1061, 0.0861, s), 0.0000, 3.1416, false)
+  ..lineTo(-0.3000 * s, -0.2339 * s)
+  ..arcTo(_c(-0.1336, -0.2339, 0.1664, s), -3.1416, 2.1943, false)
+  ..lineTo(0.2638 * s, -0.1530 * s)
+  ..arcTo(_c(0.1569, -0.0044, 0.1830, s), -0.9473, 1.9188, false)
+  ..lineTo(-0.0891 * s, 0.3852 * s)
+  ..arcTo(_c(-0.1377, 0.3141, 0.0861, s), 0.9715, 3.1416, false)
+  ..lineTo(0.1630 * s, 0.0046 * s)
+  ..arcTo(_c(0.1569, -0.0044, 0.0108, s), 0.9715, -1.9188, false)
+  ..lineTo(-0.1278 * s, -0.2225 * s)
+  ..close();
 
 Rect _c(double x, double y, double r, double s) =>
     Rect.fromCircle(center: Offset(x * s, y * s), radius: r * s);
@@ -317,14 +323,13 @@ Rect _c(double x, double y, double r, double s) =>
 Path identMarkSheen(double s) => Path.combine(
   PathOperation.intersect,
   identPlayPath(s),
-  Path()
-    ..addOval(
-      Rect.fromCenter(
-        center: Offset(-0.16 * s, -0.24 * s),
-        width: 0.62 * s,
-        height: 0.50 * s,
-      ),
+  Path()..addOval(
+    Rect.fromCenter(
+      center: Offset(-0.16 * s, -0.24 * s),
+      width: 0.62 * s,
+      height: 0.50 * s,
     ),
+  ),
 );
 
 /// Glow idiom: on TV two translucent strokes (the trick shipped in the
@@ -366,7 +371,7 @@ void identGlowPath(
 // Word machinery
 // ─────────────────────────────────────────────────────────────────────────
 
-/// Per-letter layout of DEBRIFY for one type treatment, with any number of
+/// Per-letter layout of NEXTUP for one type treatment, with any number of
 /// pre-laid-out [TextPainter] "sets" (fill variants: base, highlight,
 /// reflection…). Everything is laid out ONCE per canvas size and cached by
 /// the owning painter — per-frame work is transforms and paint only.
@@ -407,12 +412,12 @@ class IdentWordLayout {
     double scaleX = 1,
   }) {
     List<TextPainter> lay(double fz) => [
-          for (final ch in kIdentWord.split(''))
-            TextPainter(
-              text: TextSpan(text: ch, style: styleFor(fz)),
-              textDirection: TextDirection.ltr,
-            )..layout(),
-        ];
+      for (final ch in kIdentWord.split(''))
+        TextPainter(
+          text: TextSpan(text: ch, style: styleFor(fz)),
+          textDirection: TextDirection.ltr,
+        )..layout(),
+    ];
     var fz = fontSize;
     var tps = lay(fz);
     double total() {
@@ -501,13 +506,13 @@ class IdentAlphaSets {
   final List<List<TextPainter>> sets;
 
   IdentAlphaSets(IdentWordLayout layout, String name, Color color)
-      : sets = [
-          for (final a in steps)
-            layout.set(
-              '$name-$a',
-              (s) => s.copyWith(color: color.withValues(alpha: color.a * a)),
-            ),
-        ];
+    : sets = [
+        for (final a in steps)
+          layout.set(
+            '$name-$a',
+            (s) => s.copyWith(color: color.withValues(alpha: color.a * a)),
+          ),
+      ];
 
   /// The set nearest to [alpha], or null when effectively invisible.
   List<TextPainter>? at(double alpha) {
@@ -526,12 +531,7 @@ class IdentAlphaSets {
 /// Path on every call, so driving this straight off progress allocates per
 /// frame. Pre-extract a quantized ladder of prefixes at layout instead (see
 /// Blueprint's `_draw`) and index into it.
-void identDrawPathPartial(
-  Canvas canvas,
-  Path path,
-  double t,
-  Paint paint,
-) {
+void identDrawPathPartial(Canvas canvas, Path path, double t, Paint paint) {
   if (t <= 0) return;
   if (t >= 1) {
     canvas.drawPath(path, paint);

@@ -27,6 +27,7 @@ import '../utils/deovr_utils.dart' as deovr;
 import '../models/playlist_view_mode.dart';
 import '../models/series_playlist.dart';
 import '../models/stremio_subtitle.dart';
+import '../models/play_loader_art.dart';
 import '../screens/video_player_screen.dart';
 import '../services/android_native_downloader.dart';
 import '../services/android_tv_player_bridge.dart';
@@ -54,6 +55,11 @@ import '../services/mdblist/mdblist_service.dart';
 import '../models/profiles/profile_policy.dart';
 import 'profiles/profile_policy_guard.dart';
 import 'tracking_source_policy.dart';
+import 'finished_movie_reconciliation_service.dart';
+import 'watchlist_sync_service.dart';
+import 'native_movie_completion_policy.dart';
+import 'profiles/profile_runtime.dart';
+import 'profiles/profile_scope.dart';
 
 /// Trakt scrobble dedup guard for Android TV player (mirrors _traktLastScrobbleAction in VideoPlayerScreen)
 String? _traktLastScrobbleAction;
@@ -324,6 +330,10 @@ class VideoPlayerLaunchArgs {
   // Continue watching metadata (for home screen section)
   final String? contentTitle; // Clean display name (IMDB title)
   final String? posterUrl;
+
+  /// Launch-time Showcase/Marquee identity for the very first player frame.
+  /// Presentation only; it never grants source access or changes tracking.
+  final PlayLoaderArt? initialArt;
   final String? contentYear;
   final String? addonId; // Stremio addon used for playback
 
@@ -408,6 +418,7 @@ class VideoPlayerLaunchArgs {
     this.mdblistProgressPercent,
     this.contentTitle,
     this.posterUrl,
+    this.initialArt,
     this.contentYear,
     this.addonId,
     this.initialSubtitles,
@@ -498,6 +509,7 @@ class VideoPlayerLaunchArgs {
         suppressTrackerAutoSync ?? this.suppressTrackerAutoSync,
     contentTitle: contentTitle,
     posterUrl: posterUrl,
+    initialArt: initialArt,
     contentYear: contentYear,
     addonId: addonId,
     initialSubtitles: initialSubtitles,
@@ -537,6 +549,7 @@ class VideoPlayerLaunchArgs {
       resumePolicy: resumePolicy,
       contentTitle: contentTitle,
       posterUrl: posterUrl,
+      initialArt: initialArt,
       iptvChannels: iptvChannels,
       iptvStartIndex: iptvStartIndex,
       iptvCategories: iptvCategories,
@@ -913,6 +926,26 @@ class VideoPlayerLauncher {
     required VoidCallback handoffNow,
     required VoidCallback handoffWhenCovered,
   }) async {
+    // A completed movie may have left pending watchlist mutations while its
+    // providers were offline. Playback launch is an existing authenticated
+    // entrypoint even for users with "Sync everywhere" OFF: replay the small
+    // profile-scoped journal when they next use the app, without delaying play.
+    if (!isTrailer &&
+        originalArgs.stremioTvChannels == null &&
+        originalArgs.iptvChannels == null) {
+      final retryScope = ProfileRuntime.scope.value;
+      unawaited(
+        () async {
+          if (await WatchlistSyncService.pendingCompletedMovieIds()
+              case final ids
+              when ids.isNotEmpty && retryScope == ProfileRuntime.scope.value) {
+            await WatchlistSyncService.retryPendingCompletedMovies();
+          }
+        }().catchError((Object error) {
+          debugPrint('Deferred watchlist retry: ${error.runtimeType}');
+        }),
+      );
+    }
     // Apply the tracker master switches to catalog content with stable IDs.
     var args = originalArgs;
     final trackingPolicy = (await TrackingSourcePolicy.load()).forContent(
@@ -1006,6 +1039,7 @@ class VideoPlayerLauncher {
           mdblistProgressPercent: args.mdblistProgressPercent,
           contentTitle: args.contentTitle,
           posterUrl: args.posterUrl,
+          initialArt: args.initialArt,
           contentYear: args.contentYear,
           addonId: args.addonId,
           initialSubtitles: args.initialSubtitles,
@@ -1105,6 +1139,7 @@ class VideoPlayerLauncher {
           mdblistProgressPercent: args.mdblistProgressPercent,
           contentTitle: args.contentTitle,
           posterUrl: args.posterUrl,
+          initialArt: args.initialArt,
           contentYear: args.contentYear,
           addonId: args.addonId,
           initialSubtitles: args.initialSubtitles,
@@ -4174,6 +4209,9 @@ class VideoPlayerLauncher {
     _AndroidTvPlaybackPayload payload,
     Map<String, dynamic> progress,
   ) async {
+    // The native activity can outlive the Flutter profile that launched it.
+    // Never attribute its late progress or completion to the next user.
+    if (payload.launchProfileScope != ProfileRuntime.scope.value) return;
     try {
       final positionMs = (progress['positionMs'] ?? 0) as int;
       final durationMs = (progress['durationMs'] ?? 0) as int;
@@ -4189,35 +4227,51 @@ class VideoPlayerLauncher {
         _cacheResolvedStream(resumeId, progressUrl);
       }
 
-      // Native TV uses this one-shot signal for locally tracked catalog
-      // movies. Complete before the generic resume writer runs, otherwise the
-      // next native ping would immediately recreate Continue Watching after we
-      // intentionally clear it.
-      final locallyTrackedMovie =
-          payload.localCompletionTracking &&
+      // Movie completion is independent of the chosen tracker progress source:
+      // even a Trakt/Simkl-backed completed movie must leave local Continue
+      // Watching and all watchlists. Restrict this to a single catalog movie,
+      // never TV streams, episodes or collection items.
+      final catalogMovie =
           payload.trackingContentType == 'movie' &&
           payload.contentType == _PlaybackContentType.single &&
+          payload.items.length == 1 &&
           payload.imdbId != null &&
           payload.imdbId!.isNotEmpty;
-      if (locallyTrackedMovie && !payload.localMovieCompletionRecorded) {
+      if (catalogMovie && !payload.localMovieCompletionRecorded) {
         final movieProgress = durationMs > 0
             ? positionMs * 100 / durationMs
             : 0.0;
         if (!payload.localMovieRewatchStarted &&
             positionMs > 0 &&
             movieProgress < payload.movieCompletionThreshold) {
-          await StorageService.unmarkMovieAsFinished(payload.imdbId!);
+          if (payload.launchProfileScope != null) {
+            await ProfileRuntime.withCapturedScope(
+              payload.launchProfileScope!,
+              () => StorageService.unmarkMovieAsFinished(payload.imdbId!),
+            );
+          } else {
+            await StorageService.unmarkMovieAsFinished(payload.imdbId!);
+          }
+          if (payload.launchProfileScope != ProfileRuntime.scope.value) return;
           payload.localMovieRewatchStarted = true;
         }
-        if (localCompleted ||
-            completed ||
-            progress['localCompletionEligible'] == true) {
-          await Future.wait([
-            StorageService.markMovieAsFinished(payload.imdbId!),
-            if (resumeId != null && resumeId.isNotEmpty)
-              StorageService.removeVideoResume(resumeId),
-          ]);
+        if (isNativeCatalogMovieComplete(
+              positionMs: positionMs,
+              durationMs: durationMs,
+              thresholdPercent: payload.movieCompletionThreshold,
+              completed: completed,
+            ) &&
+            payload.launchProfileScope == ProfileRuntime.scope.value) {
+          await FinishedMovieReconciliationService.recordWatchedMovie(
+            payload.imdbId!,
+          );
+          if (resumeId != null && resumeId.isNotEmpty) {
+            await StorageService.removeVideoResume(resumeId);
+          }
           payload.localMovieCompletionRecorded = true;
+          // Keep Home/Continue Watching in sync while the native player stays
+          // open for the remaining credits. The route is NOT popped here.
+          MainPageBridge.notifyPlaybackDataChanged();
         }
       }
 
@@ -4564,7 +4618,7 @@ class VideoPlayerLauncher {
 
       // Local completion suppresses resume persistence only. Remote trackers
       // must still receive the threshold frame and all later progress/exit data.
-      if (locallyTrackedMovie && payload.localMovieCompletionRecorded) return;
+      if (catalogMovie && payload.localMovieCompletionRecorded) return;
 
       if (payload.contentType == _PlaybackContentType.series) {
         final season = progress['season'] as int?;
@@ -4707,7 +4761,8 @@ class VideoPlayerLauncher {
     // created the playback entry — sending stop would create a duplicate)
     _traktHeartbeatTimer?.cancel();
     _traktHeartbeatTimer = null;
-    if (payload.traktScrobble &&
+    if (payload.launchProfileScope == ProfileRuntime.scope.value &&
+        payload.traktScrobble &&
         payload.imdbId != null &&
         _traktLastScrobbleAction != 'stop' &&
         _traktLastScrobbleAction != 'pause') {
@@ -4736,7 +4791,8 @@ class VideoPlayerLauncher {
     final simklSeriesUnresolved =
         payload.trackingContentType == 'series' &&
         (_simklLastKnownSeason == null || _simklLastKnownEpisode == null);
-    if (payload.simklScrobble &&
+    if (payload.launchProfileScope == ProfileRuntime.scope.value &&
+        payload.simklScrobble &&
         payload.imdbId != null &&
         _simklLastScrobbleAction != 'stop' &&
         _simklLastScrobbleAction != 'pause' &&
@@ -4957,6 +5013,10 @@ class _AndroidTvPlaybackPayload {
   final bool localCompletionTracking;
   final int movieCompletionThreshold;
   final int episodeCompletionThreshold;
+
+  /// The profile that launched this native activity. A session that stays
+  /// alive through a profile switch cannot write into the next profile.
+  final ProfileScope? launchProfileScope;
   // Session-only guards; the native activity emits local threshold crossing
   // once per item, while these prevent later progress pings from rebuilding a
   // completed movie's local resume state.
@@ -5000,6 +5060,7 @@ class _AndroidTvPlaybackPayload {
         StorageService.defaultLocalCompletionThreshold,
     this.episodeCompletionThreshold =
         StorageService.defaultLocalCompletionThreshold,
+    this.launchProfileScope,
     this.initialSubtitles,
   });
 
@@ -5352,8 +5413,10 @@ class _AndroidTvPlaylistResolver {
 
 class _AndroidTvPlaybackPayloadBuilder {
   final VideoPlayerLaunchArgs args;
+  final ProfileScope? launchProfileScope;
 
-  const _AndroidTvPlaybackPayloadBuilder(this.args);
+  _AndroidTvPlaybackPayloadBuilder(this.args)
+    : launchProfileScope = ProfileRuntime.scope.value;
 
   Future<_AndroidTvPlaybackPayloadResult?> build() async {
     final playlistEntries = _normalizePlaylist();
@@ -5376,7 +5439,8 @@ class _AndroidTvPlaybackPayloadBuilder {
         ) &&
         args.stremioTvChannels == null &&
         args.iptvChannels == null;
-    final completionThresholds = localCompletionTracking
+    final completionThresholds =
+        contentType == _PlaybackContentType.single || localCompletionTracking
         ? await Future.wait<int>([
             StorageService.getMovieCompletionThreshold(),
             StorageService.getEpisodeCompletionThreshold(),
@@ -5682,6 +5746,7 @@ class _AndroidTvPlaybackPayloadBuilder {
           ? args.mdblistProgressPercent
           : null,
       localCompletionTracking: localCompletionTracking,
+      launchProfileScope: launchProfileScope,
       movieCompletionThreshold: completionThresholds[0],
       episodeCompletionThreshold: completionThresholds[1],
       initialSubtitles: args.initialSubtitles,

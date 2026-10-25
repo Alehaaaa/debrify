@@ -397,7 +397,7 @@ class StremioSubtitleService(private val context: Context) {
         connection.connectTimeout = REQUEST_TIMEOUT_MS
         connection.readTimeout = REQUEST_TIMEOUT_MS
         connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Debrify/1.0")
+        connection.setRequestProperty("User-Agent", "Nextup/1.0")
         try {
             val responseCode = connection.responseCode
             if (responseCode != 200) throw Exception("Manifest HTTP $responseCode")
@@ -468,7 +468,7 @@ class StremioSubtitleService(private val context: Context) {
         connection.connectTimeout = REQUEST_TIMEOUT_MS
         connection.readTimeout = REQUEST_TIMEOUT_MS
         connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Debrify/1.0")
+        connection.setRequestProperty("User-Agent", "Nextup/1.0")
 
         try {
             val responseCode = connection.responseCode

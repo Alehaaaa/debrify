@@ -71,7 +71,7 @@
                     android:id="@+id/dtv_identity_eyebrow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="DEBRIFY TV"
+                    android:text="NEXTUP TV"
                     android:textColor="#6BFFFFFF"
                     android:textSize="8sp"
                     android:fontFamily="sans-serif-bold"

@@ -285,11 +285,11 @@ class _ProviderStatusCardsState extends State<ProviderStatusCards> {
           },
         );
       } else {
-        _torboxStatus = const ProviderStatus(
+        _torboxStatus = ProviderStatus(
           name: 'Torbox',
           isConfigured: true,
           isConnected: false,
-          error: 'Connection failed',
+          error: TorboxAccountService.lastValidationError ?? 'Connection check unavailable',
         );
       }
     } catch (e) {

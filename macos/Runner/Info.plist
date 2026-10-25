@@ -30,6 +30,12 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<!-- Impeller (Metal) is required for the player's liquid-glass refraction
+	     shader (ImageFilter.shader). Without this key the macOS embedder
+	     defaults to Skia, which cannot run backdrop shaders, forcing the
+	     painted chromatic-rim fallback. See docs/liquid_glass_rendering.md. -->
+	<key>FLTEnableImpeller</key>
+	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Nextup connects to your devices to pair the remote and securely transfer your setup.</string>
 	<key>NSAppTransportSecurity</key>

@@ -485,6 +485,11 @@ class ImdbCreditBrowseService extends MetadataExploreService {
   final String? companyId;
   final String? nameId;
 
+  /// The IMDb cursor endpoint returns a single popularity order and no
+  /// numerical rating per result. Do not present unsupported sort choices.
+  @override
+  bool get supportsBrowseSorting => false;
+
   /// IMDb pages by cursor; the page asks by number. Page N+1's cursor is the
   /// one page N returned.
   final _cursors = <String, String?>{};

@@ -12,10 +12,19 @@ import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 
-/// Shared Android TV + desktop editor for sidebar order, display names, and
-/// visibility. Home and Settings always remain available.
+/// Shared editor for TV/desktop order and names, plus visibility on every
+/// layout (including compact phone navigation). Home and Settings remain.
 class SidebarCustomizationPage extends StatefulWidget {
-  const SidebarCustomizationPage({super.key});
+  const SidebarCustomizationPage({
+    super.key,
+    this.initialFocusDestinationId,
+    this.focusVisibilityToggle = false,
+  });
+
+  /// Used by Settings search to land on an actual destination row. Null keeps
+  /// the normal TV-first-row / touch-no-autofocus behavior.
+  final String? initialFocusDestinationId;
+  final bool focusVisibilityToggle;
 
   static const Key listKey = ValueKey('sidebar-customization-list');
   static const Key resetKey = ValueKey('sidebar-customization-reset');
@@ -27,8 +36,11 @@ class SidebarCustomizationPage extends StatefulWidget {
 
 class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
   bool _loading = true;
+  bool _editWideLayoutOnPhone = false;
   SidebarConfiguration _configuration = SidebarConfiguration.defaults();
   final Map<String, FocusNode> _rowNodes = <String, FocusNode>{};
+  final Map<String, FocusNode> _visibilityNodes = <String, FocusNode>{};
+  final ScrollController _editorScroll = ScrollController();
   final FocusNode _resetNode = FocusNode(
     debugLabel: 'sidebar-customization-reset',
   );
@@ -38,6 +50,9 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
   int _saveRevision = 0;
 
   bool get _isTelevision => PlatformUtil.isTelevision;
+  bool get _compactLayout =>
+      !_isTelevision && MediaQuery.sizeOf(context).width < 600;
+  bool get _canEditOrderAndNames => !_compactLayout || _editWideLayoutOnPhone;
 
   @override
   void initState() {
@@ -50,6 +65,10 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
     for (final node in _rowNodes.values) {
       node.dispose();
     }
+    for (final node in _visibilityNodes.values) {
+      node.dispose();
+    }
+    _editorScroll.dispose();
     _resetNode.dispose();
     super.dispose();
   }
@@ -57,6 +76,11 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
   FocusNode _nodeFor(String id) => _rowNodes.putIfAbsent(
     id,
     () => FocusNode(debugLabel: 'sidebar-customization-$id'),
+  );
+
+  FocusNode _visibilityNodeFor(String id) => _visibilityNodes.putIfAbsent(
+    id,
+    () => FocusNode(debugLabel: 'sidebar-visibility-$id'),
   );
 
   void _focusRow(
@@ -81,9 +105,20 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
     if (!mounted) return;
     setState(() {
       _configuration = configuration;
+      // Searching for "Order & Names" intentionally requests the TV/desktop
+      // editor even when Settings search was opened on a compact phone.
+      if (widget.initialFocusDestinationId != null &&
+          !widget.focusVisibilityToggle) {
+        _editWideLayoutOnPhone = true;
+      }
       _loading = false;
     });
-    if (_isTelevision) {
+    if (widget.initialFocusDestinationId != null &&
+        _configuration.order.contains(widget.initialFocusDestinationId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusSearchTarget();
+      });
+    } else if (_isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || _configuration.order.isEmpty) return;
         _focusRow(
@@ -94,7 +129,48 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
     }
   }
 
+  /// The reorderable desktop list lazily mounts off-screen rows. First move
+  /// the viewport toward the requested item, then focus its mounted control;
+  /// on TV the eagerly built outer scroll can reveal it immediately.
+  void _focusSearchTarget() {
+    final id = widget.initialFocusDestinationId;
+    if (id == null || !mounted) return;
+    final index = _configuration.order.indexOf(id);
+    if (index < 0) return;
+    final node = widget.focusVisibilityToggle
+        ? _visibilityNodeFor(id)
+        : _nodeFor(id);
+    if (node.context?.mounted != true && _editorScroll.hasClients) {
+      final max = _editorScroll.position.maxScrollExtent;
+      _editorScroll.jumpTo(
+        max * index / (_configuration.order.length - 1).clamp(1, 100000),
+      );
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final rowContext = node.context;
+      if (rowContext?.mounted == true) {
+        Scrollable.ensureVisible(
+          rowContext!,
+          duration: Duration.zero,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+        node.requestFocus();
+      } else if (_editorScroll.hasClients) {
+        // A frame after the jump gives sliver builders time to mount the row.
+        final rowNode = _nodeFor(id);
+        if (rowNode.context?.mounted == true) {
+          Scrollable.ensureVisible(rowNode.context!, duration: Duration.zero);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && node.context?.mounted == true) node.requestFocus();
+          });
+        }
+      }
+    });
+  }
+
   void _moveTo(int from, int to) {
+    if (!_canEditOrderAndNames) return;
     final order = List<String>.of(_configuration.order);
     if (from < 0 || from >= order.length || to < 0 || to >= order.length) {
       return;
@@ -139,6 +215,7 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
   }
 
   Future<void> _rename(String id) async {
+    if (!_canEditOrderAndNames) return;
     final destination = sidebarDestinationById[id];
     if (destination == null) return;
     final result = await showDialog<_SidebarLabelEdit>(
@@ -191,6 +268,10 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
       _configuration = _configuration.copyWith(hiddenDestinationIds: hidden);
     });
     _schedulePersist();
+    if (widget.initialFocusDestinationId == id &&
+        widget.focusVisibilityToggle) {
+      _visibilityNodeFor(id).requestFocus();
+    }
   }
 
   Future<void> _reset() async {
@@ -200,8 +281,8 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Reset sidebar?'),
         content: const Text(
-          'This restores the original order and every default name on both '
-          'TV and desktop.',
+          'This restores the order, names and visibility defaults. Order and '
+          'names apply to TV and desktop; visibility also applies to phones.',
         ),
         actions: [
           TextButton(
@@ -265,11 +346,11 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
       return KeyEventResult.handled;
     }
     if (event is! KeyDownEvent) return KeyEventResult.handled;
-    if (isActivateKey(key)) {
+    if (isActivateKey(key) && _canEditOrderAndNames) {
       setState(() => _pickedId = picked ? null : id);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowRight) {
+    if (key == LogicalKeyboardKey.arrowRight && _canEditOrderAndNames) {
       unawaited(_rename(id));
       return KeyEventResult.handled;
     }
@@ -294,6 +375,11 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
       );
     }
     final t = AppThemeScope.of(context).settings;
+    final compact = _compactLayout;
+    final editWide = _canEditOrderAndNames;
+    // Keep real list space on short phones. The permanent editor heading and
+    // hint would otherwise consume more than the available Scaffold body.
+    final shortCompact = compact && MediaQuery.sizeOf(context).height < 640;
     return SettingsPageScaffold(
       title: 'Sidebar Items',
       bottomNavigationBar: SafeArea(
@@ -336,34 +422,57 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  child: SettingsPageHeader(
-                    icon: Icons.low_priority_rounded,
-                    title: 'Make the sidebar yours',
-                    subtitle:
-                        'Order and names are shared by TV and desktop for '
-                        'this profile. Availability still follows connections '
-                        'and profile access.',
+                if (!shortCompact)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: SettingsPageHeader(
+                      icon: Icons.low_priority_rounded,
+                      title: compact && !editWide
+                          ? 'Choose visible navigation items'
+                          : 'Make the sidebar yours',
+                      subtitle:
+                          'Order and names are shared by TV and desktop. '
+                          'Visibility also applies to compact phone navigation. '
+                          'Connections and profile access still decide availability.',
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: SettingsInfoBanner(
-                    icon: _isTelevision
-                        ? Icons.gamepad_rounded
-                        : Icons.drag_indicator_rounded,
-                    text: _isTelevision
-                        ? 'Press OK to pick up a row, move it with ↑/↓, then '
-                              'press OK to drop. Press RIGHT to rename.'
-                        : 'Drag rows into place. Click a row to rename it.',
+                if (!shortCompact)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: SettingsInfoBanner(
+                      icon: _isTelevision
+                          ? Icons.gamepad_rounded
+                          : Icons.drag_indicator_rounded,
+                      text: _isTelevision
+                          ? 'Press OK to pick up a row, move it with ↑/↓, then '
+                                'press OK to drop. Press RIGHT to rename.'
+                          : editWide
+                          ? 'Drag rows into place. Click a row to rename it.'
+                          : 'Use the checkboxes to show or hide items on this phone. '
+                                'Order and names are for TV and desktop.',
+                    ),
                   ),
-                ),
+                if (compact)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: SwitchListTile(
+                      key: const ValueKey('sidebar-edit-wide-on-phone'),
+                      title: const Text('Edit TV and desktop order & names'),
+                      subtitle: const Text(
+                        'These changes will not rearrange the phone navigation',
+                      ),
+                      value: _editWideLayoutOnPhone,
+                      activeThumbColor: t.accent2,
+                      onChanged: (value) =>
+                          setState(() => _editWideLayoutOnPhone = value),
+                    ),
+                  ),
                 Expanded(
                   child: Builder(
                     builder: (context) {
                       final list = ReorderableListView.builder(
                         key: SidebarCustomizationPage.listKey,
+                        scrollController: _isTelevision ? null : _editorScroll,
                         buildDefaultDragHandles: false,
                         shrinkWrap: _isTelevision,
                         physics: _isTelevision
@@ -382,6 +491,8 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                           final mandatory = id == 'home' || id == 'settings';
                           final visible = _configuration.isVisible(id);
                           final picked = _pickedId == id;
+                          final searchMatch =
+                              widget.initialFocusDestinationId == id;
                           final node = _nodeFor(id);
                           return Focus(
                             key: ValueKey('sidebar-item-$id'),
@@ -397,16 +508,21 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                               listenable: node,
                               builder: (context, _) => Semantics(
                                 button: true,
-                                label: '$label, position ${index + 1}, '
+                                label:
+                                    '$label, position ${index + 1}, '
                                     '${visible ? 'visible' : 'hidden'}',
                                 hint: _isTelevision
                                     ? 'Press OK to move or RIGHT to rename'
-                                    : 'Click to rename or drag to reorder',
+                                    : editWide
+                                    ? 'Click to rename or drag to reorder'
+                                    : 'Use the checkbox to control visibility',
                                 child: Material(
                                   color: Colors.transparent,
                                   child: InkWell(
                                     canRequestFocus: false,
-                                    onTap: () => unawaited(_rename(id)),
+                                    onTap: editWide
+                                        ? () => unawaited(_rename(id))
+                                        : null,
                                     borderRadius: BorderRadius.circular(14),
                                     child: AnimatedContainer(
                                       duration: const Duration(
@@ -420,31 +536,40 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                                         vertical: 10,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: picked
+                                        color: picked || searchMatch
                                             ? t.accent.withValues(alpha: 0.16)
                                             : t.panel,
                                         borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                          color: node.hasFocus || picked
+                                          color:
+                                              node.hasFocus ||
+                                                  picked ||
+                                                  searchMatch
                                               ? t.accent2
                                               : t.line,
-                                          width: node.hasFocus || picked
+                                          width:
+                                              node.hasFocus ||
+                                                  picked ||
+                                                  searchMatch
                                               ? 2
                                               : 1,
                                         ),
                                       ),
                                       child: Row(
                                         children: [
-                                          ReorderableDragStartListener(
-                                            index: index,
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(6),
-                                              child: Icon(
-                                                Icons.drag_indicator_rounded,
-                                                color: t.dim,
+                                          if (editWide)
+                                            ReorderableDragStartListener(
+                                              index: index,
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  6,
+                                                ),
+                                                child: Icon(
+                                                  Icons.drag_indicator_rounded,
+                                                  color: t.dim,
+                                                ),
                                               ),
                                             ),
-                                          ),
                                           SizedBox(
                                             width: 30,
                                             child: Text(
@@ -505,6 +630,10 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                                             ),
                                           if (!mandatory)
                                             Checkbox(
+                                              key: ValueKey(
+                                                'sidebar-visibility-$id',
+                                              ),
+                                              focusNode: _visibilityNodeFor(id),
                                               value: visible,
                                               onChanged: (value) {
                                                 if (value != null) {
@@ -512,14 +641,15 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                                                 }
                                               },
                                               semanticLabel:
-                                                  'Show $label in sidebar',
+                                                  'Show $label in navigation',
                                             ),
                                           const SizedBox(width: 8),
-                                          Icon(
-                                            Icons.edit_rounded,
-                                            size: 19,
-                                            color: t.dim,
-                                          ),
+                                          if (editWide)
+                                            Icon(
+                                              Icons.edit_rounded,
+                                              size: 19,
+                                              color: t.dim,
+                                            ),
                                         ],
                                       ),
                                     ),
@@ -531,7 +661,10 @@ class _SidebarCustomizationPageState extends State<SidebarCustomizationPage> {
                         },
                       );
                       if (!_isTelevision) return list;
-                      return SingleChildScrollView(child: list);
+                      return SingleChildScrollView(
+                        controller: _editorScroll,
+                        child: list,
+                      );
                     },
                   ),
                 ),

@@ -214,6 +214,15 @@ class MergedDetailScreen extends StatefulWidget {
   /// episodes it accepts (the Downloads page: only what's on the device).
   final bool Function(int season, int episode)? episodeFilter;
 
+  /// Downloads library: delete an episode's downloaded file from an inline
+  /// control on its row. Returns true when the file was deleted, so the row is
+  /// then dropped from the list. Null everywhere else (no trash control shows).
+  final Future<bool> Function(TraktEpisode episode)? onDeleteEpisodeDownload;
+
+  /// Downloads library: the under-title "Downloaded" button opens the download
+  /// manager through this instead of a second detail page. Null elsewhere.
+  final Future<void> Function()? onManageDownloads;
+
   /// The Download button: the host asks how (and for a series how much) to
   /// download, starting from the episode Play would open. Null keeps the
   /// button's old behavior (the source list / season packs).
@@ -227,6 +236,13 @@ class MergedDetailScreen extends StatefulWidget {
   /// Receives this page's best artwork (logo, backdrop, rating) for the play
   /// loader, which otherwise only has what the catalog row carried.
   final ValueChanged<PlayLoaderArt>? onLoaderArt;
+
+  /// A [seasonsLoader] title that should still honour the user's configured
+  /// detail style (Showcase etc.) instead of being pinned to Classic. The
+  /// downloads library opts in so a downloaded series opens on the exact same
+  /// surface Home does — only Xtream IPTV, with its URL-backed episode
+  /// contract, keeps the Classic pin (the default).
+  final bool directSourceUsesConfiguredStyle;
 
   const MergedDetailScreen({
     super.key,
@@ -275,6 +291,9 @@ class MergedDetailScreen extends StatefulWidget {
     this.onLoaderArt,
     this.onPlayEpisode,
     this.watchProgressLoader,
+    this.onDeleteEpisodeDownload,
+    this.onManageDownloads,
+    this.directSourceUsesConfiguredStyle = false,
   });
 
   @override
@@ -432,11 +451,14 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// build already has it — an async read would paint Classic for a frame and
   /// then re-lay-out the whole page.
   ///
-  /// Direct-source mode (Xtream IPTV series) always gets Classic: that path has
-  /// its own contract (URL-backed episodes, a different progress loader,
-  /// playback on top of this page) and a single caller, so supporting six
-  /// arrangements there would risk a shipped feature for nothing.
-  late final String _style = widget.seasonsLoader != null
+  /// Direct-source mode (Xtream IPTV series) gets Classic by default: that path
+  /// has its own contract (URL-backed episodes, a different progress loader,
+  /// playback on top of this page), so pinning the layout keeps it simple.
+  /// The downloads library opts out via [directSourceUsesConfiguredStyle] so a
+  /// downloaded series opens on the user's configured style — the same Showcase
+  /// surface Home uses — rather than a layout that reads as a separate page.
+  late final String _style =
+      (widget.seasonsLoader != null && !widget.directSourceUsesConfiguredStyle)
       ? 'classic'
       : effectiveDetailPageStyle(StorageService.detailPageStyleCached);
 
@@ -662,7 +684,11 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _loadShowcaseOpeningData();
-      _loadTrailer();
+      // Offline/local-only surfaces (the downloads library) don't stream an
+      // ambient YouTube trailer: it needs the network a downloaded title is
+      // meant to work without, and its player would contend for the single
+      // media_kit video-output slot with the episode the user taps Play on.
+      if (!widget.localOnly) _loadTrailer();
       _loadAccent();
       _loadResumeInfo();
       _loadTraktStatus();
@@ -881,8 +907,16 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
   /// search, where a source can be downloaded. Otherwise: the download page.
   VoidCallback? get _downloadAction {
     final download = widget.onDownload;
+    final manage = widget.onManageDownloads;
+    // Downloads library: the "Downloaded" button opens the download manager,
+    // not a second per-title detail page.
+    if (manage != null && _downloads.state != DownloadedTitleState.none) {
+      return () => unawaited(manage());
+    }
     // A downloaded movie has nothing more to get; a series can always get
-    // more episodes (its sheet links to the ones already here).
+    // more episodes (its sheet links to the ones already here). The
+    // under-title button then reads "Downloaded" and opens this title's
+    // manage-downloads page.
     if (_downloads.state != DownloadedTitleState.none &&
         (_isMovie || download == null)) {
       return () => unawaited(_downloads.open(context));
@@ -1040,6 +1074,20 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
         }
         if (mounted) await play(episode);
       }),
+    );
+  }
+
+  /// Inline per-episode download delete (the downloads library): run the host's
+  /// delete, and on success drop the row from the list right away so the page
+  /// reflects it without a round-trip to a separate manager.
+  Future<void> _deleteEpisodeDownload(TraktEpisode episode) async {
+    final handler = widget.onDeleteEpisodeDownload;
+    if (handler == null) return;
+    final deleted = await handler(episode);
+    if (!mounted || !deleted) return;
+    _episodesPanelKey.currentState?.removeEpisode(
+      episode.season,
+      episode.number,
     );
   }
 
@@ -3768,6 +3816,9 @@ class _MergedDetailScreenState extends State<MergedDetailScreen>
       onPlayEpisode: widget.onPlayEpisode == null ? null : _playDirectEpisode,
       watchProgressLoader: widget.watchProgressLoader,
       episodeFilter: widget.episodeFilter,
+      onDeleteEpisodeDownload: widget.onDeleteEpisodeDownload == null
+          ? null
+          : _deleteEpisodeDownload,
       onNextEpisodeChanged: _onNextEpisodeChanged,
       onSeriesCompletedChanged: (completed) {
         if (mounted && completed != _seriesCompleted) {

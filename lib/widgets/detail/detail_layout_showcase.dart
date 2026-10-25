@@ -1643,6 +1643,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       isNext: view.isNext(ep),
                       fallbackImage: view.showImageUrl,
                       onOptions: () => view.options(ep),
+                      onDeleteDownload: view.deleteDownload == null
+                          ? null
+                          : () => view.deleteDownload!(ep),
                     )
                   : ShowcaseEpisodeCell(
                       episode: ep,
@@ -1654,6 +1657,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       // visible way into the options that hold-OK provides on
                       // TV — the kebab. TV passes null and renders untouched.
                       onOptions: widget.dpad ? null : () => view.options(ep),
+                      onDeleteDownload: view.deleteDownload == null
+                          ? null
+                          : () => view.deleteDownload!(ep),
                     ),
             );
           },

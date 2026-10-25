@@ -10,6 +10,7 @@ import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:debrify/services/launch_animation/launch_animation_library.dart';
 import 'package:debrify/screens/settings/imported_launch_animations.dart';
+import 'package:debrify/screens/settings/launch_animation_page.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:debrify/theme/glass_chrome.dart';
@@ -19,6 +20,79 @@ import 'package:debrify/widgets/launch/imported_launch_player.dart';
 void _emptyCallback() {}
 
 void main() {
+  testWidgets('built-in chooser survives rapid animation changes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await StorageService.getLaunchAnimation();
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            AppThemeScope(theme: AppThemes.legacy, child: child!),
+        home: const LaunchAnimationPage(),
+      ),
+    );
+    await tester.pump();
+
+    for (final label in [
+      'Fold',
+      'Collider',
+      'Event Horizon',
+      'Drop & Bounce',
+    ]) {
+      await tester.tap(find.text(label));
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.takeException(), isNull);
+    }
+    await tester.pump(const Duration(seconds: 3));
+    expect(tester.takeException(), isNull);
+    expect(StorageService.launchAnimationCached, 'drop');
+  });
+
+  testWidgets('mobile chooser previews by swipe and applies explicitly', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await StorageService.setLaunchAnimation('trace');
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) =>
+            AppThemeScope(theme: AppThemes.legacy, child: child!),
+        home: const LaunchAnimationPage(),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('1 / 22'), findsOneWidget);
+    expect(find.text('Current animation'), findsOneWidget);
+
+    await tester.drag(find.byType(PageView), const Offset(-340, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Fold'), findsOneWidget);
+    expect(find.text('2 / 22'), findsOneWidget);
+    expect(find.text('Use this animation'), findsOneWidget);
+    expect(StorageService.launchAnimationCached, 'trace');
+
+    await tester.tap(find.text('Use this animation'));
+    await tester.pumpAndSettle();
+    expect(StorageService.launchAnimationCached, 'fold');
+    expect(find.text('Current animation'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('nested remove dialog keeps glass appearance when reopened', (
     tester,
   ) async {

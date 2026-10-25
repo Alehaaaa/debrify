@@ -272,7 +272,7 @@ jobs:
       run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Verify packaged subtitle decoders
-      run: dev/scripts/verify_macos_subtitle_decoders.sh build/macos/Build/Products/Release/debrify.app/Contents/Frameworks
+      run: dev/scripts/verify_macos_subtitle_decoders.sh build/macos/Build/Products/Release/Nextup.app/Contents/Frameworks
 
     - name: Install create-dmg
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
@@ -282,7 +282,7 @@ jobs:
         cd build/macos/Build/Products/Release
         rm -rf dmg-root
         mkdir -p dmg-root
-        cp -R debrify.app dmg-root/Nextup.app
+        cp -R Nextup.app dmg-root/Nextup.app
 
     - name: Create DMG (release)
       if: github.event_name == 'release'
@@ -309,7 +309,7 @@ jobs:
           --icon-size 120 \
           --icon "Nextup.app" 120 180 \
           --app-drop-link 400 180 \
-          debrify.dmg \
+          nextup.dmg \
           dmg-root
 
     - name: Upload DMG to Release
@@ -325,7 +325,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: nextup-macos
-        path: build/macos/Build/Products/Release/debrify.dmg
+        path: build/macos/Build/Products/Release/nextup.dmg
 
   windows:
     if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'
@@ -762,16 +762,16 @@ jobs:
         cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/debrify.png
-        cp assets/icon/app_icon_rounded.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/nextup.png
+        cp assets/icon/app_icon_rounded.png AppDir/nextup.png
 
         # Create desktop file
-        cat > AppDir/debrify.desktop << EOF
+        cat > AppDir/nextup.desktop << EOF
         [Desktop Entry]
         Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
-        Exec=debrify
-        Icon=debrify
+        Exec=nextup
+        Icon=nextup
         Type=Application
         Categories=Utility;Network;
         X-AppImage-Name=Nextup
@@ -779,7 +779,7 @@ jobs:
         X-AppImage-Arch=x86_64
         EOF
 
-        cp AppDir/debrify.desktop AppDir/usr/share/applications/
+        cp AppDir/nextup.desktop AppDir/usr/share/applications/
 
         # Create AppRun. Checked in at linux/AppRun so both arch jobs share one
         # copy — it carries the libmpv and GPU driver path setup.
@@ -824,7 +824,7 @@ jobs:
         "./${APPIMAGE}" --appimage-extract >/dev/null
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
@@ -844,7 +844,7 @@ jobs:
 
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
@@ -966,16 +966,16 @@ jobs:
         cp -r build/linux/arm64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/debrify.png
-        cp assets/icon/app_icon_rounded.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/nextup.png
+        cp assets/icon/app_icon_rounded.png AppDir/nextup.png
 
         # Create desktop file
-        cat > AppDir/debrify.desktop << EOF
+        cat > AppDir/nextup.desktop << EOF
         [Desktop Entry]
         Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
-        Exec=debrify
-        Icon=debrify
+        Exec=nextup
+        Icon=nextup
         Type=Application
         Categories=Utility;Network;
         X-AppImage-Name=Nextup
@@ -983,7 +983,7 @@ jobs:
         X-AppImage-Arch=aarch64
         EOF
 
-        cp AppDir/debrify.desktop AppDir/usr/share/applications/
+        cp AppDir/nextup.desktop AppDir/usr/share/applications/
 
         # Create AppRun. Checked in at linux/AppRun so both arch jobs share one
         # copy — it carries the libmpv and GPU driver path setup.
@@ -1031,7 +1031,7 @@ jobs:
         "./${APPIMAGE}" --appimage-extract >/dev/null
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"
@@ -1051,7 +1051,7 @@ jobs:
 
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"

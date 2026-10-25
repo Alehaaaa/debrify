@@ -107,6 +107,10 @@ class EpisodesPanelView {
   final bool Function(TraktEpisode) isNext;
   final void Function(TraktEpisode) play;
   final void Function(TraktEpisode) options;
+
+  /// Downloads library: delete this episode's downloaded file inline, from a
+  /// visible control on its card. Null everywhere else.
+  final void Function(TraktEpisode)? deleteDownload;
   final void Function(int delta) stepSeason;
   final void Function(int seasonNumber) selectSeason;
   final void Function(int seasonNumber)? seasonOptions;
@@ -133,6 +137,7 @@ class EpisodesPanelView {
     required this.isNext,
     required this.play,
     required this.options,
+    this.deleteDownload,
     required this.stepSeason,
     required this.selectSeason,
     this.seasonOptions,
@@ -245,6 +250,10 @@ class EpisodesPanel extends StatefulWidget {
   onNextEpisodeChanged;
   final ValueChanged<bool>? onSeriesCompletedChanged;
 
+  /// Downloads library: delete this episode's downloaded file, from an inline
+  /// trash control on the row. Null everywhere else.
+  final void Function(TraktEpisode episode)? onDeleteEpisodeDownload;
+
   /// Alternate arrangement. Null (the default) keeps today's rendering exactly;
   /// when set, the panel renders ONLY what this returns — no chrome of its own —
   /// and suppresses its internal scroll/focus side effects, which target widgets
@@ -276,6 +285,7 @@ class EpisodesPanel extends StatefulWidget {
     this.episodeFilter,
     this.onNextEpisodeChanged,
     this.onSeriesCompletedChanged,
+    this.onDeleteEpisodeDownload,
     this.contentBuilder,
   });
 
@@ -2197,11 +2207,58 @@ sheetAnimationStyle: kMenuSheetAnimation,context: context,
               onTrackerOptions: _isSimklAuthenticated || _isMdblistAuthenticated
                   ? () => _showEpisodeOptions(episode)
                   : null,
+              onDeleteDownload: widget.onDeleteEpisodeDownload == null
+                  ? null
+                  : () => widget.onDeleteEpisodeDownload!(episode),
             ),
           );
         },
       ),
     );
+  }
+
+  /// Drop an episode from the in-memory season list after its download was
+  /// deleted inline, so the row disappears immediately without re-reading the
+  /// device. Seasons left empty are removed. The library list re-reads the
+  /// truth when the detail route pops back onto it.
+  void removeEpisode(int season, int number) {
+    var changed = false;
+    final seasons = <TraktSeason>[];
+    for (final s in _episodeSeasons) {
+      if (s.number != season) {
+        seasons.add(s);
+        continue;
+      }
+      final kept = s.episodes
+          .where((e) => e.number != number)
+          .toList(growable: false);
+      if (kept.length == s.episodes.length) {
+        seasons.add(s);
+        continue;
+      }
+      changed = true;
+      if (kept.isNotEmpty) {
+        seasons.add(
+          TraktSeason(
+            number: s.number,
+            episodeCount: kept.length,
+            episodes: kept,
+          ),
+        );
+      }
+    }
+    if (!mounted || !changed) return;
+    setState(() {
+      _episodeSeasons = seasons;
+      // A data change, not just a repaint: bump the generation so a custom
+      // layout (the Showcase rail) re-keys its episode cells instead of
+      // reusing stale focus nodes for a now-shorter list.
+      _viewGeneration++;
+      if (seasons.every((s) => s.number != _selectedSeasonNumber) &&
+          seasons.isNotEmpty) {
+        _selectedSeasonNumber = seasons.first.number;
+      }
+    });
   }
 
   /// Chromeless header: just a left-aligned season selector (when there is more
@@ -2269,6 +2326,7 @@ sheetAnimationStyle: kMenuSheetAnimation,context: context,
           _nextEpisode!.episode == e.number,
       play: _onEpisodeQuickPlay,
       options: _showEpisodeOptions,
+      deleteDownload: widget.onDeleteEpisodeDownload,
       stepSeason: _stepSeason,
       selectSeason: (n) => _onSeasonChanged(n),
       seasonOptions: _isDirectSource ? null : _showSeasonOptions,
@@ -2639,6 +2697,15 @@ sheetAnimationStyle: kMenuSheetAnimation,
                 ),
               ),
           ],
+          // Downloads library: delete this episode's downloaded file, right
+          // from the episode's own options — no separate manager page.
+          if (widget.onDeleteEpisodeDownload != null)
+            tile(
+              Icons.delete_outline_rounded,
+              'Delete download',
+              () => widget.onDeleteEpisodeDownload!(episode),
+              color: const Color(0xFFFF6B6B),
+            ),
         ];
 
         // Opened by a HELD OK, and it autofocuses Play below — so it

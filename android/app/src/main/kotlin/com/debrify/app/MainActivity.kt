@@ -2796,7 +2796,7 @@ class MainActivity : FlutterActivity() {
         }
         
         val initialTitleRaw = (args["initialTitle"] as? String)?.trim()
-        val initialTitle = if (initialTitleRaw.isNullOrEmpty()) "Debrify TV" else initialTitleRaw
+        val initialTitle = if (initialTitleRaw.isNullOrEmpty()) "Nextup TV" else initialTitleRaw
         android.util.Log.d("DebrifyTV", "MainActivity: title=$initialTitle")
 
         @Suppress("UNCHECKED_CAST")

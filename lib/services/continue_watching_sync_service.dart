@@ -8,6 +8,8 @@ import 'trakt/trakt_service.dart';
 import 'watchlist_sync_service.dart';
 import 'watch_history_sync_service.dart';
 import 'profiles/profile_runtime.dart';
+import 'profiles/profile_scope.dart';
+import '../models/media_identity.dart';
 
 /// Removes a title from every Continue Watching owner when unified tracking is
 /// enabled. Each remote operation is best-effort so one disconnected account
@@ -20,17 +22,29 @@ class ContinueWatchingSyncService {
   static Future<void> removeEverywhere({
     required String imdbId,
     required String contentType,
+    // A genuinely completed movie must leave every paused-session owner even
+    // when opt-in three-way CW matching is disabled. This does NOT delete
+    // watched history or make unrelated accounts start syncing.
+    bool force = false,
+    // Completion already removed local resumes in markMovieAsFinished. Cloud
+    // cleanup can lag, so never clear a newer rewatch's local resume again.
+    bool remoteOnly = false,
   }) async {
-    if (!await enabled()) return;
+    if (!force && !await enabled()) return;
+    // Force is deliberately movie-only: a show with another episode must
+    // retain its actionable Continue Watching entry.
+    if (force && contentType != 'movie') return;
     final type = contentType == 'series' ? 'series' : 'movie';
+    final scope = ProfileRuntime.scope.value;
     await Future.wait([
-      StorageService.removeContinueWatchingItem(imdbId),
-      StorageService.clearPlaybackStateByImdbId(
-        imdbId,
-        preserveFinishedEpisodes: true,
-      ),
-      _removeTrakt(imdbId, type),
-      _removeSimkl(imdbId, type),
+      if (!remoteOnly) StorageService.removeContinueWatchingItem(imdbId),
+      if (!remoteOnly)
+        StorageService.clearPlaybackStateByImdbId(
+          imdbId,
+          preserveFinishedEpisodes: true,
+        ),
+      _removeTrakt(imdbId, type, scope, onlyWhileFinished: force),
+      _removeSimkl(imdbId, type, scope, onlyWhileFinished: force),
     ]);
   }
 
@@ -119,6 +133,10 @@ class ContinueWatchingSyncService {
     }
 
     await checkCurrent();
+    // A paused tracker snapshot can arrive after the playback completion
+    // cleanup. Never reimport a locally finished movie into Continue Watching
+    // on a later unified match (series remain independently resumable).
+    final finishedMovies = await StorageService.getFinishedMovieIds();
     final traktAuthed = await TraktService.instance.isAuthenticated();
     final simklAuthed = await SimklService.instance.isAuthenticated();
     final traktService = TraktContinueWatchingService.instance;
@@ -149,6 +167,12 @@ class ContinueWatchingSyncService {
     final atSimkl = <String, _MatchEntry>{};
 
     void merge(_MatchEntry entry, Map<String, _MatchEntry> owner) {
+      if (entry.contentType == 'movie' &&
+          finishedMovies.contains(
+            MediaIdentity.progressId(entry.imdbId, 'movie'),
+          )) {
+        return;
+      }
       final key = entry.key;
       if (key.isEmpty) return;
       final had = owner[key];
@@ -229,6 +253,23 @@ class ContinueWatchingSyncService {
           : trackerTime;
     }
 
+    // A completed movie can cross the watched threshold DURING the tracker
+    // fetch, after the earlier snapshot was captured. Re-read before any local
+    // import or remote scrobble to prevent a stale cloud snapshot resurrecting
+    // the newly finished session.
+    final justFinished = await StorageService.getFinishedMovieIds();
+    for (final entry in best.entries.toList()) {
+      final target = entry.value;
+      if (target.contentType == 'movie' &&
+          justFinished.contains(
+            MediaIdentity.progressId(target.imdbId, 'movie'),
+          )) {
+        best.remove(entry.key);
+        atLocal.remove(entry.key);
+        atTrakt.remove(entry.key);
+        atSimkl.remove(entry.key);
+      }
+    }
     // Titles missing locally are imported in one write at their watched
     // time, so they slot in chronologically instead of pushing titles out.
     final imports = <Map<String, dynamic>>[
@@ -248,6 +289,10 @@ class ContinueWatchingSyncService {
     var toTrakt = 0, toSimkl = 0;
     for (final MapEntry(key: key, value: target) in best.entries) {
       await checkCurrent();
+      if (target.contentType == 'movie' &&
+          await StorageService.isMovieFinished(target.imdbId)) {
+        continue;
+      }
       final localEntry = atLocal[key];
       if ((localEntry == null || target.isAheadOf(localEntry)) &&
           await _writeLocalPosition(
@@ -428,8 +473,14 @@ class ContinueWatchingSyncService {
     }
   }
 
-  static Future<void> _removeTrakt(String imdbId, String contentType) async {
+  static Future<void> _removeTrakt(
+    String imdbId,
+    String contentType,
+    Object? scope, {
+    bool onlyWhileFinished = false,
+  }) async {
     if (!await TraktService.instance.isAuthenticated()) return;
+    if (scope != ProfileRuntime.scope.value) return;
     try {
       final service = TraktContinueWatchingService.instance;
       final lists = await Future.wait([
@@ -440,12 +491,30 @@ class ContinueWatchingSyncService {
           .cast<TraktContinueWatchingItem?>()
           .firstWhere((item) => item?.id == imdbId, orElse: () => null);
       // Only the paused session goes; watched history stays untouched.
-      if (item != null) await service.removeItem(item);
+      if (item != null &&
+          scope == ProfileRuntime.scope.value &&
+          (!onlyWhileFinished ||
+              await StorageService.isMovieFinished(imdbId))) {
+        if (scope is ProfileScope) {
+          await ProfileRuntime.withCapturedScope(
+            scope,
+            () => service.removeItem(item),
+          );
+        } else {
+          await service.removeItem(item);
+        }
+      }
     } catch (_) {}
   }
 
-  static Future<void> _removeSimkl(String imdbId, String type) async {
+  static Future<void> _removeSimkl(
+    String imdbId,
+    String type,
+    Object? scope, {
+    bool onlyWhileFinished = false,
+  }) async {
     if (!await SimklService.instance.isAuthenticated()) return;
+    if (scope != ProfileRuntime.scope.value) return;
     // Same as Simkl's own "Remove from Continue Watching": a series is parked
     // On Hold (keeps its watched episodes), a movie just loses its session.
     // Never removeFromList — that wipes the title's Simkl history.
@@ -453,10 +522,24 @@ class ContinueWatchingSyncService {
       if (type == 'series') {
         await SimklService.instance.addToList(imdbId, type, 'hold');
       }
-      await SimklService.instance.deletePlaybackForImdb(
-        imdbId,
-        contentType: type,
-      );
+      if (scope != ProfileRuntime.scope.value) return;
+      if (onlyWhileFinished && !await StorageService.isMovieFinished(imdbId)) {
+        return;
+      }
+      if (scope is ProfileScope) {
+        await ProfileRuntime.withCapturedScope(
+          scope,
+          () => SimklService.instance.deletePlaybackForImdb(
+            imdbId,
+            contentType: type,
+          ),
+        );
+      } else {
+        await SimklService.instance.deletePlaybackForImdb(
+          imdbId,
+          contentType: type,
+        );
+      }
     } catch (_) {}
   }
 }

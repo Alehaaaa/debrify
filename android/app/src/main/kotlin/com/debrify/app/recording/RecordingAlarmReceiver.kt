@@ -171,7 +171,7 @@ class RecordingAlarmReceiver : BroadcastReceiver() {
 						.setContentTitle("Scheduled recording couldn't start")
 						// The alarm may fire while another profile owns the UI.
 						// Keep its channel/programme identity inside Debrify.
-						.setContentText("Open Debrify for details")
+						.setContentText("Open Nextup for details")
 						.setSmallIcon(com.debrify.app.R.mipmap.ic_launcher)
 						.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
 						.setPriority(NotificationCompat.PRIORITY_DEFAULT)

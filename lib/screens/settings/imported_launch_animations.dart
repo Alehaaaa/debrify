@@ -163,6 +163,30 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
     await _load();
   }
 
+  Future<void> _showCraftGuide() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Craft a launch animation'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Create an original logo reveal in After Effects, Cavalry, Figma with a Lottie exporter, or another Lottie-capable motion tool.\n\n'
+          '• Use a 16:9 canvas for TVs and landscape screens. Add a 9:16 animation to the same .lottie package for phones.\n'
+          '• Keep it at 5 seconds or less and the final frame fully settled so Nextup can hold it while Home loads.\n'
+          '• Export as a dotLottie (.lottie) file under 10 MiB. Prefer vector shapes, embedded fonts or outlined text, and modest effects for smooth TV playback.\n'
+          '• Keep the canvas transparent if you want to use Nextup’s selectable backdrops.\n'
+          '• Use artwork and motion you own or have permission to distribute. A reference can guide timing and feel, but do not copy its logo or animation frames.\n\n'
+          'Then choose Import .lottie file below. Nextup validates it and lets you preview both orientations before selecting it.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => SettingsSection(
     title: 'Imported animations',
@@ -177,6 +201,12 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
             if (!_busy) unawaited(_import());
           },
         ),
+      SettingsTile(
+        icon: Icons.design_services_outlined,
+        title: 'How to craft an animation',
+        subtitle: 'Canvas, timing, export and licensing tips',
+        onTap: _showCraftGuide,
+      ),
       if (PlatformUtil.isTelevision)
         const Padding(
           padding: EdgeInsets.all(16),
@@ -327,37 +357,36 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('Background'),
+              const Text('Backdrop'),
               Wrap(
                 spacing: 10,
+                runSpacing: 10,
                 children: [
-                  for (final color in const [
-                    0xff080b12,
-                    0xff000000,
-                    0xffffffff,
-                    0xff102438,
+                  for (final option in const [
+                    (0xff080b12, 'Blue Black'),
+                    (0xff000000, 'Black'),
+                    (0xffffffff, 'White'),
+                    (0xff102438, 'Deep Navy'),
+                    (0xff21152f, 'Dark Plum'),
+                    (0xff0d2924, 'Deep Teal'),
+                    (0xff282421, 'Warm Charcoal'),
+                    (0xff35171d, 'Oxblood'),
+                    (0xff17233d, 'Indigo Navy'),
+                    (0xff2d2412, 'Dark Bronze'),
                   ])
                     OutlinedButton(
-                      onPressed: () => setState(() => _background = color),
+                      onPressed: () => setState(() => _background = option.$1),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _background == color
+                            _background == option.$1
                                 ? Icons.check_circle
                                 : Icons.circle,
-                            color: Color(color),
+                            color: Color(option.$1),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            color == 0xffffffff
-                                ? 'White'
-                                : color == 0xff000000
-                                ? 'Black'
-                                : color == 0xff080b12
-                                ? 'Midnight'
-                                : 'Navy',
-                          ),
+                          Text(option.$2),
                         ],
                       ),
                     ),
