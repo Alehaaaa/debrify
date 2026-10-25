@@ -10,14 +10,10 @@ name: iOS Commit Build
 
 on:
   push:
-    branches: ['**', '!sidestore']
+    branches: [nextup, main]
     # Docs-only commits change nothing in the app.
     paths-ignore: ['**.md', 'docs/**', 'LICENSE']
   workflow_dispatch:
-  # Commits pushed with GitHub's Actions token do not create another workflow
-  # run. Catch up the default branch without rebuilding an already-published SHA.
-  schedule:
-    - cron: '*/30 * * * *'
 
 permissions:
   contents: write
@@ -32,27 +28,7 @@ env:
   SOURCE_BRANCH: sidestore
 
 jobs:
-  should-build:
-    runs-on: ubuntu-latest
-    outputs:
-      value: ${{ steps.check.outputs.value }}
-    steps:
-    - name: Check whether this commit needs a build
-      id: check
-      env:
-        SOURCE_URL: https://raw.githubusercontent.com/${{ github.repository }}/sidestore/apps.json
-      run: |
-        if [ "${{ github.event_name }}" != schedule ]; then
-          echo "value=true" >> "$GITHUB_OUTPUT"
-        elif ! curl --fail --silent --show-error "$SOURCE_URL" | grep --fixed-strings --quiet "$GITHUB_SHA"; then
-          echo "value=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "value=false" >> "$GITHUB_OUTPUT"
-        fi
-
   build:
-    needs: should-build
-    if: needs.should-build.outputs.value == 'true'
     runs-on: macos-latest
     outputs:
       ipa_name: ${{ steps.ipa.outputs.name }}
