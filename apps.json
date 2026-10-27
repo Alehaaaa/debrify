@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Nextup for iPhone and iPad, built from every commit.",
   "description": "Nextup is an independent, unofficial fork of Debrify with a Reels feed, Continue Watching synced across Trakt, Simkl and MDBList, offline-first downloads and a reworked glass interface.\n\nEvery commit to nextup in Alehaaaa/debrify is built automatically and published here with a changelog of what changed since the previous build, so updates show up right in SideStore or AltStore. The source keeps the last few builds, so you can always roll back.\n\nNot affiliated with or endorsed by the official Debrify project.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/ab9e3c9cf05799ed5a99e95add45deadeb63eb4c/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/f805485fe241b6dc7fb08a1137a4448954ea0082/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,11 +16,20 @@
       "developerName": "Alehaaaa",
       "subtitle": "Your movies and shows, one swipe away.",
       "localizedDescription": "Nextup brings your cloud accounts, WebDAV servers, Stremio catalogs, IPTV and YouTube into one library, with a player built for movies and TV.\n\n• Reels: swipe through official scenes and trailers, then jump straight into the title\n• Continue Watching that follows you across Trakt, Simkl and MDBList\n• Up Next links: open any episode straight from Up Next for Trakt\n• Downloads that work fully offline, with auto-download filters\n• A glass interface with your own looks and colour palettes\n• Lock-screen controls, touch lock, pinch to fill, double-tap to pause\n• WebDAV sync with snapshots, and backups that restore cleanly\n\nNextup doesn't host or provide any content; you connect the services you already use.\n\nThese are untested builds of every commit, made by GitHub Actions. SideStore or AltStore re-signs them with your own certificate on install. Nextup is an independent fork of Debrify and isn't affiliated with the official project.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/ab9e3c9cf05799ed5a99e95add45deadeb63eb4c/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/f805485fe241b6dc7fb08a1137a4448954ea0082/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": {},
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202610270730",
+          "date": "2026-10-27T07:36:00Z",
+          "localizedDescription": "What's new:\n• Refine mobile navigation and detail controls (f805485f)\n\nBuild 202610270730 from nextup@f805485\nhttps://github.com/Alehaaaa/debrify/compare/ab9e3c9...f805485",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-71-f805485/nextup-ios-71-f805485.ipa",
+          "size": 40274699,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.0.1",
           "buildVersion": "202610252126",
@@ -100,15 +109,6 @@
           "localizedDescription": "What's new:\n• Unify frosted glass chrome across shared app widgets (5d060f04)\n• Polish frosted glass surfaces across Nextup chrome (da04dbc9)\n• chore: clear Dart and Flutter analysis diagnostics (7d60e409)\n• Fix Dart analyzer diagnostics and preserve Flutter compatibility (b61985a1)\n\nBuild 202610101858 from nextup@5d060f0\nhttps://github.com/Alehaaaa/debrify/compare/9bb4987...5d060f0",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-61-5d060f0/nextup-ios-61-5d060f0.ipa",
           "size": 40296359,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610101616",
-          "date": "2026-10-10T16:22:20Z",
-          "localizedDescription": "What's new:\n• Resolve unnecessary underscore lint diagnostics (9bb49874)\n• Rebrand app presentation and release assets as Nextup (56f7a28c)\n\nBuild 202610101616 from nextup@9bb4987\nhttps://github.com/Alehaaaa/debrify/compare/cc1e3c6...9bb4987",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-60-9bb4987/nextup-ios-60-9bb4987.ipa",
-          "size": 40304919,
           "minOSVersion": "14.0"
         }
       ],
