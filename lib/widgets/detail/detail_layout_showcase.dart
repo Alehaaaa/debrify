@@ -1086,20 +1086,14 @@ class _DetailShowcaseState extends State<DetailShowcase> {
       ),
     ];
     if (view != null && view.seasons.length > 1) {
-      // Compact renders ONE control — the season pill — so its band carries
-      // exactly one node. Listing a node per season here while the rendering
-      // mounts a single pill would let a desktop arrow key focus a detached
-      // node (dpad:false still receives arrow keys from real keyboards) and
-      // strand the cursor. Topology always matches rendering.
-      final compact = (_m?.compact ?? false);
+      // Every form factor now renders the full horizontal pill row (compact
+      // included — the old single-pill dropdown is gone), so the band carries
+      // one node per season on all of them. Topology always matches rendering:
+      // a node per pill, never a detached one an arrow key could strand on.
       bands.add(
         _Band(
           'seasons',
-          _grow(
-            _seasonNodes,
-            compact ? 1 : view.seasons.length,
-            'showcase-season',
-          ),
+          _grow(_seasonNodes, view.seasons.length, 'showcase-season'),
           _seasonsKey,
           110,
         ),

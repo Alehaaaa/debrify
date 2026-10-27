@@ -17686,8 +17686,9 @@ class _SearchScreenState extends State<SearchScreen>
   Widget _buildHomeJourneyStrip({bool compact = false}) {
     final app = AppThemeScope.of(context);
     final actions = <({String label, IconData icon, int tab})>[
-      if (ProfilePolicyGuard.allowsSync(ProfileFeature.trackersAndDiscovery))
-        (label: 'Explore catalogs', icon: Icons.explore_rounded, tab: MainTab.discover),
+      // "Explore catalogs" is hidden for now: Explore can be hidden from the
+      // nav, and this button then switched to a tab that isn't there (dead
+      // tap). Re-add once it opens Explore reliably regardless of nav state.
       if (!compact && ProfilePolicyGuard.allowsSync(ProfileFeature.downloads))
         (label: 'On device', icon: Icons.download_done_rounded, tab: MainTab.downloads),
       if (!compact && ProfilePolicyGuard.allowsSync(ProfileFeature.cloudFiles))

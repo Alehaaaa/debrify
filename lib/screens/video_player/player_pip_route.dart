@@ -12,7 +12,7 @@ FrozenLegacyPageRoute<T> videoPlayerRoute<T>({
   required WidgetBuilder builder,
 }) => Platform.isIOS && !PlatformUtil.isTvOS
     ? IosPipPlayerRoute<T>(builder: builder)
-    : FrozenLegacyPageRoute<T>(builder: builder);
+    : FrozenLegacyPageRoute<T>(builder: builder, swipeToPopEnabled: false);
 
 /// Moves the existing player element into an offstage overlay while browsing.
 /// Removing the route and reparenting happen in the same frame: the player,
@@ -21,7 +21,8 @@ class IosPipPlayerRoute<T> extends FrozenLegacyPageRoute<T> {
   factory IosPipPlayerRoute({required WidgetBuilder builder}) =>
       IosPipPlayerRoute._(PlayerPipSession(builder));
 
-  IosPipPlayerRoute._(this.session) : super(builder: session.buildPlayer) {
+  IosPipPlayerRoute._(this.session)
+    : super(builder: session.buildPlayer, swipeToPopEnabled: false) {
     session._route = this;
   }
 

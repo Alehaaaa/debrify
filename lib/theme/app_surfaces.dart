@@ -164,12 +164,22 @@ class FrozenLegacyPageRoute<T> extends MaterialPageRoute<T> {
     required WidgetBuilder builder,
     super.settings,
     super.fullscreenDialog,
+    this.swipeToPopEnabled = true,
   }) : super(
          builder: (context) => LegacyThemeBoundary(
            withMessenger: true,
            child: Builder(builder: builder),
          ),
        );
+
+  /// When false, the iOS left-edge back-swipe gesture is disabled for this
+  /// route (the HUD back button and Android system back still pop it). The
+  /// player passes false: a stray edge swipe must never drop playback, locked
+  /// or not.
+  final bool swipeToPopEnabled;
+
+  @override
+  bool get popGestureEnabled => swipeToPopEnabled && super.popGestureEnabled;
 }
 
 /// Push an excluded screen. The player above all: every external

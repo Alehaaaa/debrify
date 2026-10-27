@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -172,11 +173,23 @@ class _MobileFloatingNavState extends State<MobileFloatingNav>
     // Read ONCE: the FAB's AnimatedBuilder rides a repeating pulse controller,
     // so anything read inside it would be a per-frame scope walk.
     final app = AppThemeScope.of(context);
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-    final topPadding = MediaQuery.of(context).padding.top;
-    final screenHeight = MediaQuery.of(context).size.height;
-    // Calculate max menu height: screen - top safe area - bottom button area - some padding
-    final maxMenuHeight = screenHeight - topPadding - 100 - bottomPadding - 40;
+    final mq = MediaQuery.of(context);
+    final bottomPadding = mq.padding.bottom;
+    final topPadding = mq.padding.top;
+    final screenHeight = mq.size.height;
+    // The keyboard (or any bottom inset) pushes the whole nav up with the
+    // resizing body, so the panel's ceiling has to drop by the same amount —
+    // otherwise its topmost items ride above the viewport, which is exactly
+    // what surfaced on iOS with the keyboard open. Clamp to a usable minimum so
+    // a tall keyboard on a short phone still leaves a scrollable sliver rather
+    // than collapsing the panel.
+    final keyboardInset = mq.viewInsets.bottom;
+    // Max menu height: screen - top safe area - bottom button area - padding -
+    // whatever the keyboard currently occupies.
+    final maxMenuHeight = math.max(
+      160.0,
+      screenHeight - topPadding - 100 - bottomPadding - 40 - keyboardInset,
+    );
 
     return Stack(
       alignment: Alignment.bottomRight,
