@@ -331,7 +331,12 @@ Future<void> _mainUnchecked(List<String> launchArguments) async {
       ),
     },
   );
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+  // Every desktop drives fullscreen through windowManager (the player's
+  // fullscreen control is shown on macOS too), so the native main window must
+  // be bound on all three. Skipping macOS left _mainWindow nil, and the first
+  // isFullScreen() call during playback force-unwrapped it — a Swift
+  // fatalError no Dart try/catch can intercept.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
   }
 
