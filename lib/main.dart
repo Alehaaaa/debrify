@@ -341,7 +341,10 @@ Future<void> _mainUnchecked(List<String> launchArguments) async {
       ),
     },
   );
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+  // Every desktop drives fullscreen through windowManager. Skipping macOS
+  // leaves the plugin's native main window unbound, so the first fullscreen
+  // query during playback can crash before Dart can handle the failure.
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
     await windowManager.ensureInitialized();
   }
 
