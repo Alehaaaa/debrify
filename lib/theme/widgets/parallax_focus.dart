@@ -164,6 +164,13 @@ class ParallaxFocus extends StatelessWidget {
   /// highlight cannot wash through text.
   final Widget? fixedScaleForeground;
 
+  /// A card-sized layer that TRAVELS with the lift — the same scale growth,
+  /// rise and lean shift, applied as a pure translation — but is never
+  /// scaled or tilted itself. Its bottom-left corner stays pinned to the
+  /// card's, so text drawn here sits on the lifted art without the softening
+  /// a 3D transform gives small glyphs.
+  final Widget? attachedForeground;
+
   /// Clips the glare. Should match the child's own corner radius, or the
   /// highlight paints over the corners the artwork rounded off.
   final BorderRadius? radius;
@@ -175,6 +182,7 @@ class ParallaxFocus extends StatelessWidget {
     this.shape = ParallaxShape.poster,
     this.radius,
     this.fixedScaleForeground,
+    this.attachedForeground,
     this.forceEnabled = false,
   });
 
@@ -188,10 +196,13 @@ class ParallaxFocus extends StatelessWidget {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     if (!forceEnabled && app.focus.expression != FocusExpression.parallax) {
-      return _withFixedScaleForeground(
-        child: child,
-        foreground: fixedScaleForeground,
-        scale: 1,
+      return _withAttached(
+        _withFixedScaleForeground(
+          child: child,
+          foreground: fixedScaleForeground,
+          scale: 1,
+        ),
+        attachedForeground,
       );
     }
     if (shape == ParallaxShape.sourceRow && PlatformUtil.isAndroidTvCached) {
@@ -207,10 +218,13 @@ class ParallaxFocus extends StatelessWidget {
             width: app.focus.widthFor(true),
           ),
         ),
-        child: _withFixedScaleForeground(
-          child: child,
-          foreground: fixedScaleForeground,
-          scale: 1,
+        child: _withAttached(
+          _withFixedScaleForeground(
+            child: child,
+            foreground: fixedScaleForeground,
+            scale: 1,
+          ),
+          attachedForeground,
         ),
       );
     }
@@ -222,6 +236,7 @@ class ParallaxFocus extends StatelessWidget {
       curve: app.motion.emphasized,
       duration: app.motion.base,
       fixedScaleForeground: fixedScaleForeground,
+      attachedForeground: attachedForeground,
       // Android TV degrades to the lite body unless a [ParallaxRichScope]
       // above opts this subtree into the full effect (the detail page does).
       richTv: ParallaxRichScope.of(context),
@@ -229,6 +244,16 @@ class ParallaxFocus extends StatelessWidget {
     );
   }
 }
+
+Widget _withAttached(Widget child, Widget? attached) => attached == null
+    ? child
+    : Stack(
+        fit: StackFit.passthrough,
+        children: [
+          child,
+          Positioned.fill(child: attached),
+        ],
+      );
 
 Widget _withFixedScaleForeground({
   required Widget child,
@@ -263,6 +288,7 @@ class _ParallaxBody extends StatefulWidget {
   final Curve curve;
   final Duration duration;
   final Widget? fixedScaleForeground;
+  final Widget? attachedForeground;
 
   /// Opts this body into the full effect on Android TV (spring + tilt + glare)
   /// rather than the lite body. Set by a [ParallaxRichScope] ancestor.
@@ -277,6 +303,7 @@ class _ParallaxBody extends StatefulWidget {
     required this.curve,
     required this.duration,
     required this.fixedScaleForeground,
+    required this.attachedForeground,
     required this.richTv,
   });
 
@@ -501,7 +528,7 @@ class _ParallaxBodyState extends State<_ParallaxBody>
           final rx = rich ? -_lean.dy * _tilt * swing : 0.0;
           final ry = rich ? _lean.dx * _tilt * swing : 0.0;
 
-          return Transform(
+          final lifted = Transform(
             alignment: Alignment.center,
             transform: Matrix4.identity()
               ..setEntry(3, 2, rich ? -1 / _perspective : 0)
@@ -574,6 +601,30 @@ class _ParallaxBodyState extends State<_ParallaxBody>
                 ),
               ),
             ),
+          );
+          final attached = widget.attachedForeground;
+          if (attached == null) return lifted;
+          // Where the card's bottom-left corner went: scaling about the centre
+          // pushes it out by half the growth on each axis, then the same
+          // translation the card gets (lean shift, rise). Tilt is not applied.
+          return Stack(
+            fit: StackFit.passthrough,
+            clipBehavior: Clip.none,
+            children: [
+              lifted,
+              Positioned.fill(
+                child: FractionalTranslation(
+                  translation: Offset(-(scale - 1) / 2, (scale - 1) / 2),
+                  child: Transform.translate(
+                    offset: Offset(
+                      -ry * _shiftPerDeg,
+                      rx * _shiftPerDeg - _risePerScale * (scale - 1),
+                    ),
+                    child: attached,
+                  ),
+                ),
+              ),
+            ],
           );
         },
         child: RepaintBoundary(child: widget.child),

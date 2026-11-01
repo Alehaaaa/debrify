@@ -4,6 +4,7 @@ import 'package:debrify/features/detail_showcase/presentation/showcase_style.dar
 import 'package:debrify/services/debrify_image_cache.dart'
     show DebrifyImageCache;
 import 'package:debrify/widgets/detail/detail_model.dart';
+import 'package:debrify/widgets/rotten_tomatoes_score.dart';
 import 'package:debrify/widgets/tracker_brand_marks.dart';
 import 'package:flutter/material.dart';
 
@@ -179,6 +180,21 @@ class _MetaLine extends StatelessWidget {
           const SizedBox(width: 7),
           _RatingBox(value: m.rating!),
         ],
+        OmdbRatingsBuilder(
+          imdbId: m.item.effectiveImdbId,
+          builder: (context, ratings) {
+            final readouts = omdbDetailReadouts(
+              ratings,
+              style: st(8.5 * scale, w: FontWeight.w700, a: 0.92),
+              glyphColor: sInk,
+              glyphSize: 11 * scale,
+              gap: 7,
+              hasImdb: m.rating != null,
+              imdbBadge: (value) => _RatingBox(value: value),
+            );
+            return Row(mainAxisSize: MainAxisSize.min, children: readouts);
+          },
+        ),
         if (m.hasTrakt) ...[
           const SizedBox(width: 8),
           _TrackerMark(

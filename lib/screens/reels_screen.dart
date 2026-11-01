@@ -1,11 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/main_page_bridge.dart';
 import '../services/reels_feed.dart';
+import '../services/storage/watchlist_storage.dart';
 import '../services/youtube_service.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../widgets/hero_trailer_backdrop.dart';
+import '../widgets/rotten_tomatoes_score.dart';
 
 /// Full-screen vertical feed of official scene clips.
 ///
@@ -28,6 +33,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
   final Map<String, YoutubeResolvedStreams?> _streams =
       <String, YoutubeResolvedStreams?>{};
   final Set<String> _resolving = <String>{};
+  final Map<String, bool> _saved = <String, bool>{};
 
   bool _loading = false;
   String? _error;
@@ -58,6 +64,7 @@ class _ReelsScreenState extends State<ReelsScreen> {
       if (_items.isNotEmpty) {
         unawaited(_resolveAt(_currentIndex));
         unawaited(_resolveAt(_currentIndex + 1));
+        unawaited(_loadSaved(_currentIndex));
       }
     } catch (error) {
       if (mounted) setState(() => _error = error.toString());
@@ -88,7 +95,43 @@ class _ReelsScreenState extends State<ReelsScreen> {
     setState(() => _currentIndex = index);
     unawaited(_resolveAt(index));
     unawaited(_resolveAt(index + 1));
+    unawaited(_loadSaved(index));
     if (index >= _items.length - 3) unawaited(_loadMore());
+  }
+
+  String _savedKey(ReelTitle reel) => '${reel.item.type}:${reel.item.id}';
+
+  Future<void> _loadSaved(int index) async {
+    if (index < 0 || index >= _items.length) return;
+    final reel = _items[index];
+    final key = _savedKey(reel);
+    if (_saved.containsKey(key)) return;
+    final saved = await WatchlistStorage.isInMyWatchlist(reel.item);
+    if (mounted) setState(() => _saved[key] = saved);
+  }
+
+  Future<void> _toggleSaved(ReelTitle reel) async {
+    final key = _savedKey(reel);
+    final next = !(_saved[key] ?? false);
+    setState(() => _saved[key] = next);
+    HapticFeedback.mediumImpact();
+    try {
+      await WatchlistStorage.setMyWatchlistItem(reel.item, next);
+    } catch (_) {
+      if (mounted) setState(() => _saved[key] = !next);
+    }
+  }
+
+  Future<void> _share(ReelTitle reel) async {
+    final imdb = reel.item.effectiveImdbId;
+    final url = imdb == null
+        ? 'https://www.imdb.com/find/?q=${Uri.encodeQueryComponent(reel.item.name)}'
+        : 'https://www.imdb.com/title/$imdb/';
+    await Clipboard.setData(ClipboardData(text: '${reel.item.name}\n$url'));
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('IMDb link copied')));
   }
 
   void _openDetails(ReelTitle reel) {
@@ -141,6 +184,9 @@ class _ReelsScreenState extends State<ReelsScreen> {
             active: index == _currentIndex,
             resolving: _resolving.contains(reel.clipKey),
             onDetails: () => _openDetails(reel),
+            saved: _saved[_savedKey(reel)] ?? false,
+            onSaved: () => _toggleSaved(reel),
+            onShare: () => _share(reel),
           );
         },
       ),
@@ -148,13 +194,16 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 }
 
-class _ReelPage extends StatelessWidget {
+class _ReelPage extends StatefulWidget {
   const _ReelPage({
     required this.reel,
     required this.streams,
     required this.active,
     required this.resolving,
     required this.onDetails,
+    required this.saved,
+    required this.onSaved,
+    required this.onShare,
   });
 
   final ReelTitle reel;
@@ -162,23 +211,36 @@ class _ReelPage extends StatelessWidget {
   final bool active;
   final bool resolving;
   final VoidCallback onDetails;
+  final bool saved;
+  final VoidCallback onSaved;
+  final VoidCallback onShare;
+
+  @override
+  State<_ReelPage> createState() => _ReelPageState();
+}
+
+class _ReelPageState extends State<_ReelPage> {
+  bool _muted = false;
 
   @override
   Widget build(BuildContext context) {
+    final reel = widget.reel;
     final item = reel.item;
+    final theme = AppThemeScope.of(context);
+    final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
     return Stack(
       fit: StackFit.expand,
       children: <Widget>[
         HeroTrailerBackdrop(
           imageUrl: item.background ?? item.poster,
-          videoUrl: active ? streams?.playUrl : null,
-          audioUrl: active ? streams?.audioUrl : null,
-          enabled: active && streams?.hasPlayable == true,
+          videoUrl: widget.active ? widget.streams?.playUrl : null,
+          audioUrl: widget.active ? widget.streams?.audioUrl : null,
+          enabled: widget.active && widget.streams?.hasPlayable == true,
           sharpStill: true,
           imageBlurSigma: 0,
           videoBlurSigma: 0,
           startDelay: Duration.zero,
-          ambientVolume: 100,
+          ambientVolume: _muted ? 0 : 100,
           repeat: true,
         ),
         const DecoratedBox(
@@ -187,81 +249,243 @@ class _ReelPage extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: <Color>[
-                Color(0x22000000),
-                Color(0x11000000),
-                Color(0xDD000000),
+                Color(0x12000000),
+                Color(0x33000000),
+                Color(0xF0000000),
               ],
               stops: <double>[0, 0.5, 1],
             ),
           ),
         ),
         SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 18, 24, 30),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Text(
-                  'Reels',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
+          child: Stack(
+            children: <Widget>[
+              Positioned(
+                left: 20,
+                top: 16,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 7,
                   ),
-                ),
-                const Spacer(),
-                if (resolving)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: SizedBox.square(
-                      dimension: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
+                  decoration: GlassChrome.decoration(
+                    theme,
+                    radius: BorderRadius.circular(999),
                   ),
-                Text(
-                  item.name,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    height: 1.05,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  <String>[
-                    if (item.year?.isNotEmpty == true) item.year!,
-                    if (item.imdbRating != null)
-                      'IMDb ${item.imdbRating!.toStringAsFixed(1)}',
-                    reel.clipName,
-                  ].join('  •  '),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
-                ),
-                if (item.description?.isNotEmpty == true) ...<Widget>[
-                  const SizedBox(height: 10),
-                  Text(
-                    item.description!,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                  child: const Text(
+                    'REELS',
+                    style: TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
-                      height: 1.35,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 2.2,
                     ),
                   ),
-                ],
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: item.imdbId == null ? null : onDetails,
-                  icon: const Icon(Icons.info_outline_rounded),
-                  label: const Text('More info'),
                 ),
-              ],
+              ),
+              Positioned(
+                left: 20,
+                right: 92,
+                bottom: 28,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    if (widget.resolving)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 12),
+                        child: SizedBox.square(
+                          dimension: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    GestureDetector(
+                      onTap: widget.onDetails,
+                      child: item.logo?.isNotEmpty == true
+                          ? Image.network(
+                              item.logo!,
+                              height: 66,
+                              width: 280,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.bottomLeft,
+                              errorBuilder: (_, _, _) =>
+                                  _ReelTitle(name: item.name),
+                            )
+                          : _ReelTitle(name: item.name),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      <String>[
+                        if (genres.isNotEmpty) genres,
+                        reel.clipName,
+                      ].join('  •  '),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    OmdbRatingsBuilder(
+                      imdbId: item.effectiveImdbId,
+                      builder: (context, ratings) => Wrap(
+                        spacing: 8,
+                        children: omdbDetailReadouts(
+                          ratings,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          glyphColor: Colors.white,
+                          glyphSize: 14,
+                          gap: 8,
+                          hasImdb: item.imdbRating != null,
+                          imdbBadge: (value) =>
+                              Text('IMDb ${value.toStringAsFixed(1)}'),
+                        ),
+                      ),
+                    ),
+                    if (item.description?.trim().isNotEmpty ==
+                        true) ...<Widget>[
+                      const SizedBox(height: 10),
+                      _ReelSynopsis(text: item.description!.trim()),
+                    ],
+                  ],
+                ),
+              ),
+              Positioned(
+                right: 14,
+                bottom: 28,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ReelAction(
+                      icon: _muted
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
+                      label: _muted ? 'Unmute' : 'Sound',
+                      onTap: () => setState(() => _muted = !_muted),
+                    ),
+                    const SizedBox(height: 16),
+                    _ReelAction(
+                      icon: widget.saved
+                          ? Icons.check_rounded
+                          : Icons.add_rounded,
+                      label: widget.saved ? 'Saved' : 'Save',
+                      selected: widget.saved,
+                      onTap: widget.onSaved,
+                    ),
+                    const SizedBox(height: 16),
+                    _ReelAction(
+                      icon: Icons.ios_share_rounded,
+                      label: 'Share',
+                      onTap: widget.onShare,
+                    ),
+                    const SizedBox(height: 16),
+                    _ReelAction(
+                      icon: Icons.info_outline_rounded,
+                      label: 'Details',
+                      onTap: widget.onDetails,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReelTitle extends StatelessWidget {
+  const _ReelTitle({required this.name});
+  final String name;
+  @override
+  Widget build(BuildContext context) => Text(
+    name,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: const TextStyle(
+      color: Colors.white,
+      fontSize: 31,
+      height: 1.02,
+      letterSpacing: -0.8,
+      fontWeight: FontWeight.w900,
+      shadows: [Shadow(color: Colors.black87, blurRadius: 18)],
+    ),
+  );
+}
+
+class _ReelSynopsis extends StatefulWidget {
+  const _ReelSynopsis({required this.text});
+  final String text;
+  @override
+  State<_ReelSynopsis> createState() => _ReelSynopsisState();
+}
+
+class _ReelSynopsisState extends State<_ReelSynopsis> {
+  bool open = false;
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () => setState(() => open = !open),
+    child: Text(
+      widget.text,
+      maxLines: open ? 8 : 3,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 14.5,
+        height: 1.38,
+        shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
+      ),
+    ),
+  );
+}
+
+class _ReelAction extends StatelessWidget {
+  const _ReelAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool selected;
+  @override
+  Widget build(BuildContext context) {
+    final theme = AppThemeScope.of(context);
+    return Column(
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            customBorder: const CircleBorder(),
+            child: Ink(
+              width: 50,
+              height: 50,
+              decoration: GlassChrome.decoration(
+                theme,
+                radius: BorderRadius.circular(25),
+                active: selected,
+                raised: true,
+              ),
+              child: Icon(icon, color: Colors.white, size: 25),
             ),
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            shadows: [Shadow(color: Colors.black, blurRadius: 6)],
           ),
         ),
       ],

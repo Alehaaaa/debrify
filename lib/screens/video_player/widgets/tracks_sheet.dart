@@ -10,6 +10,7 @@ import '../constants/color_constants.dart';
 import '../utils/language_mapping.dart';
 import '../services/subtitle_settings_service.dart';
 import '../services/subtitle_track_utils.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TracksSheetSubtitleSearchResult {
   final List<StremioSubtitle> subtitles;
@@ -50,7 +51,8 @@ class TracksSheet {
     mk.Player player, {
     required Future<void> Function(String audioId, String subtitleId)
     onTrackChanged,
-    Future<void> Function(String audioId, String subtitleId)? onAudioTrackChanged,
+    Future<void> Function(String audioId, String subtitleId)?
+    onAudioTrackChanged,
     void Function(SubtitleSettingsData settings)? onSubtitleStyleChanged,
     VoidCallback? onSyncOverlayRequested,
     String? contentImdbId,
@@ -165,6 +167,7 @@ class TracksSheet {
 
     subtitleSelectionCorrection?.addListener(reconcileSubtitleSelection);
     await showModalBottomSheet(
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

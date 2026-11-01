@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../constants/color_constants.dart';
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// What a sleep timer is set to.
 enum SleepTimerMode {
@@ -46,6 +47,7 @@ class SleepTimerSheet {
     bool allowEndOfItem = true,
   }) {
     return showModalBottomSheet<SleepTimerSelection>(
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: VideoPlayerColors.darkBackground,
       // The player runs landscape, where an unconstrained sheet is capped near
@@ -64,61 +66,63 @@ class SleepTimerSheet {
               maxHeight: MediaQuery.sizeOf(context).height * 0.85,
             ),
             child: ListView(
-            shrinkWrap: true,
-            padding: EdgeInsets.zero,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
-                child: Text(
-                  'Sleep timer',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+              shrinkWrap: true,
+              padding: EdgeInsets.zero,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+                  child: Text(
+                    'Sleep timer',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                child: Text(
-                  'Playback pauses and the screen is released so the device '
-                  'can sleep. Your position is saved.',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.55),
-                    fontSize: 13,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                  child: Text(
+                    'Playback pauses and the screen is released so the device '
+                    'can sleep. Your position is saved.',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.55),
+                      fontSize: 13,
+                    ),
                   ),
                 ),
-              ),
-              _tile(
-                context,
-                label: 'Off',
-                selected: current == SleepTimerMode.off,
-                value: SleepTimerSelection.off,
-              ),
-              for (final minutes in minuteOptions)
                 _tile(
                   context,
-                  label: '$minutes minutes',
-                  selected: current == SleepTimerMode.countdown &&
-                      armedMinutes == minutes,
-                  trailingText: current == SleepTimerMode.countdown &&
-                          armedMinutes == minutes
-                      ? '$minutesLeft min left'
-                      : null,
-                  value: SleepTimerSelection(
-                    SleepTimerMode.countdown,
-                    minutes,
+                  label: 'Off',
+                  selected: current == SleepTimerMode.off,
+                  value: SleepTimerSelection.off,
+                ),
+                for (final minutes in minuteOptions)
+                  _tile(
+                    context,
+                    label: '$minutes minutes',
+                    selected:
+                        current == SleepTimerMode.countdown &&
+                        armedMinutes == minutes,
+                    trailingText:
+                        current == SleepTimerMode.countdown &&
+                            armedMinutes == minutes
+                        ? '$minutesLeft min left'
+                        : null,
+                    value: SleepTimerSelection(
+                      SleepTimerMode.countdown,
+                      minutes,
+                    ),
                   ),
-                ),
-              if (allowEndOfItem)
-                _tile(
-                  context,
-                  label: 'End of episode',
-                  selected: current == SleepTimerMode.endOfItem,
-                  value: const SleepTimerSelection(SleepTimerMode.endOfItem),
-                ),
-              const SizedBox(height: 8),
-            ],
+                if (allowEndOfItem)
+                  _tile(
+                    context,
+                    label: 'End of episode',
+                    selected: current == SleepTimerMode.endOfItem,
+                    value: const SleepTimerSelection(SleepTimerMode.endOfItem),
+                  ),
+                const SizedBox(height: 8),
+              ],
             ),
           ),
         );

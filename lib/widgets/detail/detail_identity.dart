@@ -6,6 +6,7 @@ import '../../services/debrify_image_cache.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../tracker_brand_marks.dart';
+import '../rotten_tomatoes_score.dart';
 import '../season_action_region.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
@@ -563,43 +564,64 @@ class DetailMetaBar extends StatelessWidget {
         ),
       );
     }
-    final r = model.rating;
-    if (r != null) {
-      add(
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              r.toStringAsFixed(1),
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: FontWeight.w700,
-                color: t.tx,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-              decoration: BoxDecoration(
-                // The IMDb badge is a LOGO, not a colour choice — it keeps its
-                // own yellow in every theme, exactly as the Trakt and Simkl
-                // marks do.
-                color: const Color(0xFFF5C518),
-                borderRadius: t.brSm,
-              ),
-              child: const Text(
-                'IMDb',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ],
+    Widget imdbRow(double value) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value.toStringAsFixed(1),
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.w700,
+            color: t.tx,
+          ),
         ),
-      );
-    }
+        const SizedBox(width: 5),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          decoration: BoxDecoration(
+            // The IMDb badge is a LOGO, not a colour choice — it keeps its
+            // own yellow in every theme, exactly as the Trakt and Simkl
+            // marks do.
+            color: const Color(0xFFF5C518),
+            borderRadius: t.brSm,
+          ),
+          child: const Text(
+            'IMDb',
+            style: TextStyle(
+              color: Colors.black,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+      ],
+    );
+    final r = model.rating;
+    if (r != null) add(imdbRow(r));
+    final before = parts.length;
+    parts.add(
+      OmdbRatingsBuilder(
+        imdbId: model.item.effectiveImdbId,
+        builder: (context, omdb) {
+          final readouts = omdbDetailReadouts(
+            omdb,
+            style: TextStyle(
+              fontSize: fontSize,
+              fontWeight: FontWeight.w700,
+              color: t.tx,
+            ),
+            glyphColor: t.tx,
+            glyphSize: fontSize + 2,
+            gap: 14,
+            hasImdb: r != null,
+            imdbBadge: imdbRow,
+          );
+          if (readouts.isEmpty) return const SizedBox.shrink();
+          if (before == 0) readouts.removeAt(0);
+          return Row(mainAxisSize: MainAxisSize.min, children: readouts);
+        },
+      ),
+    );
     if (parts.isEmpty) return const SizedBox.shrink();
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -765,8 +787,11 @@ class DetailActionRow extends StatelessWidget {
           autofocus: model.isTelevision && !model.showPrimary,
         ),
       if (model.onMetadataExplore != null)
-        DetailGhostButton(label: 'Explore', icon: Icons.explore_outlined,
-          onTap: model.onMetadataExplore!),
+        DetailGhostButton(
+          label: 'Explore',
+          icon: Icons.explore_outlined,
+          onTap: model.onMetadataExplore!,
+        ),
       if (model.onAppMenu != null)
         DetailRoundButton(
           icon: Icons.more_horiz_rounded,
@@ -1100,48 +1125,52 @@ class _DetailSeasonControlState extends State<DetailSeasonControl> {
             child: Material(
               color: t.ghostFill,
               borderRadius: t.brBtn,
-              child: SeasonActionRegion(onTap: widget.onPick, onOptions: widget.onOptions, child: InkWell(
-                focusNode: widget.focusNode,
-                borderRadius: t.brBtn,
+              child: SeasonActionRegion(
                 onTap: widget.onPick,
-                onFocusChange: (f) => setState(() => _focused = f),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: t.brBtn,
-                    border: Border.all(color: t.ghostBorder),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.chevron_left_rounded,
-                        size: 17,
-                        color: widget.canPrev ? t.tx2 : t.tx3,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Season ${widget.seasonNumber}',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: t.tx,
+                onOptions: widget.onOptions,
+                child: InkWell(
+                  focusNode: widget.focusNode,
+                  borderRadius: t.brBtn,
+                  onTap: widget.onPick,
+                  onFocusChange: (f) => setState(() => _focused = f),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: t.brBtn,
+                      border: Border.all(color: t.ghostBorder),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.chevron_left_rounded,
+                          size: 17,
+                          color: widget.canPrev ? t.tx2 : t.tx3,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 17,
-                        color: widget.canNext ? t.tx2 : t.tx3,
-                      ),
-                    ],
+                        const SizedBox(width: 6),
+                        Text(
+                          'Season ${widget.seasonNumber}',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: t.tx,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 17,
+                          color: widget.canNext ? t.tx2 : t.tx3,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            )),
+            ),
           ),
           const SizedBox(width: 10),
           Text(

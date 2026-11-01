@@ -64,6 +64,7 @@ import 'video_player/widgets/pikpak_retry_overlay.dart';
 import 'video_player/widgets/buffering_indicator.dart';
 import 'video_player/widgets/tracks_sheet.dart';
 import 'video_player/widgets/player_menu_panel.dart';
+import 'video_player/widgets/player_media_details.dart';
 import 'video_player/widgets/channel_guide.dart';
 import 'video_player/widgets/iptv_channel_sheet.dart';
 import 'video_player/widgets/iptv_zap_banner.dart';
@@ -2871,6 +2872,45 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen>
                                 ? null
                                 : () => Navigator.of(context).maybePop(),
                           ),
+                  ),
+                // Fork identity treatment restored on top of the refactored
+                // player: it follows the controls and keeps clear of the dock.
+                if (isReady &&
+                    !inPip &&
+                    !PlatformUtil.isTelevision &&
+                    widget.showVideoTitle &&
+                    !widget.showChannelName)
+                  ValueListenableBuilder<bool>(
+                    valueListenable: _controlsVisible,
+                    builder: (context, visible, _) => Positioned(
+                      left: 28,
+                      bottom: 176 + MediaQuery.paddingOf(context).bottom,
+                      child: AnimatedOpacity(
+                        opacity: visible ? 1 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width * 0.58,
+                          ),
+                          child: PlayerMediaDetails(
+                            media: PlayerMediaIdentity.fromMeta(
+                              null,
+                              fallbackTitle:
+                                  widget.contentTitle ??
+                                  _episodeTitleInfo.getCurrentEpisodeTitle(),
+                              fallbackImdbId: widget.contentImdbId,
+                              season: widget.contentSeason,
+                              episode: widget.contentEpisode,
+                              useMetahubLogoFallback: true,
+                            ),
+                            compact: MediaQuery.sizeOf(context).height < 520,
+                            scale: MediaQuery.sizeOf(context).height < 520
+                                ? 0.78
+                                : 1,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 // Controls overlay (shown only when ready)
                 if (isReady &&

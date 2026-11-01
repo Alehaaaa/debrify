@@ -9,6 +9,7 @@ import 'package:debrify/features/catalog_detail/presentation/legacy_catalog_deta
 import 'package:debrify/services/metadata_details_service.dart';
 import 'package:debrify/widgets/detail/theme/detail_theme.dart';
 import 'package:debrify/widgets/shimmer.dart';
+import 'package:debrify/widgets/rotten_tomatoes_score.dart';
 import 'package:flutter/material.dart';
 
 class CatalogDetailHeroSections {
@@ -155,6 +156,26 @@ class CatalogDetailHeroSections {
               _a.dot(),
               CatalogMetacriticBadge(score: extra!.metacriticScore!),
             ],
+            OmdbRatingsBuilder(
+              imdbId: item.effectiveImdbId,
+              builder: (context, ratings) {
+                final readouts = omdbDetailReadouts(
+                  ratings,
+                  style: DefaultTextStyle.of(context).style,
+                  glyphColor: Colors.white,
+                  glyphSize: 15,
+                  gap: 10,
+                  hasImdb: rating != null,
+                  imdbBadge: (value) => Text(value.toStringAsFixed(1)),
+                );
+                if (extra?.metacriticScore != null) {
+                  readouts.removeWhere(
+                    (widget) => widget.key == const ValueKey('omdb-mc'),
+                  );
+                }
+                return Row(mainAxisSize: MainAxisSize.min, children: readouts);
+              },
+            ),
           ],
         ),
       ),
