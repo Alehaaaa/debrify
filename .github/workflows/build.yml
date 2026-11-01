@@ -194,7 +194,7 @@ jobs:
       run: flutter build macos --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Verify packaged subtitle decoders
-      run: dev/scripts/verify_macos_subtitle_decoders.sh build/macos/Build/Products/Release/debrify.app/Contents/Frameworks
+      run: dev/scripts/verify_macos_subtitle_decoders.sh build/macos/Build/Products/Release/Nextup.app/Contents/Frameworks
 
     - name: Install create-dmg
       run: HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
@@ -204,7 +204,7 @@ jobs:
         cd build/macos/Build/Products/Release
         rm -rf dmg-root
         mkdir -p dmg-root
-        cp -R debrify.app dmg-root/Nextup.app
+        cp -R Nextup.app dmg-root/Nextup.app
 
     - name: Create DMG (release)
       if: github.event_name == 'release'
@@ -231,7 +231,7 @@ jobs:
           --icon-size 120 \
           --icon "Nextup.app" 120 180 \
           --app-drop-link 400 180 \
-          debrify.dmg \
+          nextup.dmg \
           dmg-root
 
     - name: Upload DMG to Release
@@ -247,7 +247,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: nextup-macos
-        path: build/macos/Build/Products/Release/debrify.dmg
+        path: build/macos/Build/Products/Release/nextup.dmg
 
   windows:
     if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'

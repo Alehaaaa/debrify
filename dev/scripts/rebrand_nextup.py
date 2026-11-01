@@ -60,13 +60,15 @@ def main() -> None:
         "ios/Flutter/Release.xcconfig": [('= Debrify', '= Nextup')],
         "tvos/Flutter/Debug.xcconfig": [('DEBRIFY_APP_DISPLAY_NAME = Debrify', 'DEBRIFY_APP_DISPLAY_NAME = Nextup')],
         "tvos/Flutter/Release.xcconfig": [('DEBRIFY_APP_DISPLAY_NAME = Debrify', 'DEBRIFY_APP_DISPLAY_NAME = Nextup')],
-        "ios/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to'), ('<string>debrify</string>', '<string>Nextup</string>')],
+        # Keep the debrify:// protocol stable for existing links and peers.
+        "ios/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to')],
         "macos/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to')],
         "macos/Runner/Configs/AppInfo.xcconfig": [
             ('DEBRIFY_PRODUCT_NAME = debrify', 'DEBRIFY_PRODUCT_NAME = Nextup'),
             ('DEBRIFY_APP_DISPLAY_NAME = $(PRODUCT_NAME)', 'DEBRIFY_APP_DISPLAY_NAME = Nextup'),
         ],
-        "tvos/Runner/Info.plist": [('<string>debrify</string>', '<string>Nextup</string>')],
+        # CFBundleDisplayName is branded through xcconfig; the literal here is
+        # the stable debrify:// URL scheme and must not be renamed.
         "tvos/TopShelf/Info.plist": [('Debrify Top Shelf', 'Nextup Top Shelf')],
         "web/index.html": [('content="debrify"', 'content="Nextup"'), ('<title>debrify</title>', '<title>Nextup</title>')],
         "web/manifest.json": [('"debrify"', '"Nextup"')],

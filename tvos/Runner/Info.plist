@@ -28,7 +28,7 @@
 			<string>com.varunsalian.debrifytv.topshelf</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>Nextup</string>
+				<string>debrify</string>
 			</array>
 		</dict>
 	</array>
