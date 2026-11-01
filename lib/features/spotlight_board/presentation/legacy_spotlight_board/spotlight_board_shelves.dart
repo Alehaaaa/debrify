@@ -249,6 +249,7 @@ class SpotlightBoardShelves {
                     _owners.selection.largeCardInteractions,
                 trailerEnabled: view.trailersEnabled,
                 trailerVolume: view.cardTrailerVolume,
+                onTrailerSoundToggle: view.onCardTrailerSoundToggle,
                 onTrailerStart: view.onTrailerStop,
                 hoverable: !view.dpad,
                 dpad: view.dpad,

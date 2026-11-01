@@ -336,6 +336,7 @@ class SpotlightBoardCardLayout {
                   key: ValueKey(c.metadata!.id),
                   item: c.metadata!,
                   volume: cardState.widget.trailerVolume,
+                  onToggleSound: cardState.widget.onTrailerSoundToggle,
                   onPlayingChanged: (playing) {
                     if (!cardState.mounted ||
                         !cardState.activeCard ||

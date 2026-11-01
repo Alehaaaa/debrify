@@ -61,6 +61,12 @@ class HomeSpotlightBoards {
       showCardTitlesAndRatings: !_displaySection.hideHomeCardTitlesAndRatings,
       expandFocusedCard: _displaySection.spotlightFocusDetails,
       cardTrailerVolume: _heroPreview.heroTrailerVolume,
+      // Off-TV only: the playing reel card shows a speaker chip that flips
+      // ambient sound live. On TV the sound toggle lives in Settings and the
+      // DPAD reel has no pointer target, so leave it null there.
+      onCardTrailerSoundToggle: _deps.isTelevision()
+          ? null
+          : _heroPreview.toggleHeroTrailerSound,
       onHeroOpen: _itemActions.openItem,
       onLoadMoreRow: (row) {
         if (row < 0 || row >= rails.length) return;

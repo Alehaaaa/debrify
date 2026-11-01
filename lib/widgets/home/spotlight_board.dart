@@ -116,6 +116,10 @@ class SpotlightBoard extends StatefulWidget {
   final bool showCardTitlesAndRatings;
   final bool expandFocusedCard;
   final double cardTrailerVolume;
+
+  /// Off-TV only: flips ambient trailer sound live from a playing card's
+  /// speaker chip. Null on TV and in Search (no chip is shown there).
+  final VoidCallback? onCardTrailerSoundToggle;
   final bool shelvesOnly;
   final bool paintBackground;
   final bool animationsEnabled;
@@ -143,6 +147,7 @@ class SpotlightBoard extends StatefulWidget {
     this.showCardTitlesAndRatings = true,
     this.expandFocusedCard = false,
     this.cardTrailerVolume = 0,
+    this.onCardTrailerSoundToggle,
     this.shelvesOnly = false,
     this.paintBackground = true,
     this.animationsEnabled = false,
@@ -389,6 +394,8 @@ class SpotlightBoardState extends State<SpotlightBoard>
   bool get animationsEnabled => widget.animationsEnabled;
   @override
   double get cardTrailerVolume => widget.cardTrailerVolume;
+  @override
+  VoidCallback? get onCardTrailerSoundToggle => widget.onCardTrailerSoundToggle;
   @override
   bool get dpad => widget.dpad;
   @override

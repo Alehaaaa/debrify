@@ -45,6 +45,10 @@ class SpotlightBoardCard extends StatefulWidget {
   final bool forceParallax;
   final bool trailerEnabled;
   final double trailerVolume;
+
+  /// Off-TV: tapped from the playing card's speaker chip to flip ambient
+  /// trailer sound. Null on TV/Search, where the card shows no chip.
+  final VoidCallback? onTrailerSoundToggle;
   final VoidCallback? onTrailerStart;
 
   /// Pointer hover lifts the card — desktop only. OFF on TV: an Apple TV
@@ -84,6 +88,7 @@ class SpotlightBoardCard extends StatefulWidget {
     this.forceParallax = false,
     this.trailerEnabled = false,
     this.trailerVolume = 0,
+    this.onTrailerSoundToggle,
     this.onTrailerStart,
     this.hoverable = false,
     this.dpad = true,

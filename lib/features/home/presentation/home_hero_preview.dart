@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../models/ambient_trailer_surface.dart';
 import '../../../models/stremio_addon.dart';
 import '../../../models/youtube_resolved_streams.dart';
+import '../../../services/storage/ambient_trailer_storage.dart';
 import '../../../utils/tvos_device.dart';
 import '../application/home_trailer_preferences_controller.dart';
 import '../models/home_catalog_session.dart';
@@ -80,6 +82,25 @@ class HomeHeroPreview {
   /// Effective ambient volume (0–100); zero while the sound toggle is off.
   double get heroTrailerVolume =>
       heroTrailerPreferencesController.current.volume;
+
+  /// Flip the ambient trailer's sound live from the Spotlight reel's speaker
+  /// chip and persist it to BOTH ambient surfaces, exactly as the Settings
+  /// page does, so the Home reel and the detail backdrop agree whichever key
+  /// this platform reads. Mirrors the fork's `_toggleHeroTrailerSound`: the
+  /// reload republishes the effective volume (0 when muted, otherwise the
+  /// stored level) through [heroTrailerVolume], which the board hands to the
+  /// live backdrop — [HeroTrailerBackdrop] retargets its engine without a
+  /// restart, so the picture never flickers.
+  Future<void> toggleHeroTrailerSound() async {
+    if (!_deps.mounted()) return;
+    final enable = heroTrailerVolume <= 0;
+    await Future.wait([
+      for (final surface in AmbientTrailerSurface.values)
+        AmbientTrailerStorage.setAmbientTrailerAudioEnabled(surface, enable),
+    ]);
+    if (!_deps.mounted()) return;
+    await reloadHeroTrailerPrefs();
+  }
 
   /// Trailers only on the TV Home board's full spotlight — never the Search
   /// tab's compact strip (too small, and results should dominate) or off-TV

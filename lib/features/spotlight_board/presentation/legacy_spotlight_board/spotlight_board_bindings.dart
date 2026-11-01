@@ -11,6 +11,10 @@ abstract class SpotlightBoardWidgetView {
   String get animationStyle;
   bool get animationsEnabled;
   double get cardTrailerVolume;
+
+  /// Tapped from a playing card's speaker chip to flip ambient trailer sound
+  /// live (off-TV only; null on TV and in Search, where the reel has no chip).
+  VoidCallback? get onCardTrailerSoundToggle;
   bool get dpad;
   bool get expandFocusedCard;
   bool get forceCardParallax;

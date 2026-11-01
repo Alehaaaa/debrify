@@ -20,11 +20,17 @@ class SpotlightCardTrailer extends StatefulWidget {
     required this.item,
     required this.volume,
     required this.onPlayingChanged,
+    this.onToggleSound,
   });
 
   final StremioMeta item;
   final double volume;
   final ValueChanged<bool> onPlayingChanged;
+
+  /// Off-TV: flip ambient sound from the speaker chip shown once the trailer
+  /// is on screen. Null on TV/Search, where the chip is suppressed and sound
+  /// is a Settings-only preference.
+  final VoidCallback? onToggleSound;
 
   @override
   State<SpotlightCardTrailer> createState() => _SpotlightCardTrailerState();
@@ -36,6 +42,7 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
   YoutubeResolvedStreams? _streams;
   bool _failed = false;
   bool _loading = true;
+  bool _playing = false;
   Timer? _resolveTimeout;
 
   bool get _current => mounted && ProfileRuntime.scope.value == _scope;
@@ -114,32 +121,94 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
   Widget build(BuildContext context) {
     final streams = _streams;
     if (!_current || _failed) return const SizedBox.shrink();
-    return IgnorePointer(
-      child: Stack(fit: StackFit.expand, children: [
-      if (streams != null) HeroTrailerBackdrop(
-        imageUrl: null,
-        videoUrl: streams.playUrl,
-        audioUrl: streams.audioUrl,
-        enabled: true,
-        focusPreviewOwner: _owner,
-        ambientVolume: widget.volume,
-        imageBlurSigma: 0,
-        videoBlurSigma: 0,
-        startDelay: Duration.zero,
-        firstFrameTimeout: const Duration(seconds: 12),
-        onPlayingChanged: (playing) {
-          if (mounted && playing && _loading) setState(() => _loading = false);
-          widget.onPlayingChanged(playing);
-        },
-        onPlaybackFailed: () {
-          if (!mounted) return;
-          setState(() => _failed = true);
-          CollectionFocusPlayback.release(_owner);
-          widget.onPlayingChanged(false);
-        },
+    // The speaker chip appears only once frames are live and the host wired a
+    // toggle (off-TV). It sits ABOVE the IgnorePointer that holds the silent
+    // video, so a tap flips sound instead of opening the title.
+    final showToggle =
+        streams != null && _playing && widget.onToggleSound != null;
+    return Stack(fit: StackFit.expand, children: [
+      IgnorePointer(
+        child: Stack(fit: StackFit.expand, children: [
+          if (streams != null) HeroTrailerBackdrop(
+            imageUrl: null,
+            videoUrl: streams.playUrl,
+            audioUrl: streams.audioUrl,
+            enabled: true,
+            focusPreviewOwner: _owner,
+            ambientVolume: widget.volume,
+            imageBlurSigma: 0,
+            videoBlurSigma: 0,
+            startDelay: Duration.zero,
+            firstFrameTimeout: const Duration(seconds: 12),
+            onPlayingChanged: (playing) {
+              if (mounted && (_playing != playing || (playing && _loading))) {
+                setState(() {
+                  if (playing) _loading = false;
+                  _playing = playing;
+                });
+              }
+              widget.onPlayingChanged(playing);
+            },
+            onPlaybackFailed: () {
+              if (!mounted) return;
+              setState(() {
+                _failed = true;
+                _playing = false;
+              });
+              CollectionFocusPlayback.release(_owner);
+              widget.onPlayingChanged(false);
+            },
+          ),
+          if (_loading)
+            const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
+        ]),
       ),
-      if (_loading) const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
-      ]),
+      if (showToggle)
+        Positioned(
+          right: 10,
+          bottom: 10,
+          child: _SpotlightSoundToggle(
+            muted: widget.volume <= 0,
+            onTap: widget.onToggleSound!,
+          ),
+        ),
+    ]);
+  }
+}
+
+/// The playing reel card's speaker chip: a small translucent glass circle that
+/// flips ambient trailer sound. Styled to sit quietly over artwork, matching
+/// [_TrailerLoadingDot]'s self-contained treatment (no theme scope needed).
+class _SpotlightSoundToggle extends StatelessWidget {
+  const _SpotlightSoundToggle({required this.muted, required this.onTap});
+
+  final bool muted;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: muted ? 'Unmute trailer' : 'Mute trailer',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.46),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
+            boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6)],
+          ),
+          child: Icon(
+            muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+            size: 18,
+            color: Colors.white,
+          ),
+        ),
+      ),
     );
   }
 }
