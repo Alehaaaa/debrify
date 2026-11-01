@@ -15,6 +15,11 @@ class PlayerDockChoice {
 }
 
 const List<PlayerDockChoice> kPlayerDockStyleChoices = [
+  PlayerDockChoice(
+    'glass',
+    'Glass',
+    'Minimal frosted controls: play in the middle, one panel below',
+  ),
   PlayerDockChoice('classic', 'Classic', "Today's controls"),
   PlayerDockChoice(
     'auto',

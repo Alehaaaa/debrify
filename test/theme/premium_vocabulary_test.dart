@@ -96,12 +96,11 @@ void main() {
       floatingShadow: const [],
     );
 
-    test('settings may never take glass or space', () {
-      // SettingsSection is one filled container whose rows have ZERO
-      // inter-row gap and an in-place Border.all — dropping it shifts every
-      // row 1px and dissolves the grouping.
+    test('settings may take one grouped glass pane, but never space', () {
+      // SettingsSection is one grouped container whose rows have ZERO
+      // inter-row gap. Glass belongs on that outer group, not each row.
       expect(want(SeparationModel.glass).modelFor(SurfaceFamily.settingsGroup),
-          SeparationModel.fill);
+          SeparationModel.glass);
       expect(want(SeparationModel.space).modelFor(SurfaceFamily.settingsGroup),
           SeparationModel.rule,
           reason: 'a look that asked for "no boxes" is better served by '
@@ -132,7 +131,7 @@ void main() {
       }
     });
 
-    test('an explicit override still obeys the cap', () {
+    test('an explicit glass override obeys the settings-group cap', () {
       final t = SurfaceTokens(
         base: SeparationModel.fill,
         overrides: const {SurfaceFamily.settingsGroup: SeparationModel.glass},
@@ -144,7 +143,7 @@ void main() {
         raisedShadow: const [],
         floatingShadow: const [],
       );
-      expect(t.modelFor(SurfaceFamily.settingsGroup), SeparationModel.fill);
+      expect(t.modelFor(SurfaceFamily.settingsGroup), SeparationModel.glass);
     });
   });
 
