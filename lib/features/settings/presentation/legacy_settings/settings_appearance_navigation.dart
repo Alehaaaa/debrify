@@ -6,6 +6,7 @@ import 'package:debrify/screens/settings/desktop_sidebar_style_page.dart';
 import 'package:debrify/screens/settings/detail_page_style_page.dart';
 import 'package:debrify/screens/settings/detail_theme_page.dart';
 import 'package:debrify/screens/settings/discover_layout_page.dart';
+import 'package:debrify/screens/settings/form_palette_pages.dart';
 import 'package:debrify/screens/settings/iptv_style_page.dart';
 import 'package:debrify/screens/settings/launch_animation_page.dart';
 import 'package:debrify/screens/settings/looks_page.dart';
@@ -298,6 +299,32 @@ class SettingsAppearanceNavigation {
     await pushSettingsPage(context, const LooksPage());
     if (!context.mounted) return;
     _deps.setState(() {});
+  }
+
+  /// Appearance → Form: the app's structure (corners, type, framing, focus,
+  /// motion) independent of the colour palette. Re-read the theme summary on
+  /// the way back so the App Theme row's caption follows a palette pin.
+  Future<void> openFormPage() async {
+    final context = _deps.context();
+    await pushSettingsPage(context, const FormPage());
+    if (!context.mounted) return;
+    final theme = await DetailPageStorage.getDetailTheme();
+    if (!context.mounted) return;
+    _deps.setState(() {
+      _summaries.detailTheme = theme;
+    });
+  }
+
+  /// Appearance → Colour palette: the app's colours alone, keeping the form.
+  Future<void> openPalettePage() async {
+    final context = _deps.context();
+    await pushSettingsPage(context, const PalettePage());
+    if (!context.mounted) return;
+    final theme = await DetailPageStorage.getDetailTheme();
+    if (!context.mounted) return;
+    _deps.setState(() {
+      _summaries.detailTheme = theme;
+    });
   }
 
   Future<void> openThemeTokensPage() async {

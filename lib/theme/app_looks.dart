@@ -9,6 +9,7 @@ import 'package:debrify/services/storage/theme_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../services/main_page_bridge.dart';
+import '../widgets/detail/theme/detail_themes.dart';
 import 'shipped_themes.dart' show kDetailThemesShipped;
 import '../services/text_brightness.dart';
 import 'app_theme.dart';
@@ -403,6 +404,128 @@ abstract final class AppLooks {
       }
     }
     return problems;
+  }
+}
+
+/// Appearance → **Form**: a theme's STRUCTURE alone — how panels separate,
+/// how artwork is framed, what focus does, how things move. Independent of the
+/// palette.
+///
+/// There are only these. The rest of the old Looks were the Classic form in
+/// other colours, which is what the palette picker now is.
+@immutable
+class AppForm {
+  /// `legacy` (Classic) or a premium spec id.
+  final String id;
+  final String label;
+  final String blurb;
+
+  const AppForm({required this.id, required this.label, required this.blurb});
+
+  bool get isActive =>
+      AppThemeController.instance.effectiveStructureId == id;
+}
+
+/// Appearance → **Colour palette**: a theme's colours alone. Independent of
+/// the form.
+@immutable
+class LookPalette {
+  /// The theme whose COLOURS these are (`app_theme`).
+  final String themeId;
+  final String label;
+
+  const LookPalette({required this.themeId, required this.label});
+
+  bool get isActive => ThemeStorage.appThemeCached == themeId;
+}
+
+abstract final class LookParts {
+  static const List<AppForm> forms = [
+    AppForm(
+      id: 'legacy',
+      label: 'Classic',
+      blurb: 'Filled cards and a focus ring. Each palette keeps its own '
+          'corners and fonts.',
+    ),
+    AppForm(
+      id: 'spotlight',
+      label: 'Spotlight',
+      blurb: 'Full-bleed artwork, borderless focus that lifts and tilts, and '
+          'its own Settings style.',
+    ),
+    AppForm(
+      id: 'glass',
+      label: 'Glass',
+      blurb: 'Floating panes of tinted glass over the artwork, a focus ring '
+          'and gliding motion.',
+    ),
+    AppForm(
+      id: 'field',
+      label: 'Deep Field',
+      blurb: 'No boxes — artwork bleeds and space separates. Focus scales up.',
+    ),
+    AppForm(
+      id: 'hearth',
+      label: 'Warm Room',
+      blurb: 'Soft filled panels, artwork that fades into the page, focus '
+          'that lifts.',
+    ),
+    AppForm(
+      id: 'console',
+      label: 'Console',
+      blurb: 'Square corners and hairline rules. Focus inverts; motion snaps.',
+    ),
+    AppForm(
+      id: 'reel',
+      label: 'Cinema',
+      blurb: 'Artwork mounted like a print on filled panels, focus that lifts.',
+    ),
+  ];
+
+  static AppForm? activeForm() {
+    for (final f in forms) {
+      if (f.isActive) return f;
+    }
+    return null;
+  }
+
+  static String formLabel() => activeForm()?.label ?? 'Custom';
+
+  /// Classic, then every palette this build ships.
+  static List<LookPalette> palettes(
+    List<({String id, String label})> shippedThemes,
+  ) => [
+    const LookPalette(themeId: 'legacy', label: 'Nextup Classic'),
+    for (final t in shippedThemes) LookPalette(themeId: t.id, label: t.label),
+  ];
+
+  static String paletteLabel(String themeId) =>
+      themeId == AppThemes.legacyId
+          ? 'Nextup Classic'
+          : DetailThemes.byId(themeId).label;
+
+  /// "Spotlight form · Signal" — for the Settings rows.
+  static String currentLabel() =>
+      '${formLabel()} form · ${paletteLabel(ThemeStorage.appThemeCached)}';
+
+  /// Picks a form. Never touches colours.
+  static Future<void> applyForm(AppForm form) async {
+    LookApplier.noteExternalWrite('app_structure');
+    await AppThemeController.instance.selectStructure(form.id);
+  }
+
+  /// Picks a palette while keeping the form exactly where it is.
+  ///
+  /// With no form picked the app follows the palette (a premium palette
+  /// wears its own form), so a palette change could restyle everything.
+  /// Pinning the current form first is what keeps the two isolated.
+  static Future<void> applyPalette(LookPalette palette) async {
+    final controller = AppThemeController.instance;
+    if (controller.structureId.isEmpty) {
+      await controller.selectStructure(controller.effectiveStructureId);
+    }
+    LookApplier.noteExternalWrite('app_theme');
+    await controller.select(palette.themeId);
   }
 }
 

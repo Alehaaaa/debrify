@@ -456,6 +456,74 @@ class DetailTheme {
   bool get _btnIsAccent =>
       btnFill.withValues(alpha: 1) == accent.withValues(alpha: 1);
 
+  /// This theme's COLOURS and identity, wearing another theme's STRUCTURE —
+  /// corners, type, artwork framing, focus expression, motion, surfaces, grain.
+  ///
+  /// Appearance → Form picks a structure independently of the colour palette;
+  /// this is how the two are composed. Narrow and explicit on purpose (like
+  /// [withTokens]): every colour/identity field comes from `this`, every
+  /// structural field from `s`, so a palette change can never move the form and
+  /// a form change can never move a colour.
+  DetailTheme withStructureOf(DetailTheme s) => DetailTheme(
+    id: id,
+    label: label,
+    subtitle: subtitle,
+    ground: ground,
+    pane: pane,
+    railBg: railBg,
+    panel: panel,
+    hair: hair,
+    tx: tx,
+    tx2: tx2,
+    tx3: tx3,
+    accent: accent,
+    state: state,
+    callout: callout,
+    calloutText: calloutText,
+    award: award,
+    rating: rating,
+    focus: focus,
+    btnFill: btnFill,
+    btnText: btnText,
+    ghostFill: ghostFill,
+    ghostBorder: ghostBorder,
+    ghostText: ghostText,
+    imageBg: imageBg,
+    paneWash: paneWash,
+    railWash: railWash,
+    idWash: idWash,
+    lightGround: lightGround,
+    stateGradient: stateGradient,
+    useArtworkAccent: useArtworkAccent,
+    btnGradient: btnGradient,
+    btnBorder: btnBorder,
+    dividerGradient: dividerGradient,
+    // ── structure ──
+    washOpacity: s.washOpacity,
+    radius: s.radius,
+    radiusSm: s.radiusSm,
+    radiusBtn: s.radiusBtn,
+    radiusImg: s.radiusImg,
+    radiusCast: s.radiusCast,
+    displayFont: s.displayFont,
+    bodyFont: s.bodyFont,
+    dataFont: s.dataFont,
+    displayWeight: s.displayWeight,
+    displayUpper: s.displayUpper,
+    displayTracking: s.displayTracking,
+    displaySize: s.displaySize,
+    slabSize: s.slabSize,
+    slabTracking: s.slabTracking,
+    slabWeight: s.slabWeight,
+    btnWeight: s.btnWeight,
+    btnBorderWidth: s.btnBorderWidth,
+    focusWidth: s.focusWidth,
+    focusOffset: s.focusOffset,
+    shadow: s.shadow,
+    grain: s.grain,
+    grid: s.grid,
+  );
+
   /// This theme with user-chosen palette, shape and type values, and every
   /// field that DERIVES from them brought along.
   ///

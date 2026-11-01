@@ -108,6 +108,16 @@ Widget buildSpotlightCategory(
             blurb: 'Colour, focus, and motion. Applies everywhere.',
             children: [
               SettingsTile.spec(
+                SettingsRows.form,
+                subtitle: layout.formLabel,
+                onTap: layout.onOpenForm,
+              ),
+              SettingsTile.spec(
+                SettingsRows.palette,
+                subtitle: layout.paletteLabel,
+                onTap: layout.onOpenPalette,
+              ),
+              SettingsTile.spec(
                 SettingsRows.textBrightness,
                 subtitle: layout.textBrightnessLabel,
                 onTap: layout.onOpenTextBrightness,

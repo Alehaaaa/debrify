@@ -62,6 +62,33 @@ class AppThemeController extends ChangeNotifier {
   String get id => _id;
   bool get isLegacy => _id == AppThemes.legacyId;
 
+  /// Appearance → Looks → Structure. Empty = follow the palette ([id]), which
+  /// is how every theme rendered before structure and palette were split.
+  String _structureId = '';
+  String get structureId => _structureId;
+
+  /// The structure the CORE takes, or null to keep the palette's own —
+  /// Classic form, or a premium palette wearing its own form.
+  String? get formCoreId {
+    final s = effectiveStructureId;
+    return s == AppThemes.legacyId || s == _id ? null : s;
+  }
+
+  /// The FORM on screen (Appearance → Form): `legacy` (Classic) or a premium
+  /// spec id. With none picked, a premium palette keeps its own form and
+  /// every other palette is Classic — exactly how each rendered before form
+  /// and palette were split. The Classic palette is hand-built and always
+  /// Classic.
+  String get effectiveStructureId {
+    if (isLegacy) return AppThemes.legacyId;
+    if (_structureId.isNotEmpty &&
+        (_structureId == AppThemes.legacyId ||
+            PremiumLooks.byId(_structureId) != null)) {
+      return _structureId;
+    }
+    return PremiumLooks.byId(_id) != null ? _id : AppThemes.legacyId;
+  }
+
   /// The preset-resolved theme the root [AppThemeScope] provides.
   AppTheme get theme => _theme;
 
@@ -99,6 +126,7 @@ class AppThemeController extends ChangeNotifier {
   static Future<void> warm() async {
     try {
       instance._id = await ThemeStorage.getAppTheme();
+      instance._structureId = await ThemeStorage.getAppStructure();
       // Decoded here rather than on every recompute: a malformed value costs
       // one parse at startup and degrades to none, and the running app never
       // touches storage to answer "what did the user change".
@@ -165,6 +193,30 @@ class AppThemeController extends ChangeNotifier {
       await ThemeStorage.setAppTheme(normalized);
     } catch (e) {
       debugPrint('AppThemeController: persist failed: $e');
+    }
+  }
+
+  /// Pick the structure (form) independently of the palette. Publish-first,
+  /// like [select]. Picking the palette's own theme stores it explicitly —
+  /// the choice then survives a later palette change, which is the point of
+  /// separating the two.
+  Future<void> selectStructure(String id) async {
+    final normalized =
+        (id == AppThemes.legacyId ||
+            DetailPageStorage.kDetailThemes.contains(id))
+        ? id
+        : '';
+    if (normalized == _structureId) {
+      unawaited(ThemeStorage.setAppStructure(normalized).catchError((_) {}));
+      return;
+    }
+    _structureId = normalized;
+    ThemeStorage.appStructureCached = normalized;
+    _recompute();
+    try {
+      await ThemeStorage.setAppStructure(normalized);
+    } catch (e) {
+      debugPrint('AppThemeController: structure persist failed: $e');
     }
   }
 
@@ -236,8 +288,15 @@ class AppThemeController extends ChangeNotifier {
     // Through the shared resolver rather than inline: the detail layouts fetch
     // their core from the same place, and a core patched only here would leave
     // every alternate detail page showing the unedited theme.
+    // Structure picked separately from the palette: the core carries the
+    // palette's colours in the structure's form, and the structure's spec
+    // (framing, focus, motion, surfaces…) is what builds the app below.
+    final structure = effectiveStructureId;
+    // Classic form keeps the palette's own core untouched (its authored radii
+    // and fonts); a spec form lays its structure over the palette's colours.
+    final formCore = formCoreId;
     final core = AppThemeAdapter.resolveCoreText(
-      ThemeCoreResolver.resolve(_id, overrides),
+      ThemeCoreResolver.resolve(_id, overrides, structureId: formCore),
       preset,
     );
     // A premium look is a SPEC, and `fromDetail(core)` alone would deliver
@@ -246,7 +305,9 @@ class AppThemeController extends ChangeNotifier {
     // in the phase-four groups that only `ThemeSpec` supplies. Resolving them
     // here rather than in `AppThemes.byId` is what actually puts them on
     // screen: this is the method the live app reads.
-    final spec = PremiumLooks.byId(_id);
+    // The spec belongs to the STRUCTURE. It builds from the core it is
+    // handed, so it contributes form only and the palette's colours stay.
+    final spec = PremiumLooks.byId(structure);
     if (spec != null) {
       _theme = overrides.isEmpty
           ? spec.buildWith(core)
@@ -263,6 +324,7 @@ class AppThemeController extends ChangeNotifier {
         ),
       );
     }
+    _theme = _theme.withForm(structure);
     _themeData = AppThemeAdapter.themed(_theme, preset);
   }
 }

@@ -110,6 +110,16 @@ Widget buildClassicSettingsLayout(SettingsLayout layout, BuildContext context) {
                     'app.',
                 children: [
                   SettingsTile.spec(
+                    SettingsRows.form,
+                    subtitle: layout.formLabel,
+                    onTap: layout.onOpenForm,
+                  ),
+                  SettingsTile.spec(
+                    SettingsRows.palette,
+                    subtitle: layout.paletteLabel,
+                    onTap: layout.onOpenPalette,
+                  ),
+                  SettingsTile.spec(
                     SettingsRows.textBrightness,
                     subtitle: layout.textBrightnessLabel,
                     onTap: layout.onOpenTextBrightness,

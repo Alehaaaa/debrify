@@ -264,6 +264,20 @@ abstract final class SettingsRows {
     title: 'Theme',
     subtitle: '',
   );
+
+  /// The two halves a theme splits into: Form is the structure (corners, type,
+  /// framing, focus, motion), Palette is the colours. Independent on purpose —
+  /// changing one never moves the other. Subtitles are dynamic per call site.
+  static const form = SettingsRowContent(
+    icon: Icons.dashboard_customize_rounded,
+    title: 'Form',
+    subtitle: '',
+  );
+  static const palette = SettingsRowContent(
+    icon: Icons.palette_rounded,
+    title: 'Colour palette',
+    subtitle: '',
+  );
   static const detailTheme = SettingsRowContent(
     icon: Icons.palette_rounded,
     title: 'Details Theme',

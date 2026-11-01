@@ -80,6 +80,13 @@ class SettingsLayout extends StatelessWidget {
   final Future<void> Function() onOpenDetailPageStyle;
   final String appThemeLabel;
   final Future<void> Function() onOpenLooks;
+
+  /// Appearance → Form / Colour palette: the two independent halves a theme
+  /// splits into. [formPaletteLabel] is the "Structure · Palette" summary.
+  final Future<void> Function() onOpenForm;
+  final Future<void> Function() onOpenPalette;
+  final String formLabel;
+  final String paletteLabel;
   final Future<void> Function() onOpenThemeTokens;
   final String themeTokensLabel;
 
@@ -176,6 +183,10 @@ class SettingsLayout extends StatelessWidget {
     required this.onOpenDetailPageStyle,
     required this.appThemeLabel,
     required this.onOpenLooks,
+    required this.onOpenForm,
+    required this.onOpenPalette,
+    required this.formLabel,
+    required this.paletteLabel,
     required this.onOpenThemeTokens,
     required this.themeTokensLabel,
     required this.onOpenThemeLab,
