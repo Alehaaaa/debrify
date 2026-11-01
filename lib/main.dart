@@ -59,6 +59,7 @@ import 'screens/profiles/linux_vault_screen.dart';
 import 'screens/profiles/profile_recovery_screen.dart';
 import 'screens/downloads_screen.dart';
 import 'screens/trakt_calendar_screen.dart';
+import 'screens/reels_screen.dart';
 import 'screens/magic_tv_screen.dart';
 import 'screens/stremio_tv/stremio_tv_screen.dart';
 import 'screens/playlist_screen.dart';
@@ -1588,6 +1589,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     'Search', // 17: dedicated search tab (TV + sidebar layouts)
     'Discover', // 18: source-dropdown browser (Continue Watching / Trakt / …)
     'Calendar', // 19: Trakt/Simkl calendar (visible when either is connected)
+    'Reels', // 20: official scene clips
   ];
 
   final List<IconData> _icons = [
@@ -1611,6 +1613,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     Icons.search_rounded, // 17: Search
     Icons.explore_rounded, // 18: Discover
     Icons.calendar_month_rounded, // 19: Calendar (Trakt/Simkl)
+    Icons.video_collection_rounded, // 20: Reels
   ];
 
   /// Tab index → bridge back-handler key, in ONE place. Every path that
@@ -1979,6 +1982,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             MainTab.iptv => ProfileFeature.iptv,
             MainTab.youtube => ProfileFeature.youtube,
             MainTab.discover ||
+            MainTab.reels ||
             MainTab.calendar => ProfileFeature.trackersAndDiscovery,
             _ => null,
           };
@@ -3137,6 +3141,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MainTab.search,
         MainTab.home,
         MainTab.discover,
+        MainTab.reels,
         MainTab.downloads,
         MainTab.iptv,
         MainTab.youtube,
@@ -3182,6 +3187,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MainTab.search,
         MainTab.home,
         MainTab.discover,
+        MainTab.reels,
         MainTab.iptv,
         MainTab.youtube,
         MainTab.stremioTv,
@@ -3196,6 +3202,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       MainTab.search,
       MainTab.home,
       MainTab.discover,
+      MainTab.reels,
       MainTab.downloads,
       MainTab.iptv,
       MainTab.youtube,
@@ -3225,6 +3232,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 17: // Search (TV + sidebar layouts)
       case 15: // Home New (board)
       case 18: // Discover
+      case 20: // Reels
       case 0: // Home
       case 2: // Downloads
       case 19: // Trakt/Simkl Calendar
@@ -3316,6 +3324,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         return SearchScreen(isTelevision: _isAndroidTv, discoverMode: true);
       case 19: // Calendar (gated on Trakt OR Simkl auth in the nav below)
         return const TraktCalendarScreen();
+      case 20: // Reels
+        return const ReelsScreen();
       default:
         return _pages[index];
     }
