@@ -115,7 +115,7 @@ class AddonHubMarketList {
               TextSpan(
                 children: [
                   TextSpan(
-                    text: 'Works with Debrify: ',
+                    text: 'Works with Nextup: ',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: Colors.white.withValues(alpha: 0.9),

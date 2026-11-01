@@ -82,7 +82,7 @@ class SettingsSummaries {
   String launchAnimation = 'trace';
   String downloadLocationSubtitle = 'Downloads/Debrify (default)';
   SupportDonationConfig supportDonation = SupportDonationConfig.empty;
-  String supportSettingsLabel = 'Support Debrify';
+  String supportSettingsLabel = 'Support Nextup';
   String supportSettingsSubtitle = 'Help fund development with a donation';
   int mediaServerCount = 0;
 }

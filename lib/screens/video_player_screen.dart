@@ -8491,8 +8491,8 @@ class VideoPlayerScreenTestHooks {
         'Video player test hooks require an assertion-enabled test',
       );
     }
-    if (!const bool.fromEnvironment('DEBRIFY_VP_TEST_HOOKS')) {
-      throw StateError('Video player test hooks require DEBRIFY_VP_TEST_HOOKS');
+    if (!const bool.fromEnvironment('NEXTUP_VP_TEST_HOOKS')) {
+      throw StateError('Video player test hooks require NEXTUP_VP_TEST_HOOKS');
     }
     assert(() {
       _installed = hooks;
@@ -8544,9 +8544,9 @@ class VpS2Hooks {
         'Video player platform hooks require an assertion-enabled test',
       );
     }
-    if (!const bool.fromEnvironment('DEBRIFY_VP_TEST_HOOKS')) {
+    if (!const bool.fromEnvironment('NEXTUP_VP_TEST_HOOKS')) {
       throw StateError(
-        'Video player platform hooks require DEBRIFY_VP_TEST_HOOKS',
+        'Video player platform hooks require NEXTUP_VP_TEST_HOOKS',
       );
     }
     assert(() {

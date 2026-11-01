@@ -74,8 +74,8 @@ class MediaServerClient {
       );
     }
     final parameters = [
-      'Client="Debrify"',
-      'Device="Debrify"',
+      'Client="Nextup"',
+      'Device="Nextup"',
       'DeviceId="${_segment(deviceId)}"',
       'Version="1.0"',
       if (token != null) 'Token="$token"',

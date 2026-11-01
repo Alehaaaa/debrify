@@ -33,7 +33,7 @@ class DebrifyTvChannelSave {
     }
 
     debugPrint(
-      'DebrifyTV: ${isEdit ? 'Updating' : 'Creating'} channel "${channel.name}" with ${normalizedKeywords.length} keyword(s): ${normalizedKeywords.join(', ')}',
+      'NextupTV: ${isEdit ? 'Updating' : 'Creating'} channel "${channel.name}" with ${normalizedKeywords.length} keyword(s): ${normalizedKeywords.join(', ')}',
     );
 
     final int estimatedSeconds = _sections.engines.estimatedWarmDurationSeconds(
@@ -61,7 +61,7 @@ class DebrifyTvChannelSave {
           color: Colors.orange,
         );
         debugPrint(
-          'DebrifyTV: Aborting save for "${channel.name}" – keyword cap exceeded.',
+          'NextupTV: Aborting save for "${channel.name}" – keyword cap exceeded.',
         );
         return;
       }
@@ -77,7 +77,7 @@ class DebrifyTvChannelSave {
         addedKeywords = currentKeywordSet.difference(previousKeywords);
 
         debugPrint(
-          'DebrifyTV: Detected keyword changes for "${channel.name}" – added: ${addedKeywords.join(', ')}, removed: ${removedKeywords.join(', ')}',
+          'NextupTV: Detected keyword changes for "${channel.name}" – added: ${addedKeywords.join(', ')}, removed: ${removedKeywords.join(', ')}',
         );
 
         if (removedKeywords.isNotEmpty) {
@@ -104,7 +104,7 @@ class DebrifyTvChannelSave {
           );
 
           debugPrint(
-            'DebrifyTV: Pruned ${baseline.torrents.length - filteredTorrents.length} torrent(s) after removing keywords. Remaining: ${filteredTorrents.length}.',
+            'NextupTV: Pruned ${baseline.torrents.length - filteredTorrents.length} torrent(s) after removing keywords. Remaining: ${filteredTorrents.length}.',
           );
         } else if (baseline.normalizedKeywords.length !=
             normalizedKeywords.length) {
@@ -121,7 +121,7 @@ class DebrifyTvChannelSave {
             ),
           );
           debugPrint(
-            'DebrifyTV: Warming new keywords for "${channel.name}": ${addedKeywords.join(', ')}',
+            'NextupTV: Warming new keywords for "${channel.name}": ${addedKeywords.join(', ')}',
           );
           workingEntry = await _sections.warmup.computeChannelCacheEntry(
             channel,
@@ -130,13 +130,13 @@ class DebrifyTvChannelSave {
             keywordsToSearch: addedKeywords,
           );
           debugPrint(
-            'DebrifyTV: After warming new keywords, cache has ${workingEntry.torrents.length} torrent(s).',
+            'NextupTV: After warming new keywords, cache has ${workingEntry.torrents.length} torrent(s).',
           );
         }
 
         if (addedKeywords.isEmpty && removedKeywords.isEmpty) {
           debugPrint(
-            'DebrifyTV: No keyword changes for "${channel.name}" – reusing existing cache.',
+            'NextupTV: No keyword changes for "${channel.name}" – reusing existing cache.',
           );
           workingEntry = baseline.copyWith(
             normalizedKeywords: normalizedKeywords,
@@ -144,13 +144,13 @@ class DebrifyTvChannelSave {
         }
       } else {
         ensureProgressDialog();
-        debugPrint('DebrifyTV: Running full warm-up for "${channel.name}"');
+        debugPrint('NextupTV: Running full warm-up for "${channel.name}"');
         workingEntry = await _sections.warmup.computeChannelCacheEntry(
           channel,
           normalizedKeywords,
         );
         debugPrint(
-          'DebrifyTV: Initial warm-up complete for "${channel.name}" with ${workingEntry.torrents.length} torrent(s).',
+          'NextupTV: Initial warm-up complete for "${channel.name}" with ${workingEntry.torrents.length} torrent(s).',
         );
       }
 
@@ -176,7 +176,7 @@ class DebrifyTvChannelSave {
                   'Unable to find torrents for these keywords. Try again later.');
 
         debugPrint(
-          'DebrifyTV: Cache validation failed for "${channel.name}" – ready=${entry.isReady}, torrents=${entry.torrents.length}.',
+          'NextupTV: Cache validation failed for "${channel.name}" – ready=${entry.isReady}, torrents=${entry.torrents.length}.',
         );
 
         if (isEdit && baseline != null) {
@@ -242,10 +242,10 @@ class DebrifyTvChannelSave {
           : 'Channel "${updatedChannel.name}" saved';
       _sections.feedback.showSnack(successMsg, color: Colors.green);
       debugPrint(
-        'DebrifyTV: $successMsg (torrents cached: ${entry.torrents.length})',
+        'NextupTV: $successMsg (torrents cached: ${entry.torrents.length})',
       );
     } catch (e) {
-      debugPrint('DebrifyTV: Channel creation failed for ${channel.name}: $e');
+      debugPrint('NextupTV: Channel creation failed for ${channel.name}: $e');
       _sections.feedback.showSnack(
         'Failed to build channel cache. Please try again.',
         color: Colors.red,

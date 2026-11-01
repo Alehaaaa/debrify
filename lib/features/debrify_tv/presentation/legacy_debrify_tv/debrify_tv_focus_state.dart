@@ -6,16 +6,16 @@ class DebrifyTvFocusState {
   bool showSearchBar = false;
   late final FocusNode channelSearchFocusNode;
   final FocusNode quickPlayFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVQuickPlay',
+    debugLabel: 'NextupTVQuickPlay',
   );
   final FocusNode channelSearchButtonFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelSearchButton',
+    debugLabel: 'NextupTVChannelSearchButton',
   );
   final FocusNode channelSearchClearFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelSearchClear',
+    debugLabel: 'NextupTVChannelSearchClear',
   );
   final FocusNode channelMenuFocusNode = FocusNode(
-    debugLabel: 'DebrifyTVChannelMenu',
+    debugLabel: 'NextupTVChannelMenu',
   );
   final MenuController channelMenuController = MenuController();
   // TV content focus handler (stored for proper unregistration)

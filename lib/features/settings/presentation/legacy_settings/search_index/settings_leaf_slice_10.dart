@@ -37,7 +37,7 @@ extension SettingsLeafSlice10 on SettingsLeafBuilder {
         leaf(
           'IPTV Playlists',
           'Battery optimization',
-          'Exclude Debrify so recordings survive doze',
+          'Exclude Nextup so recordings survive doze',
           const [
             'battery',
             'doze',
@@ -101,7 +101,7 @@ extension SettingsLeafSlice10 on SettingsLeafBuilder {
         leaf(
           'Profiles',
           'Ask who\'s watching at startup',
-          'Show the profile picker whenever Debrify opens',
+          'Show the profile picker whenever Nextup opens',
           const [
             'always ask',
             'profile behavior',

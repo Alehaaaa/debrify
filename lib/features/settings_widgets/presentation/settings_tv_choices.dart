@@ -49,7 +49,7 @@ const List<TvRenderQualityChoice> kTvRenderQualityChoices = [
   TvRenderQualityChoice(
     TvRenderQuality.auto,
     'Automatic',
-    "Default — Debrify picks based on this TV's graphics",
+    "Default — Nextup picks based on this TV's graphics",
   ),
   TvRenderQualityChoice(
     TvRenderQuality.sharp,

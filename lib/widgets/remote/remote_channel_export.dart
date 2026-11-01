@@ -362,7 +362,7 @@ class RemoteChannelExportState extends State<RemoteChannelExport> {
 
         // Title
         const Text(
-          'Debrify TV Channels',
+          'Nextup TV Channels',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
 
@@ -488,7 +488,7 @@ class RemoteChannelExportState extends State<RemoteChannelExport> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Create channels in Debrify TV first',
+              'Create channels in Nextup TV first',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.5),
                 fontSize: 14,

@@ -317,7 +317,7 @@ class VpDecoderProbe {
   }
 
   void releasePlayerDiagnostic(String fields) {
-    final message = 'DEBRIFY_PLAYER_DECODER $fields';
+    final message = 'NEXTUP_PLAYER_DECODER $fields';
     if (Platform.isAndroid) {
       // A dedicated native tag lets release captures select only this
       // privacy-safe line. Capturing Flutter's general stdout exposed unrelated

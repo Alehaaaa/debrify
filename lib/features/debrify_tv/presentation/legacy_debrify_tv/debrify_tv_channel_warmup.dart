@@ -119,7 +119,7 @@ class DebrifyTvChannelWarmup {
         ),
       );
       debugPrint(
-        'DebrifyTV: Starting incremental warm for "${channel.name}" – seeded cache with ${accumulator.length} torrent(s).',
+        'NextupTV: Starting incremental warm for "${channel.name}" – seeded cache with ${accumulator.length} torrent(s).',
       );
     }
 
@@ -128,11 +128,11 @@ class DebrifyTvChannelWarmup {
         : normalizedKeywords.toSet();
 
     if (keywordsToWarm.isEmpty) {
-      debugPrint('DebrifyTV: No keywords to warm for "${channel.name}".');
+      debugPrint('NextupTV: No keywords to warm for "${channel.name}".');
     }
     if (enabledTvEngines.isEmpty && keywordsToWarm.isNotEmpty) {
       debugPrint(
-        'DebrifyTV: No enabled TV search engines for "${channel.name}".',
+        'NextupTV: No enabled TV search engines for "${channel.name}".',
       );
     }
 
@@ -167,7 +167,7 @@ class DebrifyTvChannelWarmup {
         }
         final keyword = result.keyword;
         debugPrint(
-          'DebrifyTV: Warmed keyword "$keyword" – added ${result.addedHashes.length} new torrent(s).',
+          'NextupTV: Warmed keyword "$keyword" – added ${result.addedHashes.length} new torrent(s).',
         );
         anySuccess = anySuccess || result.addedHashes.isNotEmpty;
         stats[keyword] = result.stat;
@@ -236,7 +236,7 @@ class DebrifyTvChannelWarmup {
           );
         } catch (e) {
           debugPrint(
-            'DebrifyTV: Cache warm ${engine.displayName} failed for "$keyword": $e',
+            'NextupTV: Cache warm ${engine.displayName} failed for "$keyword": $e',
           );
           return _TvEngineWarmResult(
             engine: engine,
@@ -281,7 +281,7 @@ class DebrifyTvChannelWarmup {
 
     if (avoidNsfw && totalBefore != totalAfter) {
       debugPrint(
-        'DebrifyTV: Cache NSFW filter for "$keyword": $totalBefore → $totalAfter torrents',
+        'NextupTV: Cache NSFW filter for "$keyword": $totalBefore → $totalAfter torrents',
       );
     }
 
@@ -292,7 +292,7 @@ class DebrifyTvChannelWarmup {
     );
     if (totalTorrents < minTorrentsPerKeyword) {
       debugPrint(
-        'DebrifyTV: Skipping keyword "$keyword" – only $totalTorrents torrent(s), minimum is $minTorrentsPerKeyword',
+        'NextupTV: Skipping keyword "$keyword" – only $totalTorrents torrent(s), minimum is $minTorrentsPerKeyword',
       );
       final stat = (stats[keyword] ?? KeywordStat.initial())
           .copyWith(

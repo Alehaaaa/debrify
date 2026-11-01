@@ -259,7 +259,7 @@ class RecordingsHubLayout {
                           share != null && share.recordsDirect
                               ? 'New recordings are saved to ${share.address}'
                               : _sections.data.desktop
-                              ? 'Recordings run while Debrify is open and '
+                              ? 'Recordings run while Nextup is open and '
                                     'the computer is awake · saved in '
                                     'Downloads/Debrify/Recordings'
                               : 'Recordings run even with the app closed '

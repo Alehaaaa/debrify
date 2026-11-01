@@ -6,37 +6,37 @@ extension SettingsLeafSlice08 on SettingsLeafBuilder {
     return [
       // Debrify TV
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Keyword Threshold',
-        'Choose when Debrify TV fetches more or fewer results per keyword',
+        'Choose when Nextup TV fetches more or fewer results per keyword',
         const ['keyword', 'threshold', 'results', 'fetch', 'global tv mode'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Batch Size',
         'Number of keywords processed in each batch',
         const ['batch', 'keywords', 'performance', 'global tv mode'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Min Torrents Per Keyword',
         'Skip keywords with fewer torrent results',
         const ['minimum', 'torrents', 'keyword', 'skip', 'result count'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Max Keywords (Quick Play)',
         'Limit the keywords used in Quick Play mode',
         const ['maximum', 'keyword limit', 'quick play', 'performance'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Avoid NSFW Content',
-        'Filter adult content out of Debrify TV results',
+        'Filter adult content out of Nextup TV results',
         const ['nsfw', 'adult', 'safe', 'filter', 'content'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Prepare Torrents in Background',
         'Pre-add upcoming Real-Debrid and AllDebrid torrents',
         const [
@@ -50,33 +50,33 @@ extension SettingsLeafSlice08 on SettingsLeafBuilder {
         ],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Engine TV Mode',
-        'Enable or disable each search engine for Debrify TV',
+        'Enable or disable each search engine for Nextup TV',
         const ['engine', 'tv mode enabled', 'tv mode disabled', 'toggle'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Small Channel Limit',
         'Maximum results for each engine in small channel mode',
         const ['small channel', 'result limit', 'max results', 'engine'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Large Channel Limit',
         'Maximum results for each engine in large channel mode',
         const ['large channel', 'result limit', 'max results', 'engine'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Quick Play Limit',
         'Maximum results for each engine in Quick Play mode',
         const ['quick play', 'result limit', 'max results', 'engine'],
       ),
       leaf(
-        'Debrify TV',
+        'Nextup TV',
         'Reset to Defaults',
-        'Restore the default Debrify TV engine settings',
+        'Restore the default Nextup TV engine settings',
         const ['reset', 'defaults', 'restore', 'engines'],
       ),
 

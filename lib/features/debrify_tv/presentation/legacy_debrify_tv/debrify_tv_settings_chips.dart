@@ -77,7 +77,7 @@ class DebrifyTvSettingsChips {
         ),
         const SizedBox(height: 2),
         Text(
-          'Applies to channels and quick play. If nothing matches, Debrify TV '
+          'Applies to channels and quick play. If nothing matches, Nextup TV '
           'plays what it can rather than showing an empty channel.',
           style: labelStyle,
         ),
@@ -160,7 +160,7 @@ class DebrifyTvSettingsChips {
       required String unavailableMessage,
     }) {
       return Tooltip(
-        message: available ? 'Use $label for Debrify TV' : unavailableMessage,
+        message: available ? 'Use $label for Nextup TV' : unavailableMessage,
         child: debrifyTvChoiceChip(
           label: label,
           selected: currentProvider == value,

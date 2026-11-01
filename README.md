@@ -28,7 +28,7 @@
 
 ---
 
-## What is Debrify?
+## What is Nextup?
 
 Debrify is an open-source, cross-platform **media hub**. It brings the services you already use — cloud storage accounts, personal WebDAV servers, IPTV playlists, Stremio addon catalogs, YouTube — into one place, with a **built-in player** tuned for movies and TV, a **download manager**, **Trakt/Simkl/MDBList tracking**, and a **cinematic UI** that works just as well on a phone, a desktop, or a TV with a remote.
 
@@ -150,8 +150,8 @@ sudo dnf install mpv-libs sqlite-devel fuse-libs
 sudo pacman -S mpv sqlite fuse2
 
 # Run the AppImage
-chmod +x debrify-*.AppImage
-./debrify-*.AppImage
+chmod +x nextup-*.AppImage
+./nextup-*.AppImage
 ```
 
 ### iOS

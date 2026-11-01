@@ -189,7 +189,7 @@ class VpEpisodeNext {
               provider.toLowerCase() == 'pikpak' || pikpakFileId.isNotEmpty;
           if (isPikPak) {
             debugPrint(
-              'Player: Detected PikPak video from Debrify TV, using retry logic',
+              'Player: Detected PikPak video from Nextup TV, using retry logic',
             );
             // VpPikPakRetry.playPikPakVideoWithRetry will increment _pikPakRetryId to cancel previous retries
             await _host.playPikPakVideoWithRetry(

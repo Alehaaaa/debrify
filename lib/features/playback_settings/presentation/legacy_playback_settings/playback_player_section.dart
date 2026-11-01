@@ -75,7 +75,7 @@ class PlaybackPlayerSection {
               _deps.buildPlayerModeOption(
                 _deps.context(),
                 value: 'debrify',
-                title: 'Debrify Player',
+                title: 'Nextup Player',
                 subtitle: 'Use the built-in video player',
                 icon: Icons.play_circle_filled_rounded,
                 recommended: true,

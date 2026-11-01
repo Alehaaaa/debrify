@@ -76,7 +76,7 @@ class DebrifyTvCachedAllDebrid {
       torrentsToUse = cachedTorrents.where((torrent) {
         if (NsfwFilter.shouldFilter(torrent.category, torrent.name)) {
           debugPrint(
-            'DebrifyTV: Filtered cached NSFW torrent: ${torrent.name}',
+            'NextupTV: Filtered cached NSFW torrent: ${torrent.name}',
           );
           return false;
         }
@@ -84,7 +84,7 @@ class DebrifyTvCachedAllDebrid {
       }).toList();
       if (beforeCount != torrentsToUse.length) {
         debugPrint(
-          'DebrifyTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
+          'NextupTV: NSFW filter on cached: $beforeCount → ${torrentsToUse.length} torrents',
         );
       }
     }
@@ -103,11 +103,11 @@ class DebrifyTvCachedAllDebrid {
       return Uri.decodeComponent(last);
     }
 
-    String firstTitle = 'Debrify TV';
+    String firstTitle = 'Nextup TV';
 
     Future<Map<String, String>?> requestMagicNext() async {
       debugPrint(
-        'DebrifyTV/AD: requestMagicNext() queueSize=${_owners.session.queue.length}',
+        'NextupTV/AD: requestMagicNext() queueSize=${_owners.session.queue.length}',
       );
       while (_owners.session.queue.isNotEmpty) {
         final item = _owners.session.queue.removeAt(0);
@@ -121,19 +121,19 @@ class DebrifyTvCachedAllDebrid {
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (display ?? 'Debrify TV');
+                  : (display ?? 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV/AD: Cached unlock failed: $e');
+            debugPrint('NextupTV/AD: Cached unlock failed: $e');
             continue;
           }
         }
 
         if (item is Torrent) {
           debugPrint(
-            'DebrifyTV/AD: Cached trying torrent name="${item.name}" hash=${item.infohash}',
+            'NextupTV/AD: Cached trying torrent name="${item.name}" hash=${item.infohash}',
           );
           final prepared = await _sections.prefetch.resolveAllDebridLinks(
             item,
@@ -163,17 +163,17 @@ class DebrifyTvCachedAllDebrid {
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                  : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
           } catch (e) {
-            debugPrint('DebrifyTV/AD: Cached add/unlock failed: $e');
+            debugPrint('NextupTV/AD: Cached add/unlock failed: $e');
             continue;
           }
         }
       }
-      debugPrint('DebrifyTV/AD: Cached queue exhausted.');
+      debugPrint('NextupTV/AD: Cached queue exhausted.');
       return null;
     }
 
@@ -231,7 +231,7 @@ class DebrifyTvCachedAllDebrid {
 
       if (launchedOnTv) {
         debugPrint(
-          'DebrifyTV: Cached flow - AllDebrid playback started on Android TV',
+          'NextupTV: Cached flow - AllDebrid playback started on Android TV',
         );
         return;
       }
@@ -285,7 +285,7 @@ class DebrifyTvCachedAllDebrid {
         _owners.session.isBusy = false;
         _owners.session.status = '';
       });
-      debugPrint('DebrifyTV: AllDebrid cached watch flow finished.');
+      debugPrint('NextupTV: AllDebrid cached watch flow finished.');
     }
   }
 }

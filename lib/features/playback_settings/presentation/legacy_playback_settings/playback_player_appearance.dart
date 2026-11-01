@@ -40,7 +40,7 @@ class PlaybackPlayerAppearance {
       if (_deps.values.isAndroidTv)
         SettingsTile.spec(
           SettingsRows.debrifyTvPlayer,
-          subtitle: 'Debrify TV playback-screen style',
+          subtitle: 'Nextup TV playback-screen style',
           onTap: () async {
             await pushSettingsPage(
               _deps.context(),

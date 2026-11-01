@@ -31,7 +31,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Debrify connects to your devices to pair the remote and securely transfer your setup.</string>
+	<string>Nextup connects to your devices to pair the remote and securely transfer your setup.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

@@ -83,7 +83,7 @@ class DebrifyTvChannelLibrary {
     if (channel != null) {
       _sections.channelWatch.watchChannel(channel);
     } else {
-      debugPrint('DebrifyTVScreen: Channel with ID $channelId not found');
+      debugPrint('NextupTVScreen: Channel with ID $channelId not found');
     }
   }
 
@@ -102,7 +102,7 @@ class DebrifyTvChannelLibrary {
     }
 
     if (_owners.library.channels.isEmpty) {
-      debugPrint('DebrifyTVScreen: Channels not loaded for auto-play');
+      debugPrint('NextupTVScreen: Channels not loaded for auto-play');
       return;
     }
 

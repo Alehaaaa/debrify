@@ -69,7 +69,7 @@ class VpPikPakRetry {
         ); // Detect PikPak by URL (Stremio TV, etc.)
 
     print(
-      'PikPak: _playPikPakVideoWithRetry called for index ${_host.currentIndex}, isPikPak: $isPikPak, overrideProvider: $overrideProvider, overridePikPakFileId: $overridePikPakFileId, isDebrifyTV: $isDebrifyTV',
+      'PikPak: _playPikPakVideoWithRetry called for index ${_host.currentIndex}, isPikPak: $isPikPak, overrideProvider: $overrideProvider, overridePikPakFileId: $overridePikPakFileId, isNextupTV: $isDebrifyTV',
     );
 
     if (!isPikPak) {
@@ -183,7 +183,7 @@ class VpPikPakRetry {
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Debrify TV queue');
+              print('PikPak: Auto-advancing to next video in Nextup TV queue');
               ScaffoldMessenger.of(_host.context).showSnackBar(
                 const SnackBar(
                   content: Text(
@@ -286,7 +286,7 @@ class VpPikPakRetry {
 
             if (isDebrifyTV) {
               // Auto-skip for Debrify TV
-              print('PikPak: Auto-advancing to next video in Debrify TV queue');
+              print('PikPak: Auto-advancing to next video in Nextup TV queue');
               ScaffoldMessenger.of(_host.context).showSnackBar(
                 const SnackBar(
                   content: Text(

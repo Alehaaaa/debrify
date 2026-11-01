@@ -36,7 +36,7 @@ class DebrifyTvQuickPlay {
     void _log(String m) {
       final copy = List<String>.from(_owners.progress.progress.value)..add(m);
       _owners.progress.progress.value = copy;
-      debugPrint('DebrifyTV: ' + m);
+      debugPrint('NextupTV: ' + m);
     }
 
     await _sections.settings.syncProviderAvailability();
@@ -48,36 +48,36 @@ class DebrifyTvQuickPlay {
       if (_deps.mounted()) {
         _deps.setState(() {
           _owners.session.status =
-              'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Debrify TV.';
+              'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Nextup TV.';
         });
       }
       _sections.feedback.showSnack(
-        'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Debrify TV.',
+        'Connect Real Debrid, Torbox, Premiumize, AllDebrid, or PikPak in Settings to use Nextup TV.',
         color: Colors.orange,
       );
       return;
     }
     final text = _owners.library.keywordsController.text.trim();
-    debugPrint('DebrifyTV: Watch started. Raw input="$text"');
+    debugPrint('NextupTV: Watch started. Raw input="$text"');
     if (text.isEmpty) {
       _deps.setState(() {
         _owners.session.status =
             'Enter one or more keywords, separated by commas';
       });
-      debugPrint('DebrifyTV: Aborting. No keywords provided.');
+      debugPrint('NextupTV: Aborting. No keywords provided.');
       return;
     }
 
     final keywords = _sections.library.parseKeywords(text);
     debugPrint(
-      'DebrifyTV: Parsed ${keywords.length} keyword(s): ${keywords.join(' | ')}',
+      'NextupTV: Parsed ${keywords.length} keyword(s): ${keywords.join(' | ')}',
     );
     if (keywords.isEmpty) {
       _deps.setState(() {
         _owners.session.status = 'Enter valid keywords';
       });
       debugPrint(
-        'DebrifyTV: Aborting. Parsed keywords became empty after trimming.',
+        'NextupTV: Aborting. Parsed keywords became empty after trimming.',
       );
       return;
     }
@@ -91,7 +91,7 @@ class DebrifyTvQuickPlay {
         color: Colors.orange,
       );
       debugPrint(
-        'DebrifyTV: Aborting. Too many keywords for Quick Play (${keywords.length}).',
+        'NextupTV: Aborting. Too many keywords for Quick Play (${keywords.length}).',
       );
       return;
     }
@@ -126,7 +126,7 @@ class DebrifyTvQuickPlay {
           eyebrow: 'Quick play · $providerLabel',
           title: 'Searching for something to play',
           subtitle:
-              'Debrify is searching your keywords, applying filters, and checking $providerLabel.',
+              'Nextup is searching your keywords, applying filters, and checking $providerLabel.',
           onCancel: () =>
               _sections.feedback.cancelActiveWatch(dialogContext: ctx),
         );
@@ -173,7 +173,7 @@ class DebrifyTvQuickPlay {
             ),
           ),
         );
-        debugPrint('DebrifyTV: Missing Real Debrid API key.');
+        debugPrint('NextupTV: Missing Real Debrid API key.');
         return;
       }
       final String apiKeyEarly = apiKeyEarlyRaw;
@@ -187,14 +187,14 @@ class DebrifyTvQuickPlay {
         return Uri.decodeComponent(last);
       }
 
-      String firstTitle = 'Debrify TV';
+      String firstTitle = 'Nextup TV';
 
       Future<Map<String, String>?> requestMagicNext() async {
         if (_owners.session.watchCancelled) {
           return null;
         }
         debugPrint(
-          'DebrifyTV: requestMagicNext() called. queueSize=${_owners.session.queue.length}',
+          'NextupTV: requestMagicNext() called. queueSize=${_owners.session.queue.length}',
         );
         while (_owners.session.queue.isNotEmpty &&
             !_owners.session.watchCancelled) {
@@ -207,7 +207,7 @@ class DebrifyTvQuickPlay {
             final String link = item['restrictedLink'] as String? ?? '';
             final String rdTid = item['torrentId'] as String? ?? '';
             debugPrint(
-              'DebrifyTV: Trying RD link from queue: torrentId=$rdTid',
+              'NextupTV: Trying RD link from queue: torrentId=$rdTid',
             );
             if (link.isEmpty) continue;
             try {
@@ -225,13 +225,13 @@ class DebrifyTvQuickPlay {
               final videoUrl = unrestrict['download'] as String?;
               if (videoUrl != null && videoUrl.isNotEmpty) {
                 debugPrint(
-                  'DebrifyTV: Success (RD link). Unrestricted in ${elapsed}s',
+                  'NextupTV: Success (RD link). Unrestricted in ${elapsed}s',
                 );
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (display ?? 'Debrify TV');
+                    : (display ?? 'Nextup TV');
                 firstTitle = chosenTitle;
                 if (_owners.session.watchCancelled) {
                   return null;
@@ -239,7 +239,7 @@ class DebrifyTvQuickPlay {
                 return {'url': videoUrl, 'title': chosenTitle};
               }
             } catch (e) {
-              debugPrint('DebrifyTV: RD link failed to unrestrict: $e');
+              debugPrint('NextupTV: RD link failed to unrestrict: $e');
               continue;
             }
           }
@@ -247,7 +247,7 @@ class DebrifyTvQuickPlay {
           // Case 2: Torrent entry
           if (item is Torrent) {
             debugPrint(
-              'DebrifyTV: Trying torrent: name="${item.name}", hash=${item.infohash}, size=${item.sizeBytes}, seeders=${item.seeders}',
+              'NextupTV: Trying torrent: name="${item.name}", hash=${item.infohash}, size=${item.sizeBytes}, seeders=${item.seeders}',
             );
             final magnetLink = 'magnet:?xt=urn:btih:${item.infohash}';
             try {
@@ -305,12 +305,12 @@ class DebrifyTvQuickPlay {
                 if (videoUrl == null || videoUrl.isEmpty) continue;
 
                 debugPrint(
-                  'DebrifyTV: Success. Got unrestricted URL in ${elapsed}s',
+                  'NextupTV: Success. Got unrestricted URL in ${elapsed}s',
                 );
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                    : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
                 firstTitle = chosenTitle;
 
                 if (!_owners.session.watchCancelled && newLinks.isNotEmpty) {
@@ -324,12 +324,12 @@ class DebrifyTvQuickPlay {
               }
             } catch (e) {
               debugPrint(
-                'DebrifyTV: Debrid add failed for ${item.infohash}: $e',
+                'NextupTV: Debrid add failed for ${item.infohash}: $e',
               );
             }
           }
         }
-        debugPrint('DebrifyTV: requestMagicNext() queue exhausted.');
+        debugPrint('NextupTV: requestMagicNext() queue exhausted.');
         return null;
       }
 
@@ -347,7 +347,7 @@ class DebrifyTvQuickPlay {
         pendingKeywords = pendingKeywords.skip(batch.length).toList();
 
         final futures = batch.map((kw) {
-          debugPrint('DebrifyTV: Searching engines for "$kw"...');
+          debugPrint('NextupTV: Searching engines for "$kw"...');
           return TorrentService.searchAllEngines(
             kw,
             engineStates: engineStates,
@@ -372,11 +372,11 @@ class DebrifyTvQuickPlay {
           }
           if (engineErrors.isNotEmpty) {
             engineErrors.forEach((engine, message) {
-              debugPrint('DebrifyTV: Search engine "$engine" failed: $message');
+              debugPrint('NextupTV: Search engine "$engine" failed: $message');
             });
           }
           debugPrint(
-            'DebrifyTV: Partial results received: total=${torrents.length}, engineCounts=$engineCounts',
+            'NextupTV: Partial results received: total=${torrents.length}, engineCounts=$engineCounts',
           );
 
           // Apply NSFW filter if enabled
@@ -386,14 +386,14 @@ class DebrifyTvQuickPlay {
             final beforeCount = torrents.length;
             torrentsToProcess = torrents.where((torrent) {
               if (NsfwFilter.shouldFilter(torrent.category, torrent.name)) {
-                debugPrint('DebrifyTV: Filtered NSFW torrent: ${torrent.name}');
+                debugPrint('NextupTV: Filtered NSFW torrent: ${torrent.name}');
                 return false;
               }
               return true;
             }).toList();
             if (beforeCount != torrentsToProcess.length) {
               debugPrint(
-                'DebrifyTV: NSFW filter: $beforeCount → ${torrentsToProcess.length} torrents',
+                'NextupTV: NSFW filter: $beforeCount → ${torrentsToProcess.length} torrents',
               );
             }
           }
@@ -457,7 +457,7 @@ class DebrifyTvQuickPlay {
                   Navigator.of(_owners.progress.progressSheetContext!).pop();
                 }
                 debugPrint(
-                  'DebrifyTV: Launching player early. Remaining queue=${_owners.session.queue.length}',
+                  'NextupTV: Launching player early. Remaining queue=${_owners.session.queue.length}',
                 );
 
                 // Start background prefetch only while player is active
@@ -517,7 +517,7 @@ class DebrifyTvQuickPlay {
                   if (launchedOnTv) {
                     // Successfully launched on Android TV
                     debugPrint(
-                      'DebrifyTV: Early launch - Real-Debrid playback started on Android TV',
+                      'NextupTV: Early launch - Real-Debrid playback started on Android TV',
                     );
                     // Prefetch will continue in background while TV player is active
                     break; // Exit the search loop
@@ -590,7 +590,7 @@ class DebrifyTvQuickPlay {
             ..addAll(fallback);
         }
         debugPrint(
-          'DebrifyTV: Queue prepared. size=${_owners.session.queue.length}',
+          'NextupTV: Queue prepared. size=${_owners.session.queue.length}',
         );
         _owners.session.lastQueueSize = _owners.session.queue.length;
         _owners.session.lastSearchAt = DateTime.now();
@@ -600,7 +600,7 @@ class DebrifyTvQuickPlay {
       _deps.setState(() {
         _owners.session.status = 'Search failed: $e';
       });
-      debugPrint('DebrifyTV: Search failed: $e');
+      debugPrint('NextupTV: Search failed: $e');
       if (e is NativePlayerSettingsUnavailable) {
         _sections.feedback.showNativeSettingsFailure(e);
         return;
@@ -614,7 +614,7 @@ class DebrifyTvQuickPlay {
     }
 
     if (_owners.session.watchCancelled) {
-      debugPrint('DebrifyTV: Watch was cancelled before completion.');
+      debugPrint('NextupTV: Watch was cancelled before completion.');
       return;
     }
 
@@ -624,7 +624,7 @@ class DebrifyTvQuickPlay {
       _deps.setState(() {
         _owners.session.status = 'No results found';
       });
-      debugPrint('DebrifyTV: No results found after combining.');
+      debugPrint('NextupTV: No results found after combining.');
       _log('❌ No results found - trying different search strategies');
 
       // Close popup and show user-friendly message
@@ -686,7 +686,7 @@ class DebrifyTvQuickPlay {
       return;
     }
 
-    String firstTitle = 'Debrify TV';
+    String firstTitle = 'Nextup TV';
 
     Future<Map<String, String>?> requestMagicNext() async {
       debugPrint(
@@ -715,7 +715,7 @@ class DebrifyTvQuickPlay {
               final display = (item['displayName'] as String?)?.trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (display ?? 'Debrify TV');
+                  : (display ?? 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }
@@ -776,7 +776,7 @@ class DebrifyTvQuickPlay {
               final inferred = _inferTitleFromUrl(videoUrl).trim();
               final chosenTitle = inferred.isNotEmpty
                   ? inferred
-                  : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                  : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
               firstTitle = chosenTitle;
               return {'url': videoUrl, 'title': chosenTitle};
             }

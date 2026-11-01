@@ -172,7 +172,7 @@ class DebrifyTvQuickPlayPikPak {
           log('Trying torrent: ${item.name}');
           final prepared = await _sections.cloud.preparePikPakTorrent(
             candidate: item,
-            log: (msg) => debugPrint('DebrifyTV/PikPak: $msg'),
+            log: (msg) => debugPrint('NextupTV/PikPak: $msg'),
           );
 
           if (_owners.session.watchCancelled) {
@@ -240,7 +240,7 @@ class DebrifyTvQuickPlayPikPak {
 
       if (await _sections.handoff.handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -270,7 +270,7 @@ class DebrifyTvQuickPlayPikPak {
           videoPlayerRoute(
             builder: (_) => VideoPlayerScreen(
               videoUrl: first['url'] ?? '',
-              title: first['title'] ?? 'Debrify TV',
+              title: first['title'] ?? 'Nextup TV',
               startFromRandom: _owners.settings.quickStartRandom,
               randomStartMaxPercent: _owners.settings.quickRandomStartPercent,
               hideSeekbar: _owners.settings.quickHideSeekbar,

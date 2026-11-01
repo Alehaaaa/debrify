@@ -152,14 +152,14 @@ const List<SettingsCategoryDefinition> kAdaptiveSettingsCategories = [
     label: 'About',
     subtitle: 'Updates, version & community',
     eyebrow: 'About',
-    title: 'Debrify, up to date.',
+    title: 'Nextup, up to date.',
     description:
         'Version, release checks, and the places where the community meets.',
   ),
   SettingsCategoryDefinition(
     icon: Icons.warning_amber_rounded,
     label: 'Danger Zone',
-    subtitle: 'Reset Debrify',
+    subtitle: 'Reset Nextup',
     eyebrow: 'Danger Zone',
     title: 'Start over, deliberately.',
     description:

@@ -122,7 +122,7 @@ class RecordingsHubScheduling {
       ScaffoldMessenger.of(_deps.context()).showSnackBar(
         SnackBar(
           content: const Text(
-            'Allow "Alarms & reminders" for Debrify to schedule recordings',
+            'Allow "Alarms & reminders" for Nextup to schedule recordings',
           ),
           persist: false, // auto-hide, as before Flutter 3.44
           action: SnackBarAction(

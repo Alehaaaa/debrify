@@ -199,10 +199,10 @@ class DebrifyTvChannelWatch {
 
   /// Handle channel switching on Android TV - cycles to next channel with looping
   Future<Map<String, dynamic>?> requestNextChannel() async {
-    debugPrint('DebrifyTV: _requestNextChannel() called');
+    debugPrint('NextupTV: _requestNextChannel() called');
 
     if (_owners.library.channels.isEmpty) {
-      debugPrint('DebrifyTV: No channels available');
+      debugPrint('NextupTV: No channels available');
       return null;
     }
 
@@ -217,7 +217,7 @@ class DebrifyTvChannelWatch {
     final DebrifyTvChannel targetChannel = _owners.library.channels[nextIndex];
 
     debugPrint(
-      'DebrifyTV: Switching from channel ${currentIndex + 1} to ${nextIndex + 1} (${targetChannel.name})',
+      'NextupTV: Switching from channel ${currentIndex + 1} to ${nextIndex + 1} (${targetChannel.name})',
     );
 
     return _sections.channelSwitch.switchToChannel(
@@ -228,10 +228,10 @@ class DebrifyTvChannelWatch {
   }
 
   Future<Map<String, dynamic>?> requestChannelById(String channelId) async {
-    debugPrint('DebrifyTV: _requestChannelById($channelId) called');
+    debugPrint('NextupTV: _requestChannelById($channelId) called');
 
     if (_owners.library.channels.isEmpty) {
-      debugPrint('DebrifyTV: No channels available for direct selection');
+      debugPrint('NextupTV: No channels available for direct selection');
       return null;
     }
 
@@ -247,17 +247,17 @@ class DebrifyTvChannelWatch {
     }
 
     if (targetChannel == null) {
-      debugPrint('DebrifyTV: Channel id $channelId not found');
+      debugPrint('NextupTV: Channel id $channelId not found');
       return null;
     }
 
     if (_owners.library.currentWatchingChannelId == targetChannel.id) {
       debugPrint(
-        'DebrifyTV: Selected channel is already active; refreshing playback',
+        'NextupTV: Selected channel is already active; refreshing playback',
       );
     } else {
       debugPrint(
-        'DebrifyTV: Switching directly to channel ${targetChannel.name}',
+        'NextupTV: Switching directly to channel ${targetChannel.name}',
       );
     }
 

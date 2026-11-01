@@ -139,8 +139,8 @@ class _BatteryBanner extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'The phone likely put Debrify to sleep mid-capture. Tap '
-                    'to exclude Debrify from battery optimization so long '
+                    'The phone likely put Nextup to sleep mid-capture. Tap '
+                    'to exclude Nextup from battery optimization so long '
                     'recordings run to the end.',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.55),

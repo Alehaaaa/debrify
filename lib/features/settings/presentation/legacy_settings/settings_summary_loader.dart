@@ -270,7 +270,7 @@ class SettingsSummaryLoader {
         _summaries.desktopSidebarStyle,
       ),
       summaries.read(
-        'Debrify TV',
+        'Nextup TV',
         () => DebrifyTvStorage.getDebrifyTvStyle(),
         _summaries.debrifyTvStyle,
       ),

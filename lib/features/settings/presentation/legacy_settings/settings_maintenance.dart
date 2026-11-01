@@ -132,7 +132,7 @@ class SettingsMaintenance {
     final action = await showSettingsDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(profileMode ? 'Reset this profile?' : 'Reset Debrify?'),
+        title: Text(profileMode ? 'Reset this profile?' : 'Reset Nextup?'),
         content: Text(
           profileMode
               ? 'This clears this profile\'s settings, history, playlists, and private app data. The profile, PIN, shared connections, active jobs, downloads, and recordings remain untouched.'
@@ -169,7 +169,7 @@ class SettingsMaintenance {
         context: context,
         builder: (dialogContext) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Reset this Debrify installation?'),
+            title: const Text('Reset this Nextup installation?'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

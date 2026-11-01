@@ -23,7 +23,7 @@ class RemoteTransferProgressPanel extends StatelessWidget {
             LinearProgressIndicator(value: activity.fraction),
             const SizedBox(height: 8),
             const Text(
-              'Keep Debrify open on both devices until the transfer finishes.',
+              'Keep Nextup open on both devices until the transfer finishes.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70, fontSize: 12),
             ),

@@ -99,7 +99,7 @@ class LocalBackupManifest {
 
   static LocalBackupManifest fromJson(Map<String, dynamic> json) {
     if (json['format'] != format) {
-      throw const LocalBackupFormatException('Not a Debrify backup archive');
+      throw const LocalBackupFormatException('Not a Nextup backup archive');
     }
     final version = json['version'];
     if (version is! int || version < 1) {
@@ -107,7 +107,7 @@ class LocalBackupManifest {
     }
     if (version > LocalBackupManifest.version) {
       throw const LocalBackupFormatException(
-        'This backup was created by a newer Debrify. Update the app to '
+        'This backup was created by a newer Nextup. Update the app to '
         'restore it.',
       );
     }
@@ -523,7 +523,7 @@ class LocalBackupExporter {
               ),
       );
       if (DebrifyTvBackupOmission.fromOmissions(package.omissions) != null) {
-        throw StateError('Local archives must never omit Debrify TV');
+        throw StateError('Local archives must never omit Nextup TV');
       }
       cancellation?.throwIfCancelled();
 

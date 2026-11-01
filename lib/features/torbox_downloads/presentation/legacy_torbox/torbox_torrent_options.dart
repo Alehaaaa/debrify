@@ -27,7 +27,7 @@ class TorboxTorrentOptions {
       ),
       TorboxMoreOption(
         icon: Icons.live_tv_rounded,
-        label: 'Add to Debrify TV',
+        label: 'Add to Nextup TV',
         onTap: () => _deps.handleAddToDebrifyTv(torrent),
       ),
       TorboxMoreOption(

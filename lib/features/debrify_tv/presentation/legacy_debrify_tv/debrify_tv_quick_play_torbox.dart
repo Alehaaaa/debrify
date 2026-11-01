@@ -360,7 +360,7 @@ class DebrifyTvQuickPlayTorbox {
 
       if (await _sections.handoff.handOffToExternalPlayer(
         first['url'] ?? '',
-        first['title'] ?? 'Debrify TV',
+        first['title'] ?? 'Nextup TV',
       )) {
         return;
       }
@@ -389,7 +389,7 @@ class DebrifyTvQuickPlayTorbox {
           videoPlayerRoute(
             builder: (_) => VideoPlayerScreen(
               videoUrl: first['url'] ?? '',
-              title: first['title'] ?? 'Debrify TV',
+              title: first['title'] ?? 'Nextup TV',
               startFromRandom: _owners.settings.startRandom,
               randomStartMaxPercent: _owners.settings.randomStartPercent,
               hideSeekbar: _owners.settings.hideSeekbar,

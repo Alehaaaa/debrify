@@ -68,7 +68,7 @@ class _RemoteSendBrowserState extends State<RemoteSendBrowser> {
   RemoteSendGroup? _group;
   String name(RemoteSendGroup group) => switch (group) {
     RemoteSendGroup.addons => 'Addons',
-    RemoteSendGroup.channels => 'Debrify TV channels',
+    RemoteSendGroup.channels => 'Nextup TV channels',
     RemoteSendGroup.setup => 'Accounts & setup',
     RemoteSendGroup.webDavSync => 'WebDAV Sync',
   };

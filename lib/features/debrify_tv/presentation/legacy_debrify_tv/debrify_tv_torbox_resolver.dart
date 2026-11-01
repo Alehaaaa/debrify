@@ -270,7 +270,7 @@ class DebrifyTvTorboxResolver {
         applySizeFilter &&
         _owners.settings.tvFilters.hasSize) {
       debugPrint(
-        'DebrifyTV/Torbox: no file matched the size filter in '
+        'NextupTV/Torbox: no file matched the size filter in '
         '"$fallbackTitle" — using it unfiltered.',
       );
       return _sections.torbox._buildTorboxPlayableEntries(

@@ -156,7 +156,7 @@ extension SettingsLeafSlice09 on SettingsLeafBuilder {
       leaf(
         'IPTV Playlists',
         'Start on a channel',
-        'Open straight into live TV when Debrify starts',
+        'Open straight into live TV when Nextup starts',
         const [
           'startup channel',
           'startup',

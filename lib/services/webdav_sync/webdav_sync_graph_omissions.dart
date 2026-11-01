@@ -51,7 +51,7 @@ abstract final class WebDavSyncGraphOmissionPolicy {
         if (omission == null ||
             omission.profilesAffected > package.profiles.length) {
           throw const FormatException(
-            'WebDAV sync graph has malformed Debrify TV omissions',
+            'WebDAV sync graph has malformed Nextup TV omissions',
           );
         }
         continue;

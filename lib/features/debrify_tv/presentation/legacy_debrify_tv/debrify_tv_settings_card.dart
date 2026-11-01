@@ -152,7 +152,7 @@ class DebrifyTvSettingsCard {
             const SizedBox(height: 16),
             SwitchRow(
               title: 'Start from random timestamp',
-              subtitle: 'Each Debrify TV video starts at a random point',
+              subtitle: 'Each Nextup TV video starts at a random point',
               value: startRandom,
               onChanged: (v) => setStartRandom(v),
             ),

@@ -194,7 +194,7 @@ class IptvScheduleActions {
           );
     unawaited(_deps.refreshScheduledCount());
     if (result.errorCode == 'exact_alarms_required') {
-      return 'Allow "Alarms & reminders" for Debrify to schedule recordings';
+      return 'Allow "Alarms & reminders" for Nextup to schedule recordings';
     }
     return result.ok
         ? (airsNow

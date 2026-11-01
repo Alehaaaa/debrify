@@ -142,7 +142,7 @@ class ProfilePackageService {
       throw ArgumentError('File-backed export requires a full profile export');
     }
     if (fileSinks != null && compactDatabaseSnapshots) {
-      throw ArgumentError('File-backed export never compacts Debrify TV');
+      throw ArgumentError('File-backed export never compacts Nextup TV');
     }
     final profile = await context.validate(registry);
     if (profile.id != scope.profileId) {
@@ -324,7 +324,7 @@ class ProfilePackageService {
     void Function(ProfileGraphPackageExport)? onIdentities,
   }) async {
     if (fileSinks != null && compactDatabaseSnapshots) {
-      throw ArgumentError('File-backed export never compacts Debrify TV');
+      throw ArgumentError('File-backed export never compacts Nextup TV');
     }
     final exported = await _exportAllProfiles(
       context: context,

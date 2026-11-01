@@ -43,7 +43,7 @@ class DebrifyTvChannelActions {
       if (nsfwChanged) {
         // NSFW setting changed for this channel - rebuild cache with new filter
         debugPrint(
-          'DebrifyTV: Channel NSFW filter changed. Forcing full cache rebuild...',
+          'NextupTV: Channel NSFW filter changed. Forcing full cache rebuild...',
         );
 
         // Clear existing cache to force full rebuild

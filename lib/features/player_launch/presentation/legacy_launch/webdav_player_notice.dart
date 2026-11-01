@@ -11,9 +11,9 @@ final class WebdavPlayerNotice {
           builder: (dialogContext) => AlertDialog(
             title: const Text('External player unavailable'),
             content: const Text(
-              'This server requires authentication. Debrify cannot pass '
+              'This server requires authentication. Nextup cannot pass '
               'the required authorization headers to another app, so this video '
-              'will open in the Debrify player.',
+              'will open in the Nextup player.',
             ),
             actions: [
               TextButton(
@@ -23,7 +23,7 @@ final class WebdavPlayerNotice {
               FilledButton(
                 autofocus: true,
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Use Debrify player'),
+                child: const Text('Use Nextup player'),
               ),
             ],
           ),

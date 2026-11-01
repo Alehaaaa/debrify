@@ -235,7 +235,7 @@ class DebrifyTvUrlImport {
                     keyboardInk: app.core.tx,
                     keyboardInkOnAccent: app.inkOn(app.settings.accent),
                     decoration: InputDecoration(
-                      labelText: 'Debrify link or file URL',
+                      labelText: 'Nextup link or file URL',
                       hintText: 'debrify://channel?... or https://...',
                       errorText: errorText,
                     ),

@@ -150,7 +150,7 @@ class DebrifyTvQuickPlayAllDebrid {
         return Uri.decodeComponent(last);
       }
 
-      String firstTitle = 'Debrify TV';
+      String firstTitle = 'Nextup TV';
 
       Future<Map<String, String>?> requestMagicNext() async {
         if (_owners.session.watchCancelled) return null;
@@ -171,7 +171,7 @@ class DebrifyTvQuickPlayAllDebrid {
                 final display = (item['displayName'] as String?)?.trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (display ?? 'Debrify TV');
+                    : (display ?? 'Nextup TV');
                 firstTitle = chosenTitle;
                 return {'url': videoUrl, 'title': chosenTitle};
               }
@@ -210,7 +210,7 @@ class DebrifyTvQuickPlayAllDebrid {
                 final inferred = _inferTitleFromUrl(videoUrl).trim();
                 final chosenTitle = inferred.isNotEmpty
                     ? inferred
-                    : (item.name.trim().isNotEmpty ? item.name : 'Debrify TV');
+                    : (item.name.trim().isNotEmpty ? item.name : 'Nextup TV');
                 firstTitle = chosenTitle;
                 return {'url': videoUrl, 'title': chosenTitle};
               }

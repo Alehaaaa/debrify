@@ -31,7 +31,7 @@ abstract final class WebDavSyncLibraryMutation {
     if (candidate == differentFrom) candidate = _newGenerationId();
     if (candidate == differentFrom ||
         !RegExp(r'^[A-Za-z0-9_-]{1,96}$').hasMatch(candidate)) {
-      throw StateError('Could not mint a valid Debrify TV pool generation');
+      throw StateError('Could not mint a valid Nextup TV pool generation');
     }
     return candidate;
   }

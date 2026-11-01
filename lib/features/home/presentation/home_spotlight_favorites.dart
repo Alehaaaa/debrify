@@ -101,7 +101,7 @@ SpotlightShelf buildSpotlightDebrifyFavorites({
   required ValueChanged<DebrifyTvChannel> onOpen,
 }) => SpotlightShelf(
   id: id,
-  title: 'Debrify TV',
+  title: 'Nextup TV',
   nodes: nodes,
   items: [
     for (final channel in channels)

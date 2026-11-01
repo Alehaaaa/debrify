@@ -11,8 +11,8 @@ import 'profiles/profile_runtime.dart';
 /// Explicitly opted-in local release instrumentation. Never logs content or
 /// credentials, and never queries a database or waits for an application lock.
 abstract final class LocalValidationDiagnostics {
-  static const enabled = bool.fromEnvironment('DEBRIFY_LOCAL_VALIDATION');
-  static const build = String.fromEnvironment('DEBRIFY_VALIDATION_BUILD');
+  static const enabled = bool.fromEnvironment('NEXTUP_LOCAL_VALIDATION');
+  static const build = String.fromEnvironment('NEXTUP_VALIDATION_BUILD');
   static Timer? _heartbeat;
 
   static void event(String name, [Map<String, Object?> fields = const {}]) {

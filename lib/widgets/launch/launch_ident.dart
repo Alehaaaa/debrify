@@ -242,7 +242,7 @@ String launchIdentLabel(String? id) => launchIdentFor(id).label;
 // Shared paint helpers
 // ─────────────────────────────────────────────────────────────────────────
 
-const String kIdentWord = 'DEBRIFY';
+const String kIdentWord = 'NEXTUP';
 
 double identClamp(double v, double a, double b) => v < a ? a : (v > b ? b : v);
 double identLerp(double a, double b, double t) => a + (b - a) * t;

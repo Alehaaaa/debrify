@@ -5,7 +5,7 @@ import 'storage_usage_models.dart';
 extension StorageCategoryText on StorageCategory {
   String get label => switch (this) {
     StorageCategory.iptvCatalogs => 'IPTV catalogs & guide',
-    StorageCategory.debrifyTv => 'Debrify TV channels',
+    StorageCategory.debrifyTv => 'Nextup TV channels',
     StorageCategory.imageCache => 'Image cache',
     StorageCategory.guideDownloads => 'Guide downloads in progress',
     StorageCategory.guideCache => 'Guide cache',
@@ -24,7 +24,7 @@ extension StorageCategoryText on StorageCategory {
           'so lists open instantly. Each profile keeps its own copy, so '
           'several profiles using the same playlist store it several times.',
     StorageCategory.debrifyTv =>
-      'Your Debrify TV channels and the items cached for them.',
+      'Your Nextup TV channels and the items cached for them.',
     StorageCategory.imageCache =>
       'Posters, backdrops and channel logos kept so they load without '
           'downloading again. Capped in size and cleaned up automatically.',

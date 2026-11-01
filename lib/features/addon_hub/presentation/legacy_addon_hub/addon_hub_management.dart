@@ -72,7 +72,7 @@ class AddonHubManagement {
                     'shared with other profiles. Deleting all addons will '
                     'also remove those addons from every shared profile.'
               : 'This removes all $count installed Stremio '
-                    'addon${count == 1 ? '' : 's'} from Debrify.',
+                    'addon${count == 1 ? '' : 's'} from Nextup.',
           style: TextStyle(color: app.fade(app.core.tx, 0.75)),
         ),
         actions: [

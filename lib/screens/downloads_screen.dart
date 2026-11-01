@@ -419,7 +419,7 @@ class _DownloadsScreenState extends State<DownloadsScreen>
           final Directory? downloadsDir = await getDownloadsDirectory();
           if (downloadsDir != null) {
             final sep = Platform.pathSeparator;
-            destPath = 'Downloads${sep}Debrify$sep$folder$sep$filename';
+            destPath = 'Downloads${sep}Nextup$sep$folder$sep$filename';
           } else {
             final docs = await AppStorage.documents();
             destPath = '${docs.path}/downloads/$folder/$filename';

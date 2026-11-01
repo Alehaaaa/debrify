@@ -53,8 +53,8 @@ class DebrifyTvChannelEditor {
     FocusNode? channelNameFocus;
     FocusNode? channelKeywordFocus;
     if (_owners.settings.isAndroidTv) {
-      channelNameFocus = FocusNode(debugLabel: 'DebrifyTVChannelName');
-      channelKeywordFocus = FocusNode(debugLabel: 'DebrifyTVChannelKeyword');
+      channelNameFocus = FocusNode(debugLabel: 'NextupTVChannelName');
+      channelKeywordFocus = FocusNode(debugLabel: 'NextupTVChannelKeyword');
     }
     final List<String> keywordList = [];
     final seenKeywords = <String>{};
@@ -166,7 +166,7 @@ class DebrifyTvChannelEditor {
                     : 'Channel editor · ${existing.channelNumber.toString().padLeft(2, '0')}',
                 title: existing == null ? 'Create a channel' : 'Edit channel',
                 subtitle:
-                    'Keywords are search terms. Add one or several and Debrify will pool the results.',
+                    'Keywords are search terms. Add one or several and Nextup will pool the results.',
                 icon: Icons.tv_rounded,
                 maxWidth: 720,
                 child: Column(

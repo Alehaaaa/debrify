@@ -264,7 +264,7 @@ class DebrifyTvPrefetcher {
       // Nothing matched in this torrent — take it unfiltered rather than
       // discarding the torrent (see the Torbox builder).
       debugPrint(
-        'DebrifyTV/AD: no file matched the size filter in "${result.name}" — '
+        'NextupTV/AD: no file matched the size filter in "${result.name}" — '
         'using it unfiltered.',
       );
       freshLinks = collectLinks(applySizeFilter: false);

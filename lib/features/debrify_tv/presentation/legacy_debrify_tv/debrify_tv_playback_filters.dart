@@ -31,7 +31,7 @@ class DebrifyTvPlaybackFilters {
         .toList();
     if (matched.isEmpty) {
       debugPrint(
-        'DebrifyTV: Quality filter matched 0/${all.length} cached torrents — '
+        'NextupTV: Quality filter matched 0/${all.length} cached torrents — '
         'falling back to unfiltered.',
       );
       _sections.filters.notifyQualityFallback();
@@ -39,7 +39,7 @@ class DebrifyTvPlaybackFilters {
     }
     if (matched.length != all.length) {
       debugPrint(
-        'DebrifyTV: Quality filter on cached: ${all.length} → ${matched.length} torrents',
+        'NextupTV: Quality filter on cached: ${all.length} → ${matched.length} torrents',
       );
     }
     return matched;

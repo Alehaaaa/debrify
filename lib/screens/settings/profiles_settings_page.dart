@@ -475,7 +475,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
         key: const ValueKey('profiles-always-ask'),
         icon: Icons.login_rounded,
         title: 'Ask who\'s watching at startup',
-        subtitle: 'Show the profile picker when Debrify opens',
+        subtitle: 'Show the profile picker when Nextup opens',
         value: ProfileGateAlwaysAsk.cached,
         onChanged: (value) async {
           await ProfileGateAlwaysAsk.set(value);

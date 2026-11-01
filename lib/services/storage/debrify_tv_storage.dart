@@ -289,7 +289,7 @@ final class DebrifyTvStorage {
       final favorites = jsonDecode(favoritesJson) as Map<String, dynamic>;
       return favorites.containsKey(channelId);
     } catch (e) {
-      debugPrint('Error reading Debrify TV channel favorites: $e');
+      debugPrint('Error reading Nextup TV channel favorites: $e');
       return false;
     }
   }
@@ -329,7 +329,7 @@ final class DebrifyTvStorage {
       final favorites = jsonDecode(favoritesJson) as Map<String, dynamic>;
       return favorites.keys.toSet();
     } catch (e) {
-      debugPrint('Error reading Debrify TV channel favorites: $e');
+      debugPrint('Error reading Nextup TV channel favorites: $e');
       return {};
     }
   }

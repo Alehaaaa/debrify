@@ -90,7 +90,7 @@ class TorboxTorrentPlaylistActions {
       _deps.showSnackBar(e.message);
     } catch (e) {
       if (!_deps.mounted()) return;
-      _deps.showSnackBar('Failed to add torrent to Debrify TV: $e');
+      _deps.showSnackBar('Failed to add torrent to Nextup TV: $e');
     }
   }
 }

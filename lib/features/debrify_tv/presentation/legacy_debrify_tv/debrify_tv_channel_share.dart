@@ -63,7 +63,7 @@ class DebrifyTvChannelShare {
                 'Share channel · ${channel.channelNumber.toString().padLeft(2, '0')}',
             title: channel.name,
             subtitle:
-                'Anyone on Debrify can paste this link to import the channel and its saved pool.',
+                'Anyone on Nextup can paste this link to import the channel and its saved pool.',
             icon: Icons.share_rounded,
             maxWidth: 720,
             child: Column(

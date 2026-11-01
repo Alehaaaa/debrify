@@ -30,7 +30,7 @@ class DebrifyTvChannelSwitch {
     String reason = 'direct',
   }) async {
     debugPrint(
-      'DebrifyTV: _switchToChannel(${targetChannel.name}) reason=$reason',
+      'NextupTV: _switchToChannel(${targetChannel.name}) reason=$reason',
     );
 
     final int computedIndex =
@@ -47,32 +47,32 @@ class DebrifyTvChannelSwitch {
     );
     if (cacheEntry == null) {
       debugPrint(
-        'DebrifyTV: Channel "${targetChannel.name}" has no cache entry',
+        'NextupTV: Channel "${targetChannel.name}" has no cache entry',
       );
       return null;
     }
     if (!cacheEntry.isReady) {
       debugPrint(
-        'DebrifyTV: Channel "${targetChannel.name}" cache not ready. Error: ${cacheEntry.errorMessage}',
+        'NextupTV: Channel "${targetChannel.name}" cache not ready. Error: ${cacheEntry.errorMessage}',
       );
       return null;
     }
     if (cacheEntry.torrents.isEmpty) {
-      debugPrint('DebrifyTV: Channel "${targetChannel.name}" has no torrents');
+      debugPrint('NextupTV: Channel "${targetChannel.name}" has no torrents');
       return null;
     }
 
-    debugPrint('DebrifyTV: Stopping old channel prefetcher...');
+    debugPrint('NextupTV: Stopping old channel prefetcher...');
     await _sections.prefetch.stopPrefetch();
-    debugPrint('DebrifyTV: Prefetcher stopped. Waiting for RD cooldown...');
+    debugPrint('NextupTV: Prefetcher stopped. Waiting for RD cooldown...');
     await Future.delayed(const Duration(seconds: 5));
-    debugPrint('DebrifyTV: Cooldown complete. Proceeding with channel switch.');
+    debugPrint('NextupTV: Cooldown complete. Proceeding with channel switch.');
 
     final previousChannelId = _owners.library.currentWatchingChannelId;
     if (previousChannelId != null) {
       _owners.library.channelCache.remove(previousChannelId);
       debugPrint(
-        'DebrifyTV: Evicted cache entry for previous channel $previousChannelId',
+        'NextupTV: Evicted cache entry for previous channel $previousChannelId',
       );
     }
 
@@ -83,13 +83,13 @@ class DebrifyTvChannelSwitch {
     _owners.session.qualityFallbackNotified = false;
     _owners.session.rdSizeRejections = 0;
     _owners.session.sizeFilterRelaxed = false;
-    debugPrint('DebrifyTV: Cleared prefetch state');
+    debugPrint('NextupTV: Cleared prefetch state');
 
     final keywords = await _sections.library.getChannelKeywords(
       targetChannel.id,
     );
     if (keywords.isEmpty) {
-      debugPrint('DebrifyTV: Channel "${targetChannel.name}" has no keywords');
+      debugPrint('NextupTV: Channel "${targetChannel.name}" has no keywords');
       if (_owners.settings.provider == DebrifyTvConstants.providerRealDebrid ||
           _owners.settings.provider == DebrifyTvConstants.providerAllDebrid) {
         unawaited(_sections.prefetch.startPrefetch());
@@ -104,7 +104,7 @@ class DebrifyTvChannelSwitch {
     );
 
     if (playbackSelection.isEmpty) {
-      debugPrint('DebrifyTV: No torrents matched in selected channel');
+      debugPrint('NextupTV: No torrents matched in selected channel');
       if (_owners.settings.provider == DebrifyTvConstants.providerRealDebrid ||
           _owners.settings.provider == DebrifyTvConstants.providerAllDebrid) {
         unawaited(_sections.prefetch.startPrefetch());
@@ -116,7 +116,7 @@ class DebrifyTvChannelSwitch {
         .map((cached) => cached.toTorrent())
         .toList();
     if (allTorrents.isEmpty) {
-      debugPrint('DebrifyTV: No playable torrents resolved for channel');
+      debugPrint('NextupTV: No playable torrents resolved for channel');
       if (_owners.settings.provider == DebrifyTvConstants.providerRealDebrid ||
           _owners.settings.provider == DebrifyTvConstants.providerAllDebrid) {
         unawaited(_sections.prefetch.startPrefetch());
@@ -128,7 +128,7 @@ class DebrifyTvChannelSwitch {
     if (_owners.settings.provider == DebrifyTvConstants.providerTorbox) {
       final apiKey = await TorboxStorage.getTorboxApiKey();
       if (apiKey == null || apiKey.isEmpty) {
-        debugPrint('DebrifyTV: ❌ No Torbox API key configured');
+        debugPrint('NextupTV: ❌ No Torbox API key configured');
         return null;
       }
 
@@ -159,14 +159,14 @@ class DebrifyTvChannelSwitch {
         }
       } catch (e) {
         debugPrint(
-          'DebrifyTV: Torbox cache check failed during channel switch: $e',
+          'NextupTV: Torbox cache check failed during channel switch: $e',
         );
         return null;
       }
 
       if (cachedCandidates.isEmpty) {
         debugPrint(
-          'DebrifyTV: Torbox channel has no cached torrents available',
+          'NextupTV: Torbox channel has no cached torrents available',
         );
         return null;
       }
@@ -176,10 +176,10 @@ class DebrifyTvChannelSwitch {
 
     try {
       if (_owners.settings.provider == DebrifyTvConstants.providerRealDebrid) {
-        debugPrint('DebrifyTV: Selected channel uses Real-Debrid provider');
+        debugPrint('NextupTV: Selected channel uses Real-Debrid provider');
         final apiKey = await RealDebridStorage.getApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No Real-Debrid API key configured');
+          debugPrint('NextupTV: ❌ No Real-Debrid API key configured');
           return null;
         }
 
@@ -201,7 +201,7 @@ class DebrifyTvChannelSwitch {
             );
           } catch (error) {
             debugPrint(
-              'DebrifyTV: Real-Debrid rejected candidate ${candidate.infohash}: $error',
+              'NextupTV: Real-Debrid rejected candidate ${candidate.infohash}: $error',
             );
             continue;
           }
@@ -213,7 +213,7 @@ class DebrifyTvChannelSwitch {
 
           if (rdLinks.isEmpty) {
             debugPrint(
-              'DebrifyTV: Real-Debrid returned no usable links for candidate ${candidate.infohash}',
+              'NextupTV: Real-Debrid returned no usable links for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -249,7 +249,7 @@ class DebrifyTvChannelSwitch {
               );
             } catch (error) {
               debugPrint(
-                'DebrifyTV: Real-Debrid unrestrict failed for candidate ${candidate.infohash}: $error',
+                'NextupTV: Real-Debrid unrestrict failed for candidate ${candidate.infohash}: $error',
               );
               continue;
             }
@@ -259,7 +259,7 @@ class DebrifyTvChannelSwitch {
             final String? resolved = unrestrict['download'] as String?;
             if (resolved == null || resolved.isEmpty) {
               debugPrint(
-                'DebrifyTV: Real-Debrid unrestrict returned empty URL for candidate ${candidate.infohash}',
+                'NextupTV: Real-Debrid unrestrict returned empty URL for candidate ${candidate.infohash}',
               );
               continue;
             }
@@ -294,9 +294,9 @@ class DebrifyTvChannelSwitch {
               DebrifyTvConstants.providerRealDebrid;
           unawaited(_sections.prefetch.startPrefetch());
           debugPrint(
-            'DebrifyTV: Started Real-Debrid prefetcher for new channel',
+            'NextupTV: Started Real-Debrid prefetcher for new channel',
           );
-          debugPrint('DebrifyTV: Successfully got stream from channel: $title');
+          debugPrint('NextupTV: Successfully got stream from channel: $title');
 
           return {
             'channelId': targetChannel.id,
@@ -307,15 +307,15 @@ class DebrifyTvChannelSwitch {
           };
         }
 
-        debugPrint('DebrifyTV: All Real-Debrid candidates failed for channel');
+        debugPrint('NextupTV: All Real-Debrid candidates failed for channel');
         return null;
       }
 
       if (_owners.settings.provider == DebrifyTvConstants.providerAllDebrid) {
-        debugPrint('DebrifyTV: Selected channel uses AllDebrid provider');
+        debugPrint('NextupTV: Selected channel uses AllDebrid provider');
         final apiKey = await AllDebridStorage.getAllDebridApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No AllDebrid API key configured');
+          debugPrint('NextupTV: ❌ No AllDebrid API key configured');
           return null;
         }
 
@@ -339,7 +339,7 @@ class DebrifyTvChannelSwitch {
             videoUrl = await AllDebridService.unlockLink(apiKey, headLink);
           } catch (error) {
             debugPrint(
-              'DebrifyTV: AllDebrid unlock failed for candidate ${candidate.infohash}: $error',
+              'NextupTV: AllDebrid unlock failed for candidate ${candidate.infohash}: $error',
             );
             continue;
           }
@@ -383,8 +383,8 @@ class DebrifyTvChannelSwitch {
           _owners.prefetch.activeProvider =
               DebrifyTvConstants.providerAllDebrid;
           unawaited(_sections.prefetch.startPrefetch());
-          debugPrint('DebrifyTV: Started AllDebrid prefetcher for new channel');
-          debugPrint('DebrifyTV: Successfully got stream from channel: $title');
+          debugPrint('NextupTV: Started AllDebrid prefetcher for new channel');
+          debugPrint('NextupTV: Successfully got stream from channel: $title');
 
           return {
             'channelId': targetChannel.id,
@@ -395,14 +395,14 @@ class DebrifyTvChannelSwitch {
           };
         }
 
-        debugPrint('DebrifyTV: All AllDebrid candidates failed for channel');
+        debugPrint('NextupTV: All AllDebrid candidates failed for channel');
         return null;
       }
 
       if (_owners.settings.provider == DebrifyTvConstants.providerTorbox) {
         final apiKey = await TorboxStorage.getTorboxApiKey();
         if (apiKey == null || apiKey.isEmpty) {
-          debugPrint('DebrifyTV: ❌ No Torbox API key configured');
+          debugPrint('NextupTV: ❌ No Torbox API key configured');
           return null;
         }
 
@@ -417,7 +417,7 @@ class DebrifyTvChannelSwitch {
 
           if (prepared == null || prepared.streamUrl.isEmpty) {
             debugPrint(
-              'DebrifyTV: Torbox preparation failed for candidate ${candidate.infohash}',
+              'NextupTV: Torbox preparation failed for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -437,7 +437,7 @@ class DebrifyTvChannelSwitch {
           }
 
           debugPrint(
-            'DebrifyTV: Torbox channel switch ready with stream ${prepared.title}',
+            'NextupTV: Torbox channel switch ready with stream ${prepared.title}',
           );
           return {
             'channelId': targetChannel.id,
@@ -448,14 +448,14 @@ class DebrifyTvChannelSwitch {
           };
         }
 
-        debugPrint('DebrifyTV: All Torbox candidates failed for channel');
+        debugPrint('NextupTV: All Torbox candidates failed for channel');
         return null;
       }
 
       if (_owners.settings.provider == DebrifyTvConstants.providerPikPak) {
         final pikpakAvailable = await PikPakTvService.instance.isAvailable();
         if (!pikpakAvailable) {
-          debugPrint('DebrifyTV: PikPak not authenticated');
+          debugPrint('NextupTV: PikPak not authenticated');
           return null;
         }
 
@@ -464,12 +464,12 @@ class DebrifyTvChannelSwitch {
 
           final prepared = await _sections.cloud.preparePikPakTorrent(
             candidate: candidate,
-            log: (message) => debugPrint('DebrifyTV/PikPak: $message'),
+            log: (message) => debugPrint('NextupTV/PikPak: $message'),
           );
 
           if (prepared == null) {
             debugPrint(
-              'DebrifyTV: PikPak preparation failed for candidate ${candidate.infohash}',
+              'NextupTV: PikPak preparation failed for candidate ${candidate.infohash}',
             );
             continue;
           }
@@ -490,7 +490,7 @@ class DebrifyTvChannelSwitch {
           }
 
           debugPrint(
-            'DebrifyTV: PikPak channel switch ready with stream ${prepared.title}',
+            'NextupTV: PikPak channel switch ready with stream ${prepared.title}',
           );
           return {
             'channelId': targetChannel.id,
@@ -501,23 +501,23 @@ class DebrifyTvChannelSwitch {
           };
         }
 
-        debugPrint('DebrifyTV: All PikPak candidates failed for channel');
+        debugPrint('NextupTV: All PikPak candidates failed for channel');
         return null;
       }
 
       debugPrint(
-        'DebrifyTV: Unsupported provider for channel switching: ${_owners.settings.provider}',
+        'NextupTV: Unsupported provider for channel switching: ${_owners.settings.provider}',
       );
       return null;
     } catch (e) {
-      debugPrint('DebrifyTV: Error getting stream from channel: $e');
+      debugPrint('NextupTV: Error getting stream from channel: $e');
     }
 
-    debugPrint('DebrifyTV: Channel switch failed');
+    debugPrint('NextupTV: Channel switch failed');
     if (_owners.settings.provider == DebrifyTvConstants.providerRealDebrid ||
         _owners.settings.provider == DebrifyTvConstants.providerAllDebrid) {
       unawaited(_sections.prefetch.startPrefetch());
-      debugPrint('DebrifyTV: Restarted prefetcher for current channel');
+      debugPrint('NextupTV: Restarted prefetcher for current channel');
     }
     return null;
   }

@@ -87,7 +87,7 @@ class DebridTorrentPlaylistActions {
       _deps.showError(e.message);
     } catch (e) {
       if (!_deps.mounted()) return;
-      _deps.showError('Failed to add torrent to Debrify TV: $e');
+      _deps.showError('Failed to add torrent to Nextup TV: $e');
     }
   }
 }

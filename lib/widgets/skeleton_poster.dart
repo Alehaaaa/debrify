@@ -234,7 +234,7 @@ class BrandLoadingStage extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'DEBRIFY',
+            'NEXTUP',
             // Poppins — the same display face the hero titles wear, so the
             // brand and the content read as one voice.
             style: GoogleFonts.poppins(

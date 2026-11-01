@@ -6,7 +6,7 @@ import '../services/support_remote_config_service.dart';
 Future<void> showSupportDonationChooserDialog(
   BuildContext context, {
   required SupportDonationConfig donation,
-  String title = 'Support Debrify',
+  String title = 'Support Nextup',
   ThemeData? theme,
 }) async {
   if (!donation.hasProviders) return;

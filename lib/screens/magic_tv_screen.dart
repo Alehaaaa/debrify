@@ -32,7 +32,7 @@ class _DebrifyTVScreenState extends State<DebrifyTVScreen> {
     super.initState();
     AnalyticsService.screenView('magic_tv');
     _owners.focus.channelSearchFocusNode = FocusNode(
-      debugLabel: 'DebrifyTVChannelSearch',
+      debugLabel: 'NextupTVChannelSearch',
     );
     _sections.settings.loadSettings();
     _sections.library

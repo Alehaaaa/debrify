@@ -59,7 +59,7 @@ String storageUsageReportText(StorageUsageReport report) {
       profile.profileId: _profileLabel(report, profile, index),
   };
   final lines = <String>[
-    'Debrify storage: ${formatStorageBytes(scan.totalBytes)} in '
+    'Nextup storage: ${formatStorageBytes(scan.totalBytes)} in '
         '${scan.fileCount} files (${_stamp(report.scannedAt)})',
     '',
     'By kind:',

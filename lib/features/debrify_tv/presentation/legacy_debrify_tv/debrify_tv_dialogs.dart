@@ -65,7 +65,7 @@ class DebrifyTvDialogs {
               DebrifyTvDialogOptionCard(
                 icon: Icons.share_rounded,
                 title: 'Share channel',
-                subtitle: 'Create a portable Debrify link for this pool.',
+                subtitle: 'Create a portable Nextup link for this pool.',
                 tag: 'Link',
                 onPressed: () {
                   Navigator.of(dialogContext).pop();
@@ -254,7 +254,7 @@ class DebrifyTvDialogs {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return DebrifyTvSpotlightDialog(
-              eyebrow: 'Debrify TV · applies to every channel',
+              eyebrow: 'Nextup TV · applies to every channel',
               title: 'Channel playback',
               subtitle:
                   'Choose the provider, filters, and starting behavior used when a channel tunes.',

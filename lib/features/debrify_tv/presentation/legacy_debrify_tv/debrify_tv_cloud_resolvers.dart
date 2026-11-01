@@ -304,7 +304,7 @@ class DebrifyTvCloudResolvers {
         applySizeFilter &&
         _owners.settings.tvFilters.hasSize) {
       debugPrint(
-        'DebrifyTV/Premiumize: no file matched the size filter in '
+        'NextupTV/Premiumize: no file matched the size filter in '
         '"$fallbackTitle" — using it unfiltered.',
       );
       return _sections.cloud._buildPremiumizePlayableEntries(

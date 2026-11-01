@@ -280,7 +280,7 @@ class IptvSettingsTwoPanePreferencePanes {
                 subtitle: widget.batteryExempt == true
                     ? 'Excluded — long recordings can run to the end'
                     : 'Optimized — the phone may kill long recordings; '
-                          'tap to exclude Debrify',
+                          'tap to exclude Nextup',
                 trailing: _sections.panes.chevron,
                 onTap: () => widget.onRequestBatteryExemption?.call(),
                 onLeft: _sections.navigation.returnToRail,

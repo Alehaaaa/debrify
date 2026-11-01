@@ -66,7 +66,7 @@ class HomeClassicFavoriteRows {
     required DebrifyTvChannel Function(int) itemAt,
     required ValueChanged<DebrifyTvChannel> onOpen,
   }) => _row(
-    title: 'Debrify TV',
+    title: 'Nextup TV',
     tags: const [
       CategoryTag('Channels'),
       CategoryTag('Favorites', icon: Icons.star_rounded),

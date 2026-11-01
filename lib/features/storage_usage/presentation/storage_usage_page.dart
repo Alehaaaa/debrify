@@ -149,7 +149,7 @@ class _StorageUsagePageState extends ConsumerState<StorageUsagePage> {
                 icon: Icons.storage_rounded,
                 title: _title,
                 subtitle:
-                    'What Debrify keeps on this device, for every profile',
+                    'What Nextup keeps on this device, for every profile',
               ),
               const SizedBox(height: 20),
               StorageUsageSummary(report: report),

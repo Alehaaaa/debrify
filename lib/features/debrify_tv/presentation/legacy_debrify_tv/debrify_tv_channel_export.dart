@@ -61,8 +61,8 @@ class DebrifyTvChannelExport {
           eyebrow: 'Channel export · Apple TV',
           title: 'Export from another device',
           subtitle:
-              'Apple TV does not expose a location where Debrify can save a '
-              'portable ZIP. Export the channels from Debrify on a phone or '
+              'Apple TV does not expose a location where Nextup can save a '
+              'portable ZIP. Export the channels from Nextup on a phone or '
               'computer, or send them through Remote.',
           icon: Icons.tv_rounded,
           maxWidth: 580,
@@ -205,7 +205,7 @@ class DebrifyTvChannelExport {
       );
     } catch (error) {
       debugPrint(
-        'DebrifyTV: channel archive export failed (${error.runtimeType})',
+        'NextupTV: channel archive export failed (${error.runtimeType})',
       );
       if (_deps.mounted()) {
         _sections.feedback.showSnack(

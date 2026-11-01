@@ -52,7 +52,7 @@ class HomeSavedContentSection {
   void playStremioTvChannel(HomeStremioFavorite channel) =>
       _deps.playStremio(channel);
 
-  // Debrify TV favourites — a leading "Debrify TV" row of the user's starred
+  // Debrify TV favourites — a leading "Nextup TV" row of the user's starred
   // keyword channels, shown between Continue Watching and the catalog rows.
   // Channels have no artwork, so they render as Stremio-shaped cards with a
   // gradient + glyph placeholder (see [HomeArtPoster]).

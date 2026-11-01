@@ -25,7 +25,7 @@ class CommunityChannelsService {
         Uri.parse(manifestUrl),
         headers: {
           'Accept': 'application/json',
-          'User-Agent': 'Debrify TV App',
+          'User-Agent': 'Nextup TV App',
         },
       ).timeout(
         const Duration(seconds: 30),
@@ -64,7 +64,7 @@ class CommunityChannelsService {
       final response = await http.get(
         Uri.parse(channelUrl),
         headers: {
-          'User-Agent': 'Debrify TV App',
+          'User-Agent': 'Nextup TV App',
         },
       ).timeout(
         const Duration(seconds: 60),

@@ -193,7 +193,7 @@ class VpIptvRecordingResources {
       dir = (await getDownloadsDirectory()) ?? await AppStorage.documents();
     }
     final sep = Platform.pathSeparator;
-    final prefix = '${dir.path}${sep}Debrify${sep}Recordings$sep${base}_$stamp';
+    final prefix = '${dir.path}${sep}Nextup${sep}Recordings$sep${base}_$stamp';
 
     var candidate = '$prefix.$extension';
     for (var n = 2; n < 100 && await File(candidate).exists(); n++) {

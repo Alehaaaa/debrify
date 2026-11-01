@@ -158,7 +158,7 @@ class IptvRecordNow {
           capture == null
               ? "Couldn't start recording"
               : 'Recording ${channel.name} — stop from this Record button; '
-                    'runs while Debrify is open',
+                    'runs while Nextup is open',
         ),
       ),
     );

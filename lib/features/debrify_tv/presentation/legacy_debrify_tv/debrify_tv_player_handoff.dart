@@ -45,7 +45,7 @@ class DebrifyTvPlayerHandoff {
 
       final launched = await AndroidTvPlayerBridge.launchTorboxPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         magnets: magnets,
         requestNext: requestNext,
         requestChannelSwitch: _owners.library.channels.length > 1
@@ -86,7 +86,7 @@ class DebrifyTvPlayerHandoff {
         return true;
       }
     } catch (e) {
-      debugPrint('DebrifyTV: Android TV bridge failed: $e');
+      debugPrint('NextupTV: Android TV bridge failed: $e');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
@@ -103,28 +103,28 @@ class DebrifyTvPlayerHandoff {
     int? channelNumber,
     List<Map<String, dynamic>>? channelDirectory,
   }) async {
-    debugPrint('DebrifyTV: _launchRealDebridOnAndroidTv() called');
-    debugPrint('DebrifyTV: _isAndroidTv=${_owners.settings.isAndroidTv}');
+    debugPrint('NextupTV: _launchRealDebridOnAndroidTv() called');
+    debugPrint('NextupTV: _isAndroidTv=${_owners.settings.isAndroidTv}');
 
     if (!_owners.settings.isAndroidTv) {
-      debugPrint('DebrifyTV: Not Android TV, skipping native launch');
+      debugPrint('NextupTV: Not Android TV, skipping native launch');
       return false;
     }
 
     final initialUrl = firstStream['url'] ?? '';
     debugPrint(
-      'DebrifyTV: initialUrl=${initialUrl.substring(0, initialUrl.length > 50 ? 50 : initialUrl.length)}...',
+      'NextupTV: initialUrl=${initialUrl.substring(0, initialUrl.length > 50 ? 50 : initialUrl.length)}...',
     );
 
     if (initialUrl.isEmpty) {
-      debugPrint('DebrifyTV: Initial URL is empty, cannot launch');
+      debugPrint('NextupTV: Initial URL is empty, cannot launch');
       return false;
     }
 
     final title = (firstStream['title'] ?? '').trim();
-    debugPrint('DebrifyTV: title="$title"');
+    debugPrint('NextupTV: title="$title"');
     debugPrint(
-      'DebrifyTV: Calling AndroidTvPlayerBridge.launchRealDebridPlayback()...',
+      'NextupTV: Calling AndroidTvPlayerBridge.launchRealDebridPlayback()...',
     );
 
     try {
@@ -140,7 +140,7 @@ class DebrifyTvPlayerHandoff {
 
       final launched = await AndroidTvPlayerBridge.launchRealDebridPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         channelName: channelName,
         requestNext: requestNext,
         requestChannelSwitch: canSwitchChannels
@@ -150,11 +150,11 @@ class DebrifyTvPlayerHandoff {
             ? _sections.channelWatch.requestChannelById
             : null,
         onFinished: () async {
-          debugPrint('DebrifyTV: Android TV playback finished callback');
+          debugPrint('NextupTV: Android TV playback finished callback');
 
           // Stop prefetcher when exiting player
           await _sections.prefetch.stopPrefetch();
-          debugPrint('DebrifyTV: Stopped prefetcher on player exit');
+          debugPrint('NextupTV: Stopped prefetcher on player exit');
 
           AndroidTvPlayerBridge.clearStreamProvider();
           _owners.library.currentWatchingChannelId =
@@ -179,7 +179,7 @@ class DebrifyTvPlayerHandoff {
       );
 
       debugPrint(
-        'DebrifyTV: AndroidTvPlayerBridge.launchRealDebridPlayback() returned: $launched',
+        'NextupTV: AndroidTvPlayerBridge.launchRealDebridPlayback() returned: $launched',
       );
 
       if (launched) {
@@ -189,22 +189,22 @@ class DebrifyTvPlayerHandoff {
           });
         }
         debugPrint(
-          'DebrifyTV: ✅ Successfully launched Real-Debrid on Android TV',
+          'NextupTV: ✅ Successfully launched Real-Debrid on Android TV',
         );
         return true;
       } else {
         debugPrint(
-          'DebrifyTV: ❌ AndroidTvPlayerBridge returned false - launch failed',
+          'NextupTV: ❌ AndroidTvPlayerBridge returned false - launch failed',
         );
       }
     } catch (e, stackTrace) {
-      debugPrint('DebrifyTV: ❌ Exception during Android TV launch: $e');
-      debugPrint('DebrifyTV: Stack trace: $stackTrace');
+      debugPrint('NextupTV: ❌ Exception during Android TV launch: $e');
+      debugPrint('NextupTV: Stack trace: $stackTrace');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
     AndroidTvPlayerBridge.clearStreamProvider();
-    debugPrint('DebrifyTV: Falling back to Flutter player');
+    debugPrint('NextupTV: Falling back to Flutter player');
     return false;
   }
 
@@ -233,7 +233,7 @@ class DebrifyTvPlayerHandoff {
       // Reuse Torbox bridge method - it works for any stream URL
       final launched = await AndroidTvPlayerBridge.launchTorboxPlayback(
         initialUrl: initialUrl,
-        title: title.isEmpty ? 'Debrify TV' : title,
+        title: title.isEmpty ? 'Nextup TV' : title,
         magnets: const [],
         requestNext: requestNext,
         requestChannelSwitch: _owners.library.channels.length > 1
@@ -274,7 +274,7 @@ class DebrifyTvPlayerHandoff {
         return true;
       }
     } catch (e) {
-      debugPrint('DebrifyTV: Android TV bridge failed for PikPak: $e');
+      debugPrint('NextupTV: Android TV bridge failed for PikPak: $e');
       if (e is NativePlayerSettingsUnavailable) rethrow;
     }
 
@@ -325,7 +325,7 @@ class DebrifyTvPlayerHandoff {
     final launched = await VideoPlayerLauncher.launchExternalIfConfigured(
       _deps.context(),
       videoUrl: url,
-      title: title.trim().isEmpty ? 'Debrify TV' : title.trim(),
+      title: title.trim().isEmpty ? 'Nextup TV' : title.trim(),
     );
     if (launched) {
       _owners.session.launchedPlayer = true;

@@ -102,8 +102,8 @@ class StorageDriveDialog extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
             child: Text(
-              'Recordings on a drive go in a Debrify folder there. Android '
-              'deletes that folder if Debrify is uninstalled.',
+              'Recordings on a drive go in a Nextup folder there. Android '
+              'deletes that folder if Nextup is uninstalled.',
               style: muted,
             ),
           ),

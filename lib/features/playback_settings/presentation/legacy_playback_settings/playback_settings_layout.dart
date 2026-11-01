@@ -67,7 +67,7 @@ class PlaybackSettingsLayout {
                   if (managedExternally) ...[
                     SettingsInfoBanner(
                       text:
-                          '${_deps.core.defaultPlayerMode == 'deovr' ? 'DeoVR' : 'Your external player'} manages these settings. Choose Debrify Player to configure its defaults.',
+                          '${_deps.core.defaultPlayerMode == 'deovr' ? 'DeoVR' : 'Your external player'} manages these settings. Choose Nextup Player to configure its defaults.',
                     ),
                     const SizedBox(height: 16),
                     SettingsSection(

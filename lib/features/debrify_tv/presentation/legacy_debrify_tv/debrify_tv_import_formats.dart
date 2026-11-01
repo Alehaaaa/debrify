@@ -250,7 +250,7 @@ class DebrifyTvImportFormats {
 
     // Validate debrify link format
     if (!MagnetYamlService.isMagnetLink(content)) {
-      throw const FormatException('Not a valid Debrify link.');
+      throw const FormatException('Not a valid Nextup link.');
     }
 
     if (showDialog) {

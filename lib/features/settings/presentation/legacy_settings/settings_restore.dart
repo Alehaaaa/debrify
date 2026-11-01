@@ -145,7 +145,7 @@ class SettingsRestore {
       // devices, leaving the backup unselectable. The contents are validated by
       // BackupRestoreService.parse below, so no extension filter is needed.
       pick = await FilePicker.platform.pickFiles(
-        dialogTitle: 'Choose Debrify backup file',
+        dialogTitle: 'Choose Nextup backup file',
         type: FileType.any,
         withData: false,
       );
@@ -169,7 +169,7 @@ class SettingsRestore {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('That file is too large to be a Debrify backup.'),
+          content: Text('That file is too large to be a Nextup backup.'),
         ),
       );
       return;

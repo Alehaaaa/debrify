@@ -148,7 +148,7 @@ class RemotePairingStore {
   /// Pin that [name]/[fingerprint] spoke v2. Used to refuse silent downgrades
   /// and to warn when a known TV's identity key changes.
   ///
-  /// Keyed by FINGERPRINT, not name: two TVs left on the default "Debrify TV"
+  /// Keyed by FINGERPRINT, not name: two TVs left on the default "Nextup TV"
   /// name must each keep their own pin — name-keyed replacement made pairing
   /// the second one clobber (or be blocked by) the first.
   static Future<void> pinReceiver({

@@ -89,7 +89,7 @@ Future<void> showChannelCreatedShareDialog(
             const SizedBox(height: 8),
             Text(
               debrifyLink != null
-                  ? 'A shareable Debrify link was copied to your clipboard.'
+                  ? 'A shareable Nextup link was copied to your clipboard.'
                   : 'Failed to generate shareable link${encodeError != null ? ': $encodeError' : ''}.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.7),

@@ -80,7 +80,7 @@ class HomeStageFavoriteCards {
       focus: () => HomeFavoriteFocus(
         art: null,
         title: channel.name,
-        subtitle: 'DEBRIFY TV · CHANNEL $number',
+        subtitle: 'NEXTUP TV · CHANNEL $number',
       ),
     );
   }

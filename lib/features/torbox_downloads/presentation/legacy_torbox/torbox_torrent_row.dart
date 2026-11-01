@@ -96,7 +96,7 @@ class TorboxTorrentRow {
         ),
       CloudRowAction(
         icon: Icons.live_tv_rounded,
-        label: 'Add to Debrify TV',
+        label: 'Add to Nextup TV',
         onSelected: () => _deps.handleAddToDebrifyTv(torrent),
       ),
       CloudRowAction(

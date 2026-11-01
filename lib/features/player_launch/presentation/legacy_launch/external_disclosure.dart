@@ -54,7 +54,7 @@ final class ExternalDisclosure {
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: const Text('Use Debrify player'),
+                child: const Text('Use Nextup player'),
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),

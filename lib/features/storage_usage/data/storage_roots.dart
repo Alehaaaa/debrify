@@ -21,7 +21,7 @@ const _documentsEntries = <String>[
   'engines',
   'downloads',
   'subtitle_fonts',
-  'Debrify',
+  'Nextup',
   'iptv_catalog.db*',
   'debrify_tv.db*',
 ];

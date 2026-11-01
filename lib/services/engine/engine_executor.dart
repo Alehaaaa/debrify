@@ -602,7 +602,7 @@ class EngineExecutor {
 
   /// Get default HTTP headers.
   Map<String, String> _getDefaultHeaders() {
-    return {'Accept': 'application/json', 'User-Agent': 'Debrify/1.0'};
+    return {'Accept': 'application/json', 'User-Agent': 'Nextup/1.0'};
   }
 
   /// Determine search type based on params.

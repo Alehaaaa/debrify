@@ -45,7 +45,7 @@ final class PlayerNowPlaying {
           liveTitle?.call() ??
           attachment.mediaTitle ??
           launch?.title ??
-          'Debrify',
+          'Nextup',
       subtitle: () {
         if (liveTitle?.call() != null) return 'Live TV';
         // The launch subtitle described the first item only.

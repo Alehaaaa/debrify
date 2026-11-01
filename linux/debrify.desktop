@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Debrify
+Name=Nextup
 Comment=Debrid client for torrents and streaming
 Exec=debrify %u
 Icon=debrify

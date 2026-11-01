@@ -108,7 +108,7 @@ class HomeStageRails {
       case HomeFavoriteKind.iptv:
         return 'IPTV Favorites';
       case HomeFavoriteKind.debrify:
-        return 'Debrify TV';
+        return 'Nextup TV';
       case HomeFavoriteKind.stremio:
         return 'Stremio TV';
       case HomeFavoriteKind.playlist:

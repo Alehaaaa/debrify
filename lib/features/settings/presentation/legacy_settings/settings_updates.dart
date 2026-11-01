@@ -130,7 +130,7 @@ class SettingsUpdates {
         url: asset.downloadUrl.toString(),
         fileName: asset.name.isNotEmpty
             ? asset.name
-            : 'Debrify-${release.versionLabel}.apk',
+            : 'Nextup-${release.versionLabel}.apk',
         subDir: 'Debrify/Updates',
         mimeType: mime,
       );
@@ -208,7 +208,7 @@ class SettingsUpdates {
     final result = await Permission.requestInstallPackages.request();
     if (result.isGranted) return true;
     if (result.isPermanentlyDenied || result.isRestricted) {
-      _deps.showSnack('Allow Debrify to install apps from your settings.');
+      _deps.showSnack('Allow Nextup to install apps from your settings.');
       unawaited(openAppSettings());
     } else {
       _deps.showSnack('Permission required to install the downloaded update.');

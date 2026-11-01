@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Debrify</string>
+    <string name="app_name">Nextup</string>
     <string name="tv_audio_tracks">Audio Tracks</string>
     <string name="tv_subtitle_tracks">Subtitle Tracks</string>
     <string name="debrify_tv_control_rewind">Rewind 10 seconds</string>

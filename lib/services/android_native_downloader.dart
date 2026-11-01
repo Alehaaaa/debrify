@@ -351,7 +351,7 @@ class AndroidNativeDownloader {
 
   static Future<String?> startUpdate({
     required String url,
-    String fileName = 'Debrify-update.apk',
+    String fileName = 'Nextup-update.apk',
     String subDir = 'Debrify/Updates',
     String mimeType = 'application/vnd.android.package-archive',
     Map<String, String>? headers,
