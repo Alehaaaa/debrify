@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../services/analytics_service.dart';
 import '../../services/play_loader_style.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/platform_util.dart';
@@ -39,6 +41,7 @@ class _PlayLoaderStylePageState extends State<PlayLoaderStylePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('play_loader_style_settings');
     _load();
   }
 

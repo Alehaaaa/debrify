@@ -1,3 +1,6 @@
+import 'package:debrify/features/sources/application/source_candidate_ranking.dart';
+import 'package:debrify/features/sources/application/source_probing.dart';
+import 'package:debrify/features/sources/data/recovery_source_resolution.dart';
 import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/models/torrent.dart';
 import 'package:debrify/models/torrent_filter_state.dart';
@@ -5,7 +8,6 @@ import 'package:debrify/services/alldebrid_service.dart';
 import 'package:debrify/services/debrid_service.dart';
 import 'package:debrify/services/series_source_fetcher.dart';
 import 'package:debrify/services/startup_recovery_sources.dart';
-import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:debrify/utils/filter_ladder.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -53,10 +55,10 @@ void main() {
           manualCalls++;
           return [low];
         },
-        searchForRecovery: (_, _, _) async => [low, high],
+        searchForRecovery: (_, __, ___) async => [low, high],
       );
       final raw = (await fetcher.fetch('movie', automaticRecovery: true))!;
-      final automatic = await TorrentPlaybackService.prepareRecoverySources(
+      final automatic = await RecoverySourceResolution.prepareRecoverySources(
         raw,
         rules: rules,
         provider: 'debrid',
@@ -94,20 +96,21 @@ void main() {
         ]) {
           final cold = row('Cold'), cached = row('Cached');
           var called = false;
-          final prepared = await TorrentPlaybackService.prepareRecoverySources(
-            [cold, cached],
-            provider: provider,
-            rules: QuickPlayRules.debrifyDefault(
-              isMovie: true,
-            ).copyWith(ranking: ranking),
-            ladder: FilterLadder(TorrentFilterState()),
-            cacheCheck: (actual, candidates) async {
-              expect(actual, provider);
-              expect(candidates, [cold, cached]);
-              called = true;
-              return [cached, cold];
-            },
-          );
+          final prepared =
+              await RecoverySourceResolution.prepareRecoverySources(
+                [cold, cached],
+                provider: provider,
+                rules: QuickPlayRules.debrifyDefault(
+                  isMovie: true,
+                ).copyWith(ranking: ranking),
+                ladder: FilterLadder(TorrentFilterState()),
+                cacheCheck: (actual, candidates) async {
+                  expect(actual, provider);
+                  expect(candidates, [cold, cached]);
+                  called = true;
+                  return [cached, cold];
+                },
+              );
           expect(called, isTrue);
           expect(prepared, [cached, cold]);
         }
@@ -122,7 +125,7 @@ void main() {
       final preflight = RecoveryDirectPreflight(
         budget: 2,
         isMovie: false,
-        shouldProbe: TorrentPlaybackService.shouldPreflightDirectStream,
+        shouldProbe: SourceCandidateRanking.shouldPreflightDirectStream,
         probe: (url, {minBytes = 0, lenient = false, headers}) async {
           probes++;
           expect(minBytes, 10 * 1024 * 1024);
@@ -155,7 +158,7 @@ void main() {
     final preflight = RecoveryDirectPreflight(
       budget: 5,
       isMovie: true,
-      shouldProbe: TorrentPlaybackService.shouldPreflightDirectStream,
+      shouldProbe: SourceCandidateRanking.shouldPreflightDirectStream,
       probe: (_, {minBytes = 0, lenient = false, headers}) async =>
           throw StateError('must not probe'),
     );
@@ -199,22 +202,22 @@ void main() {
         calls.add('ad:$key:$id');
       }
 
-      await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
+      await SourceProbing.cleanupFailedAutomaticAcquisition(
         TorrentNotCachedException('torrent', 'rd-key'),
         deleteRealDebrid: rd,
         deleteAllDebrid: ad,
       );
-      await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
+      await SourceProbing.cleanupFailedAutomaticAcquisition(
         AllDebridTorrentNotReadyException('magnet', 'ad-key'),
         deleteRealDebrid: rd,
         deleteAllDebrid: ad,
       );
       expect(calls, ['rd:rd-key:torrent', 'ad:ad-key:magnet']);
-      await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
+      await SourceProbing.cleanupFailedAutomaticAcquisition(
         TorrentNotCachedException('torrent', 'key'),
-        deleteRealDebrid: (_, _) async => throw StateError('cleanup failed'),
+        deleteRealDebrid: (_, __) async => throw StateError('cleanup failed'),
       );
-      await TorrentPlaybackService.cleanupFailedAutomaticAcquisition(
+      await SourceProbing.cleanupFailedAutomaticAcquisition(
         StateError('network'),
         deleteRealDebrid: rd,
         deleteAllDebrid: ad,

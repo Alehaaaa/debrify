@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -6,10 +5,10 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_surface.dart';
+import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/widgets/glass_surface.dart';
 import '../models/profiles/user_profile.dart';
-import 'menu_pill.dart';
 import 'profiles/profile_avatar_view.dart';
 
 /// A premium glassmorphic floating action button menu for mobile navigation
@@ -123,10 +122,10 @@ class _MobileFloatingNavState extends State<MobileFloatingNav>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final motion = AppMotion.of(context);
     // The hook that may depend on inherited widgets AND re-runs when they
     // change, so a theme or accessibility switch retargets both live
     // controllers. Legacy resolves back to exactly what initState built.
+    final motion = AppMotion.of(context);
     _mainController.duration = motion.scaled(const Duration(milliseconds: 250));
     _menuController.duration = motion.scaled(const Duration(milliseconds: 350));
     _scaleCurve.curve = motion.standard;
@@ -173,23 +172,13 @@ class _MobileFloatingNavState extends State<MobileFloatingNav>
     // Read ONCE: the FAB's AnimatedBuilder rides a repeating pulse controller,
     // so anything read inside it would be a per-frame scope walk.
     final app = AppThemeScope.of(context);
-    final mq = MediaQuery.of(context);
-    final bottomPadding = mq.padding.bottom;
-    final topPadding = mq.padding.top;
-    final screenHeight = mq.size.height;
-    // The keyboard (or any bottom inset) pushes the whole nav up with the
-    // resizing body, so the panel's ceiling has to drop by the same amount —
-    // otherwise its topmost items ride above the viewport, which is exactly
-    // what surfaced on iOS with the keyboard open. Clamp to a usable minimum so
-    // a tall keyboard on a short phone still leaves a scrollable sliver rather
-    // than collapsing the panel.
-    final keyboardInset = mq.viewInsets.bottom;
-    // Max menu height: screen - top safe area - bottom button area - padding -
-    // whatever the keyboard currently occupies.
-    final maxMenuHeight = math.max(
-      160.0,
-      screenHeight - topPadding - 100 - bottomPadding - 40 - keyboardInset,
-    );
+    // Hoisted with the theme read, above every builder callback below.
+    final motion = AppMotion.of(context);
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final topPadding = MediaQuery.of(context).padding.top;
+    final screenHeight = MediaQuery.of(context).size.height;
+    // Calculate max menu height: screen - top safe area - bottom button area - some padding
+    final maxMenuHeight = screenHeight - topPadding - 100 - bottomPadding - 40;
 
     return Stack(
       alignment: Alignment.bottomRight,
@@ -237,7 +226,7 @@ class _MobileFloatingNavState extends State<MobileFloatingNav>
 
         // Glassmorphic menu panel
         Positioned(
-          bottom: 96 + bottomPadding,
+          bottom: 80 + bottomPadding,
           right: 16,
           child: AnimatedBuilder(
             animation: Listenable.merge([
@@ -323,21 +312,87 @@ class _MobileFloatingNavState extends State<MobileFloatingNav>
 
         // Main FAB button - clean minimal design
         Positioned(
-          bottom: 32 + bottomPadding,
+          bottom: 16 + bottomPadding,
           right: 16,
-          child: AnimatedBuilder(
-            animation: Listenable.merge([_mainController, _pulseAnimation]),
-            builder: (context, child) {
-              final pulseValue = _isExpanded ? 0.0 : _pulseAnimation.value;
-              return Transform.scale(
-                scale: _scaleAnimation.value,
-                child: MenuPill(
-                  isOpen: _isExpanded,
-                  onTap: _toggle,
-                  pulseValue: pulseValue,
-                ),
-              );
-            },
+          child: GestureDetector(
+            onTap: _toggle,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_mainController, _pulseAnimation]),
+              builder: (context, child) {
+                final pulseValue = _isExpanded ? 0.0 : _pulseAnimation.value;
+                return Transform.scale(
+                  scale: _scaleAnimation.value,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: app.shape.br(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                          spreadRadius: -2,
+                        ),
+                      ],
+                    ),
+                    child: GlassSurface(
+                      // A control rather than a pane, so it follows the family
+                      // whose decoration it actually carries.
+                      family: SurfaceFamily.card,
+                      borderRadius: app.shape.br(20),
+                      sigma: 16,
+                      // The pill's fill and hairline TWEEN between the open and
+                      // closed states (250ms at the shipped tempo); a tint
+                      // handed to GlassSurface would swap instantly. The
+                      // AnimatedContainer keeps them.
+                      tint: Colors.transparent,
+                      border: Colors.transparent,
+                      child: AnimatedContainer(
+                        duration: motion.scaled(
+                          const Duration(milliseconds: 250),
+                        ),
+                        height: 44,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: _isExpanded
+                              ? app.fade(app.core.tx, 0.12)
+                              : app.fade(app.core.tx, 0.1),
+                          borderRadius: app.shape.br(22),
+                          border: Border.all(
+                            color: app.fade(
+                              app.core.tx,
+                              _isExpanded ? 0.25 : 0.15,
+                            ),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Simple animated icon
+                            _SimpleAnimatedIcon(
+                              isExpanded: _isExpanded,
+                              pulseValue: pulseValue,
+                              app: app,
+                            ),
+                            const SizedBox(width: 8),
+                            // Text label
+                            Text(
+                              _isExpanded ? 'Close' : 'Menu',
+                              style: TextStyle(
+                                color: app.fade(app.core.tx, 0.8),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -579,7 +634,6 @@ class _MobileProfileMenuItem extends StatelessWidget {
                     avatarKey: profile.avatarKey,
                     role: profile.role,
                     name: profile.name,
-                    focused: true,
                     animateWhenIdle: true,
                   ),
                 ),
@@ -681,13 +735,7 @@ class _GlassMenuItemState extends State<_GlassMenuItem> {
       child: AnimatedContainer(
         duration: motion.scaled(const Duration(milliseconds: 150)),
         curve: motion.standard,
-        transform: Matrix4.identity()
-          ..scaleByDouble(
-            _isPressed ? 0.97 : 1.0,
-            _isPressed ? 0.97 : 1.0,
-            _isPressed ? 0.97 : 1.0,
-            1.0,
-          ),
+        transform: Matrix4.identity()..scale(_isPressed ? 0.97 : 1.0),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
@@ -826,6 +874,76 @@ class _GlassMenuItemState extends State<_GlassMenuItem> {
   }
 }
 
+/// Simple animated icon - 4 dots with subtle movement
+class _SimpleAnimatedIcon extends StatelessWidget {
+  final bool isExpanded;
+  final double pulseValue;
+
+  /// Passed down rather than read here: this widget rebuilds on every frame of
+  /// the FAB's repeating pulse, so a scope lookup in its build would be one
+  /// per frame. The host reads it once.
+  final AppTheme app;
+
+  const _SimpleAnimatedIcon({
+    required this.isExpanded,
+    required this.pulseValue,
+    required this.app,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isExpanded) {
+      return Icon(Icons.close_rounded, color: app.core.tx, size: 18);
+    }
+
+    // 2x2 grid of dots with subtle animation
+    return SizedBox(
+      width: 16,
+      height: 16,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _Dot(opacity: 0.9 + 0.1 * pulseValue, app: app),
+              _Dot(opacity: 0.7 + 0.3 * (1 - pulseValue), app: app),
+            ],
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _Dot(opacity: 0.7 + 0.3 * (1 - pulseValue), app: app),
+              _Dot(opacity: 0.9 + 0.1 * pulseValue, app: app),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Dot extends StatelessWidget {
+  final double opacity;
+
+  /// See [_SimpleAnimatedIcon.app] — per-frame widget, token passed in.
+  final AppTheme app;
+
+  const _Dot({required this.opacity, required this.app});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 5,
+      height: 5,
+      decoration: BoxDecoration(
+        color: app.fade(app.core.tx, opacity),
+        borderRadius: app.shape.br(1.5),
+      ),
+    );
+  }
+}
+
 /// Remote Control menu item - accent line style
 class _RemoteControlMenuItem extends StatefulWidget {
   final VoidCallback onTap;
@@ -853,13 +971,7 @@ class _RemoteControlMenuItemState extends State<_RemoteControlMenuItem> {
       child: AnimatedContainer(
         duration: motion.scaled(const Duration(milliseconds: 150)),
         curve: motion.standard,
-        transform: Matrix4.identity()
-          ..scaleByDouble(
-            _isPressed ? 0.98 : 1.0,
-            _isPressed ? 0.98 : 1.0,
-            _isPressed ? 0.98 : 1.0,
-            1.0,
-          ),
+        transform: Matrix4.identity()..scale(_isPressed ? 0.98 : 1.0),
         transformAlignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(

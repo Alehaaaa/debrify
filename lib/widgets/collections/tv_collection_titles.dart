@@ -1,15 +1,16 @@
 import 'dart:async';
+import 'package:debrify/services/storage/ambient_trailer_storage.dart';
 import '../../utils/tv_keys.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/debrify_image_cache.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/stremio_addon.dart';
-import '../../services/storage_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/app_route_observer.dart';
 import '../../utils/platform_util.dart';
 import '../home/spotlight_card_trailer.dart';
+import 'package:debrify/models/ambient_trailer_surface.dart';
 
 /// Large-screen presentations of a collection's titles. The parent owns
 /// paging, sorting and title actions; focus remains here while details push.
@@ -74,9 +75,9 @@ class TvCollectionTitlesState extends State<TvCollectionTitles>
         ? AmbientTrailerSurface.homeHero
         : AmbientTrailerSurface.detail;
     final values = await Future.wait([
-      StorageService.getHomeHeroTrailerEnabled(),
-      StorageService.getAmbientTrailerAudioEnabled(surface),
-      StorageService.getAmbientTrailerVolume(surface),
+      AmbientTrailerStorage.getHomeHeroTrailerEnabled(),
+      AmbientTrailerStorage.getAmbientTrailerAudioEnabled(surface),
+      AmbientTrailerStorage.getAmbientTrailerVolume(surface),
     ]);
     if (!mounted || request != _prefsRequest) return;
     final enabled = values[0] as bool;
@@ -90,18 +91,16 @@ class TvCollectionTitlesState extends State<TvCollectionTitles>
 
   void _armPreview() {
     _trailerDwell?.cancel();
-    if (_previewIdentity != null && mounted) {
+    if (_previewIdentity != null && mounted)
       setState(() => _previewIdentity = null);
-    }
     if (!mounted || !_previewEligible) return;
     final identity = _identity(widget.items[_index]);
     _trailerDwell = Timer(const Duration(seconds: 2), () {
       if (!mounted ||
           !_previewEligible ||
           ModalRoute.of(context)?.isCurrent == false ||
-          identity != _identity(widget.items[_index])) {
+          identity != _identity(widget.items[_index]))
         return;
-      }
       setState(() => _previewIdentity = identity);
     });
   }

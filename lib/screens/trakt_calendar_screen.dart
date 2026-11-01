@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/trakt/trakt_calendar_entry.dart';
+import '../services/analytics_service.dart';
 import '../services/android_native_downloader.dart';
 import '../services/main_page_bridge.dart';
 import '../services/mdblist/mdblist_calendar_service.dart';
@@ -12,23 +13,10 @@ import '../services/trakt/trakt_calendar_service.dart';
 import '../services/trakt/trakt_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
-import '../theme/glass_chrome.dart';
 import '../widgets/trakt_calendar_day_sheet.dart';
-import '../widgets/card_action_menu.dart';
-import '../widgets/hold_feedback.dart';
-import '../models/stremio_addon.dart';
-import '../services/offline_title_store.dart';
-import '../services/storage_service.dart';
-import '../services/watchlist_sync_service.dart';
-import '../services/startup_connection.dart';
-import '../services/watched_action_coordinator.dart';
 import '../utils/tv_keys.dart';
 import '../services/profiles/profile_preferences.dart';
 import '../widgets/calendar_display_preferences.dart';
-import '../widgets/watchlist_added_bubble.dart';
-import 'settings/widgets/settings_widgets.dart'
-    show SettingsSection, SettingsSectionLabel;
-import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TraktCalendarScreen extends StatefulWidget {
   const TraktCalendarScreen({super.key});
@@ -107,6 +95,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('trakt_calendar');
     final now = DateTime.now();
     _selectedYear = _lastViewedYear ?? now.year;
     _selectedMonth = _lastViewedMonth ?? now.month;
@@ -122,9 +111,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     _timeFormatFocusNode.dispose();
     for (final node in _dayFocusNodes.values) {
       node.dispose();
-    }
-    for (final hold in _dayHolds.values) {
-      hold.reset();
     }
     super.dispose();
   }
@@ -201,12 +187,8 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   /// Preload the selected month and the next one (shared by initial load and
   /// source switching).
   Future<void> _loadCurrentAndNextMonth() async {
-    final generation = _sourceGen;
     final currentMonth = _selectedMonthStart;
     await _ensureMonthLoaded(currentMonth);
-    // A newer tracker selection owns the next request now. The previous load
-    // must not issue an extra request in the new profile/source's scope.
-    if (!mounted || generation != _sourceGen) return;
     await _ensureMonthLoaded(
       DateTime(currentMonth.year, currentMonth.month + 1, 1),
     );
@@ -227,9 +209,8 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       _isLoading = true;
     });
     _lastSource = source; // survive the detail round-trip's remount
-    final generation = _sourceGen;
     await _loadCurrentAndNextMonth();
-    if (!mounted || generation != _sourceGen) return;
+    if (!mounted) return;
     setState(() => _isLoading = false);
   }
 
@@ -327,197 +308,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     }
   }
 
-  /// Hold-OK per TV day card (and the ring it fills): a short press opens
-  /// the day, a held one opens the episode menu. Kept here beside the focus
-  /// nodes because the cards themselves are stateless list items.
-  final Map<DateTime, CardHold> _dayHolds = {};
-
-  CardHold _holdForDay(_AiringDay day) => _dayHolds.putIfAbsent(
-    _dateOnly(day.day),
-    () => CardHold(
-      // Re-read the day at press time: the list rebuilds as months load.
-      onTap: () {
-        final current = _dayFor(day.day);
-        if (current != null) _openDaySheet(current.day, current.entries);
-      },
-      onHold: () {
-        final current = _dayFor(day.day);
-        if (current != null) _openDayOptions(current);
-      },
-    ),
-  );
-
-  _AiringDay? _dayFor(DateTime day) {
-    final wanted = _dateOnly(day);
-    for (final d in _visibleDays) {
-      if (_dateOnly(d.day) == wanted) return d;
-    }
-    return null;
-  }
-
-  /// A held TV day card: one episode gets its menu straight away; a busier
-  /// day opens its sheet, where each episode has its own hold menu.
-  void _openDayOptions(_AiringDay day) {
-    if (day.entries.length == 1) {
-      _openEpisodeOptions(day.entries.first);
-    } else {
-      _openDaySheet(day.day, day.entries);
-    }
-  }
-
-  bool _episodeMenuOpen = false;
-
-  /// Hold / right-click on a calendar episode: open it, see its day, keep the
-  /// show on My Watchlist, or mark the episode watched.
-  Future<void> _openEpisodeOptions(
-    TraktCalendarEntry entry, {
-    List<TraktCalendarEntry>? dayEntries,
-  }) async {
-    final imdbId = entry.showImdbId;
-    if (_episodeMenuOpen || imdbId == null || imdbId.isEmpty) return;
-    _episodeMenuOpen = true;
-    _CalendarEpisodeAction? action;
-    StremioMeta? show;
-    try {
-      final addon = await OfflineTitleStore.cinemetaAddon();
-      show = StorageService.withMyWatchlistSource(
-        StremioMeta(
-          id: imdbId,
-          imdbId: imdbId,
-          type: 'series',
-          name: entry.showTitle,
-          poster: entry.posterUrl,
-          year: entry.showYear?.toString(),
-        ),
-        addon,
-      );
-      var inWatchlist = false;
-      var watched = false;
-      try {
-        inWatchlist = await StorageService.isInMyWatchlist(show);
-        watched = await StorageService.isEpisodeFinished(
-          seriesTitle: entry.showTitle,
-          season: entry.seasonNumber,
-          episode: entry.episodeNumber,
-          imdbId: imdbId,
-        );
-      } catch (_) {}
-      if (!mounted) return;
-      final code =
-          'S${entry.seasonNumber.toString().padLeft(2, '0')}'
-          'E${entry.episodeNumber.toString().padLeft(2, '0')}';
-      final episodeTitle = entry.episodeTitle?.trim();
-      action = await showCardActionMenu<_CalendarEpisodeAction>(
-        context,
-        title: entry.showTitle,
-        subtitle: episodeTitle == null || episodeTitle.isEmpty
-            ? code
-            : '$code  ·  $episodeTitle',
-        posterUrl: entry.posterUrl,
-        isTelevision: _isTelevision,
-        actions: [
-          const CardMenuAction(
-            value: _CalendarEpisodeAction.open,
-            icon: Icons.info_outline_rounded,
-            label: 'Open episode',
-            description: 'The show\'s page, scrolled to this episode.',
-          ),
-          if (dayEntries != null && dayEntries.length > 1)
-            CardMenuAction(
-              value: _CalendarEpisodeAction.showDay,
-              icon: Icons.calendar_view_day_rounded,
-              label: 'Everything airing that day',
-              description: 'All ${dayEntries.length} episodes of the day.',
-            ),
-          inWatchlist
-              ? const CardMenuAction(
-                  value: _CalendarEpisodeAction.watchlistRemove,
-                  icon: Icons.bookmark_remove_rounded,
-                  label: 'Remove show from My Watchlist',
-                  description: 'Takes the show off your watchlist row.',
-                )
-              : const CardMenuAction(
-                  value: _CalendarEpisodeAction.watchlistAdd,
-                  icon: Icons.bookmark_add_outlined,
-                  label: 'Add show to My Watchlist',
-                  description: 'Saves the show to the watchlist row on Home.',
-                ),
-          watched
-              ? const CardMenuAction(
-                  value: _CalendarEpisodeAction.markUnwatched,
-                  icon: Icons.remove_done_rounded,
-                  label: 'Mark episode as unwatched',
-                  description:
-                      'Clears its watched mark here and on your synced '
-                      'trackers.',
-                )
-              : const CardMenuAction(
-                  value: _CalendarEpisodeAction.markWatched,
-                  icon: Icons.done_rounded,
-                  label: 'Mark episode as watched',
-                  description:
-                      'Marks it watched here and on your synced trackers.',
-                ),
-        ],
-      );
-    } finally {
-      _episodeMenuOpen = false;
-    }
-    if (!mounted || action == null) return;
-    switch (action) {
-      case _CalendarEpisodeAction.open:
-        // The day sheet, when this came from one, closes on the way out like
-        // its own tap does.
-        if (dayEntries == null) {
-          _handleEpisodeSelected(entry);
-        } else {
-          Navigator.of(
-            context,
-          ).popUntil((route) => route is! ModalBottomSheetRoute);
-          _handleEpisodeSelected(entry);
-        }
-      case _CalendarEpisodeAction.showDay:
-        _openDaySheet(entry.firstAiredLocal, dayEntries!);
-      case _CalendarEpisodeAction.watchlistAdd:
-      case _CalendarEpisodeAction.watchlistRemove:
-        final add = action == _CalendarEpisodeAction.watchlistAdd;
-        try {
-          await WatchlistSyncService.setMyWatchlistItem(show, add);
-          if (!mounted) return;
-          if (add) {
-            showWatchlistAddedBubble(context);
-          } else {
-            _snack('Removed from My Watchlist');
-          }
-        } catch (_) {
-          _snack('Couldn\'t update My Watchlist');
-        }
-      case _CalendarEpisodeAction.markWatched:
-      case _CalendarEpisodeAction.markUnwatched:
-        final watched = action == _CalendarEpisodeAction.markWatched;
-        final result = await WatchedActionCoordinator.setEpisodeWatched(
-          imdbId: imdbId,
-          seriesTitle: entry.showTitle,
-          season: entry.seasonNumber,
-          episode: entry.episodeNumber,
-          watched: watched,
-        );
-        _snack(
-          result.success
-              ? (watched ? 'Marked as watched' : 'Marked as unwatched')
-              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
-                    'didn\'t update',
-        );
-    }
-  }
-
-  void _snack(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
-
   FocusNode _focusNodeForDay(DateTime day) {
     final normalized = _dateOnly(day);
     return _dayFocusNodes.putIfAbsent(
@@ -564,18 +354,11 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   }
 
   void _openDaySheet(DateTime day, List<TraktCalendarEntry> entries) {
-    final app = AppThemeScope.of(context);
     showModalBottomSheet<void>(
-      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: GlassChrome.enabled(app)
-          ? GlassChrome.fill(app, raised: true)
-          : app.calendar.sheetBg,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        side: GlassChrome.enabled(app)
-            ? BorderSide(color: GlassChrome.edge(app))
-            : BorderSide.none,
+      backgroundColor: AppThemeScope.of(context).calendar.sheetBg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (_) => CalendarTimeFormatScope(
         format: _timeFormat,
@@ -583,8 +366,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
           date: day,
           entries: entries,
           onEpisodeSelected: _handleEpisodeSelected,
-          onEpisodeOptions: (entry) =>
-              _openEpisodeOptions(entry, dayEntries: entries),
         ),
       ),
     );
@@ -619,80 +400,48 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final isWide = MediaQuery.of(context).size.width >= 900;
-    final frosted = GlassChrome.enabled(app);
 
     return CalendarTimeFormatScope(
       format: _timeFormat,
       child: Scaffold(
-        backgroundColor: frosted ? app.core.pane : app.calendar.bg,
+        backgroundColor: app.calendar.bg,
+        appBar: _isTelevision
+            ? null
+            : AppBar(
+                backgroundColor: Colors.transparent,
+                surfaceTintColor: Colors.transparent,
+                elevation: 0,
+                title: Text('$_sourceName Calendar'),
+              ),
         body: Container(
-          decoration: frosted
-              ? BoxDecoration(color: GlassChrome.fill(app))
-              : BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      const Color(0xFF171B30),
-                      const Color(0xFF0B1020),
-                      app.calendar.bg,
-                    ],
-                  ),
-                ),
-          // No app bar: the page header (month, chevrons, filters) is the
-          // top of the page, so it keeps clear of the status bar itself.
-          child: SafeArea(top: !_isTelevision, child: _buildBody(isWide, app)),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                const Color(0xFF171B30),
+                const Color(0xFF0B1020),
+                app.calendar.bg,
+              ],
+            ),
+          ),
+          child: SafeArea(top: false, child: _buildBody(isWide, app)),
         ),
       ),
     );
   }
 
   Widget _buildBody(bool isWide, AppTheme app) {
-    if (StartupConnection.isKnownOffline) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.wifi_off_rounded,
-                size: 46,
-                color: app.fade(app.core.tx, 0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'You’re offline',
-                style: TextStyle(
-                  color: app.core.tx,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Calendar updates need a connection. Try again when you’re back online.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: app.fade(app.core.tx, 0.68),
-                  height: 1.4,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
     if (!_isAuth) {
       // Only reachable when neither tracker is connected (the default source is
       // whichever IS connected), so phrase it for both.
-      return Center(
+      return const Center(
         child: Padding(
-          padding: const EdgeInsets.all(32),
+          padding: EdgeInsets.all(32),
           child: Text(
             'Connect Trakt, Simkl, or MDBList to see your calendar.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: app.fade(app.core.tx, 0.72), fontSize: 16),
+            style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
         ),
       );
@@ -705,11 +454,10 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     final days = _visibleDays;
 
     if (_isTelevision) return _buildTvBody(days, isWide, app);
-    if (isWide) return _buildWideBody(days, app);
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
+        constraints: BoxConstraints(maxWidth: isWide ? 1040 : 1180),
         child: Padding(
           padding: EdgeInsets.fromLTRB(
             isWide ? 28 : 16,
@@ -719,7 +467,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
           ),
           child: Column(
             children: [
-              _buildPageHeader(days, app),
+              _buildHeaderSurface(days, isWide, app),
               const SizedBox(height: 16),
               Expanded(
                 child: AnimatedSwitcher(
@@ -787,189 +535,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     );
   }
 
-  /// Wide (desktop/tablet) layout: the filters get their own column on the
-  /// left, laid out as full labelled fields, and the day list takes the rest
-  /// — instead of every option squeezed into icon buttons beside the title.
-  Widget _buildWideBody(List<_AiringDay> days, AppTheme app) {
-    final dayList = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 160),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeOutCubic,
-      child: _isChangingMonth
-          ? const Center(
-              key: ValueKey('changing-month'),
-              child: CircularProgressIndicator(),
-            )
-          : days.isEmpty
-          ? _EmptyMonthState(
-              key: ValueKey('empty-$_selectedYear-$_selectedMonth'),
-              monthLabel: _monthName(_selectedMonth),
-              year: _selectedYear,
-              fromToday: _isCurrentMonth && !_showEarlierDays,
-            )
-          : _buildDayList(days, true, app),
-    );
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1180),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 18, 28, 28),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 280,
-                child: SingleChildScrollView(
-                  child: _buildWideFilters(days, app),
-                ),
-              ),
-              const SizedBox(width: 28),
-              Expanded(child: dayList),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWideFilters(List<_AiringDay> days, AppTheme app) {
-    final t = app.settings;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    final summary = days.isEmpty
-        ? 'No episodes airing'
-        : '${days.length} airing day${days.length == 1 ? '' : 's'} · '
-              '$_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
-
-    void step(int delta) {
-      final next = DateTime(_selectedYear, _selectedMonth + delta, 1);
-      _selectMonth(year: next.year, month: next.month);
-    }
-
-    Widget label(String text) => Padding(
-      padding: const EdgeInsets.fromLTRB(2, 0, 0, 8),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          letterSpacing: 0.8,
-          color: t.dim,
-        ),
-      ),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${_monthName(_selectedMonth)} $_selectedYear',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                  height: 1.15,
-                  color: onSurface,
-                ),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Previous month',
-              onPressed: () => step(-1),
-              visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.chevron_left_rounded, size: 22, color: t.dim),
-            ),
-            IconButton(
-              tooltip: 'Next month',
-              onPressed: () => step(1),
-              visualDensity: VisualDensity.compact,
-              icon: Icon(Icons.chevron_right_rounded, size: 22, color: t.dim),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(summary, style: TextStyle(fontSize: 12, color: t.dim)),
-        const SizedBox(height: 24),
-        if (_buildSourceSelector() case final sourceField?) ...[
-          sourceField,
-          const SizedBox(height: 22),
-        ],
-        label('Period'),
-        _SelectorField(
-          // Keyed by value: the chevrons change the month from outside the
-          // field, and a form field otherwise keeps showing its first value.
-          key: ValueKey('wide-month-$_selectedMonth'),
-          label: 'Month',
-          value: _selectedMonth,
-          focusNode: _monthFocusNode,
-          items: [
-            for (int i = 1; i <= 12; i++)
-              DropdownMenuItem<int>(value: i, child: Text(_monthName(i))),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _selectMonth(month: value);
-          },
-        ),
-        const SizedBox(height: 12),
-        _SelectorField(
-          key: ValueKey('wide-year-$_selectedYear'),
-          label: 'Year',
-          value: _selectedYear,
-          focusNode: _yearFocusNode,
-          items: [
-            for (final year in _yearOptions)
-              DropdownMenuItem<int>(value: year, child: Text('$year')),
-          ],
-          onChanged: (value) {
-            if (value == null) return;
-            _selectMonth(year: value);
-          },
-        ),
-        const SizedBox(height: 22),
-        label('Display'),
-        _SelectorField<CalendarTimeFormat>(
-          label: 'Time format',
-          value: _timeFormat,
-          focusNode: _timeFormatFocusNode,
-          items: [
-            for (final format in CalendarTimeFormat.values)
-              DropdownMenuItem(value: format, child: Text(format.label)),
-          ],
-          onChanged: (value) async {
-            if (value == null) return;
-            setState(() => _timeFormat = value);
-            await _displayPreferences?.setString(_timeFormatKey, value.name);
-          },
-        ),
-        if (_isCurrentMonth) ...[
-          const SizedBox(height: 6),
-          SwitchListTile(
-            value: _showEarlierDays,
-            onChanged: (value) => setState(() => _showEarlierDays = value),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            activeThumbColor: app.calendar.accent,
-            title: Text(
-              'Show earlier days',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: onSurface,
-              ),
-            ),
-            subtitle: Text(
-              'Include days of this month that already aired',
-              style: TextStyle(fontSize: 12, color: t.dim),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
   /// The tracker source dropdown — only when multiple trackers are connected.
   /// A single-tracker user has nothing to switch. Returns null otherwise so
   /// callers can conditionally omit it. Styled like the Year/Month selectors,
@@ -1010,28 +575,22 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app, radius: app.shape.br(20), raised: true)
-          : BoxDecoration(
-              borderRadius: app.shape.br(20),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF211017),
-                  Color(0xFF110A0F),
-                  Color(0xFF07090F),
-                ],
-              ),
-              border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
-              boxShadow: [
-                BoxShadow(
-                  color: app.fade(app.calendar.accent, 0.12),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
+      decoration: BoxDecoration(
+        borderRadius: app.shape.br(20),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF211017), Color(0xFF110A0F), Color(0xFF07090F)],
+        ),
+        border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
+        boxShadow: [
+          BoxShadow(
+            color: app.fade(app.calendar.accent, 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -1044,10 +603,8 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             ),
             child: Text(
               'YOUR ${_sourceName.toUpperCase()} SCHEDULE',
-              style: TextStyle(
-                color: GlassChrome.enabled(app)
-                    ? app.core.tx
-                    : const Color(0xFFFFC4C8),
+              style: const TextStyle(
+                color: Color(0xFFFFC4C8),
                 fontSize: 9,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.6,
@@ -1130,12 +687,10 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
+                const Icon(
                   Icons.bolt_rounded,
                   size: 13,
-                  color: GlassChrome.enabled(app)
-                      ? app.calendar.accent
-                      : const Color(0xFFFFB3B8),
+                  color: Color(0xFFFFB3B8),
                 ),
                 const SizedBox(width: 6),
                 Flexible(
@@ -1155,145 +710,220 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
     );
   }
 
-  /// Settings-style page header (phone and desktop): no card, just a
-  /// month title you step through with chevrons, a dim summary line, and
-  /// the secondary controls tucked into icon buttons.
-  Widget _buildPageHeader(List<_AiringDay> days, AppTheme app) {
-    final t = app.settings;
+  Widget _buildHeaderSurface(List<_AiringDay> days, bool isWide, AppTheme app) {
+    final isCompact = MediaQuery.of(context).size.width < 560;
     final monthLabel = '${_monthName(_selectedMonth)} $_selectedYear';
     final summary = days.isEmpty
-        ? 'No episodes airing'
-        : '${days.length} airing day${days.length == 1 ? '' : 's'} · '
-              '$_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
+        ? 'No upcoming episodes found for this month.'
+        : '${days.length} airing day${days.length == 1 ? '' : 's'} · $_episodeCount episode${_episodeCount == 1 ? '' : 's'}';
 
-    void step(int delta) {
-      final next = DateTime(_selectedYear, _selectedMonth + delta, 1);
-      _selectMonth(year: next.year, month: next.month);
-    }
-
-    Widget chevron(IconData icon, String tip, VoidCallback onPressed) =>
-        IconButton(
-          tooltip: tip,
-          onPressed: onPressed,
-          visualDensity: VisualDensity.compact,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          icon: Icon(icon, size: 22, color: t.dim),
-        );
-
-    final multiSource = _authenticatedSourceCount >= 2;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 4, 0, 4),
-      child: Row(
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        isWide ? 22 : (isCompact ? 14 : 16),
+        isWide ? 20 : (isCompact ? 14 : 16),
+        isWide ? 22 : (isCompact ? 14 : 16),
+        isWide ? 18 : (isCompact ? 14 : 16),
+      ),
+      decoration: BoxDecoration(
+        borderRadius: app.shape.br(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF211017), Color(0xFF110A0F), Color(0xFF07090F)],
+        ),
+        border: Border.all(color: app.core.tx.withValues(alpha: 0.07)),
+        boxShadow: [
+          BoxShadow(
+            color: app.fade(app.calendar.accent, 0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              borderRadius: app.shape.brPill,
+              color: app.fade(app.calendar.accent, 0.14),
+            ),
+            child: Text(
+              'YOUR ${_sourceName.toUpperCase()} SCHEDULE',
+              style: TextStyle(
+                color: const Color(0xFFFFC4C8),
+                fontSize: isCompact ? 10 : 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          SizedBox(height: isCompact ? 10 : 12),
+          Text(
+            monthLabel,
+            style: TextStyle(
+              fontSize: isCompact ? 22 : 30,
+              fontWeight: FontWeight.w900,
+              height: 1.0,
+            ),
+          ),
+          SizedBox(height: isCompact ? 6 : 8),
+          if (!isCompact) ...[
+            Text(
+              'Pick a year and month, then browse only the days that actually have episodes airing. No grid, no jitter, just the schedule.',
+              style: TextStyle(
+                color: app.core.tx.withValues(alpha: 0.72),
+                fontSize: 14,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            Text(
+              'Only days with actual episodes are shown.',
+              style: TextStyle(
+                color: app.core.tx.withValues(alpha: 0.68),
+                fontSize: 12,
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_buildSourceSelector(dense: isCompact)
+              case final sourceField?) ...[
+            sourceField,
+            SizedBox(height: isCompact ? 10 : 12),
+          ],
+          if (isCompact)
+            Row(
               children: [
-                Row(
+                Expanded(
+                  child: _SelectorField(
+                    label: 'Year',
+                    value: _selectedYear,
+                    focusNode: _yearFocusNode,
+                    dense: true,
+                    items: [
+                      for (final year in _yearOptions)
+                        DropdownMenuItem<int>(
+                          value: year,
+                          child: Text('$year'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _selectMonth(year: value);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _SelectorField(
+                    label: 'Month',
+                    value: _selectedMonth,
+                    focusNode: _monthFocusNode,
+                    dense: true,
+                    items: [
+                      for (int i = 1; i <= 12; i++)
+                        DropdownMenuItem<int>(
+                          value: i,
+                          child: Text(_monthName(i)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _selectMonth(month: value, focusFirstDay: true);
+                    },
+                  ),
+                ),
+              ],
+            )
+          else
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: isWide ? 170 : 160,
+                  child: _SelectorField(
+                    label: 'Year',
+                    value: _selectedYear,
+                    focusNode: _yearFocusNode,
+                    items: [
+                      for (final year in _yearOptions)
+                        DropdownMenuItem<int>(
+                          value: year,
+                          child: Text('$year'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _selectMonth(year: value);
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: isWide ? 210 : 190,
+                  child: _SelectorField(
+                    label: 'Month',
+                    value: _selectedMonth,
+                    focusNode: _monthFocusNode,
+                    items: [
+                      for (int i = 1; i <= 12; i++)
+                        DropdownMenuItem<int>(
+                          value: i,
+                          child: Text(_monthName(i)),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _selectMonth(month: value, focusFirstDay: true);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          SizedBox(height: isCompact ? 10 : 12),
+          _buildDisplayControls(dense: isCompact),
+          SizedBox(height: isCompact ? 10 : 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 12 : 14,
+                  vertical: isCompact ? 8 : 10,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: app.shape.brPill,
+                  color: app.fade(app.calendar.accent, 0.14),
+                  border: Border.all(
+                    color: app.fade(app.calendar.accent, 0.22),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: isCompact ? 14 : 16,
+                      color: const Color(0xFFFFB3B8),
+                    ),
+                    SizedBox(width: isCompact ? 6 : 8),
                     Flexible(
                       child: Text(
-                        monthLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        summary,
                         style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          height: 1.15,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          fontSize: isCompact ? 11 : 12,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 4),
-                    chevron(
-                      Icons.chevron_left_rounded,
-                      'Previous month',
-                      () => step(-1),
-                    ),
-                    chevron(
-                      Icons.chevron_right_rounded,
-                      'Next month',
-                      () => step(1),
-                    ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  multiSource ? '$_sourceName · $summary' : summary,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: t.dim),
-                ),
-              ],
-            ),
-          ),
-          if (multiSource)
-            PopupMenuButton<String>(
-              tooltip: 'Source',
-              initialValue: _source,
-              icon: Icon(Icons.swap_horiz_rounded, size: 21, color: t.dim),
-              color: GlassChrome.enabled(app)
-                  ? GlassChrome.fill(app, raised: true)
-                  : const Color(0xFF12182B),
-              shape: GlassChrome.enabled(app)
-                  ? GlassChrome.shape(app, radius: 14)
-                  : null,
-              onSelected: _onSourceChanged,
-              itemBuilder: (_) => [
-                if (_traktAuthed)
-                  CheckedPopupMenuItem(
-                    value: _sourceTrakt,
-                    checked: _source == _sourceTrakt,
-                    child: const Text('Trakt'),
-                  ),
-                if (_simklAuthed)
-                  CheckedPopupMenuItem(
-                    value: _sourceSimkl,
-                    checked: _source == _sourceSimkl,
-                    child: const Text('Simkl'),
-                  ),
-                if (_mdblistAuthed)
-                  CheckedPopupMenuItem(
-                    value: _sourceMdblist,
-                    checked: _source == _sourceMdblist,
-                    child: const Text('MDBList'),
-                  ),
-              ],
-            ),
-          if (_isCurrentMonth)
-            IconButton(
-              tooltip: _showEarlierDays ? 'From today' : 'Show earlier days',
-              onPressed: () =>
-                  setState(() => _showEarlierDays = !_showEarlierDays),
-              icon: Icon(
-                _showEarlierDays ? Icons.today : Icons.history,
-                size: 21,
-                color: _showEarlierDays ? app.calendar.accent : t.dim,
               ),
-            ),
-          PopupMenuButton<CalendarTimeFormat>(
-            tooltip: 'Time format',
-            initialValue: _timeFormat,
-            icon: Icon(Icons.schedule_rounded, size: 21, color: t.dim),
-            color: GlassChrome.enabled(app)
-                ? GlassChrome.fill(app, raised: true)
-                : const Color(0xFF12182B),
-            shape: GlassChrome.enabled(app)
-                ? GlassChrome.shape(app, radius: 14)
-                : null,
-            onSelected: (value) async {
-              setState(() => _timeFormat = value);
-              await _displayPreferences?.setString(_timeFormatKey, value.name);
-            },
-            itemBuilder: (_) => [
-              for (final format in CalendarTimeFormat.values)
-                CheckedPopupMenuItem(
-                  value: format,
-                  checked: format == _timeFormat,
-                  child: Text(format.label),
-                ),
             ],
           ),
         ],
@@ -1340,7 +970,7 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
       ),
       padding: EdgeInsets.zero,
       itemCount: days.length,
-      separatorBuilder: (_, _) => SizedBox(height: _isTelevision ? 8 : 22),
+      separatorBuilder: (_, __) => SizedBox(height: _isTelevision ? 8 : 12),
       itemBuilder: (context, index) {
         final airingDay = days[index];
         return _AiringDayCard(
@@ -1353,10 +983,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
           isTelevision: _isTelevision,
           focusNode: _focusNodeForDay(airingDay.day),
           onOpen: () => _openDaySheet(airingDay.day, airingDay.entries),
-          onEpisodeOpen: _handleEpisodeSelected,
-          onEpisodeOptions: (entry) =>
-              _openEpisodeOptions(entry, dayEntries: airingDay.entries),
-          hold: _isTelevision ? _holdForDay(airingDay) : null,
           onArrowUp: index == 0
               ? () => _monthFocusNode.requestFocus()
               : () => _focusNodeForDay(days[index - 1].day).requestFocus(),
@@ -1395,7 +1021,6 @@ class _TraktCalendarScreenState extends State<TraktCalendarScreen> {
 
 class _SelectorField<T> extends StatelessWidget {
   const _SelectorField({
-    super.key,
     required this.label,
     required this.value,
     required this.items,
@@ -1416,47 +1041,34 @@ class _SelectorField<T> extends StatelessWidget {
     final app = AppThemeScope.of(context);
     return DropdownButtonFormField<T>(
       isExpanded: true,
-      initialValue: value,
+      value: value,
       focusNode: focusNode,
       items: items,
       onChanged: onChanged,
-      dropdownColor: GlassChrome.enabled(app)
-          ? GlassChrome.fill(app, raised: true)
-          : const Color(0xFF12182B),
+      dropdownColor: const Color(0xFF12182B),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: app.core.tx.withValues(alpha: 0.72)),
         filled: true,
-        fillColor: GlassChrome.enabled(app)
-            ? GlassChrome.field(app)
-            : const Color(0xFF1A1720),
+        fillColor: const Color(0xFF1A1720),
         border: OutlineInputBorder(
           borderRadius: app.shape.br(18),
-          borderSide: BorderSide(
-            color: GlassChrome.enabled(app)
-                ? GlassChrome.edge(app)
-                : app.core.tx.withValues(alpha: 0.07),
-          ),
+          borderSide: BorderSide(color: app.core.tx.withValues(alpha: 0.07)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: app.shape.br(18),
-          borderSide: BorderSide(
-            color: GlassChrome.enabled(app)
-                ? GlassChrome.edge(app)
-                : app.core.tx.withValues(alpha: 0.08),
-          ),
+          borderSide: BorderSide(color: app.core.tx.withValues(alpha: 0.08)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: const BorderRadius.all(Radius.circular(18)),
           borderSide: BorderSide(color: app.calendar.accent, width: 2),
         ),
-        isDense: dense,
         contentPadding: EdgeInsets.symmetric(
-          horizontal: dense ? 12 : 14,
-          vertical: dense ? 11 : 16,
+          horizontal: 14,
+          vertical: dense ? 12 : 16,
         ),
       ),
-      iconEnabledColor: GlassChrome.enabled(app) ? app.core.tx : Colors.white70,
+      iconEnabledColor: Colors.white70,
       // Explicit color: the dropdown renders its menu with this style,
       // outside the page's DefaultTextStyle. onSurface follows the
       // Appearance → Text Brightness preset.
@@ -1467,15 +1079,6 @@ class _SelectorField<T> extends StatelessWidget {
       borderRadius: app.shape.br(18),
     );
   }
-}
-
-enum _CalendarEpisodeAction {
-  open,
-  showDay,
-  watchlistAdd,
-  watchlistRemove,
-  markWatched,
-  markUnwatched,
 }
 
 class _AiringDay {
@@ -1495,9 +1098,6 @@ class _AiringDayCard extends StatelessWidget {
     required this.onOpen,
     required this.onArrowUp,
     required this.onArrowDown,
-    this.onEpisodeOpen,
-    this.onEpisodeOptions,
-    this.hold,
     this.isTelevision = false,
   });
 
@@ -1513,16 +1113,6 @@ class _AiringDayCard extends StatelessWidget {
   final VoidCallback onArrowUp;
   final VoidCallback? onArrowDown;
 
-  /// Opens one episode's detail page. Each grouped row uses it so a tap
-  /// goes to that episode instead of through the day sheet.
-  final ValueChanged<TraktCalendarEntry>? onEpisodeOpen;
-
-  /// Hold / right-click on one episode row: the calendar's episode menu.
-  final ValueChanged<TraktCalendarEntry>? onEpisodeOptions;
-
-  /// TV hold-OK on the whole card (see the screen's `_holdForDay`).
-  final CardHold? hold;
-
   @override
   Widget build(BuildContext context) {
     final accent = _accentFor(
@@ -1532,10 +1122,7 @@ class _AiringDayCard extends StatelessWidget {
     return Focus(
       focusNode: focusNode,
       onFocusChange: (focused) {
-        if (!focused) {
-          hold?.reset();
-          return;
-        }
+        if (!focused) return;
         final ctx = focusNode.context;
         if (ctx != null) {
           Scrollable.ensureVisible(
@@ -1547,10 +1134,6 @@ class _AiringDayCard extends StatelessWidget {
         }
       },
       onKeyEvent: (_, event) {
-        final hold = this.hold;
-        if (hold != null && isActivateOrSpaceKey(event.logicalKey)) {
-          return hold.handle(event);
-        }
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
         final key = event.logicalKey;
         if (key == LogicalKeyboardKey.arrowUp) {
@@ -1570,68 +1153,49 @@ class _AiringDayCard extends StatelessWidget {
       child: Builder(
         builder: (context) {
           final isFocused = Focus.of(context).hasFocus;
-          if (!isTelevision) {
-            return _buildGroupLayout(accent, isFocused);
-          }
           return AnimatedContainer(
             duration: const Duration(milliseconds: 140),
             curve: Curves.easeOutCubic,
-            decoration: GlassChrome.enabled(app)
-                ? GlassChrome.decoration(
-                    app,
-                    radius: BorderRadius.circular(16),
-                    raised: isFocused,
-                    active: isFocused,
-                  )
-                : BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isFocused
-                          ? const Color(0xFFE85A63)
-                          : Colors.white.withValues(alpha: 0.06),
-                      width: isFocused ? 2 : 1,
-                    ),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        app.fade(app.calendar.card, 0.98),
-                        app.fade(app.calendar.card2, 0.98),
-                      ],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.22),
-                        blurRadius: 18,
-                        offset: const Offset(0, 12),
-                      ),
-                      if (isFocused)
-                        BoxShadow(
-                          color: app.fade(app.calendar.accent, 0.22),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                    ],
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(isTelevision ? 16 : 26),
+              border: Border.all(
+                color: isFocused
+                    ? const Color(0xFFE85A63)
+                    : Colors.white.withValues(alpha: 0.06),
+                width: isFocused ? 2 : 1,
+              ),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  app.fade(app.calendar.card, 0.98),
+                  app.fade(app.calendar.card2, 0.98),
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.22),
+                  blurRadius: 18,
+                  offset: const Offset(0, 12),
+                ),
+                if (isFocused)
+                  BoxShadow(
+                    color: app.fade(app.calendar.accent, 0.22),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
-            // The frosted press on touch, the ring for a TV hold.
-            child: HoldFeedback(
-              controller: hold?.ring,
-              borderRadius: BorderRadius.circular(16),
-              child: InkWell(
-                splashFactory: NoSplash.splashFactory,
-                highlightColor: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                onTap: onOpen,
-                onLongPress: withHoldHaptic(
-                  onEpisodeOptions == null ? null : _optionsForCard,
-                ),
-                onSecondaryTap: CardMenuGesture.secondaryClick(
-                  onEpisodeOptions == null ? null : _optionsForCard,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: _buildTvLayout(accent),
-                ),
+              ],
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(isTelevision ? 16 : 26),
+              onTap: onOpen,
+              child: Padding(
+                padding: EdgeInsets.all(isTelevision ? 10 : (isWide ? 18 : 14)),
+                child: isTelevision
+                    ? _buildTvLayout(accent)
+                    : isWide
+                    ? _buildWideLayout(accent)
+                    : _buildCompactLayout(accent),
               ),
             ),
           );
@@ -1640,132 +1204,161 @@ class _AiringDayCard extends StatelessWidget {
     );
   }
 
-  /// A hold always opens the title actions, like Home/Discover. For a busy
-  /// day the menu includes "Everything airing that day" to reach the sheet.
-  void _optionsForCard() {
-    if (entries.isNotEmpty) onEpisodeOptions?.call(entries.first);
-  }
-
-  /// Phone + desktop layout, built like a settings group: a small caps date
-  /// label above one grouped panel whose rows are the episodes, split by
-  /// hairline rules — no card-in-card nesting.
-  Widget _buildGroupLayout(Color accent, bool isFocused) {
-    const shortDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const shortMonths = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final relative = _relativeLabel(day);
-    final dateLabel =
-        '${shortDays[day.weekday - 1]} ${day.day} ${shortMonths[day.month - 1]}';
-    final shown = entries.take(3).toList();
-    final count = '${entries.length} episode${entries.length == 1 ? '' : 's'}';
+  Widget _buildWideLayout(Color accent) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Flexible(child: SettingsSectionLabel(dateLabel)),
-            if (relative != null)
-              Flexible(
-                child: SettingsSectionLabel('  ·  $relative', color: accent),
-              ),
-            const Spacer(),
-            SettingsSectionLabel(count),
-          ],
-        ),
-        DecoratedBox(
-          // Keyboard focus (hardware keyboard on phones) still needs a
-          // visible cursor; it rides on the group instead of a card.
-          position: DecorationPosition.foreground,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isFocused ? app.calendar.accent : Colors.transparent,
-              width: 1.5,
-            ),
-          ),
-          child: SettingsSection(
-            title: '',
+        _DayHeaderStrip(
+          app: app,
+          posterUrl: entries.first.posterUrl,
+          accent: accent,
+          compact: true,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              for (final entry in shown)
-                _GroupEpisodeRow(
-                  entry: entry,
-                  app: app,
-                  palette: app.calendar.accentPalette,
-                  onTap: onEpisodeOpen == null
-                      ? onOpen
-                      : () => onEpisodeOpen!(entry),
-                  onLongPress: onEpisodeOptions == null
-                      ? null
-                      : () => onEpisodeOptions!(entry),
-                ),
-              if (entries.length > 3)
-                HoldFeedback(
-                  borderRadius: BorderRadius.zero,
-                  child: InkWell(
-                    splashFactory: NoSplash.splashFactory,
-                    highlightColor: Colors.transparent,
-                    onTap: onOpen,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 11,
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            '${entries.length - 3} more episode'
-                            '${entries.length - 3 == 1 ? '' : 's'}',
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w700,
-                              color: app.settings.dim,
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            size: 20,
-                            color: app.settings.dim2,
-                          ),
-                        ],
+              _DateBadge(
+                day: day,
+                accent: accent,
+                badgeGround: app.calendar.badgeGround,
+                compact: true,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatHeadline(day),
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _CountPill(count: entries.length, accent: accent),
+                        Text(
+                          entries.length == 1
+                              ? 'One episode scheduled'
+                              : '${entries.length} episodes scheduled',
+                          style: TextStyle(
+                            // Inside _DayHeaderStrip, whose ground IS
+                            // calendar.panel — so this ink may follow the
+                            // theme. The rows below sit on hardcoded darks
+                            // and deliberately do not.
+                            color: app.fade(app.core.tx, 0.62),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),
+        const SizedBox(height: 12),
+        for (final entry in entries.take(3))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _EpisodeRow(
+              entry: entry,
+              app: app,
+              palette: app.calendar.accentPalette,
+              rowGround: app.calendar.row,
+              rowLine: app.calendar.line,
+              roomy: true,
+            ),
+          ),
+        if (entries.length > 3)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '+${entries.length - 3} more episodes',
+              style: TextStyle(
+                color: app.fade(app.core.tx, 0.58),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
       ],
     );
   }
 
-  /// "Today" / "Tomorrow" / "In 3 days" / "Yesterday" — null for days far
-  /// enough out that the date alone says it.
-  static String? _relativeLabel(DateTime day) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    // Rounded hours, not inDays: a DST change makes one local day 23h long.
-    final diff =
-        (DateTime(day.year, day.month, day.day).difference(today).inHours / 24)
-            .round();
-    if (diff == 0) return 'Today';
-    if (diff == 1) return 'Tomorrow';
-    if (diff == -1) return 'Yesterday';
-    if (diff > 1 && diff <= 6) return 'In $diff days';
-    if (diff < -1 && diff >= -6) return '${-diff} days ago';
-    return null;
+  Widget _buildCompactLayout(Color accent) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _DayHeaderStrip(
+          app: app,
+          posterUrl: entries.first.posterUrl,
+          accent: accent,
+          compact: true,
+          child: Row(
+            children: [
+              _DateBadge(
+                day: day,
+                accent: accent,
+                badgeGround: app.calendar.badgeGround,
+                compact: true,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatHeadline(day),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    _CountPill(count: entries.length, accent: accent),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _PosterThumb(
+                posterUrl: entries.first.posterUrl,
+                width: 44,
+                height: 62,
+                radius: 14,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        for (final entry in entries.take(3))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _EpisodeRow(
+              entry: entry,
+              app: app,
+              palette: app.calendar.accentPalette,
+              rowGround: app.calendar.row,
+              rowLine: app.calendar.line,
+            ),
+          ),
+        if (entries.length > 3)
+          Text(
+            '+${entries.length - 3} more episodes',
+            style: TextStyle(
+              color: app.fade(app.core.tx, 0.58),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _buildTvLayout(Color accent) {
@@ -1812,6 +1405,7 @@ class _AiringDayCard extends StatelessWidget {
                     palette: app.calendar.accentPalette,
                     rowGround: app.calendar.row,
                     rowLine: app.calendar.line,
+                    compact: true,
                   ),
                 ),
               if (entries.length > 3)
@@ -1983,6 +1577,8 @@ class _EpisodeRow extends StatelessWidget {
     required this.palette,
     required this.rowGround,
     required this.rowLine,
+    this.roomy = false,
+    this.compact = false,
   });
 
   final TraktCalendarEntry entry;
@@ -2001,6 +1597,8 @@ class _EpisodeRow extends StatelessWidget {
   /// the other and a light theme puts deep ink on a dark row.
   final Color rowGround;
   final Color rowLine;
+  final bool roomy;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -2016,163 +1614,146 @@ class _EpisodeRow extends StatelessWidget {
         ? code
         : '$code · ${entry.episodeTitle}';
 
+    if (compact) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        decoration: BoxDecoration(
+          borderRadius: app.shape.br(10),
+          color: rowGround,
+          border: Border.all(color: rowLine),
+        ),
+        child: Row(
+          children: [
+            _PosterThumb(
+              posterUrl: entry.posterUrl,
+              width: 28,
+              height: 40,
+              radius: 7,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.showTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: app.fade(app.core.tx, 0.68),
+                      fontSize: 10,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                borderRadius: app.shape.brPill,
+                color: accent.withValues(alpha: 0.14),
+                border: Border.all(color: accent.withValues(alpha: 0.22)),
+              ),
+              child: Text(
+                time,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      padding: EdgeInsets.all(roomy ? 12 : 10),
       decoration: BoxDecoration(
-        borderRadius: app.shape.br(10),
+        borderRadius: app.shape.br(16),
         color: rowGround,
         border: Border.all(color: rowLine),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _PosterThumb(
             posterUrl: entry.posterUrl,
-            width: 28,
-            height: 40,
-            radius: 7,
+            width: roomy ? 46 : 38,
+            height: roomy ? 64 : 54,
+            radius: roomy ? 12 : 10,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  entry.showTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.showTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: roomy ? 15 : 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: app.shape.brPill,
+                        color: accent.withValues(alpha: 0.14),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.22),
+                        ),
+                      ),
+                      child: Text(
+                        time,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   detail,
-                  maxLines: 1,
+                  maxLines: roomy ? 2 : 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: app.fade(app.core.tx, 0.68),
-                    fontSize: 10,
-                    height: 1.2,
+                    fontSize: roomy ? 12.5 : 12,
+                    height: 1.25,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            decoration: BoxDecoration(
-              borderRadius: app.shape.brPill,
-              color: accent.withValues(alpha: 0.14),
-              border: Border.all(color: accent.withValues(alpha: 0.22)),
-            ),
-            child: Text(
-              time,
-              style: TextStyle(
-                color: accent,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
         ],
-      ),
-    );
-  }
-}
-
-/// One episode as a settings-style row: poster where a settings tile has
-/// its icon, show title + dim "S06E04 · Episode" subtitle, and the air time
-/// as the trailing element in the show's accent.
-class _GroupEpisodeRow extends StatelessWidget {
-  const _GroupEpisodeRow({
-    required this.entry,
-    required this.app,
-    required this.palette,
-    required this.onTap,
-    this.onLongPress,
-  });
-
-  /// Hold / right-click: the episode menu.
-  final VoidCallback? onLongPress;
-
-  final TraktCalendarEntry entry;
-
-  /// Threaded from the list build, like the other per-row widgets here.
-  final AppTheme app;
-  final List<Color> palette;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final t = app.settings;
-    final accent = _AiringDayCard._accentFor(entry.showTitle, palette);
-    final time = CalendarTimeFormatScope.formatTime(
-      context,
-      entry.firstAiredLocal,
-    );
-    final code =
-        'S${entry.seasonNumber.toString().padLeft(2, '0')}'
-        'E${entry.episodeNumber.toString().padLeft(2, '0')}';
-    final title = entry.episodeTitle?.trim();
-    final subtitle = title == null || title.isEmpty ? code : '$code · $title';
-    return HoldFeedback(
-      borderRadius: BorderRadius.zero,
-      child: InkWell(
-        splashFactory: NoSplash.splashFactory,
-        highlightColor: Colors.transparent,
-        onTap: onTap,
-        onLongPress: withHoldHaptic(onLongPress),
-        onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 16, 10),
-          child: Row(
-            children: [
-              _PosterThumb(
-                posterUrl: entry.posterUrl,
-                width: 34,
-                height: 48,
-                radius: 7,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.showTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 11.5, color: t.dim),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                time,
-                style: TextStyle(
-                  color: accent,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -2217,8 +1798,125 @@ class _PosterThumb extends StatelessWidget {
               width: width,
               height: height,
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => placeholder,
+              errorBuilder: (_, __, ___) => placeholder,
             ),
+    );
+  }
+}
+
+class _DayHeaderStrip extends StatelessWidget {
+  const _DayHeaderStrip({
+    required this.app,
+    required this.posterUrl,
+    required this.accent,
+    required this.child,
+    this.compact = false,
+  });
+
+  /// Handed down from the card, which is itself built inside the day list.
+  final AppTheme app;
+  final String? posterUrl;
+  final Color accent;
+  final Widget child;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: app.shape.brImg(22),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: posterUrl == null
+                ? DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          accent.withValues(alpha: 0.14),
+                          const Color(0xFF12131A),
+                        ],
+                      ),
+                    ),
+                  )
+                : Image.network(
+                    posterUrl!,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    errorBuilder: (_, __, ___) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            accent.withValues(alpha: 0.14),
+                            const Color(0xFF12131A),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: compact ? 0.26 : 0.18),
+                    const Color(0xFF10131C).withValues(alpha: 0.78),
+                    const Color(0xFF10131C),
+                  ],
+                  stops: const [0.0, 0.52, 1.0],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    app.calendar.panel,
+                    app.fade(app.calendar.panel, 0.82),
+                    app.fade(app.calendar.panel, 0.48),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: Container(
+              height: 2,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    accent.withValues(alpha: 0.0),
+                    accent.withValues(alpha: 0.7),
+                    accent.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(compact ? 10 : 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: app.core.tx.withValues(alpha: 0.04)),
+              borderRadius: app.shape.br(22),
+            ),
+            child: child,
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2239,19 +1937,12 @@ class _EmptyMonthState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
     return Container(
-      decoration: frosted
-          ? GlassChrome.decoration(
-              app,
-              radius: BorderRadius.circular(compact ? 18 : 28),
-            )
-          : BoxDecoration(
-              borderRadius: BorderRadius.circular(compact ? 18 : 28),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              color: const Color(0xFF0A0F1D).withValues(alpha: 0.96),
-            ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(compact ? 18 : 28),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        color: const Color(0xFF0A0F1D).withValues(alpha: 0.96),
+      ),
       padding: EdgeInsets.all(compact ? 16 : 24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -2262,15 +1953,11 @@ class _EmptyMonthState extends StatelessWidget {
             height: compact ? 48 : 68,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(compact ? 14 : 22),
-              color: frosted
-                  ? GlassChrome.fill(app, raised: true)
-                  : Colors.white.withValues(alpha: 0.05),
+              color: Colors.white.withValues(alpha: 0.05),
             ),
             child: Icon(
               Icons.event_busy_rounded,
-              color: frosted
-                  ? app.core.tx.withValues(alpha: 0.75)
-                  : Colors.white70,
+              color: Colors.white70,
               size: compact ? 22 : 30,
             ),
           ),
@@ -2281,7 +1968,6 @@ class _EmptyMonthState extends StatelessWidget {
                 : 'Nothing airing in $monthLabel $year',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: frosted ? app.core.tx : null,
               fontSize: compact ? 16 : 24,
               fontWeight: FontWeight.w900,
             ),
@@ -2293,9 +1979,7 @@ class _EmptyMonthState extends StatelessWidget {
                 : 'Try another month or year.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: frosted
-                  ? app.core.tx.withValues(alpha: 0.7)
-                  : Colors.white.withValues(alpha: 0.66),
+              color: Colors.white.withValues(alpha: 0.66),
               fontSize: compact ? 12 : 14,
               height: 1.4,
             ),

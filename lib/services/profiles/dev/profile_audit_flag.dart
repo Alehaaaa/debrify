@@ -24,6 +24,6 @@
 /// The real end state is the removal recipe in README.md; this flag only keeps
 /// the tooling cheap to carry until then.
 const bool kProfileAudit = bool.fromEnvironment(
-  'NEXTUP_PROFILE_AUDIT',
+  'DEBRIFY_PROFILE_AUDIT',
   defaultValue: false,
 );

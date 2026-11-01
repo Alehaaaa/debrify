@@ -1,8 +1,29 @@
-import 'services/torrent_playback_service.dart';
+import 'package:debrify/services/addon_auto_update_scheduler.dart';
+import 'package:debrify/widgets/iptv/multi_view_launcher.dart';
+import 'package:debrify/services/storage/alldebrid_storage.dart';
+import 'package:debrify/services/storage/completion_migration_storage.dart';
+import 'package:debrify/services/storage/debrify_tv_storage.dart';
+import 'package:debrify/services/storage/defaults_generation_storage.dart';
+import 'package:debrify/services/storage/detail_page_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:debrify/services/storage/iptv_playlist_storage.dart';
+import 'package:debrify/services/storage/launch_ident_storage.dart';
+import 'package:debrify/services/storage/pikpak_storage.dart';
+import 'package:debrify/services/storage/playback_cleanup_storage.dart';
+import 'package:debrify/services/storage/player_settings_storage.dart';
+import 'package:debrify/services/storage/premiumize_storage.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/sidebar_storage.dart';
+import 'package:debrify/services/storage/startup_iptv_storage.dart';
+import 'package:debrify/services/storage/torbox_storage.dart';
+import 'package:debrify/services/storage/tv_display_storage.dart';
+import 'package:debrify/services/storage/ui_feedback_storage.dart';
+import 'package:debrify/services/storage/webdav_server_storage.dart';
+import 'package:debrify/services/storage/webdav_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'services/webdav_sync/webdav_log_upload.dart';
 import 'services/cache_scratch_cleanup.dart';
 import 'services/debrify_image_cache.dart';
-import 'services/offline_title_store.dart';
 import 'widgets/webdav_sync/webdav_save_status.dart';
 import 'services/local_validation_diagnostics.dart';
 import 'dart:async';
@@ -11,7 +32,6 @@ import 'dart:ui' show AppExitResponse, PointerDeviceKind;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
@@ -20,11 +40,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'services/app_route_observer.dart';
-// Old Home board deprecated — moved to screens/deprecated/ and commented out.
-// import 'screens/torrent_search_screen.dart';
 import 'screens/browse_screen.dart';
 import 'screens/cloud_screen.dart';
-import 'screens/watch_hub_screen.dart';
 import 'screens/search_screen.dart';
 import 'widgets/iptv/iptv_results_view.dart';
 import 'widgets/youtube/youtube_results_view.dart';
@@ -41,7 +58,6 @@ import 'screens/profiles/profile_gate.dart';
 import 'screens/profiles/linux_vault_screen.dart';
 import 'screens/profiles/profile_recovery_screen.dart';
 import 'screens/downloads_screen.dart';
-import 'screens/reels_screen.dart';
 import 'screens/trakt_calendar_screen.dart';
 import 'screens/magic_tv_screen.dart';
 import 'screens/stremio_tv/stremio_tv_screen.dart';
@@ -57,7 +73,6 @@ import 'services/iptv_catalog_refresh_service.dart';
 import 'services/profiles/local_backup/local_backup_archive.dart'
     show LocalBackupScratch;
 import 'services/profiles/profile_bootstrap.dart';
-import 'services/tracker_scrobble_outbox.dart';
 import 'services/profiles/profile_database_adoption_gate.dart';
 import 'services/profiles/profile_migration_service.dart';
 import 'services/profiles/profile_native_lock_bridge.dart';
@@ -74,7 +89,6 @@ import 'models/profiles/user_profile.dart';
 import 'models/sidebar_configuration.dart';
 import 'services/secret_vault.dart';
 import 'services/play_loader_style.dart';
-import 'services/storage_service.dart';
 import 'services/tv_hero_artwork_quality_controller.dart';
 import 'services/tv_playback_recovery.dart';
 import 'services/tvos_top_shelf_service.dart';
@@ -83,12 +97,9 @@ import 'services/simkl/simkl_service.dart';
 import 'services/trakt/trakt_service.dart';
 import 'services/mdblist/mdblist_service.dart';
 import 'widgets/app_initializer.dart';
-import 'services/startup_connection.dart';
 
 import 'widgets/animated_background.dart';
 import 'services/main_page_bridge.dart';
-import 'services/navigation_destination_compat.dart';
-import 'services/discover_credits_handoff.dart';
 import 'services/profiles/profile_policy_guard.dart';
 import 'theme/app_surfaces.dart';
 import 'theme/app_theme_controller.dart';
@@ -108,25 +119,30 @@ import 'widgets/mobile_floating_nav.dart';
 import 'widgets/mobile_classic_nav.dart';
 import 'widgets/tv_ambient_art_stage.dart';
 import 'widgets/app_tab_switcher.dart';
-import 'widgets/shell_tab_pager.dart';
 import 'widgets/tv_sidebar_nav.dart';
 import 'widgets/desktop_pill_nav.dart';
 import 'widgets/desktop_sidebar_nav.dart';
 import 'services/remote_control/remote_control_state.dart';
 import 'services/remote_control/remote_command_router.dart';
 import 'services/remote_control/remote_constants.dart';
+import 'services/analytics_service.dart';
 import 'services/text_brightness.dart';
+import 'services/support_remote_config_service.dart';
 import 'widgets/auto_launch_overlay.dart';
 import 'widgets/remote/addon_install_dialog.dart';
 import 'widgets/remote/remote_pairing_dialog.dart';
 import 'widgets/remote/remote_role_picker_screen.dart';
+import 'widgets/support_donation_chooser_dialog.dart';
 import 'utils/platform_util.dart';
 import 'utils/tvos_device.dart';
+import 'widgets/iptv/sports/iptv_sports_board.dart';
+import 'features/recording_output/presentation/smb_upload_host.dart';
 import 'services/desktop_recording_service.dart';
 import 'services/desktop_schedule_service.dart';
 import 'services/update_service.dart';
-import 'services/local_source_update_service.dart';
 import 'services/webdav_sync/webdav_sync_runtime.dart';
+import 'package:debrify/services/storage/device_storage.dart';
+import 'package:debrify/services/storage/remote_control_storage.dart';
 
 /// Flutter's default image cache (1000 images / 100 MB) is far too large for a
 /// 2 GB Android TV box — a screenful of full-res posters plus offscreen ones
@@ -160,7 +176,7 @@ Future<void> _capImageCache() async {
     // Warm the Debrify-keyboard opt-out alongside the TV flag — TvTextField
     // reads StorageService.tvKeyboardEnabledCached synchronously in build.
     try {
-      await StorageService.getTvKeyboardEnabled();
+      await TvDisplayStorage.getTvKeyboardEnabled();
     } catch (_) {}
   }
   final cache = PaintingBinding.instance.imageCache;
@@ -184,12 +200,6 @@ Future<void> _capImageCache() async {
 // it belongs to — both are shared by the legacy and themed builds.
 
 Future<void> main(List<String> launchArguments) async {
-  // A person's or studio's titles open as a fixed-source Discover page.
-  DiscoverCreditsHandoff.pageBuilder = (request, isTelevision) => SearchScreen(
-    isTelevision: isTelevision,
-    discoverMode: true,
-    discoverCredits: request,
-  );
   try {
     await _mainUnchecked(launchArguments);
   } catch (error, stackTrace) {
@@ -331,12 +341,7 @@ Future<void> _mainUnchecked(List<String> launchArguments) async {
       ),
     },
   );
-  // Every desktop drives fullscreen through windowManager (the player's
-  // fullscreen control is shown on macOS too), so the native main window must
-  // be bound on all three. Skipping macOS left _mainWindow nil, and the first
-  // isFullScreen() call during playback force-unwrapped it — a Swift
-  // fatalError no Dart try/catch can intercept.
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     await windowManager.ensureInitialized();
   }
 
@@ -472,7 +477,7 @@ class _StartupFailureApp extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Nextup could not start safely. Close the app and try again. '
+                  'Debrify could not start safely. Close the app and try again. '
                   'If this continues, restart the device before changing any data.',
                   textAlign: TextAlign.center,
                 ),
@@ -555,7 +560,7 @@ class _MigrationUpdateScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    'Nextup is upgrading your library for this new version. '
+                    'Debrify is upgrading your library for this new version. '
                     'This launch can take up to 5 minutes on large setups — '
                     'please don’t close the app or turn off the device. '
                     'This only happens once.',
@@ -614,7 +619,6 @@ Future<void> _continueApplicationStartup() async {
   // This common path is also entered after registry recovery and interactive
   // Linux vault unlock; both must receive the same native lock authority as a
   // normal bootstrap.
-  unawaited(StartupConnection.check());
   ProfileNativeLockBridge.initialize();
   // Resume a crash-interrupted CircleAdoption before any profile database or
   // preference warm can observe a half-copied target generation.
@@ -624,12 +628,9 @@ Future<void> _continueApplicationStartup() async {
   // any crash-interrupted generation adoption, but still before ProfileGate
   // paints the recreated session.
   await TvPlaybackRecovery.initialize();
-  // Deliver tracker progress queued while offline (a downloaded title watched
-  // on a plane) now, and again whenever the connection comes back — not only
-  // after the next play happens to queue something new.
-  TrackerScrobbleOutbox.instance.initialize();
   // These initializers may touch profile-sensitive state and therefore start
   // only after the immutable runtime mode and active scope are installed.
+  unawaited(AnalyticsService.init());
   if (!ProfileRuntime.isProfileCommitted) {
     unawaited(SecretVault.warmUp());
   }
@@ -640,14 +641,14 @@ Future<void> _continueApplicationStartup() async {
   await _initOrientation();
   // Warms playerStartPortraitCached: the player picks its orientation while
   // building, and the IPTV startup channel can open one on the first frame.
-  await StorageService.getPlayerStartPortrait();
+  await PlayerSettingsStorage.getPlayerStartPortrait();
   // Update-aware defaults: one-time adoption of the current flagship look
   // for every pref the user never wrote (see migrateDefaultsGeneration).
   // MUST precede the brightness/theme warms below — they read migrated keys
   // for the very first frame.
   await _bestEffortStartupStep(
     'defaults-generation-migration',
-    StorageService.migrateDefaultsGeneration,
+    DefaultsGenerationStorage.migrateDefaultsGeneration,
   );
   // Adopt the configurable local watched thresholds for playback recorded by
   // older builds. The generation marker is profile-scoped, so every profile
@@ -656,7 +657,7 @@ Future<void> _continueApplicationStartup() async {
   // drifted must cost the user a watched badge, not the whole app.
   await _bestEffortStartupStep(
     'playback-completion-migration',
-    StorageService.migrateExistingPlaybackCompletionThresholds,
+    CompletionMigrationStorage.migrateExistingPlaybackCompletionThresholds,
   );
   // Drop the zero-position rows older builds left behind when unwatching an
   // episode; they outrank real progress and pin Continue Watching to an
@@ -664,20 +665,20 @@ Future<void> _continueApplicationStartup() async {
   // one-shot, and best-effort for the same reason as the step above.
   await _bestEffortStartupStep(
     'resume-ghost-purge',
-    StorageService.purgeUnwatchedResumeGhosts,
+    CompletionMigrationStorage.purgeUnwatchedResumeGhosts,
   );
   // Warm the layout prefs the shell reads through field initializers —
   // without this the first frame paints canvas/ghost/rail and then snaps
   // to the stored (possibly just-migrated) look. A warm that fails costs
   // that one snap; it must not cost the launch.
   await _bestEffortStartupStep('layout-pref-warms', () async {
-    await StorageService.getTvHomeStyle();
-    await StorageService.getTvSidebarStyle();
-    await StorageService.getDesktopSidebarStyle();
-    await StorageService.getSidebarConfiguration();
+    await HomeAppearanceStorage.getTvHomeStyle();
+    await SidebarStorage.getTvSidebarStyle();
+    await SidebarStorage.getDesktopSidebarStyle();
+    await SidebarStorage.getSidebarConfiguration();
     // Debrify TV reads its mirror synchronously on first build; warmed here,
     // AFTER the migration, so frame one draws what generation 3 just wrote.
-    await StorageService.getDebrifyTvStyle();
+    await DebrifyTvStorage.getDebrifyTvStyle();
   });
   // Warms the Appearance → Text Brightness preset: the root theme is built
   // synchronously in DebrifyApp.build, so the stored choice must be readable
@@ -707,8 +708,8 @@ Future<void> _continueApplicationStartup() async {
   // consulted from a focus listener that cannot await, so an unwarmed read
   // would use the default for the first few seconds of a session.
   try {
-    await StorageService.getUiSounds();
-    await StorageService.getUiHaptics();
+    await UiFeedbackStorage.getUiSounds();
+    await UiFeedbackStorage.getUiHaptics();
   } catch (_) {
     debugPrint('main: feedback preferences warm failed; using defaults');
   }
@@ -734,27 +735,27 @@ Future<void> _continueApplicationStartup() async {
   // initState, so an async-only read would flash the default ident's world
   // for a frame. A cosmetic pref must never block startup.
   try {
-    await StorageService.getLaunchAnimation();
-    await StorageService.getLaunchIdentPalette();
+    await LaunchIdentStorage.getLaunchAnimation();
+    await LaunchIdentStorage.getLaunchIdentPalette();
   } catch (_) {}
   // Warms the details-page layout choice: MergedDetailScreen picks its body in
   // the first build, so an async-only read would paint Classic for a frame and
   // then re-lay-out the entire page. Same rule — a cosmetic pref must never
   // block startup.
   try {
-    await StorageService.getDetailPageStyle();
-    await StorageService.getDetailPageSectionVisibility();
+    await DetailPageStorage.getDetailPageStyle();
+    await DetailPageStorage.getDetailPageSectionVisibility();
   } catch (_) {}
   // And the details THEME, for the same reason — the page resolves both in its
   // first build, so a stored choice must be readable before the first frame.
   try {
-    await StorageService.getDetailTheme();
+    await DetailPageStorage.getDetailTheme();
   } catch (_) {}
   // Parents Guide chooses its presentation synchronously when metadata lands.
   // Warm the cosmetic preference so a stored Classic choice never flashes
   // Compass for one frame.
   try {
-    await StorageService.getParentsGuideStyle();
+    await DetailPageStorage.getParentsGuideStyle();
   } catch (_) {}
   // Apple TV hardware generation, warmed FIRST because everything below keys
   // off it: the artwork decode bounds, the image-cache cap, the Home board's
@@ -796,10 +797,10 @@ Future<void> _continueApplicationStartup() async {
   // Old-playback-state cleanup is pure housekeeping — never block first frame
   // on a storage sweep (slow flash on TV boxes).
   unawaited(_cleanupPlaybackState());
+  // NB: no manual app_open — Pug's autoTrack fires app_open/app_close from the
+  // app lifecycle automatically (see AnalyticsService.init / PugOptions).
   runApp(const DebrifyApp());
   unawaited(DebrifyImageCache.maintainDiskCaches());
-  // Downloaded titles' saved details, ready before their pages open offline.
-  unawaited(OfflineTitleStore.instance.ensureLoaded());
   applicationReady.complete();
   // Desktop scheduled recordings (Tier 1: fire while the app is running).
   // Arms stored timers + late-joins anything already in its window; no-op on
@@ -815,8 +816,7 @@ Future<void> _continueApplicationStartup() async {
   WidgetsBinding.instance.addPostFrameCallback((_) {
     unawaited(_prewarmIptvCatalogDb());
     IptvCatalogRefreshService.instance.start();
-    // Downloads waiting on a debrid provider pick up where they left off.
-    TorrentDownloads.resumeDownloadsWhenReady(_navigatorKey);
+    AddonAutoUpdateScheduler.instance.start();
   });
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
@@ -871,11 +871,11 @@ Future<void> _resolveStartupChannel() async {
     // channel round trips, and this runs before the first frame on every cold
     // start — making every user pay that so the small minority with a startup
     // channel can have one would be a plain boot regression.
-    if (!await StorageService.getStartupIptvEnabled()) return;
+    if (!await StartupIptvStorage.getStartupIptvEnabled()) return;
     await DeepLinkService.preflightLaunchIntent();
     if (DeepLinkService.launchedByIntent) return;
-    await StorageService.warmStartupIptv();
-    final channel = StorageService.startupIptvChannelCached;
+    await StartupIptvStorage.warmStartupIptv();
+    final channel = StartupIptvStorage.startupIptvChannelCached;
     if (channel != null) {
       MainPageBridge.setIptvStartupChannel(channel);
     }
@@ -892,7 +892,7 @@ Future<void> _prewarmIptvCatalogDb() async {
     // Most users never configure IPTV. Do not create a database or compete
     // with Home startup IO unless a stored source could actually use the
     // paged catalog.
-    if ((await StorageService.getIptvPlaylists()).isEmpty) return;
+    if ((await IptvPlaylistStorage.getIptvPlaylists()).isEmpty) return;
     stage = 'prewarm_open';
     await IptvCatalogDb.open();
   } catch (error, stack) {
@@ -963,10 +963,8 @@ void _updateFocusHighlightStrategy(bool isTv) {
 
 Future<void> _cleanupPlaybackState() async {
   try {
-    await StorageService.cleanupOldPlaybackState();
-  } catch (e) {
-    debugPrint('Playback state cleanup failed: $e');
-  }
+    await PlaybackCleanupStorage.cleanupOldPlaybackState();
+  } catch (e) {}
 }
 
 // Global scaffold messenger key for showing snackbars from anywhere
@@ -1124,7 +1122,7 @@ class _DebrifyAppState extends State<DebrifyApp> {
       navigatorKey: _navigatorKey,
       scaffoldMessengerKey: _scaffoldMessengerKey,
       navigatorObservers: [appRouteObserver, AppSurfaceRouteObserver()],
-      title: 'Nextup',
+      title: 'Debrify',
       debugShowCheckedModeBanner: false,
       // Performance optimizations for TV with TV-aware text scaling
       builder: (context, child) {
@@ -1138,15 +1136,24 @@ class _DebrifyAppState extends State<DebrifyApp> {
         // overlay inherits it, and excluded surfaces shadow it lower down
         // with a LegacyThemeBoundary. An open overlay restyles live on theme
         // change for free — it inherits from here, not from a capture.
-        Widget content = AppThemeScope(
-          theme: AppThemeController.instance.theme,
-          // The theme's whole-page texture — film grain, Blueprint's rule.
-          // INSIDE the scope so it can read the tokens, and self-gating on
-          // AppSurfaceState so it never paints over the frozen player or the
-          // launch ident (see app_texture.dart). It short-circuits to `child`
-          // for legacy and for the seventeen themes that declare neither, so
-          // the common path costs one build and no layer.
-          child: WebDavSaveStatus(child: AppTexture(child: child!)),
+        // This scope sits above the consuming Navigator, so pushed routes
+        // and dialogs inherit the same feature dependencies and state.
+        Widget content = ProviderScope(
+          retry: (count, error) => null,
+          overrides: [...sportsAppOverrides(), ...multiViewAppOverrides()],
+          child: AppThemeScope(
+            theme: AppThemeController.instance.theme,
+            // The theme's whole-page texture — film grain, Blueprint's rule.
+            // INSIDE the scope so it can read the tokens, and self-gating on
+            // AppSurfaceState so it never paints over the frozen player or the
+            // launch ident (see app_texture.dart). It short-circuits to `child`
+            // for legacy and for the seventeen themes that declare neither, so
+            // the common path costs one build and no layer.
+            // Copies finished recordings to an SMB share while the app runs.
+            child: SmbUploadHost(
+              child: WebDavSaveStatus(child: AppTexture(child: child!)),
+            ),
+          ),
         );
         // Pointer input counts as presence too — an Apple TV remote's
         // trackpad and an attached mouse both arrive here rather than through
@@ -1290,62 +1297,110 @@ class _DebrifyAppState extends State<DebrifyApp> {
 }
 
 class MainPage extends StatefulWidget {
-  const MainPage({super.key, this.initialTab});
-
-  final int? initialTab;
+  const MainPage({super.key});
 
   @override
   State<MainPage> createState() => _MainPageState();
 }
 
+class _SupportCampaignDialog extends StatefulWidget {
+  final SupportCampaignConfig campaign;
+  final Future<void> Function() onDismissForever;
+
+  const _SupportCampaignDialog({
+    required this.campaign,
+    required this.onDismissForever,
+  });
+
+  @override
+  State<_SupportCampaignDialog> createState() => _SupportCampaignDialogState();
+}
+
+class _SupportCampaignDialogState extends State<_SupportCampaignDialog> {
+  final FocusNode _maybeLaterFocusNode = FocusNode(
+    debugLabel: 'supportMaybeLater',
+  );
+  final FocusNode _dismissFocusNode = FocusNode(
+    debugLabel: 'supportDismissForever',
+  );
+  final FocusNode _donateFocusNode = FocusNode(debugLabel: 'supportDonate');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _donateFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _maybeLaterFocusNode.dispose();
+    _dismissFocusNode.dispose();
+    _donateFocusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return FocusTraversalGroup(
+      child: FocusScope(
+        autofocus: true,
+        child: AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          title: Text(widget.campaign.title),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Text(
+              widget.campaign.message,
+              style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+            ),
+          ),
+          actions: [
+            TextButton(
+              focusNode: _maybeLaterFocusNode,
+              onPressed: () {
+                Navigator.of(context).pop(false);
+              },
+              child: const Text('Maybe later'),
+            ),
+            TextButton(
+              focusNode: _dismissFocusNode,
+              onPressed: () async {
+                await widget.onDismissForever();
+                if (mounted) {
+                  Navigator.of(context).pop(false);
+                }
+              },
+              child: const Text("Don't show again"),
+            ),
+            FilledButton(
+              focusNode: _donateFocusNode,
+              onPressed: () {
+                Navigator.of(context).pop(true);
+              },
+              child: Text(widget.campaign.buttonLabel),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   static bool _didAutoUpdateCheck = false;
-  final GlobalKey<NavigatorState> _sectionNavigatorKey =
-      GlobalKey<NavigatorState>();
-  late final _SectionNavigatorObserver _sectionNavigatorObserver =
-      _SectionNavigatorObserver(
-        (playerOpen) {
-          if (!mounted) return;
-          if (_selectedIndex == MainTab.iptv && _iptvStartupPlaybackLaunched) {
-            if (playerOpen) {
-              _iptvStartupPlayerRouteSeen = true;
-            } else if (_iptvStartupPlayerRouteSeen) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _finishIptvStartup();
-              });
-            }
-          }
-          setState(() => _playerRouteOpen = playerOpen);
-        },
-        onCoveredChanged: (covered) {
-          if (!mounted || _sectionRouteCovering == covered) return;
-          void apply() {
-            if (mounted) setState(() => _sectionRouteCovering = covered);
-          }
-
-          // Declarative page updates can report routes mid-build.
-          if (SchedulerBinding.instance.schedulerPhase ==
-              SchedulerPhase.persistentCallbacks) {
-            WidgetsBinding.instance.addPostFrameCallback((_) => apply());
-          } else {
-            apply();
-          }
-        },
-      );
-  bool _playerRouteOpen = false;
-
-  /// True while any route (detail page, sheet, dialog) sits above the section
-  /// root, including its exit animation. Pushed routes inherit the selected
-  /// tab's safe-area mode from the shell; the swipe pager applies it per page.
-  bool _sectionRouteCovering = false;
 
   // Home (the Stremio board; old index-0 Home retired) — unless a startup
-  // channel is pending, in which case boot straight to transient IPTV (13)
-  // until it consumes the channel. It is intentionally absent from ordinary
-  // nav; profile and integration refreshes must preserve this boot handoff.
-  late int _selectedIndex =
-      widget.initialTab ??
-      (MainPageBridge.hasPendingIptvStartup ? MainTab.iptv : MainTab.home);
+  // channel is pending, in which case boot straight to IPTV (13) so the page
+  // that owns the launch is the one that mounts. Resolved in main() before
+  // runApp precisely so this initializer can read it; tab 13 is unconditional
+  // in _computeVisibleNavIndices, so it can never be swallowed.
+  int _selectedIndex = MainPageBridge.hasPendingIptvStartup
+      ? MainTab.iptv
+      : MainTab.home;
 
   // Phone nav chrome: 'classic' (bottom bar, default) vs 'floating' (the
   // glass button). Nothing renders until the pref is read — a one-frame
@@ -1357,17 +1412,17 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// nav prefs; live-reloaded when the Settings picker fires the bridge.
   /// Ghost is the product default — matching it here avoids a one-frame
   /// classic flash before the pref read lands.
-  String _tvSidebarStyle = StorageService.tvSidebarStyleCached;
+  String _tvSidebarStyle = SidebarStorage.tvSidebarStyleCached;
 
   /// Desktop/tablet sidebar chrome: 'rail' (fixed, the default) or 'pill'
   /// (no rail — content full-bleed, a floating capsule opens the menu).
   /// Same load/reload path as the TV style above.
-  String _desktopSidebarStyle = StorageService.desktopSidebarStyleCached;
+  String _desktopSidebarStyle = SidebarStorage.desktopSidebarStyleCached;
 
   /// Shared order and label overrides for living-room and wide-window rails.
   /// Visibility remains owned by [_computeVisibleNavIndices].
   SidebarConfiguration _sidebarConfiguration =
-      StorageService.sidebarConfigurationCached;
+      SidebarStorage.sidebarConfigurationCached;
 
   /// The classic bar's stored middle-slot picks (real indices; may contain
   /// currently-hidden tabs — validated against visibility at build). Null =
@@ -1379,19 +1434,21 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// providers are configured — sidebar layouts carry it, phones don't.
   static const int _kSearchTabIndex = 17;
 
-  /// Backfill order when picks are missing/invalid. Reels remains separately
-  /// pinnable alongside Watch; all numbers are stable tab IDs.
+  /// Backfill order when picks are missing/invalid: Discover, IPTV, Cloud,
+  /// Downloads, YouTube, Debrify TV, Stremio TV, Calendar, Addons, Settings.
   /// Deliberately without [_kSearchTabIndex]: the classic bar's three slots
   /// are all spoken for, and the phone reaches search from the Home board.
   static const List<int> _phoneNavDefaultOrder = [
-    18, // Discover
-    MainTab.reels, // 20: independently pinnable clips
-    MainTab.watch, // 21: hub for clips and TV feeds
-    16, // Cloud
-    2, // Downloads
-    19, // Calendar
-    7, // Addons
-    8, // Settings
+    18,
+    13,
+    16,
+    2,
+    14,
+    3,
+    9,
+    19,
+    7,
+    8,
   ];
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -1427,25 +1484,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   /// Torn down by [MainPageBridge.notifyPlayerLaunching] (which every playback
   /// path already calls) or by cancellation.
   bool _showIptvStartupOverlay = false;
-  bool _iptvStartupPlaybackLaunched = false;
-  bool _iptvStartupPlayerRouteSeen = false;
-
-  void _onIptvStartupPlayerLaunching() {
-    if (mounted && _selectedIndex == MainTab.iptv && !_showIptvStartupOverlay) {
-      _iptvStartupPlaybackLaunched = true;
-    }
-  }
-
-  void _finishIptvStartup() {
-    if (!mounted || _selectedIndex != MainTab.iptv) return;
-    _iptvStartupPlaybackLaunched = false;
-    _iptvStartupPlayerRouteSeen = false;
-    _selectTab(MainTab.watch);
-  }
-
-  void _onIptvStartupPlaybackReturned() {
-    if (_iptvStartupPlaybackLaunched) _finishIptvStartup();
-  }
 
   void _hideIptvStartupOverlay() {
     if (!mounted) {
@@ -1454,17 +1492,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     }
     if (_showIptvStartupOverlay) {
       setState(() => _showIptvStartupOverlay = false);
-      // Cancellation may originate in the IPTV page itself. A successful
-      // launch synchronously publishes its player event after hiding this
-      // overlay; resolve an unsuccessful attempt on the following frame.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted &&
-            _selectedIndex == MainTab.iptv &&
-            !_showIptvStartupOverlay &&
-            !_iptvStartupPlaybackLaunched) {
-          _finishIptvStartup();
-        }
-      });
     }
   }
 
@@ -1474,7 +1501,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   void _cancelIptvStartup() {
     MainPageBridge.cancelIptvStartupChannel();
     _hideIptvStartupOverlay();
-    _finishIptvStartup();
   }
 
   // Back button press tracking for Android TV exit
@@ -1505,32 +1531,15 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   UserProfile? _profilePolicy;
   StreamSubscription<Map<String, dynamic>>? _autoUpdateDownloadSub;
   String? _autoUpdateDownloadTaskId;
+  bool _hasTrackedInitialTab = false;
+  bool _didCheckSupportCampaign = false;
   bool _startupModalActive = false;
+  bool _supportCampaignResolved = false;
   bool _autoUpdateCheckResolved = false;
 
   /// True while a Cloud-hub provider route is on the stack, so a rapid re-tap or
   /// a duplicate deep link doesn't stack a second identical provider route.
   bool _cloudProviderRouteOpen = false;
-
-  /// True while a Watch-hub feed route is on the stack (mirrors
-  /// [_cloudProviderRouteOpen]) — a rapid re-tap doesn't stack a duplicate.
-  bool _feedRouteOpen = false;
-  int? _activePushedFeedIndex;
-
-  /// Tabs whose pages keep their own content clear of the status bar and the
-  /// tab bar (their own SafeArea, AppBar or CloudScaffold), so on iOS the
-  /// shell lets them draw edge-to-edge. Every other tab stays inset by the
-  /// shell: Playlist (1), Debrify TV (3), Addons (7), Settings (8),
-  /// Stremio TV (9) and Calendar (19) don't handle the top inset themselves.
-  static const Set<int> _kEdgeToEdgeTabs = {
-    2, // Downloads
-    4, 5, 6, 10, 11, 12, // cloud providers (CloudScaffold)
-    13, 14, // IPTV, YouTube (BrowseScreen)
-    15, 17, 18, // Home, Search, Discover (SearchScreen)
-    MainTab.reels, // full-bleed clips; keeps its own text clear of insets
-    16, // Cloud hub
-    MainTab.watch, // Watch hub (own SafeArea, like the Cloud hub)
-  };
 
   final List<Widget> _pages = [
     const SizedBox.shrink(), // 0: (deprecated old Home — kept as an inert slot
@@ -1558,7 +1567,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     'Home (deprecated)', // 0: old board, hidden from nav (index kept as a slot)
     'Playlist',
     'Downloads',
-    'Nextup TV',
+    'Debrify TV',
     'Real Debrid',
     'Torbox',
     'PikPak',
@@ -1574,10 +1583,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     // deprecated). Built on demand in _buildPage as SearchScreen().
     'Cloud', // 16: consolidated cloud-provider hub (RD/Torbox/PikPak/…/WebDAV)
     'Search', // 17: dedicated search tab (TV + sidebar layouts)
-    'Explore', // 18: browsable catalogs and connected sources (stable ID)
+    'Discover', // 18: source-dropdown browser (Continue Watching / Trakt / …)
     'Calendar', // 19: Trakt/Simkl calendar (visible when either is connected)
-    'Reels', // 20: vertical feed of trailer clips
-    'Watch', // 21: consolidated lean-back hub (Reels/IPTV/YouTube/Nextup/Stremio)
   ];
 
   final List<IconData> _icons = [
@@ -1601,8 +1608,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     Icons.search_rounded, // 17: Search
     Icons.explore_rounded, // 18: Discover
     Icons.calendar_month_rounded, // 19: Calendar (Trakt/Simkl)
-    Icons.slow_motion_video_rounded, // 20: Reels
-    Icons.live_tv_rounded, // 21: Watch (lean-back hub)
   ];
 
   /// Tab index → bridge back-handler key, in ONE place. Every path that
@@ -1641,8 +1646,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    MainPageBridge.addPlayerLaunchListener(_onIptvStartupPlayerLaunching);
-    MainPageBridge.addPlaybackReturnListener(_onIptvStartupPlaybackReturned);
     unawaited(_loadProfilePolicy());
     // Active-surface signal: the initializer above picked the boot tab before
     // any tap could, so system-bar ownership needs it published explicitly.
@@ -1675,26 +1678,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.desktopSidebarStyleChanged = () {
-      if (!mounted) return;
-      // The picker has already updated this process mirror. Apply it in this
-      // frame so a rail/pill swap never waits for a preferences round-trip.
-      setState(() {
-        _desktopSidebarStyle = StorageService.desktopSidebarStyleCached;
-      });
-      unawaited(_loadPhoneNavPrefs());
+      if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.sidebarConfigurationChanged = () {
       if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.navPrefsChanged = () {
-      if (!mounted) return;
-      // Swap floating ↔ classic chrome immediately; the later read supplies
-      // the bar-slot picks and any related preference updates.
-      setState(() {
-        _phoneNavStyle = MainPageBridge.phoneNavStyleCached;
-        _phoneNavLoaded = true;
-      });
-      unawaited(_loadPhoneNavPrefs());
+      if (mounted) unawaited(_loadPhoneNavPrefs());
     };
     MainPageBridge.reloadProfilePolicy = () {
       if (mounted) unawaited(_loadProfilePolicy());
@@ -1704,26 +1694,38 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       if (!mounted) return;
       final visibleIndices = _computeVisibleNavIndices();
       if (!visibleIndices.contains(index)) {
-        // Old callers still use the stable numeric IDs. Only the four TV
-        // feeds became child routes; Reels (20) stays a real root destination.
-        final feed = NavigationDestinationCompat.isCollapsedFeedTab(index)
-            ? NavigationDestinationCompat.feedForLegacyTab(index)
-            : null;
-        if (feed != null) {
-          _openFeed(feed);
-          return;
+        if (index == MainTab.realDebrid) {
+          _showMissingApiKeySnack('Real Debrid');
+        } else if (index == MainTab.torbox) {
+          _showMissingApiKeySnack('Torbox');
+        } else if (index == MainTab.pikPak) {
+          // PikPak tab - check if enabled but hidden vs not configured
+          if (_pikpakEnabled && _pikpakHiddenFromNav) {
+            _showTabHiddenSnack('PikPak');
+          } else {
+            _showMissingApiKeySnack('PikPak');
+          }
+        } else if (index == MainTab.webDav) {
+          if (_webDavEnabled && _webDavHiddenFromNav) {
+            _showTabHiddenSnack('WebDAV');
+          } else {
+            _showMissingApiKeySnack('WebDAV');
+          }
+        } else if (index == MainTab.premiumize) {
+          if (_premiumizeEnabled && _premiumizeHiddenFromNav) {
+            _showTabHiddenSnack('Premiumize');
+          } else {
+            _showMissingApiKeySnack('Premiumize');
+          }
+        } else if (index == MainTab.allDebrid) {
+          if (_allDebridEnabled && _allDebridHiddenFromNav) {
+            _showTabHiddenSnack('AllDebrid');
+          } else {
+            _showMissingApiKeySnack('AllDebrid');
+          }
+        } else {
+          _showIntegrationRequiredSnack();
         }
-        final cloud = NavigationDestinationCompat.cloudForLegacyTab(index);
-        if (cloud != null) {
-          _openCloudProvider(cloud);
-          return;
-        }
-        if (index == MainTab.reels &&
-            !_allowsProfileFeature(ProfileFeature.trackersAndDiscovery)) {
-          _showPolicyDeniedSnack();
-          return;
-        }
-        _showIntegrationRequiredSnack();
         return;
       }
       _onItemTapped(index);
@@ -1739,7 +1741,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvokedWithResult: (didPop, result) {
+            onPopInvoked: (didPop) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1764,7 +1766,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvokedWithResult: (didPop, result) {
+            onPopInvoked: (didPop) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1789,7 +1791,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvokedWithResult: (didPop, result) {
+            onPopInvoked: (didPop) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1814,7 +1816,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvokedWithResult: (didPop, result) {
+            onPopInvoked: (didPop) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1835,7 +1837,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         MaterialPageRoute(
           builder: (ctx) => PopScope(
             canPop: false,
-            onPopInvokedWithResult: (didPop, result) {
+            onPopInvoked: (didPop) {
               if (didPop) return;
               if (!MainPageBridge.handleBackNavigation()) {
                 Navigator.of(ctx).pop();
@@ -1847,7 +1849,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       );
     };
     MainPageBridge.openCloudProvider = _openCloudProvider;
-    MainPageBridge.openFeed = _openFeed;
     MainPageBridge.addIntegrationListener(_handleIntegrationChanged);
     _loadIntegrationState();
     _animationController = AnimationController(
@@ -1893,6 +1894,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         }
       }
 
+      if (!_hasTrackedInitialTab) {
+        _trackCurrentTab();
+        _hasTrackedInitialTab = true;
+      }
+
       // Initialize remote control based on device type
       unawaited(
         _initializeRemoteControl(isTv).catchError((Object error) {
@@ -1909,6 +1915,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeAutoCheckForUpdates();
     });
+
+    _scheduleSupportCampaignPrompt();
   }
 
   Future<void> _loadProfilePolicy() async {
@@ -1917,23 +1925,10 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     final profile = await ProfileBootstrap.registry.getProfile(scope.profileId);
     if (!mounted || ProfileRuntime.capture() != scope) return;
     ProfilePolicyGuard.updateActiveProfile(profile);
-    final retainIptv = NavigationDestinationCompat.retainAuthorizedIptvStartup(
-      selectedTab: _selectedIndex,
-      overlayOpen: _showIptvStartupOverlay || _iptvStartupPlaybackLaunched,
-      profileAllowsIptv:
-          profile != null &&
-          profile.isEnabled &&
-          profile.allows(ProfileFeature.iptv),
-    );
-    if (_selectedIndex == MainTab.iptv &&
-        _showIptvStartupOverlay &&
-        !retainIptv) {
-      MainPageBridge.cancelIptvStartupChannel();
-    }
     setState(() {
       _profilePolicy = profile;
       final visible = _computeVisibleNavIndices();
-      if (!visible.contains(_selectedIndex) && !retainIptv) {
+      if (!visible.contains(_selectedIndex)) {
         _selectedIndex = visible.contains(MainTab.home)
             ? MainTab.home
             : visible.first;
@@ -1981,7 +1976,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             MainTab.iptv => ProfileFeature.iptv,
             MainTab.youtube => ProfileFeature.youtube,
             MainTab.discover ||
-            MainTab.reels ||
             MainTab.calendar => ProfileFeature.trackersAndDiscovery,
             _ => null,
           };
@@ -1992,8 +1986,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    MainPageBridge.removePlayerLaunchListener(_onIptvStartupPlayerLaunching);
-    MainPageBridge.removePlaybackReturnListener(_onIptvStartupPlaybackReturned);
     MainPageBridge.removeIntegrationListener(_handleIntegrationChanged);
     MainPageBridge.switchTab = null;
     MainPageBridge.navPrefsChanged = null;
@@ -2007,7 +1999,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     MainPageBridge.openPremiumizeFolder = null;
     MainPageBridge.openAllDebridFolder = null;
     MainPageBridge.openCloudProvider = null;
-    MainPageBridge.openFeed = null;
     MainPageBridge.focusTvSidebar = null;
     MainPageBridge.isTvSidebarFocused = null;
     MainPageBridge.tvDirectionalLeft = null;
@@ -2071,7 +2062,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   Future<void> _initializeRemoteControl(bool isTv) async {
     if (!_allowsProfileFeature(ProfileFeature.remoteControl)) return;
     // Check if remote control is enabled
-    _remoteControlEnabled = await StorageService.getRemoteControlEnabled();
+    _remoteControlEnabled =
+        await RemoteControlStorage.getRemoteControlEnabled();
     if (!_remoteControlEnabled) return;
 
     if (isTv) {
@@ -2080,9 +2072,9 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       // RemoteControlState.startTvListener so phones/desktops that switch
       // to receive mode mid-session via the Remote picker also work.
       // Priority: 1. User-set custom name, 2. Actual device name, 3. Fallback
-      var deviceName = await StorageService.getRemoteTvDeviceName();
+      var deviceName = await RemoteControlStorage.getRemoteTvDeviceName();
       deviceName ??= await PlatformUtil.getDeviceName();
-      deviceName ??= 'Nextup TV';
+      deviceName ??= 'Debrify TV';
       await RemoteControlState().startTvListener(deviceName);
     } else {
       // Non-TV: Start scanning for TVs
@@ -2253,7 +2245,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
           manifestUrl: manifestUrl,
         );
 
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -2319,16 +2310,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       }
     };
 
-    deepLinkService.onEpisodeLinkReceived = (episode) async {
-      if (!mounted) return;
-      if (!_allowsProfileFeature(ProfileFeature.incomingLinks) ||
-          !_allowsProfileFeature(ProfileFeature.addonUse)) {
-        _showPolicyDeniedSnack();
-        return;
-      }
-      MainPageBridge.requestCatalogDetailOpen(episode);
-    };
-
     // Initialize the service
     deepLinkService.initialize();
   }
@@ -2339,6 +2320,39 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     Future<void>.delayed(const Duration(seconds: 6), () async {
       if (!mounted) return;
       await _runDeferredAutoUpdateCheck();
+    });
+  }
+
+  void _scheduleSupportCampaignPrompt() {
+    if (_didCheckSupportCampaign) return;
+    _didCheckSupportCampaign = true;
+
+    Future<void>.delayed(const Duration(seconds: 4), () async {
+      if (!mounted) return;
+      await _runDeferredSupportCampaignPrompt();
+    });
+  }
+
+  Future<void> _runDeferredSupportCampaignPrompt() async {
+    if (!mounted || _supportCampaignResolved) return;
+    if (_startupModalActive) {
+      Future<void>.delayed(const Duration(seconds: 3), () async {
+        if (!mounted) return;
+        await _runDeferredSupportCampaignPrompt();
+      });
+      return;
+    }
+
+    final completed = await _maybeShowSupportCampaignDialog();
+    if (completed) {
+      _supportCampaignResolved = true;
+      return;
+    }
+
+    if (!mounted || _supportCampaignResolved) return;
+    Future<void>.delayed(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      await _runDeferredSupportCampaignPrompt();
     });
   }
 
@@ -2365,18 +2379,53 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     });
   }
 
+  Future<bool> _maybeShowSupportCampaignDialog() async {
+    final config = await SupportRemoteConfigService.instance.loadConfig();
+    final campaign = config.campaign;
+    final donation = config.donation;
+    if (_startupModalActive) return false;
+    if (!campaign.isActiveAt(
+      DateTime.now().toUtc(),
+      providers: donation.providers,
+    )) {
+      return true;
+    }
+
+    final dismissedIds = await DeviceStorage.getDismissedDonationCampaignIds();
+    if (dismissedIds.contains(campaign.id)) return true;
+    if (!mounted) return false;
+
+    _startupModalActive = true;
+    try {
+      final shouldOpenChooser = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => _SupportCampaignDialog(
+          campaign: campaign,
+          onDismissForever: () async {
+            await DeviceStorage.dismissDonationCampaign(campaign.id);
+          },
+        ),
+      );
+
+      if (shouldOpenChooser == true && mounted) {
+        await showSupportDonationChooserDialog(
+          context,
+          donation: donation,
+          title: donation.settingsLabel,
+        );
+      }
+      return true;
+    } finally {
+      _startupModalActive = false;
+    }
+  }
+
   Future<bool> _performAutoUpdateCheck() async {
     try {
       if (!_allowsProfileFeature(ProfileFeature.appUpdates)) return true;
-      final autoEnabled = await StorageService.getUpdateAutoCheckEnabled();
+      final autoEnabled = await DeviceStorage.getUpdateAutoCheckEnabled();
       if (!autoEnabled) return true;
-      // This macOS build updates from source: check the ORIGINAL repo
-      // (upstream) through the local checkout, same as Settings → Check for
-      // Updates, instead of the fork's GitHub releases.
-      if (!kIsWeb && Platform.isMacOS) {
-        return await _performLocalSourceUpdateCheck();
-      }
-      final includeAlpha = await StorageService.getUpdateIncludeAlphaEnabled();
+      final includeAlpha = await DeviceStorage.getUpdateIncludeAlphaEnabled();
       final packageInfo = await AppVersionInfo.get();
       UpdateSummary summary;
       try {
@@ -2388,7 +2437,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         return true;
       }
       if (!summary.updateAvailable) return true;
-      final ignored = await StorageService.getIgnoredUpdateVersion();
+      final ignored = await DeviceStorage.getIgnoredUpdateVersion();
       final releaseVersion = summary.release.versionLabel;
       if (ignored != null &&
           releaseVersion.isNotEmpty &&
@@ -2414,57 +2463,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       _startupModalActive = false;
       // Ignore auto-update failures silently
       return true;
-    }
-  }
-
-  /// Startup check against the original repo via the local source checkout.
-  /// Silent when up to date or when the checkout/toolchain isn't available.
-  Future<bool> _performLocalSourceUpdateCheck() async {
-    final bool available;
-    try {
-      available = await LocalSourceUpdateService.updateAvailable();
-    } catch (_) {
-      return true;
-    }
-    if (!available || !mounted) return true;
-    if (_startupModalActive) {
-      Future<void>.delayed(const Duration(seconds: 3), () async {
-        if (!mounted) return;
-        await _runDeferredAutoUpdateCheck();
-      });
-      return false;
-    }
-    _startupModalActive = true;
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Nextup update available'),
-          content: const Text(
-            'The original Debrify repo has new changes. Nextup will merge them '
-            'into your local fork (keeping your changes), build it, replace this '
-            'app and relaunch when the build succeeds.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Later'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                try {
-                  await LocalSourceUpdateService.buildAndInstall();
-                } catch (_) {}
-              },
-              child: const Text('Build & Install'),
-            ),
-          ],
-        ),
-      );
-      return true;
-    } finally {
-      _startupModalActive = false;
     }
   }
 
@@ -2529,13 +2527,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                       ),
                     ),
                   ],
-                  if (UpdateService.manualInstallHint != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      UpdateService.manualInstallHint!,
-                      style: textTheme.bodyMedium?.copyWith(height: 1.4),
-                    ),
-                  ],
                   if (notes.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text(
@@ -2580,7 +2571,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     TextButton(
                       onPressed: () async {
                         final navigator = Navigator.of(dialogContext);
-                        await StorageService.setIgnoredUpdateVersion(
+                        await DeviceStorage.setIgnoredUpdateVersion(
                           release.versionLabel,
                         );
                         navigator.pop();
@@ -2641,7 +2632,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         url: asset.downloadUrl.toString(),
         fileName: asset.name.isNotEmpty
             ? asset.name
-            : 'Nextup-${release.versionLabel}.apk',
+            : 'Debrify-${release.versionLabel}.apk',
         subDir: 'Debrify/Updates',
         mimeType: mime,
       );
@@ -2712,7 +2703,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (result.isGranted) return true;
     if (result.isPermanentlyDenied || result.isRestricted) {
       _showAutoUpdateSnack(
-        'Allow Nextup to install apps from system settings.',
+        'Allow Debrify to install apps from system settings.',
       );
       unawaited(openAppSettings());
     } else {
@@ -2743,8 +2734,8 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     String fileId,
     String fileName,
   ) async {
-    final postAction = await StorageService.getPikPakPostTorrentAction();
-    final pikpakHidden = await StorageService.getPikPakHiddenFromNav();
+    final postAction = await PikpakStorage.getPikPakPostTorrentAction();
+    final pikpakHidden = await PikpakStorage.getPikPakHiddenFromNav();
 
     // For 'none' action, just show success
     if (postAction == 'none') {
@@ -2826,34 +2817,16 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadPhoneNavPrefs() async {
-    final startingScope = ProfileRuntime.isProfileCommitted
-        ? ProfileRuntime.capture()
-        : null;
-    final style = await StorageService.getPhoneNavStyle();
-    final picks = await StorageService.getPhoneNavBarIndices();
-    final tvSidebar = await StorageService.getTvSidebarStyle();
-    final desktopSidebar = await StorageService.getDesktopSidebarStyle();
-    final sidebarConfiguration = await StorageService.getSidebarConfiguration();
-    if (!mounted ||
-        (startingScope != null && ProfileRuntime.capture() != startingScope)) {
-      return;
-    }
-    final migrated = picks == null
-        ? null
-        : NavigationDestinationCompat.migratePhonePicks(picks);
-    if (picks != null && !listEquals(picks, migrated)) {
-      // Save once for this profile. Repeated startup should not rewrite prefs.
-      await StorageService.setPhoneNavBarIndices(migrated!);
-      if (!mounted ||
-          (startingScope != null &&
-              ProfileRuntime.capture() != startingScope)) {
-        return;
-      }
-    }
+    final style = await SidebarStorage.getPhoneNavStyle();
+    final picks = await SidebarStorage.getPhoneNavBarIndices();
+    final tvSidebar = await SidebarStorage.getTvSidebarStyle();
+    final desktopSidebar = await SidebarStorage.getDesktopSidebarStyle();
+    final sidebarConfiguration = await SidebarStorage.getSidebarConfiguration();
+    if (!mounted) return;
     MainPageBridge.phoneNavStyleCached = style;
     setState(() {
       _phoneNavStyle = style;
-      _phoneNavBarPicks = migrated;
+      _phoneNavBarPicks = picks;
       _tvSidebarStyle = tvSidebar;
       _desktopSidebarStyle = desktopSidebar;
       _sidebarConfiguration = sidebarConfiguration;
@@ -2897,27 +2870,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     if (!visible.contains(index)) {
       return;
     }
-    // On touch layouts the selection change slides [ShellTabPager] to the
-    // tab; it never reports the tabs it crosses.
-    _selectTab(index);
-  }
-
-  void _selectTab(int index) {
-    // Tabs are section roots. Selecting one — including the already-active
-    // tab — dismisses every page, sheet and dialog opened inside a section.
-    _sectionNavigatorKey.currentState?.popUntil((route) => route.isFirst);
     final changed = _selectedIndex != index;
     // A tab switch invalidates a pending "press back again to exit" arm —
     // otherwise tap-tap-back inside the 2s window could exit on what the
     // user experienced as a single back press.
     if (changed) _lastBackPressTime = null;
-    // Swiped/tapped tabs stay mounted in the pager, so a text field focused on
-    // the page being left keeps its focus — and its soft keyboard — over every
-    // page after it. Leaving a page ends its editing. TV is excluded: there
-    // focus IS the remote's cursor, which the sidebar hand-off owns.
-    if (changed && !_isAndroidTv) {
-      FocusManager.instance.primaryFocus?.unfocus();
-    }
     setState(() {
       _selectedIndex = index;
     });
@@ -2930,6 +2887,21 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
 
     // Update active tab for TV sidebar navigation
     MainPageBridge.setActiveTvTab(index);
+
+    if (changed) {
+      _hasTrackedInitialTab = true;
+      _trackCurrentTab();
+    }
+  }
+
+  void _trackCurrentTab() {
+    final title = _titles[_selectedIndex];
+    AnalyticsService.trackInBackground('tab_opened', <String, Object?>{
+      'tab': title,
+      'tab_index': _selectedIndex,
+      'platform': AnalyticsService.currentPlatformLabel(),
+      'tv_mode': _isAndroidTv,
+    });
   }
 
   void _handleIntegrationChanged() {
@@ -2956,25 +2928,26 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 
   Future<void> _loadIntegrationStateForCurrentProfile() async {
-    final rdKey = await StorageService.getApiKey();
-    final torboxKey = await StorageService.getTorboxApiKey();
-    final rdEnabled = await StorageService.getRealDebridIntegrationEnabled();
-    final torboxEnabled = await StorageService.getTorboxIntegrationEnabled();
-    final rdHidden = await StorageService.getRealDebridHiddenFromNav();
-    final tbHidden = await StorageService.getTorboxHiddenFromNav();
-    final pikpakEnabled = await StorageService.getPikPakEnabled();
-    final pikpakHidden = await StorageService.getPikPakHiddenFromNav();
-    final webDavEnabled = await StorageService.getWebDavEnabled();
-    final webDavServers = await StorageService.getWebDavServers();
-    final webDavHidden = await StorageService.getWebDavHiddenFromNav();
-    final premiumizeKey = await StorageService.getPremiumizeApiKey();
+    final rdKey = await RealDebridStorage.getApiKey();
+    final torboxKey = await TorboxStorage.getTorboxApiKey();
+    final rdEnabled = await RealDebridStorage.getRealDebridIntegrationEnabled();
+    final torboxEnabled = await TorboxStorage.getTorboxIntegrationEnabled();
+    final rdHidden = await RealDebridStorage.getRealDebridHiddenFromNav();
+    final tbHidden = await TorboxStorage.getTorboxHiddenFromNav();
+    final pikpakEnabled = await PikpakStorage.getPikPakEnabled();
+    final pikpakHidden = await PikpakStorage.getPikPakHiddenFromNav();
+    final webDavEnabled = await WebdavStorage.getWebDavEnabled();
+    final webDavServers = await WebdavServerStorage.getWebDavServers();
+    final webDavHidden = await WebdavStorage.getWebDavHiddenFromNav();
+    final premiumizeKey = await PremiumizeStorage.getPremiumizeApiKey();
     final premiumizeEnabledPref =
-        await StorageService.getPremiumizeIntegrationEnabled();
-    final premiumizeHidden = await StorageService.getPremiumizeHiddenFromNav();
-    final allDebridKey = await StorageService.getAllDebridApiKey();
+        await PremiumizeStorage.getPremiumizeIntegrationEnabled();
+    final premiumizeHidden =
+        await PremiumizeStorage.getPremiumizeHiddenFromNav();
+    final allDebridKey = await AllDebridStorage.getAllDebridApiKey();
     final allDebridEnabledPref =
-        await StorageService.getAllDebridIntegrationEnabled();
-    final allDebridHidden = await StorageService.getAllDebridHiddenFromNav();
+        await AllDebridStorage.getAllDebridIntegrationEnabled();
+    final allDebridHidden = await AllDebridStorage.getAllDebridHiddenFromNav();
     // Trakt/Simkl connection gates the Calendar tab. Login/logout of either
     // fires notifyIntegrationChanged(), so this re-reads on those events too.
     final traktAuthed = await TraktService.instance.isAuthenticated();
@@ -3052,12 +3025,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     );
 
     int nextIndex = _selectedIndex;
-    if (!newVisible.contains(nextIndex) &&
-        !NavigationDestinationCompat.retainAuthorizedIptvStartup(
-          selectedTab: nextIndex,
-          overlayOpen: _showIptvStartupOverlay || _iptvStartupPlaybackLaunched,
-          profileAllowsIptv: ProfilePolicyGuard.allowsSync(ProfileFeature.iptv),
-        )) {
+    if (!newVisible.contains(nextIndex)) {
       // The current tab disappeared — land on a Home board rather than the first
       // visible tab, which on TV is now the dedicated (blank) Search tab.
       nextIndex = newVisible.contains(15)
@@ -3150,25 +3118,73 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     // returns false while its rollout flag is disabled.
     final calendar = trakt || simkl || mdblist;
     if (_isAndroidTv) {
+      final rd = hasRealDebrid ?? _hasRealDebridKey;
+      final rdHidden = realDebridHidden ?? _rdHiddenFromNav;
+      final tb = hasTorbox ?? _hasTorboxKey;
+      final tbHidden = torboxHidden ?? _tbHiddenFromNav;
+      final pikpak = pikpakEnabled ?? _pikpakEnabled;
+      final ppHidden = pikpakHidden ?? _pikpakHiddenFromNav;
+      final webDav = webDavEnabled ?? _webDavEnabled;
+      final wdHidden = webDavHidden ?? _webDavHiddenFromNav;
+      final premiumize = premiumizeEnabled ?? _premiumizeEnabled;
+      final pmHidden = premiumizeHidden ?? _premiumizeHiddenFromNav;
+      final allDebrid = allDebridEnabled ?? _allDebridEnabled;
+      final adHidden = allDebridHidden ?? _allDebridHiddenFromNav;
       final indices = <int>[
         MainTab.search,
         MainTab.home,
-        MainTab.reels,
         MainTab.discover,
-        MainTab.watch,
         MainTab.downloads,
-      ]; // Reels is still an independent pinnable section and also appears in
-      // Watch. The other four TV feeds live in Watch (21). Search is no longer
+        MainTab.iptv,
+        MainTab.youtube,
+        MainTab.debrifyTv,
+        MainTab.stremioTv,
+      ]; // Search, Home, Discover, Downloads, IPTV, YouTube,
+      // Debrify TV, Stremio TV. The dedicated Search tab (17) is no longer
       // TV-only — every non-TV layout WIDE enough for a sidebar carries it
       // too (see the phone gate where nonTvIndices is built). The Home board
       // (15) keeps its own persistent search bar regardless; the tab is an
       // additional way in, not a replacement.
-      // Cloud is a destination even before the first provider is connected.
-      // Hiding all provider tiles must not strand the restore/connect journey.
-      // ProfilePolicy and saved sidebar visibility still gate this hub.
-      indices.add(MainTab.cloud);
+      // Consolidated Cloud tab: one entry when ANY provider is enabled & not
+      // hidden (replaces the former per-provider RD/Torbox/PikPak/Premiumize/
+      // AllDebrid/WebDAV tabs). The in-tab hub lists the available providers.
+      if ((rd && !rdHidden) ||
+          (tb && !tbHidden) ||
+          (pikpak && !ppHidden) ||
+          (premiumize && !pmHidden) ||
+          (allDebrid && !adHidden) ||
+          (webDav && !wdHidden)) {
+        indices.add(MainTab.cloud);
+      }
       indices.add(MainTab.addons);
       indices.add(MainTab.settings);
+      _insertTraktCalendarTab(indices, calendar);
+      return _applyProfilePolicy(indices);
+    }
+
+    final rd = hasRealDebrid ?? _hasRealDebridKey;
+    final rdHidden = realDebridHidden ?? _rdHiddenFromNav;
+    final tb = hasTorbox ?? _hasTorboxKey;
+    final tbHidden = torboxHidden ?? _tbHiddenFromNav;
+    final pikpak = pikpakEnabled ?? _pikpakEnabled;
+    final ppHidden = pikpakHidden ?? _pikpakHiddenFromNav;
+    final webDav = webDavEnabled ?? _webDavEnabled;
+    final wdHidden = webDavHidden ?? _webDavHiddenFromNav;
+    final premiumize = premiumizeEnabled ?? _premiumizeEnabled;
+    final pmHidden = premiumizeHidden ?? _premiumizeHiddenFromNav;
+    final allDebrid = allDebridEnabled ?? _allDebridEnabled;
+    final adHidden = allDebridHidden ?? _allDebridHiddenFromNav;
+    if (!rd && !tb && !pikpak && !webDav && !premiumize && !allDebrid) {
+      final indices = <int>[
+        MainTab.search,
+        MainTab.home,
+        MainTab.discover,
+        MainTab.iptv,
+        MainTab.youtube,
+        MainTab.stremioTv,
+        MainTab.addons,
+        MainTab.settings,
+      ]; // Search, Home, Discover, IPTV, YouTube, Stremio TV, Addons, Settings
       _insertTraktCalendarTab(indices, calendar);
       return _applyProfilePolicy(indices);
     }
@@ -3176,14 +3192,23 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
     final indices = <int>[
       MainTab.search,
       MainTab.home,
-      MainTab.reels,
       MainTab.discover,
-      MainTab.watch,
       MainTab.downloads,
-    ]; // The four TV feeds live behind Watch; Reels remains standalone.
-    // Reachable even if credentials are missing or every provider tile has
-    // been hidden. CloudScreen owns useful setup and restore actions.
-    indices.add(MainTab.cloud);
+      MainTab.iptv,
+      MainTab.youtube,
+      MainTab.debrifyTv,
+      MainTab.stremioTv,
+    ];
+    // Consolidated Cloud tab (see TV branch above): one entry when any provider
+    // is enabled & not hidden.
+    if ((rd && !rdHidden) ||
+        (tb && !tbHidden) ||
+        (pikpak && !ppHidden) ||
+        (premiumize && !pmHidden) ||
+        (allDebrid && !adHidden) ||
+        (webDav && !wdHidden)) {
+      indices.add(MainTab.cloud);
+    }
     indices.add(MainTab.addons);
     indices.add(MainTab.settings);
     _insertTraktCalendarTab(indices, calendar);
@@ -3200,8 +3225,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 0: // Home
       case 2: // Downloads
       case 19: // Trakt/Simkl Calendar
-      case MainTab.watch: // Watch (consolidated lean-back hub)
-      case MainTab.reels: // independent pinnable Reels, also in Watch
         return 'Main';
       case 13: // IPTV
       case 14: // YouTube
@@ -3285,37 +3308,11 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       case 16: // Cloud (consolidated provider hub)
         return CloudScreen(isTelevision: _isAndroidTv);
       case 17: // Search (dedicated tab — TV + sidebar layouts)
-        // Off-TV it is Home's board pinned in search, so an empty query shows
-        // Home's shelves (lists, Continue Watching, catalogs) like Home's own
-        // search button; TV keeps the dedicated prompt.
-        return _isAndroidTv
-            ? SearchScreen(isTelevision: _isAndroidTv, searchMode: true)
-            : const SearchScreen(searchPage: true);
+        return SearchScreen(isTelevision: _isAndroidTv, searchMode: true);
       case 18: // Discover (source-dropdown browser)
         return SearchScreen(isTelevision: _isAndroidTv, discoverMode: true);
       case 19: // Calendar (gated on Trakt OR Simkl auth in the nav below)
         return const TraktCalendarScreen();
-      case MainTab.reels:
-        return ReelsScreen(
-          isTelevision: _isAndroidTv,
-          isActive:
-              ((_activePushedFeedIndex == MainTab.reels) ||
-                  (_selectedIndex == MainTab.reels && !_feedRouteOpen)) &&
-              !_playerRouteOpen,
-          floatingNav:
-              !_isAndroidTv &&
-              ((_phoneNavLoaded &&
-                      _phoneNavStyle == 'floating' &&
-                      MediaQuery.sizeOf(context).width < 600) ||
-                  // The desktop pill lives over the lower-right corner just
-                  // like the mobile floating navigation. Reels owns a full
-                  // action rail there, so give both its buttons the same
-                  // clearance on every floating-nav surface.
-                  (_desktopSidebarStyle == 'pill' &&
-                      MediaQuery.sizeOf(context).width >= 600)),
-        );
-      case MainTab.watch: // Watch (consolidated lean-back feed hub)
-        return WatchHubScreen(isTelevision: _isAndroidTv);
       default:
         return _pages[index];
     }
@@ -3329,59 +3326,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
       isTelevision: _isAndroidTv,
       entranceAnimation: _fadeAnimation,
       child: _buildPage(_selectedIndex),
-    );
-  }
-
-  /// Touch layouts: one continuous horizontal surface across the visible
-  /// tabs (see [ShellTabPager]).
-  Widget _buildSwipeableTabs(List<int> visible, {required bool iosEdge}) {
-    // An authorized IPTV cold start temporarily selects old tab 13 to
-    // consume the requested channel. Its ID is deliberately absent from the
-    // ordinary nav, so the pager would otherwise fall back to Home before
-    // the IPTV view could mount. Keep this transient root until navigation
-    // selects a regular tab or the startup is cancelled.
-    if (_selectedIndex == MainTab.iptv && !visible.contains(MainTab.iptv)) {
-      final edge = iosEdge && _kEdgeToEdgeTabs.contains(MainTab.iptv);
-      return SafeArea(
-        left: false,
-        right: false,
-        top: !edge,
-        bottom: !edge,
-        child: _buildPage(MainTab.iptv),
-      );
-    }
-    // Settings is a destination in the navigation controls, not another
-    // discoverable page in the horizontal content carousel.
-    if (_selectedIndex == MainTab.settings) {
-      return SafeArea(
-        left: false,
-        right: false,
-        top: true,
-        bottom: true,
-        child: _buildPage(MainTab.settings),
-      );
-    }
-    return ShellTabPager(
-      tabs: visible.where((tab) => tab != MainTab.settings).toList(),
-      selectedTab: _selectedIndex,
-      fallbackTab: MainTab.home,
-      onTabSelected: _selectTab,
-      // Any pushed detail, sheet or dialog owns its navigation gesture. The
-      // underlying tab pager must not change sections while it is covered.
-      swipeEnabled: !_sectionRouteCovering && !_playerRouteOpen,
-      pageBuilder: (context, index) {
-        // Safe-area mode is per page: an edge-to-edge tab and an inset tab
-        // can share the screen mid-swipe without either one jumping when
-        // the selection flips at the midpoint.
-        final edge = iosEdge && _kEdgeToEdgeTabs.contains(index);
-        return SafeArea(
-          left: false,
-          right: false,
-          top: !edge,
-          bottom: !edge,
-          child: _buildPage(index),
-        );
-      },
     );
   }
 
@@ -3520,7 +3464,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             settings: const RouteSettings(name: 'cloud_provider'),
             builder: (ctx) => PopScope(
               canPop: false,
-              onPopInvokedWithResult: (didPop, result) {
+              onPopInvoked: (didPop) {
                 if (didPop) return;
                 back(ctx);
               },
@@ -3538,82 +3482,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
         )
         .then((_) {
           if (mounted) _cloudProviderRouteOpen = false;
-        });
-  }
-
-  /// Open a Watch feed as a child route, including the independently pinnable
-  /// Reels. Its stable tab identity determines permissions and TV focus.
-  void _openFeed(String feedKey) {
-    if (!mounted) return;
-    final index = NavigationDestinationCompat.tabForFeed(feedKey);
-    final feature = NavigationDestinationCompat.permissionForFeed(feedKey);
-    if (index == null || feature == null) return;
-    if (!ProfilePolicyGuard.allowsSync(feature)) {
-      _showPolicyDeniedSnack();
-      return;
-    }
-    if (_feedRouteOpen) return;
-    _feedRouteOpen = true;
-    _activePushedFeedIndex = index;
-
-    void back(BuildContext ctx) {
-      if (!MainPageBridge.handleBackNavigation()) {
-        Navigator.of(ctx).pop();
-      }
-    }
-
-    // Tab pages in [_kEdgeToEdgeTabs] draw to the screen edges and manage their
-    // own insets; the others rely on the shell to inset them, which a pushed
-    // route doesn't do — so add the top inset back for those.
-    Widget content = _buildTabContent(index);
-    if (!_kEdgeToEdgeTabs.contains(index)) {
-      content = SafeArea(bottom: false, child: content);
-    }
-
-    if (_isAndroidTv) {
-      // The pushed screen registers focus under its original tab ID (3, 9,
-      // 13, 14). Hand off after it mounts, and restore the hub on return.
-      MainPageBridge.setActiveTvTab(index);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _activePushedFeedIndex != index) return;
-        MainPageBridge.setActiveTvTab(index);
-        MainPageBridge.requestTvContentFocus();
-      });
-    }
-    Navigator.of(context)
-        .push(
-          MaterialPageRoute(
-            settings: RouteSettings(name: 'watch_feed/$feedKey'),
-            builder: (ctx) => PopScope(
-              canPop: false,
-              onPopInvokedWithResult: (didPop, result) {
-                if (didPop) return;
-                back(ctx);
-              },
-              child: CallbackShortcuts(
-                bindings: {
-                  const SingleActivator(LogicalKeyboardKey.escape): () =>
-                      back(ctx),
-                },
-                child: content,
-              ),
-            ),
-          ),
-        )
-        .then((_) {
-          if (!mounted) return;
-          _feedRouteOpen = false;
-          _activePushedFeedIndex = null;
-          setState(() {});
-          if (_isAndroidTv) {
-            MainPageBridge.setActiveTvTab(_selectedIndex);
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted && !_feedRouteOpen) {
-                MainPageBridge.setActiveTvTab(_selectedIndex);
-                MainPageBridge.requestTvContentFocus();
-              }
-            });
-          }
         });
   }
 
@@ -3765,7 +3633,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
             // in SystemNavigator.pop (a no-op there); the handler now owns
             // the whole rail/exit contract via the runner's suspend channel.
             canPop: false,
-            onPopInvokedWithResult: (didPop, _) => _onRootPopInvoked(didPop),
+            onPopInvoked: _onRootPopInvoked,
             child: shell!,
           ),
           child: AnimatedPremiumBackground(
@@ -3777,9 +3645,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   // actually being rendered — startup and integration-driven tab
                   // changes set _selectedIndex without routing through
                   // _onNavItemSelected, so a screen can't otherwise trust it.
-                  MainPageBridge.setActiveTvTab(
-                    _activePushedFeedIndex ?? _selectedIndex,
-                  );
+                  MainPageBridge.setActiveTvTab(_selectedIndex);
                   final tvIndices = _sidebarOrderedIndices(visibleIndices);
                   final tvSelected = tvIndices.indexOf(_selectedIndex);
                   // The scope regular tab content lives in — the left-edge
@@ -4011,25 +3877,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     (Platform.isAndroid || Platform.isIOS) &&
                     !PlatformUtil.isTelevision &&
                     MediaQuery.of(context).size.shortestSide < 600;
-                // Sidebar ordering stops at the wide-layout boundary: phone
-                // navigation keeps its canonical order and its separate
-                // classic-bar picks. Hidden sections are hidden everywhere,
-                // though, including the floating button's popup.
+                // Profile sidebar customization stops at the wide-layout
+                // boundary. Phone navigation keeps its canonical order and
+                // its separate classic-bar picks.
                 final nonTvIndices =
                     (isDesktopWide
                             ? _sidebarOrderedIndices(visibleIndices)
-                            : _sidebarConfiguration.filterHiddenTabs(
-                                visibleIndices,
-                              ))
+                            : visibleIndices)
                         .where(
                           (i) =>
                               (isDesktopWide && !isPhone) ||
                               i != _kSearchTabIndex,
                         )
                         .toList();
-                MainPageBridge.searchTabInNav = nonTvIndices.contains(
-                  _kSearchTabIndex,
-                );
                 final nonTvSelected = nonTvIndices.indexOf(_selectedIndex);
                 // Touch tablets (iPad / Android tablet in landscape) get the
                 // wider rail. True desktop keeps the slim rail.
@@ -4056,28 +3916,6 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                     !isDesktopWide &&
                     _phoneNavLoaded &&
                     _phoneNavStyle == 'classic';
-                // iPhone/iPad: pages run edge-to-edge — under the status bar
-                // and under a translucent tab bar — when they keep their own
-                // content clear of the insets (see [_kEdgeToEdgeTabs]).
-                final iosEdge =
-                    PlatformUtil.isIosMobile && !_isAndroidTv && !isDesktopWide;
-                final edgePage =
-                    iosEdge && _kEdgeToEdgeTabs.contains(_selectedIndex);
-                // Touch layouts page between tabs with one continuous swipe.
-                // Sidebar and TV layouts keep their focus-first transition.
-                final useTabPager = !isDesktopWide && !_isAndroidTv;
-                // With the pager, each root page applies its own top/bottom
-                // insets; the shell applies the selected tab's mode only for
-                // routes pushed over it (unchanged from before the pager).
-                // The player is pushed on the section navigator, so the shell
-                // must step aside entirely while it's up: no insets, no
-                // sidebar offset, black ground. Pager pages keep their own
-                // insets, so the tab underneath doesn't shift.
-                final playerFullscreen = _playerRouteOpen;
-                final shellInsets =
-                    !playerFullscreen &&
-                    !edgePage &&
-                    (!useTabPager || _sectionRouteCovering);
                 return Scaffold(
                   // Opaque page ink rather than transparent-to-the-wallpaper.
                   //
@@ -4102,21 +3940,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                   //
                   // TV keeps its transparent shell above — TvAmbientArtStage is
                   // the real background there.
-                  backgroundColor: playerFullscreen
-                      ? Colors.black
-                      : app.shell.ink,
-                  // On iOS the body runs under the (translucent) tab bar;
-                  // Scaffold then reports the bar's height as bottom padding
-                  // to the page, so content can still clear it.
-                  extendBody: iosEdge && classicBottomNav,
+                  backgroundColor: app.shell.ink,
                   // The REAL Scaffold slot, not a body child: Scaffold then
                   // owns the geometry — body inset above the bar, descendant
                   // MediaQuery stripped of the bottom padding the bar
                   // absorbs, and fixed SnackBars ("press back again to
                   // exit") anchor ABOVE the bar instead of covering it.
-                  bottomNavigationBar: classicBottomNav && !_playerRouteOpen
+                  bottomNavigationBar: classicBottomNav
                       ? MobileClassicNav(
-                          translucent: iosEdge,
                           currentIndex: _selectedIndex,
                           visibleIndices: nonTvIndices,
                           barIndices: _phoneNavEffectiveBar(nonTvIndices),
@@ -4126,22 +3957,16 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                           onBarEdited: (picks) {
                             setState(() => _phoneNavBarPicks = picks);
                             unawaited(
-                              StorageService.setPhoneNavBarIndices(picks),
+                              SidebarStorage.setPhoneNavBarIndices(picks),
                             );
                           },
-                          onRemoteControlTap:
-                              _allowsProfileFeature(
-                                ProfileFeature.remoteControl,
-                              )
-                              ? () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const RemoteRolePickerScreen(),
-                                    ),
-                                  );
-                                }
-                              : null,
+                          onRemoteControlTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RemoteRolePickerScreen(),
+                              ),
+                            );
+                          },
                           profile: _profilePolicy,
                           onProfileTap: _profilePolicy == null
                               ? null
@@ -4162,54 +3987,19 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                       // pages with their own SafeArea/padding.bottom reads
                       // would re-apply a 34px inset they no longer sit under.
                       Positioned.fill(
-                        left: isDesktopWide && !playerFullscreen
-                            ? desktopSidebarWidth
-                            : 0,
+                        left: isDesktopWide ? desktopSidebarWidth : 0,
                         child: ClipRect(
                           child: SafeArea(
                             // The rail absorbs the left inset when present;
                             // under 'pill' there is no rail, so the content
                             // must take the inset back (iPad landscape
                             // notch) or the first column sits under it.
-                            left:
-                                !playerFullscreen &&
-                                (!isDesktopWide || desktopPill),
-                            right: !playerFullscreen,
-                            // Edge-to-edge pages keep the top and bottom
-                            // insets in MediaQuery and handle them
-                            // themselves, so their backgrounds (and Home's
-                            // hero) reach under the status bar and tab bar.
-                            top: shellInsets,
-                            bottom: shellInsets,
+                            left: !isDesktopWide || desktopPill,
                             child: Stack(
                               children: [
                                 // Page fills the whole area so its own
                                 // background covers the animated backdrop.
-                                Positioned.fill(
-                                  child: Navigator(
-                                    key: _sectionNavigatorKey,
-                                    observers: [_sectionNavigatorObserver],
-                                    pages: [
-                                      MaterialPage<void>(
-                                        key: const ValueKey('section-root'),
-                                        // Sidebar/TV layouts retain their
-                                        // focus-first tab transition. On
-                                        // touch layouts PageView keeps the
-                                        // outgoing tab beside the incoming
-                                        // one throughout the swipe.
-                                        child: useTabPager
-                                            ? _buildSwipeableTabs(
-                                                nonTvIndices,
-                                                iosEdge: iosEdge,
-                                              )
-                                            : _buildAnimatedPage(),
-                                      ),
-                                    ],
-                                    // The section root is fixed; Flutter has
-                                    // already completed the pop when notified.
-                                    onDidRemovePage: (_) {},
-                                  ),
-                                ),
+                                Positioned.fill(child: _buildAnimatedPage()),
                                 // Invisible top strip keeps frameless desktop
                                 // windows draggable now that the AppBar is gone.
                                 if (isDesktopWide)
@@ -4226,7 +4016,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-                      if (isDesktopWide && !desktopPill && !_playerRouteOpen)
+                      if (isDesktopWide && !desktopPill)
                         Positioned(
                           left: 0,
                           top: 0,
@@ -4260,7 +4050,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                         ),
                       // Full-screen layer, but hit-testable only at the
                       // capsule while closed — see DesktopPillNav.
-                      if (desktopPill && !_playerRouteOpen)
+                      if (desktopPill)
                         Positioned.fill(
                           child: DesktopPillNav(
                             expanded: expandDesktopSidebar,
@@ -4291,8 +4081,7 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                         ),
                       if (!isDesktopWide &&
                           _phoneNavLoaded &&
-                          _phoneNavStyle == 'floating' &&
-                          !_playerRouteOpen)
+                          _phoneNavStyle == 'floating')
                         MobileFloatingNav(
                           currentIndex: nonTvSelected == -1 ? 0 : nonTvSelected,
                           items: [
@@ -4307,19 +4096,13 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
                             final actualIndex = nonTvIndices[relativeIndex];
                             _onItemTapped(actualIndex);
                           },
-                          onRemoteControlTap:
-                              _allowsProfileFeature(
-                                ProfileFeature.remoteControl,
-                              )
-                              ? () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const RemoteRolePickerScreen(),
-                                    ),
-                                  );
-                                }
-                              : null,
+                          onRemoteControlTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RemoteRolePickerScreen(),
+                              ),
+                            );
+                          },
                           profile: _profilePolicy,
                           onProfileTap: _profilePolicy == null
                               ? null
@@ -4352,98 +4135,14 @@ class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   }
 
   String get _iptvStartupChannelName {
-    final name = StorageService.startupIptvChannelCached?['name'];
+    final name = StartupIptvStorage.startupIptvChannelCached?['name'];
     return name is String && name.isNotEmpty ? name : 'your channel';
   }
 
   int? get _iptvStartupChannelNumber {
-    final number = StorageService.startupIptvChannelCached?['channelNumber'];
+    final number =
+        StartupIptvStorage.startupIptvChannelCached?['channelNumber'];
     return number is num ? number.toInt() : null;
-  }
-}
-
-/// Keeps shell controls above normal section routes while letting the player
-/// remain genuinely fullscreen.
-class _SectionNavigatorObserver extends NavigatorObserver {
-  _SectionNavigatorObserver(
-    this._onPlayerVisibilityChanged, {
-    this.onCoveredChanged,
-  });
-
-  final ValueChanged<bool> _onPlayerVisibilityChanged;
-
-  /// Reports whether any route sits above the section root. A popped route
-  /// keeps counting until its exit animation finishes, so the shell's insets
-  /// don't change under a page that is still sliding out.
-  final ValueChanged<bool>? onCoveredChanged;
-  final Set<Route<dynamic>> _covering = <Route<dynamic>>{};
-
-  void _cover(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (previousRoute == null) return; // the section root itself
-    if (_covering.add(route) && _covering.length == 1) {
-      onCoveredChanged?.call(true);
-    }
-  }
-
-  void _uncover(Route<dynamic> route, {required bool animated}) {
-    if (!_covering.contains(route)) return;
-    void drop() {
-      if (_covering.remove(route) && _covering.isEmpty) {
-        onCoveredChanged?.call(false);
-      }
-    }
-
-    final animation = route is ModalRoute ? route.animation : null;
-    if (!animated ||
-        animation == null ||
-        animation.status == AnimationStatus.dismissed) {
-      drop();
-      return;
-    }
-    late final AnimationStatusListener listener;
-    listener = (status) {
-      if (status != AnimationStatus.dismissed) return;
-      animation.removeStatusListener(listener);
-      drop();
-    };
-    animation.addStatusListener(listener);
-  }
-
-  void _update(Route<dynamic>? route) {
-    if (route is! FrozenLegacyPageRoute) return;
-    _onPlayerVisibilityChanged(true);
-  }
-
-  @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _cover(route, previousRoute);
-    _update(route);
-  }
-
-  @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _uncover(route, animated: true);
-    if (route is FrozenLegacyPageRoute) {
-      _onPlayerVisibilityChanged(false);
-    }
-  }
-
-  @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _uncover(route, animated: false);
-    if (route is FrozenLegacyPageRoute) {
-      _onPlayerVisibilityChanged(false);
-    }
-  }
-
-  @override
-  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    final wasCovering = oldRoute != null && _covering.remove(oldRoute);
-    if (wasCovering && newRoute != null) {
-      _covering.add(newRoute);
-    } else if (wasCovering && _covering.isEmpty) {
-      onCoveredChanged?.call(false);
-    }
   }
 }
 

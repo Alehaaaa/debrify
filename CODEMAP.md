@@ -28,16 +28,17 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
 - Stremio addons: `services/stremio_service.dart` (`_fetchStreamsFromAddon`, `_convertToTorrents` —
   where addon order + labels get overwritten), `models/stremio_addon.dart` (`StremioStream.fromJson`,
   `sizeFromTitle`), `services/stremio_marketplace_service.dart`, `screens/addons/addon_hub_screen.dart`.
+- Addon hub: `screens/addons/addon_hub_screen.dart` retains the widget, State lifecycle,
+  owners, lazy composition and build forwarder. Pure models/helpers/widgets live in
+  `features/addon_hub/{models,application,presentation}/`; the bounded State-driven
+  service/platform sections, loading, actions, navigation, lists and layout live in
+  `features/addon_hub/presentation/legacy_addon_hub/`. Inventory and verified contracts:
+  `docs/refactoring/addon-hub-plan.md` and `docs/refactoring/addon-hub-deps.md`.
 - Indexer managers (Prowlarr/Jackett): `services/indexer_manager_service.dart`
   (`_searchProwlarr*`, Torznab), `models/indexer_manager_config.dart`,
   `screens/settings/indexer_managers_settings_page.dart`.
 - Scraper "engine" system (YAML-config, **not** a code-plugin runtime): `services/engine/*`.
-- **Source intent**: `models/source_intent.dart` (`browse`/`play`/`download`) is the one fact that decides
-  what tapping a source does — carried by the Sources screen (`screens/search/search_sources.dart`),
-  `_browseSelection` and `TorrentPlaybackService.activateTorrent`.
-- **Filters**: `models/torrent_filter_state.dart` (Quality/RipSource/AudioLanguage/Size/DynamicRange/Codec),
-  persisted once in `services/saved_source_filters.dart` — Sources, keyword search, Quick Play's
-  `utils/filter_ladder.dart` and auto-download all read and write the same values;
+- **Filters**: `models/torrent_filter_state.dart` (QualityTier/RipSource/AudioLanguage/SizeBucket dims),
   format/HDR tag detection already exists in `utils/format_tag_detector.dart` +
   `utils/torrent_coverage_detector.dart` + `utils/{movie,series}_parser.dart`. Result row UI:
   `widgets/torrent_result_row.dart`; source picker: `screens/video_player/widgets/source_sheet.dart`.
@@ -49,22 +50,19 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   `download_service.dart`, `magnet_link_handler.dart`, `backup_restore_service.dart`, pickers, settings).
   AllDebrid is the newest = the template for adding a provider.
 - File-tree browse (per provider, post-add): `debrid_service.getTorrentFolderTree`,
-  `utils/{rd,torbox}_folder_tree_builder.dart`, `screens/playlist_content_view_screen.dart`.
+  `utils/{rd,torbox}_folder_tree_builder.dart`; saved playlist content uses the
+  facade `screens/playlist_content_view_screen.dart` and `features/playlist_content/`.
+- Saved playlist content: pure trees/sorting/formatting in `features/playlist_content/application/`,
+  search DTO in `models/`, route owners/composition/loading/navigation/metadata/progress/playback
+  and layouts in `presentation/legacy_playlist_content/` (all paths relative to that feature).
+  The facade retains the public widget and State lifecycle; `playlist_content_composition.dart`
+  wires live getters to fresh route sections. Playback sites live in
+  `playlist_content_{debrid_launches,cloud_launches}.dart`, preserving the legacy launcher bridge.
+  Inventory and staged verification: `docs/refactoring/playlist-content-plan.md` and
+  `docs/refactoring/playlist-content-deps.md`.
 - Cloud/downloads screens: `screens/{debrid_downloads,torbox/torbox_downloads,pikpak/pikpak_files,`
   `premiumize/premiumize_files,alldebrid/alldebrid_files}_screen.dart`, `screens/cloud_screen.dart`.
 - WebDAV: `services/webdav_service.dart` (read/browse only — no upload yet).
-
-## Downloads to device
-- `services/downloads/` is the download system: `download_request.dart` (what + `DownloadScope`),
-  `download_preferences.dart` (the Download button's remembered answers, also Settings → Downloads),
-  `download_coordinator.dart` (the button flow: ask → auto → sources), `download_outcome.dart` (why
-  auto missed + the user-facing note), `download_feedback.dart` (every download message, "View"),
-  `title_download_summary.dart` (state/progress/label for the poster sweep and the detail button),
-  `torrent_downloads.dart` (a `part` of `torrent_playback_service.dart`: `downloadBest`, pack picker
-  defaults via `utils/pack_selection.dart`, direct streams, "download when ready").
-- UI: `widgets/detail/download_choice_sheet.dart`, `screens/downloads_screen.dart`,
-  `screens/settings/download_settings_page.dart`; queue/storage: `services/download_service.dart`,
-  `services/downloaded_media_service.dart`.
 
 ## Players
 - In-app player: `screens/video_player_screen.dart` 🔴 (subtitles via media_kit
@@ -75,10 +73,6 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   `services/android_tv_player_bridge.dart`, native Kotlin
   `android/app/src/main/kotlin/com/debrify/app/{MainActivity.kt,tv/AndroidTvTorrentPlayerActivity.kt}`.
 - External players: `services/external_player_service.dart`, `models/*_external_player.dart`.
-- OS media controls (headset/media keys/lock screen): `services/media_session_service.dart` (+
-  `media_session_mpris.dart` on Linux) over `debrify/media_session`, native in
-  `android/.../media/MediaSessionBridge.kt`, `ios/Runner/AppDelegate.swift`,
-  `macos/Runner/MainFlutterWindow.swift`, `windows/runner/media_session_win.cpp`.
 
 ## IPTV
 - Playlist/M3U/Xtream: `services/iptv_service.dart` (`parseContent`), `utils/m3u_parser.dart`
@@ -103,24 +97,18 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   Simkl: `services/simkl/*` (incl. `simkl_menu_helpers.dart` remove/On-Hold, `simkl_continue_watching_service.dart`).
   MDBList: `services/mdblist/*`. **Trackers share no abstraction — fully parallel by design.**
 - Settings: `screens/settings/{trakt,simkl}_settings_page.dart`. Home rows + scrobble wiring live in
-  `search_screen.dart` + both players. Discover source dropdown: `widgets/search_source_dropdown.dart`,
-  `widgets/trakt/trakt_results_view.dart`.
+  `search_screen.dart` + both players.
 
 ## Detail screens & trailers
-- `screens/merged_series_detail_screen.dart` — the detail page for every catalog title (a series with
-  episodes, anything else as a single title); `screens/catalog_item_detail_screen.dart` remains only for
-  Stremio TV's channel info, `widgets/episodes_panel.dart`, `widgets/series_browser.dart`.
-- Offline copy of downloaded titles' detail pages (meta, episodes, IMDb details, parents guide,
-  recommendations, artwork): `services/offline_title_store.dart`; fed by `stremio_service.dart`
-  (`fetchMetaDetails`/`fetchSeriesMeta` fallbacks), `merged_series_detail_screen.dart` (`_restoreOffline`,
-  `_saveOffline`) and the library scan (`downloaded_media_service.dart` → `updatePinned`); artwork served by
-  `debrify_image_cache.dart`'s `_OfflineAwareCacheManager`.
+- `screens/merged_series_detail_screen.dart` (default-on), legacy `screens/catalog_item_detail_screen.dart`
+  (no trailer), `widgets/episodes_panel.dart`, `widgets/series_browser.dart`.
 - Trailer: `widgets/hero_trailer_backdrop.dart` (`buildVideo(fit:)` — crop lives here),
   `widgets/trailer_engine.dart`.
 
 ## Other video sources
-- YouTube: `services/youtube_service.dart`, `widgets/youtube/*`. Reddit: `services/reddit_service.dart`,
-  `widgets/reddit/*`. Lemmy: `services/lemmy_service.dart`, `widgets/lemmy/*`.
+- YouTube: `services/youtube_service.dart`, `widgets/youtube/*`. The Reddit and Lemmy sources were
+  retired with the old Home and their code deleted; Reddit credentials are still quarantined by
+  `services/profiles/profile_migration_service.dart`.
 
 ## Settings · storage · misc infra
 - Settings: `screens/settings/*` (+ `home_sections_filter_page.dart` = show/hide home rows,
@@ -137,7 +125,7 @@ right code instead of re-discovering it. Flutter app; code under `lib/{screens,s
   deletions), `services/collection_catalog_pager.dart` (raw cursor and retry state),
   `services/collection_folder_loader.dart` (merged multi-catalog paging),
   `services/home_collection_rows.dart` (`HomeCollectionSection`), browser
-  `screens/collections/collection_folder_screen.dart` (+ `widgets/collections/rail_see_all_pill.dart`),
+  `screens/collections/collection_folder_screen.dart`,
   settings `screens/settings/collections_settings_page.dart` (+ `widgets/text_prompt_dialog.dart`).
   Board wiring lives in `search_screen.dart` (`_buildCollectionSections`, `_openCollectionFolder`,
   `_openCollectionScreen`). Docs: `docs/collections.md`.

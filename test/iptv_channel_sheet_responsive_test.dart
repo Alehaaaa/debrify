@@ -49,7 +49,7 @@ void main() {
             sourceName: 'My IPTV',
             browseProvider: browseProvider,
             onContextChanged: onContextChanged,
-            onChannelSelected: onSelected ?? (_, _) async {},
+            onChannelSelected: onSelected ?? (_, __) async {},
             onClose: () {},
           ),
         ),

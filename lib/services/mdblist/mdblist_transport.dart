@@ -29,18 +29,31 @@ class MdblistTransport {
     Map<String, Object?> query = const {},
     Object? body,
     ProfileAsyncAuthorization? capability,
+    bool Function()? canContinue,
+    // Accepted writes may refresh their owning profile after a view closes.
+    // Reads default to the same guard for sending and accepting a response.
+    bool Function()? canAcceptResponse,
     bool allowWhenDisabled = false,
     bool allowNotFound = false,
   }) async {
+    if (canContinue?.call() == false) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     if (!allowWhenDisabled && !featureEnabled()) {
       return const MdblistResult.failure(MdblistResultKind.disabled);
     }
     final key = (await apiKeyProvider())?.trim();
+    if (canContinue?.call() == false) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     if (key == null || key.isEmpty) {
       return const MdblistResult.failure(MdblistResultKind.unauthenticated);
     }
 
     Future<http.Response> send() async {
+      if (canContinue?.call() == false) {
+        throw StateError('Retired MDBList read');
+      }
       final params = <String, String>{
         for (final entry in query.entries)
           if (entry.value != null) entry.key: entry.value.toString(),
@@ -82,6 +95,9 @@ class MdblistTransport {
       final response = capability == null
           ? await send()
           : await capability.runIfCurrentAsOutbound(send);
+      if ((canAcceptResponse ?? canContinue)?.call() == false) {
+        return const MdblistResult.failure(MdblistResultKind.denied);
+      }
       final status = response.statusCode;
       if (status == 401) {
         return MdblistResult.failure(

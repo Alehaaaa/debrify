@@ -1,20 +1,18 @@
-import 'dart:async';
 import 'dart:convert';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
-
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../models/tracking_source.dart';
-import '../storage_service.dart';
 import '../tracker_identity_service.dart';
-import '../tracker_scrobble_outbox.dart';
 import '../episode_tracker_snapshot_revision.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../profiles/profile_async_authorization.dart';
 import '../profiles/profile_credential_facade.dart';
 import '../profiles/profile_runtime.dart';
+import '../profiles/profile_session_memory.dart';
 import 'mdblist_discover_models.dart';
 import 'mdblist_models.dart';
 import 'mdblist_transport.dart';
@@ -64,7 +62,13 @@ class MdblistService {
     Uri? baseUri,
   }) : _client = client ?? http.Client(),
        _apiKeyProvider =
-           apiKeyProvider ?? (() => StorageService.getMdblistApiKey()),
+           apiKeyProvider ??
+           (() {
+             final owner = ProfileSessionMemory.captureOwner();
+             return MdblistStorage.getMdblistApiKey(
+               canContinue: () => owner == ProfileSessionMemory.captureOwner(),
+             );
+           }),
        _featureEnabled = featureEnabled ?? (() => kMdblistEnabled),
        _baseUri = baseUri ?? Uri.parse(_base) {
     _transport = MdblistTransport(
@@ -159,6 +163,20 @@ class MdblistService {
   // Bumped by [_clearCache] (connect/logout/profile switch) so a fetch that
   // was in flight across the switch can't publish the old account's data.
   int _cacheEpoch = 0;
+  ProfileSessionOwner _readCacheOwner = ProfileSessionMemory.captureOwner();
+
+  bool Function() _readOwnerGuard() {
+    final owner = ProfileSessionMemory.captureOwner();
+    if (owner.scope != null && ProfileRuntime.capture() != owner.scope) {
+      return () => false;
+    }
+    if (_readCacheOwner != owner) {
+      _clearCache();
+      _readCacheOwner = owner;
+    }
+    return () => owner == ProfileSessionMemory.captureOwner();
+  }
+
   // Per-bucket invalidation generations; monotonic, deliberately NOT reset in
   // [_clearCache] so an in-flight walk's captured value can never re-match.
   final Map<String, int> _snapshotBucketGen = {};
@@ -196,6 +214,8 @@ class MdblistService {
   void _invalidateSnapshotBucket(String bucket) {
     _snapshotBucketGen[bucket] = (_snapshotBucketGen[bucket] ?? 0) + 1;
     _syncSnapshotCache.removeWhere((key, _) => key.startsWith('$bucket|'));
+    _syncSnapshotInFlight.removeWhere((key, _) => key.startsWith('$bucket|'));
+    if (bucket == 'dropped') _droppedImdbInFlight = null;
   }
 
   /// Clear account-derived state without modifying the scoped credentials.
@@ -251,13 +271,13 @@ class MdblistService {
   Future<ProfileAsyncAuthorization?> capturePlaybackCapability() =>
       _captureCapability();
 
-  Future<bool> isAuthenticated() async {
-    if (!networkEnabled) return false;
+  Future<bool> isAuthenticated({bool Function()? canContinue}) async {
+    if (!networkEnabled || canContinue?.call() == false) return false;
     final key = await _apiKeyProvider();
-    return key != null && key.isNotEmpty;
+    return canContinue?.call() != false && key != null && key.isNotEmpty;
   }
 
-  Future<String?> getUsername() => StorageService.getMdblistUsername();
+  Future<String?> getUsername() => MdblistStorage.getMdblistUsername();
 
   /// Validates [apiKey] against the API. On success, persists the key + the
   /// resolved username, caches the snapshot in [currentAccount], and returns
@@ -273,10 +293,10 @@ class MdblistService {
     if (snapshot == null) return null;
 
     Future<void> commit() async {
-      await StorageService.saveMdblistApiKey(key);
-      await StorageService.enableTrackingScrobbleTarget(TrackingSource.mdblist);
-      await StorageService.setMdblistUsername(snapshot.username);
-      await StorageService.setMdblistSyncCheckpoint(null);
+      await MdblistStorage.saveMdblistApiKey(key);
+      await TrackingSourceStorage.enableTrackingScrobbleTarget(TrackingSource.mdblist);
+      await MdblistStorage.setMdblistUsername(snapshot.username);
+      await MdblistStorage.setMdblistSyncCheckpoint(null);
       if (capability == null || capability.isCurrentlyActive) {
         _clearCache();
         currentAccount = snapshot;
@@ -304,7 +324,7 @@ class MdblistService {
     if (snapshot != null) {
       Future<void> commit() async {
         if (snapshot.username != null) {
-          await StorageService.setMdblistUsername(snapshot.username);
+          await MdblistStorage.setMdblistUsername(snapshot.username);
         }
         if (capability == null || capability.isCurrentlyActive) {
           currentAccount = snapshot;
@@ -323,7 +343,7 @@ class MdblistService {
   Future<void> logout() async {
     final capability = await _captureCapability();
     Future<void> clear() async {
-      await StorageService.clearMdblistAuth();
+      await MdblistStorage.clearMdblistAuth();
       currentAccount = null;
       _clearCache();
       authRevision.value++;
@@ -370,7 +390,7 @@ class MdblistService {
         query: {
           ...query,
           'limit': query['limit'] ?? 100,
-          'cursor': ?cursor,
+          if (cursor != null) 'cursor': cursor,
           if (cursor == null && offset > 0) 'offset': offset,
         },
         capability: capability,
@@ -567,7 +587,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      'mediatype': ?mediaType,
+      if (mediaType != null) 'mediatype': mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -583,7 +603,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      'mediatype': ?mediaType,
+      if (mediaType != null) 'mediatype': mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -599,7 +619,7 @@ class MdblistService {
     query: {
       'limit': limit.clamp(1, 1000),
       if (cursor != null && cursor.isNotEmpty) 'cursor': cursor,
-      'mediatype': ?mediaType,
+      if (mediaType != null) 'mediatype': mediaType,
       'unified': true,
       'append_to_response': 'poster,ratings,description,genres',
     },
@@ -739,7 +759,7 @@ class MdblistService {
         '/lists/$listId/items',
         query: {
           'limit': 1000,
-          'cursor': ?cursor,
+          if (cursor != null) 'cursor': cursor,
           if (cursor == null && fallbackOffset > 0) 'offset': fallbackOffset,
         },
         capability: capability,
@@ -857,7 +877,12 @@ class MdblistService {
     Map<String, Object?> query = const {},
     Object? body,
     ProfileAsyncAuthorization? capability,
+    bool Function()? canContinue,
+    bool Function()? canAcceptResponse,
   }) async {
+    if (canContinue?.call() == false) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     capability ??= await _captureCapability();
     return _transport.request(
       method,
@@ -865,6 +890,8 @@ class MdblistService {
       query: query,
       body: body,
       capability: capability,
+      canContinue: canContinue,
+      canAcceptResponse: canAcceptResponse,
     );
   }
 
@@ -874,6 +901,7 @@ class MdblistService {
     Map<String, Object?> query = const {},
     Object? body,
     ProfileAsyncAuthorization? capability,
+    bool Function()? canContinue,
   }) async {
     final response = await _trackerRequest(
       method,
@@ -881,6 +909,7 @@ class MdblistService {
       query: query,
       body: body,
       capability: capability,
+      canContinue: canContinue,
     );
     if (!response.isSuccess) {
       return MdblistResult.failure(
@@ -903,8 +932,14 @@ class MdblistService {
   Future<MdblistResult<List<Map<String, dynamic>>>> _listRequest(
     String path, {
     Map<String, Object?> query = const {},
+    bool Function()? canContinue,
   }) async {
-    final response = await _trackerRequest('GET', path, query: query);
+    final response = await _trackerRequest(
+      'GET',
+      path,
+      query: query,
+      canContinue: canContinue,
+    );
     if (!response.isSuccess) {
       return MdblistResult.failure(
         response.kind,
@@ -935,107 +970,47 @@ class MdblistService {
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-    bool queueOnFailure = true,
-  }) => _scrobble(
-    'start',
-    target,
-    progress,
-    capability: capability,
-    queueOnFailure: queueOnFailure,
-  );
+  }) => _scrobble('start', target, progress, capability: capability);
 
   Future<MdblistResult<Map<String, dynamic>>> scrobblePause(
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-    bool queueOnFailure = true,
-  }) => _scrobble(
-    'pause',
-    target,
-    progress,
-    capability: capability,
-    queueOnFailure: queueOnFailure,
-  );
+  }) => _scrobble('pause', target, progress, capability: capability);
 
   Future<MdblistResult<Map<String, dynamic>>> scrobbleStop(
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-    bool queueOnFailure = true,
-  }) => _scrobble(
-    'stop',
-    target,
-    progress,
-    capability: capability,
-    queueOnFailure: queueOnFailure,
-  );
+  }) => _scrobble('stop', target, progress, capability: capability);
 
   Future<MdblistResult<Map<String, dynamic>>> scrobbleClear(
     MdblistScrobbleTarget target, {
     ProfileAsyncAuthorization? capability,
-  }) => _scrobble('clear', target, 0, capability: capability);
+    bool Function()? canContinue,
+  }) => _scrobble(
+    'clear',
+    target,
+    0,
+    capability: capability,
+    canContinue: canContinue,
+  );
 
   Future<MdblistResult<Map<String, dynamic>>> _scrobble(
     String action,
     MdblistScrobbleTarget target,
     double progress, {
     ProfileAsyncAuthorization? capability,
-    bool queueOnFailure = false,
-  }) async {
-    final result = await _scrobbleOnce(
-      action,
-      target,
-      progress,
-      capability: capability,
-    );
-    if (queueOnFailure && !result.isSuccess) {
-      unawaited(_queueScrobble(action, target, progress, result.kind));
-    }
-    return result;
-  }
-
-  /// Progress that could not reach MDBList because this device is offline
-  /// (a downloaded title watched on a plane) joins the shared outbox and is
-  /// delivered on reconnect, exactly like Trakt and Simkl. Failures while
-  /// online are MDBList's answer, not a delivery problem, and are not retried.
-  /// (Offline even the id lookup fails, as "not found", so the result kind
-  /// alone can't tell the two apart.)
-  Future<void> _queueScrobble(
-    String action,
-    MdblistScrobbleTarget target,
-    double progress,
-    MdblistResultKind kind,
-  ) async {
-    try {
-      if (kind == MdblistResultKind.disabled ||
-          kind == MdblistResultKind.unauthenticated) {
-        return;
-      }
-      final states = await Connectivity().checkConnectivity();
-      final offline = states.every((s) => s == ConnectivityResult.none);
-      final id = target.ids.contentId ?? target.ids.imdb;
-      if (!offline || id == null || id.isEmpty) return;
-      await TrackerScrobbleOutbox.instance.enqueue(
-        tracker: 'mdblist',
-        action: action,
-        imdbId: id,
-        progress: progress,
-        contentType: target.isEpisode ? 'series' : 'movie',
-        season: target.season,
-        episode: target.episode,
-      );
-    } catch (_) {
-      // Best effort — the live session already failed; nothing to undo.
-    }
-  }
-
-  Future<MdblistResult<Map<String, dynamic>>> _scrobbleOnce(
-    String action,
-    MdblistScrobbleTarget target,
-    double progress, {
-    ProfileAsyncAuthorization? capability,
+    bool Function()? canContinue,
   }) async {
     final scope = ProfileRuntime.scope.value;
+    final owner = ProfileSessionMemory.captureOwner();
+    bool current() =>
+        owner == ProfileSessionMemory.captureOwner() &&
+        canContinue?.call() != false;
+    if (!current()) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     capability ??= await _captureCapability();
     final contentId = target.ids.contentId;
     final originalTarget = target;
@@ -1056,7 +1031,7 @@ class MdblistService {
             )
           : MdblistScrobbleTarget.movie(mapped);
     }
-    if (scope != ProfileRuntime.scope.value) {
+    if (scope != ProfileRuntime.scope.value || !current()) {
       return const MdblistResult.failure(MdblistResultKind.denied);
     }
     final payload = target.payload(progress);
@@ -1068,8 +1043,12 @@ class MdblistService {
       '/scrobble/$action',
       body: payload,
       capability: capability,
+      canContinue: current,
     );
     if (result.isSuccess) {
+      if (!current()) {
+        return const MdblistResult.failure(MdblistResultKind.denied);
+      }
       // A stop lands the title in watched history; drop the cached snapshot
       // BEFORE notifying, so revision listeners refetch authoritative data.
       if (action == 'stop') _invalidateSnapshotBucket('watched');
@@ -1080,15 +1059,29 @@ class MdblistService {
         );
       }
       playbackRevision.value++;
+      // Listeners run synchronously and may initiate profile retirement.
+      if (!current()) {
+        return const MdblistResult.failure(MdblistResultKind.denied);
+      }
       libraryRevision.value++;
+      if (!current()) {
+        return const MdblistResult.failure(MdblistResultKind.denied);
+      }
       if (action == 'stop') watchedRevision.value++;
+      if (!current()) {
+        return const MdblistResult.failure(MdblistResultKind.denied);
+      }
     }
     return result;
   }
 
-  Future<MdblistResult<List<MdblistPlaybackSession>>>
-  fetchPlaybackSessions() async {
-    final response = await _listRequest('/sync/playback');
+  Future<MdblistResult<List<MdblistPlaybackSession>>> fetchPlaybackSessions({
+    bool Function()? canContinue,
+  }) async {
+    final response = await _listRequest(
+      '/sync/playback',
+      canContinue: canContinue,
+    );
     if (!response.isSuccess) {
       return MdblistResult.failure(
         response.kind,
@@ -1163,13 +1156,12 @@ class MdblistService {
     int? episode,
     int? rating,
     String? timestampField,
-    DateTime? watchedAt,
   }) {
     if (ids.toJson().isEmpty) return null;
-    final timestamp = (watchedAt ?? DateTime.now()).toUtc().toIso8601String();
+    final timestamp = DateTime.now().toUtc().toIso8601String();
     final attributes = <String, dynamic>{
-      'rating': ?rating,
-      ?timestampField: timestamp,
+      if (rating != null) 'rating': rating,
+      if (timestampField != null) timestampField: timestamp,
     };
     if (type == 'episode') {
       if (season == null || episode == null) return null;
@@ -1205,10 +1197,18 @@ class MdblistService {
     int? episode,
     int? rating,
     String? timestampField,
-    DateTime? watchedAt,
+    bool Function()? canContinue,
   }) async {
     final scope = ProfileRuntime.scope.value;
+    final owner = ProfileSessionMemory.captureOwner();
+    bool ownerCurrent() => owner == ProfileSessionMemory.captureOwner();
+    bool current() => ownerCurrent() && canContinue?.call() != false;
+    if (!current() ||
+        (owner.scope != null && ProfileRuntime.capture() != owner.scope)) {
+      return false;
+    }
     final capability = await _captureCapability();
+    if (!current()) return false;
     final originalId = ids.contentId ?? ids.imdb;
     if (ids.contentId case final String contentId) {
       final resolved = await TrackerIdentityService.instance.resolve(
@@ -1218,7 +1218,7 @@ class MdblistService {
       if (resolved == null) return false;
       ids = MdblistMediaIds.fromJson(resolved);
     }
-    if (scope != ProfileRuntime.scope.value) return false;
+    if (scope != ProfileRuntime.scope.value || !current()) return false;
     final payload = _singleTitlePayload(
       ids,
       type,
@@ -1226,7 +1226,6 @@ class MdblistService {
       episode: episode,
       rating: rating,
       timestampField: timestampField,
-      watchedAt: watchedAt,
     );
     if (payload == null) return false;
     final response = await _trackerRequest(
@@ -1234,7 +1233,10 @@ class MdblistService {
       path,
       body: payload,
       capability: capability,
+      canContinue: current,
+      canAcceptResponse: ownerCurrent,
     );
+    if (!ownerCurrent()) return false;
     final success = response.isSuccess;
     if (success) {
       // Both '/sync/{bucket}' and '/sync/{bucket}/remove' change that bucket's
@@ -1254,7 +1256,9 @@ class MdblistService {
       EpisodeTrackerSnapshotRevision.invalidateTitle('mdblist', originalId);
     }
     if (success) {
+      if (!ownerCurrent()) return false;
       libraryRevision.value++;
+      if (!ownerCurrent()) return false;
       if (path == '/sync/watched' || path == '/sync/watched/remove') {
         watchedRevision.value++;
       }
@@ -1262,36 +1266,50 @@ class MdblistService {
     return success;
   }
 
-  Future<bool> addToWatchlist(MdblistMediaIds ids, String type) =>
-      _mutateTitle('/watchlist/items/add', ids, type);
-  Future<bool> removeFromWatchlist(MdblistMediaIds ids, String type) =>
-      _mutateTitle('/watchlist/items/remove', ids, type);
+  Future<bool> addToWatchlist(
+    MdblistMediaIds ids,
+    String type, {
+    bool Function()? canContinue,
+  }) =>
+      _mutateTitle('/watchlist/items/add', ids, type, canContinue: canContinue);
+  Future<bool> removeFromWatchlist(
+    MdblistMediaIds ids,
+    String type, {
+    bool Function()? canContinue,
+  }) => _mutateTitle(
+    '/watchlist/items/remove',
+    ids,
+    type,
+    canContinue: canContinue,
+  );
   Future<bool> markWatched(
     MdblistMediaIds ids,
     String type, {
     int? season,
     int? episode,
-    DateTime? watchedAt,
+    bool Function()? canContinue,
   }) => _mutateTitle(
     '/sync/watched',
     ids,
     type,
     season: season,
     episode: episode,
+    canContinue: canContinue,
     timestampField: 'watched_at',
-    watchedAt: watchedAt,
   );
   Future<bool> markUnwatched(
     MdblistMediaIds ids,
     String type, {
     int? season,
     int? episode,
+    bool Function()? canContinue,
   }) => _mutateTitle(
     '/sync/watched/remove',
     ids,
     type,
     season: season,
     episode: episode,
+    canContinue: canContinue,
   );
   Future<bool> rateTitle(
     MdblistMediaIds ids,
@@ -1299,6 +1317,7 @@ class MdblistService {
     int rating, {
     int? season,
     int? episode,
+    bool Function()? canContinue,
   }) {
     if (rating < 1 || rating > 10) return Future.value(false);
     return _mutateTitle(
@@ -1307,6 +1326,7 @@ class MdblistService {
       type,
       season: season,
       episode: episode,
+      canContinue: canContinue,
       rating: rating,
       timestampField: 'rated_at',
     );
@@ -1317,33 +1337,56 @@ class MdblistService {
     String type, {
     int? season,
     int? episode,
+    bool Function()? canContinue,
   }) => _mutateTitle(
     '/sync/ratings/remove',
     ids,
     type,
     season: season,
     episode: episode,
+    canContinue: canContinue,
   );
-  Future<bool> addToCollection(MdblistMediaIds ids, String type) =>
-      _mutateTitle(
-        '/sync/collection',
-        ids,
-        type,
-        timestampField: 'collected_at',
-      );
-  Future<bool> removeFromCollection(MdblistMediaIds ids, String type) =>
-      _mutateTitle('/sync/collection/remove', ids, type);
-  Future<bool> setDropped(MdblistMediaIds ids, {required bool dropped}) =>
-      _setDropped(ids, dropped: dropped);
+  Future<bool> addToCollection(
+    MdblistMediaIds ids,
+    String type, {
+    bool Function()? canContinue,
+  }) => _mutateTitle(
+    '/sync/collection',
+    ids,
+    type,
+    timestampField: 'collected_at',
+    canContinue: canContinue,
+  );
+  Future<bool> removeFromCollection(
+    MdblistMediaIds ids,
+    String type, {
+    bool Function()? canContinue,
+  }) => _mutateTitle(
+    '/sync/collection/remove',
+    ids,
+    type,
+    canContinue: canContinue,
+  );
+  Future<bool> setDropped(
+    MdblistMediaIds ids, {
+    required bool dropped,
+    bool Function()? canContinue,
+  }) => _setDropped(ids, dropped: dropped, canContinue: canContinue);
 
-  Future<bool> _setDropped(MdblistMediaIds ids, {required bool dropped}) async {
+  Future<bool> _setDropped(
+    MdblistMediaIds ids, {
+    required bool dropped,
+    bool Function()? canContinue,
+  }) async {
+    final owner = ProfileSessionMemory.captureOwner();
     final success = await _mutateTitle(
       dropped ? '/sync/dropped' : '/sync/dropped/remove',
       ids,
       'show',
       timestampField: dropped ? 'dropped_at' : null,
+      canContinue: canContinue,
     );
-    if (!success) return false;
+    if (!success || owner != ProfileSessionMemory.captureOwner()) return false;
     final imdb = ids.imdb?.toLowerCase();
     if (imdb != null && _droppedImdbCache != null) {
       dropped ? _droppedImdbCache!.add(imdb) : _droppedImdbCache!.remove(imdb);
@@ -1392,7 +1435,7 @@ class MdblistService {
         '/watchlist/items',
         query: {
           'limit': 1000,
-          'cursor': ?cursor,
+          if (cursor != null) 'cursor': cursor,
           if (cursor == null && offset > 0) 'offset': offset,
           'append_to_response': 'poster,ratings,description,genres',
         },
@@ -1463,6 +1506,7 @@ class MdblistService {
     required String mediaType,
     required String provider,
     required List<Object> ids,
+    bool Function()? canContinue,
   }) async {
     if (ids.length > 100 || ids.isEmpty) {
       return const MdblistResult.failure(MdblistResultKind.malformedResponse);
@@ -1471,6 +1515,7 @@ class MdblistService {
       'POST',
       '/sync/state/$mediaType/$provider',
       body: {'ids': ids},
+      canContinue: canContinue,
     );
     if (!response.isSuccess) {
       return MdblistResult.failure(
@@ -1496,6 +1541,14 @@ class MdblistService {
     String imdbId,
     String type,
   ) {
+    final current = _readOwnerGuard();
+    if (!current()) {
+      return Future.value(
+        const MdblistResult<Map<String, dynamic>>.failure(
+          MdblistResultKind.denied,
+        ),
+      );
+    }
     final normalized = imdbId.trim().toLowerCase();
     final mediaType = type == 'series' ? 'show' : type;
     final key = '$mediaType:$normalized';
@@ -1509,7 +1562,16 @@ class MdblistService {
     future = () async {
       try {
         final epoch = _cacheEpoch;
-        final result = await _mapRequest('GET', '/imdb/$mediaType/$normalized/');
+        final result = await _mapRequest(
+          'GET',
+          '/imdb/$mediaType/$normalized/',
+          canContinue: current,
+        );
+        if (!current()) {
+          return const MdblistResult<Map<String, dynamic>>.failure(
+            MdblistResultKind.denied,
+          );
+        }
         if (result.isSuccess && epoch == _cacheEpoch) {
           _resolveImdbCache[key] = (data: result.data!, at: DateTime.now());
         }
@@ -1531,9 +1593,16 @@ class MdblistService {
 
   Future<MdblistResult<Map<String, dynamic>>> resolveContent(
     String id,
-    String type,
-  ) async {
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     final ids = await TrackerIdentityService.instance.resolve(id, type);
+    if (canContinue?.call() == false) {
+      return const MdblistResult.failure(MdblistResultKind.denied);
+    }
     if (ids == null) {
       return const MdblistResult.failure(MdblistResultKind.notFound);
     }
@@ -1542,6 +1611,7 @@ class MdblistService {
     final result = await _mapRequest(
       'GET',
       '/$provider/${type == 'series' ? 'show' : 'movie'}/${ids[provider]}/',
+      canContinue: canContinue,
     );
     final resolvedIds = result.data?['ids'];
     if (result.isSuccess &&
@@ -1554,10 +1624,14 @@ class MdblistService {
 
   Future<MdblistTitleStatus?> fetchTitleStatus(
     String imdbId,
-    String type,
-  ) async {
-    final resolved = await resolveContent(imdbId, type);
-    if (!resolved.isSuccess) return null;
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    final ownerCurrent = _readOwnerGuard();
+    bool current() => ownerCurrent() && canContinue?.call() != false;
+    if (!current()) return null;
+    final resolved = await resolveContent(imdbId, type, canContinue: current);
+    if (!current() || !resolved.isSuccess) return null;
     final ids = resolved.data?['ids'];
     final rawTmdb = ids is Map ? ids['tmdb'] : null;
     final tmdb = rawTmdb is num
@@ -1570,9 +1644,11 @@ class MdblistService {
         mediaType: isSeries ? 'show' : 'movie',
         provider: 'tmdb',
         ids: [tmdb],
+        canContinue: current,
       ),
       if (isSeries) _fetchDroppedImdbIds() else Future.value(null),
     ]);
+    if (!current()) return null;
     final states = reads[0] as MdblistResult<Map<Object, MdblistTitleStatus>>;
     if (!states.isSuccess || states.data!.isEmpty) return null;
     final status =
@@ -1588,14 +1664,23 @@ class MdblistService {
   }
 
   Future<Set<String>?> _fetchDroppedImdbIds() async {
+    final current = _readOwnerGuard();
+    if (!current()) return null;
     if (_droppedImdbCache != null && _fresh(_droppedImdbAt)) {
       return Set.of(_droppedImdbCache!);
     }
     final existing = _droppedImdbInFlight;
     if (existing != null) return existing;
+    final epoch = _cacheEpoch;
+    final generation = _snapshotBucketGen['dropped'] ?? 0;
     final future = () async {
       final result = await fetchSyncSnapshot('dropped');
-      if (!result.isSuccess) return null;
+      if (!current() ||
+          epoch != _cacheEpoch ||
+          generation != (_snapshotBucketGen['dropped'] ?? 0) ||
+          !result.isSuccess) {
+        return null;
+      }
       final ids = <String>{};
       for (final row in result.data!) {
         final show = row['show'];
@@ -1788,7 +1873,7 @@ class MdblistService {
     'GET',
     '/sync/journal',
     query: {
-      'cursor': ?cursor,
+      if (cursor != null) 'cursor': cursor,
       if (cursor == null && since != null)
         'since': since.toUtc().toIso8601String(),
       'limit': limit.clamp(1, 1000),
@@ -1801,6 +1886,14 @@ class MdblistService {
     DateTime? since,
     bool forceRefresh = false,
   }) {
+    final current = _readOwnerGuard();
+    if (!current()) {
+      return Future.value(
+        const MdblistResult<List<Map<String, dynamic>>>.failure(
+          MdblistResultKind.denied,
+        ),
+      );
+    }
     if (!const {
       'watched',
       'ratings',
@@ -1840,6 +1933,11 @@ class MdblistService {
                 MdblistResultKind.transientFailure,
               );
             }
+            if (!current()) {
+              return const MdblistResult<List<Map<String, dynamic>>>.failure(
+                MdblistResultKind.denied,
+              );
+            }
             return MdblistResult.success(List.of(cached.data));
           }
           // An expired entry is dead weight (a full account walk can be tens
@@ -1853,7 +1951,13 @@ class MdblistService {
           bucket,
           mediaType: mediaType,
           since: since,
+          canContinue: current,
         );
+        if (!current()) {
+          return const MdblistResult<List<Map<String, dynamic>>>.failure(
+            MdblistResultKind.denied,
+          );
+        }
         // Cache ONLY a cleanly-finished walk (mirrors _itemsCache) — a partial
         // must retry on the next read; never publish across an account switch
         // (epoch changed mid-flight), past a bucket invalidation that landed
@@ -1887,6 +1991,7 @@ class MdblistService {
     String bucket, {
     String? mediaType,
     DateTime? since,
+    bool Function()? canContinue,
   }) async {
     final rows = <Map<String, dynamic>>[];
     String? cursor;
@@ -1895,12 +2000,13 @@ class MdblistService {
       final response = await _trackerRequest(
         'GET',
         '/sync/$bucket',
+        canContinue: canContinue,
         query: {
           'limit': 1000,
-          'cursor': ?cursor,
+          if (cursor != null) 'cursor': cursor,
           if (cursor == null && since != null)
             'since': since.toUtc().toIso8601String(),
-          'mediatype': ?mediaType,
+          if (mediaType != null) 'mediatype': mediaType,
         },
       );
       if (!response.isSuccess) {
@@ -2133,10 +2239,10 @@ class MdblistService {
     final deleted = await deleteList(cloneListId, capability: capability);
     if (!deleted) return false;
     if (capability == null) {
-      await StorageService.removeMdblistSavedClone(sourceListId);
+      await MdblistStorage.removeMdblistSavedClone(sourceListId);
     } else {
       await capability.runIfCurrent(
-        () => StorageService.removeMdblistSavedClone(sourceListId),
+        () => MdblistStorage.removeMdblistSavedClone(sourceListId),
       );
     }
     return true;
@@ -2161,7 +2267,7 @@ class MdblistService {
         final imdb = (ids is Map ? ids['imdb'] : null) ?? item['imdb_id'];
         if (tmdb == null && (imdb is! String || imdb.isEmpty)) continue;
         out.add({
-          'tmdb': ?tmdb,
+          if (tmdb != null) 'tmdb': tmdb,
           if (imdb is String && imdb.isNotEmpty) 'imdb': imdb,
         });
       }

@@ -1,13 +1,15 @@
 import 'package:debrify/services/metadata_preferences_service.dart';
+import 'package:debrify/services/storage/detail_page_storage.dart';
+import 'package:debrify/services/storage/local_completion_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:debrify/services/hide_watched_prefs.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_ui_refresh.dart';
 import 'package:debrify/services/main_page_bridge.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_active_profile_refresh.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_hot_merge.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:debrify/services/stremio_service.dart';
+import 'package:debrify/services/storage/storage_profile_caches.dart';
 
 void main() {
   const refresher = DefaultWebDavSyncActiveProfileRefresher();
@@ -30,9 +32,9 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'detail_show_where_to_watch': false,
     });
-    StorageService.resetProfileCaches();
+    resetStorageProfileCaches();
     expect(
-      StorageService.detailPageSectionVisibilityCached.whereToWatch,
+      DetailPageStorage.detailPageSectionVisibilityCached.whereToWatch,
       isTrue,
     );
 
@@ -41,7 +43,7 @@ void main() {
     }, authorizationBarrier: () {});
 
     expect(
-      StorageService.detailPageSectionVisibilityCached.whereToWatch,
+      DetailPageStorage.detailPageSectionVisibilityCached.whereToWatch,
       isFalse,
     );
   });
@@ -166,13 +168,13 @@ void main() {
   });
 
   test('synced completion publishes its process revision', () async {
-    final completionBefore = StorageService.localCompletionRevision.value;
+    final completionBefore = LocalCompletionStorage.localCompletionRevision.value;
 
     await refresher.refresh(const <String>{
       WebDavSyncHotMerge.playbackPreference,
     }, authorizationBarrier: () {});
 
-    expect(StorageService.localCompletionRevision.value, completionBefore + 1);
+    expect(LocalCompletionStorage.localCompletionRevision.value, completionBefore + 1);
   });
 
   test('profile switch during an awaited refresh is detected', () async {

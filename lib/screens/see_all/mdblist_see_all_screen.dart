@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
+import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_discover_models.dart';
@@ -13,7 +14,6 @@ import '../../services/mdblist/mdblist_list_source.dart';
 import '../../services/mdblist/mdblist_models.dart';
 import '../../services/watched_filter.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../widgets/see_all/mdblist_save_button.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
 import '../../widgets/see_all/see_all_filter_focus.dart';
@@ -174,6 +174,7 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('mdblist_see_all');
     if (widget.embedded) {
       final saved = DiscoverPrefs.enumSortFor(
         DiscoverPrefs.mdblist,
@@ -668,12 +669,6 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
-              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
-              : null,
-          shape: GlassChrome.enabled(AppThemeScope.of(context))
-              ? GlassChrome.shape(AppThemeScope.of(context))
-              : null,
           title: const Text('MDBList Catalog Filters'),
           content: SizedBox(
             width: 520,
@@ -683,9 +678,6 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: draft.mediaType,
-                    dropdownColor: GlassChrome.enabled(AppThemeScope.of(context))
-                        ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
-                        : null,
                     decoration: const InputDecoration(labelText: 'Media type'),
                     items: const [
                       DropdownMenuItem(value: 'movie', child: Text('Movies')),
@@ -949,6 +941,9 @@ class _MdblistSeeAllScreenState extends State<MdblistSeeAllScreen> {
   void _playRandom() {
     final play = widget.onQuickPlay;
     if (play == null || _visible.isEmpty) return;
+    AnalyticsService.trackInBackground('discover_random_play', {
+      'source': 'mdblist',
+    });
     play(_visible[_random.nextInt(_visible.length)]);
   }
 

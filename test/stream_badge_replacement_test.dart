@@ -111,7 +111,7 @@ void main() {
                   ],
                   currentSourceIndex: 0,
                   resolveSource: (_) async => 'https://example.invalid/video',
-                  onSourceSelected: (_, _) => taps++,
+                  onSourceSelected: (_, __) => taps++,
                   onClose: () {},
                 )
               : Scaffold(
@@ -149,12 +149,9 @@ void main() {
           );
           if (layout == 'player') {
             expect(find.text('42 seeders'), findsOneWidget);
-            // The current source is marked with a check, announced as playing.
-            expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+            expect(find.text('▮▮▮'), findsOneWidget);
             expect(
-              tester
-                  .widget<Icon>(find.byIcon(Icons.check_circle_rounded))
-                  .semanticLabel,
+              tester.widget<Text>(find.text('▮▮▮')).semanticsLabel,
               'Playing',
             );
           } else {

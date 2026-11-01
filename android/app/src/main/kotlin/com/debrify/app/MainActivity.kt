@@ -42,9 +42,6 @@ class MainActivity : FlutterActivity() {
 	private val REQUEST_PICK_DOWNLOAD_DIR = 51423
 	private var pendingDirPickResult: MethodChannel.Result? = null
     private var localSourceAccess: com.debrify.app.storage.LocalSourceAccess? = null
-    // The in-app player's media session (headset buttons, media keys, media
-    // notification). One per engine, like the channels around it.
-    private var mediaSessionBridge: com.debrify.app.media.MediaSessionBridge? = null
     // Process-local and enabled only by the journaled, user-confirmed recovery
     // reset. This lets that reset drain every owner's native work even when the
     // last projected profile was a child and the encrypted registry cannot be
@@ -563,7 +560,7 @@ class MainActivity : FlutterActivity() {
         for ((taskId, entry) in entries) {
             if (entry.ownerProfileId != ownerProfileId && !includeOtherOwners) continue
             if (entry.status != "done") continue
-            val raw = entry.uri ?: continue
+            val raw = entry.uri?.takeUnless { it.startsWith("smb:") } ?: continue // share: not playable here
             // Duration = finish (the final store write, which normal engine
             // finishes stamp and publish retries preserve) minus start. A
             // crash-finalized entry's updatedAt is reconcile time, not the
@@ -654,26 +651,11 @@ class MainActivity : FlutterActivity() {
             com.debrify.app.recording.LiveRecordingService.legacyStorageGranted(this)
         ) {
             val dir = com.debrify.app.recording.LiveRecordingService.legacyRecordingsDir()
-            val files = runCatching { dir.listFiles() }.getOrNull() ?: emptyArray()
-            for (file in files) {
-                if (!file.isFile || file.absolutePath in coveredPaths) continue
-                val ext = file.extension.lowercase()
-                if (ext !in setOf("ts", "mts", "m2ts", "mkv", "mp4")) continue
-                out.add(
-                    mapOf(
-                        "taskId" to null,
-                        "uri" to android.net.Uri.fromFile(file).toString(),
-                        "name" to file.name,
-                        "channelName" to null,
-                        "bytes" to file.length(),
-                        "recordedAtMs" to file.lastModified(),
-                        "durationMs" to null,
-                        "ownerProfileId" to null,
-                        "ownershipState" to "unassigned",
-                    ),
-                )
-            }
+            out.addAll(com.debrify.app.recording.RecordingDestination.unindexedFiles(dir, coveredPaths))
         }
+        // In-player recordings saved to a chosen drive have no index entry either.
+        com.debrify.app.recording.RecordingDestination.chosenDirectory(this)?.takeIf { includeUnassigned }
+            ?.let { out.addAll(com.debrify.app.recording.RecordingDestination.unindexedFiles(it, coveredPaths)) }
         return out
     }
 
@@ -1067,8 +1049,6 @@ class MainActivity : FlutterActivity() {
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         recordActivityLifecycle("engine_cleanup")
         super.cleanUpFlutterEngine(flutterEngine)
-        mediaSessionBridge?.dispose()
-        mediaSessionBridge = null
         // The trailer player's ExoPlayer listeners keep emitting onto this
         // engine's messenger after detach; invokeMethod on a detached engine
         // throws an UNCAUGHT RuntimeException on the main thread (process
@@ -1099,8 +1079,6 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         localSourceAccess?.dispose()
         localSourceAccess = null
-        mediaSessionBridge?.dispose()
-        mediaSessionBridge = null
         recordActivityLifecycle("destroy")
         tvTrailerPlayer?.releaseAll()
         tvTrailerPlayer = null
@@ -1312,39 +1290,8 @@ class MainActivity : FlutterActivity() {
 		super.configureFlutterEngine(flutterEngine)
         localSourceAccess?.dispose()
         localSourceAccess = com.debrify.app.storage.LocalSourceAccess(this, flutterEngine.dartExecutor.binaryMessenger)
-        mediaSessionBridge?.dispose()
-        mediaSessionBridge = com.debrify.app.media.MediaSessionBridge(
-            this,
-            flutterEngine.dartExecutor.binaryMessenger,
-        )
+        com.debrify.app.storage.StorageVolumes.register(this, flutterEngine.dartExecutor.binaryMessenger)
 		com.debrify.app.security.DeviceSecretCipherPlugin.register(this, flutterEngine)
-        // The player's right-side swipe sets the DEVICE media volume, like the
-        // left side sets screen brightness. Flag 0: no system volume panel —
-        // the player draws its own level.
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "debrify/system_volume",
-        ).setMethodCallHandler { call, result ->
-            val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
-            val stream = android.media.AudioManager.STREAM_MUSIC
-            val max = audio.getStreamMaxVolume(stream)
-            when (call.method) {
-                "get" -> result.success(
-                    if (max > 0) audio.getStreamVolume(stream).toDouble() / max else 0.0,
-                )
-                "set" -> {
-                    val value = (call.argument<Number>("value")?.toDouble() ?: 0.0)
-                        .coerceIn(0.0, 1.0)
-                    try {
-                        audio.setStreamVolume(stream, Math.round(value * max).toInt(), 0)
-                    } catch (_: SecurityException) {
-                        // Do Not Disturb can refuse volume changes; never crash.
-                    }
-                    result.success(null)
-                }
-                else -> result.notImplemented()
-            }
-        }
 		MethodChannel(
 			flutterEngine.dartExecutor.binaryMessenger,
 			"com.debrify.app/profile_privacy",
@@ -1735,6 +1682,7 @@ class MainActivity : FlutterActivity() {
 						val subDir = call.argument<String>("subDir") ?: "Debrify/Recordings"
 						val mimeType = call.argument<String>("mimeType") ?: "video/mp2t"
 						val treeUri = call.argument<String>("treeUri")
+						val directoryPath = call.argument<String>("directoryPath")
 						if (path.isNullOrEmpty()) {
 							result.error("bad_args", "path is required", null)
 							return@setMethodCallHandler
@@ -1746,10 +1694,15 @@ class MainActivity : FlutterActivity() {
 						Thread {
 							val savedUri = if (!treeUri.isNullOrEmpty()) {
 								saveLocalFileToSaf(path, fileName, subDir, mimeType, treeUri)
+							} else if (!directoryPath.isNullOrEmpty()) {
+								com.debrify.app.recording.RecordingDestination.moveIntoDirectory(this, java.io.File(path), fileName, directoryPath)?.toString()
+									?: saveRecordingToMediaStore(path, fileName, subDir, mimeType) // drive gone
 							} else {
 								saveRecordingToMediaStore(path, fileName, subDir, mimeType)
 							}
-							val savedName = if (savedUri != null) {
+							val savedName = if (savedUri?.startsWith("file:") == true) {
+								Uri.parse(savedUri).lastPathSegment ?: fileName
+							} else if (savedUri != null) {
 								runCatching {
 									contentResolver.query(
 										Uri.parse(savedUri),
@@ -2796,7 +2749,7 @@ class MainActivity : FlutterActivity() {
         }
         
         val initialTitleRaw = (args["initialTitle"] as? String)?.trim()
-        val initialTitle = if (initialTitleRaw.isNullOrEmpty()) "Nextup TV" else initialTitleRaw
+        val initialTitle = if (initialTitleRaw.isNullOrEmpty()) "Debrify TV" else initialTitleRaw
         android.util.Log.d("DebrifyTV", "MainActivity: title=$initialTitle")
 
         @Suppress("UNCHECKED_CAST")

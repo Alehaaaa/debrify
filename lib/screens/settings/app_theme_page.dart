@@ -1,10 +1,11 @@
+import 'package:debrify/services/storage/detail_page_storage.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_controller.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../theme/premium_looks.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/detail/theme/detail_theme.dart';
@@ -15,7 +16,7 @@ import 'widgets/settings_widgets.dart' show SettingsSectionLabel;
 
 /// Row caption for the Appearance list.
 String appThemeLabel(String id) =>
-    id == AppThemes.legacyId ? 'Nextup Classic' : DetailThemes.byId(id).label;
+    id == AppThemes.legacyId ? 'Debrify Classic' : DetailThemes.byId(id).label;
 
 /// App-wide theme picker (`app_theme`) — and the Foundation's vertical proof.
 ///
@@ -47,19 +48,16 @@ class _AppThemePageState extends State<AppThemePage> {
   /// The two classes of theme, told apart — see the note in
   /// `detail_theme_page.dart`. A spec look restyles the app's STRUCTURE; a
   /// core theme is a palette whose vocabulary is neutral by construction.
-  static List<DetailTheme> get _complete => [
-    for (final t in _choices)
-      if (PremiumLooks.byId(t.id) != null) t,
-  ];
+  static List<DetailTheme> get _complete =>
+      [for (final t in _choices) if (PremiumLooks.byId(t.id) != null) t];
 
-  static List<DetailTheme> get _palettes => [
-    for (final t in _choices)
-      if (PremiumLooks.byId(t.id) == null) t,
-  ];
+  static List<DetailTheme> get _palettes =>
+      [for (final t in _choices) if (PremiumLooks.byId(t.id) == null) t];
 
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('app_theme_settings');
     // isTelevision, not isAndroidTvCached: Apple TV reaches this page through
     // the same two-pane Settings shell and needs the same initial card focus.
     if (PlatformUtil.isTelevision) {
@@ -114,11 +112,8 @@ class _AppThemePageState extends State<AppThemePage> {
                         onPressed: () => Navigator.of(context).maybePop(),
                       ),
                       const SizedBox(width: 4),
-                      Icon(
-                        Icons.format_paint_rounded,
-                        size: 22,
-                        color: t.accent2,
-                      ),
+                      Icon(Icons.format_paint_rounded,
+                          size: 22, color: t.accent2),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -151,7 +146,7 @@ class _AppThemePageState extends State<AppThemePage> {
                   // by. Said HERE rather than only on the Details Page picker,
                   // because this is the screen where the expectation is set.
                   if (effectiveDetailPageStyle(
-                        StorageService.detailPageStyleCached,
+                        DetailPageStorage.detailPageStyleCached,
                       ) ==
                       'classic') ...[
                     const SizedBox(height: 18),
@@ -171,30 +166,24 @@ class _AppThemePageState extends State<AppThemePage> {
                           _optionRow(
                             app: app,
                             id: AppThemes.legacyId,
-                            label: 'Nextup Classic',
+                            label: 'Debrify Classic',
                             subtitle:
-                                'Today\'s Nextup, untouched. Details pages '
+                                'Today\'s Debrify, untouched. Details pages '
                                 'keep their own theme choice.',
                             selected: selected == AppThemes.legacyId,
                             swatches: null,
                           ),
                         ]),
-                        _heading(
-                          app,
-                          'Complete looks',
-                          'Change structure, focus and motion — not just '
-                              'colour.',
-                        ),
+                        _heading(app, 'Complete looks',
+                            'Change structure, focus and motion — not just '
+                                'colour.'),
                         _group(app, [
                           for (final choice in _complete)
                             _row(app, choice, selected),
                         ]),
-                        _heading(
-                          app,
-                          'Palettes',
-                          'Recolour the app; layout and motion stay as they '
-                              'are.',
-                        ),
+                        _heading(app, 'Palettes',
+                            'Recolour the app; layout and motion stay as they '
+                                'are.'),
                         _group(app, [
                           for (final choice in _palettes)
                             _row(app, choice, selected),
@@ -208,7 +197,7 @@ class _AppThemePageState extends State<AppThemePage> {
                     child: Text(
                       'Picking a theme here also sets the Details Theme to '
                       'match, so movie and series pages agree with the app. '
-                      'Switching back to Nextup Classic keeps that details '
+                      'Switching back to Debrify Classic keeps that details '
                       'choice.',
                       style: TextStyle(
                         fontSize: 12.5,
@@ -262,13 +251,11 @@ class _AppThemePageState extends State<AppThemePage> {
   Widget _group(AppTheme app, List<Widget> rows) {
     final t = app.settings;
     return Container(
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app, radius: app.shape.br(14))
-          : BoxDecoration(
-              color: t.panel,
-              borderRadius: app.shape.br(14),
-              border: Border.all(color: t.line),
-            ),
+      decoration: BoxDecoration(
+        color: t.panel,
+        borderRadius: app.shape.br(14),
+        border: Border.all(color: t.line),
+      ),
       child: Column(children: rows),
     );
   }

@@ -4,8 +4,10 @@ import '../../models/trakt/trakt_calendar_entry.dart';
 import 'trakt_service.dart';
 
 /// Chunk fetcher signature — injected for tests, defaults to the real TraktService.
-typedef ChunkFetcher =
-    Future<List<TraktCalendarEntry>> Function(DateTime chunkStart, int days);
+typedef _ChunkFetcher = Future<List<TraktCalendarEntry>> Function(
+  DateTime chunkStart,
+  int days,
+);
 
 /// Service that fetches Trakt upcoming episodes in 33-day chunks and caches
 /// them in memory with a 15-minute TTL.
@@ -17,22 +19,20 @@ class TraktCalendarService {
     fetcher: _defaultFetcher,
   );
 
-  TraktCalendarService._({required ChunkFetcher fetcher}) : _fetcher = fetcher;
+  TraktCalendarService._({required _ChunkFetcher fetcher}) : _fetcher = fetcher;
 
   /// Test-only constructor that injects a fake fetcher.
   @visibleForTesting
-  factory TraktCalendarService.forTesting({required ChunkFetcher fetcher}) =>
+  factory TraktCalendarService.forTesting({
+    required _ChunkFetcher fetcher,
+  }) =>
       TraktCalendarService._(fetcher: fetcher);
 
   static const int _chunkDays = 33;
   static const Duration _ttl = Duration(minutes: 15);
 
-  final ChunkFetcher _fetcher;
+  final _ChunkFetcher _fetcher;
   final Map<String, _CachedChunk> _chunkCache = {};
-  final Map<String, Future<List<TraktCalendarEntry>>> _inFlight = {};
-  final Map<String, int> _latestRequestByChunk = {};
-  int _nextRequestId = 0;
-  int _generation = 0;
 
   /// Fetch or return-cached a single 33-day chunk aligned to Monday boundaries.
   ///
@@ -42,43 +42,20 @@ class TraktCalendarService {
   Future<List<TraktCalendarEntry>> getChunk(
     DateTime chunkStart, {
     bool force = false,
-  }) {
+  }) async {
     final aligned = _chunkStartFor(chunkStart);
     final key = _cacheKey(aligned);
 
     if (!force) {
       final cached = _chunkCache[key];
       if (cached != null && cached.isFresh) {
-        return Future.value(cached.entries);
+        return cached.entries;
       }
-      final pending = _inFlight[key];
-      if (pending != null) return pending;
     }
 
-    final generation = _generation;
-    final requestId = ++_nextRequestId;
-    _latestRequestByChunk[key] = requestId;
-    late final Future<List<TraktCalendarEntry>> tracked;
-    tracked = _fetchChunk(aligned, key, generation, requestId).whenComplete(() {
-      // A force refresh or profile invalidation may have replaced this request.
-      if (identical(_inFlight[key], tracked)) _inFlight.remove(key);
-    });
-    _inFlight[key] = tracked;
-    return tracked;
-  }
-
-  Future<List<TraktCalendarEntry>> _fetchChunk(
-    DateTime aligned,
-    String key,
-    int generation,
-    int requestId,
-  ) async {
     try {
       final entries = await _fetcher(aligned, _chunkDays);
-      if (generation == _generation &&
-          _latestRequestByChunk[key] == requestId) {
-        _chunkCache[key] = _CachedChunk(entries, DateTime.now());
-      }
+      _chunkCache[key] = _CachedChunk(entries, DateTime.now());
       return entries;
     } catch (e) {
       debugPrint('TraktCalendarService: chunk fetch failed: $e');
@@ -109,7 +86,9 @@ class TraktCalendarService {
     }
 
     // Fetch in parallel; getChunk handles cache + errors internally
-    final chunkResults = await Future.wait(chunkStarts.map((s) => getChunk(s)));
+    final chunkResults = await Future.wait(
+      chunkStarts.map((s) => getChunk(s)),
+    );
 
     // Flatten, de-dupe, filter to [start, end]
     final startDay = DateTime(start.year, start.month, start.day);
@@ -142,9 +121,6 @@ class TraktCalendarService {
   /// Drop all cached chunks. Call on Trakt logout or user-triggered refresh.
   void invalidate() {
     _chunkCache.clear();
-    _inFlight.clear();
-    _latestRequestByChunk.clear();
-    _generation++;
   }
 
   /// Walk back to the Monday on or before [date]. Strips any time component.
@@ -162,7 +138,9 @@ class TraktCalendarService {
   @visibleForTesting
   void debugExpireAllCacheEntries() {
     final expired = DateTime.now().subtract(_ttl + const Duration(seconds: 1));
-    _chunkCache.updateAll((key, chunk) => _CachedChunk(chunk.entries, expired));
+    _chunkCache.updateAll(
+      (key, chunk) => _CachedChunk(chunk.entries, expired),
+    );
   }
 
   static String _cacheKey(DateTime aligned) =>

@@ -11,7 +11,6 @@ import '../../utils/app_storage.dart';
 import '../../utils/streamed_file_copy.dart';
 import '../iptv_catalog_key.dart';
 import 'profile_scope.dart';
-import 'profile_storage_paths.dart';
 
 class DebrifyTvBackupOmission {
   static const String key = 'debrifyTvChannelsOmitted';
@@ -179,7 +178,7 @@ class ProfileDatabaseSnapshot {
   }) async {
     if (fileSink != null && compact) {
       throw ArgumentError(
-        'File-backed exports never omit Nextup TV; use '
+        'File-backed exports never omit Debrify TV; use '
         'pruneRebuildableCaches instead of compact',
       );
     }
@@ -190,7 +189,7 @@ class ProfileDatabaseSnapshot {
     }
     final attachmentCap = debugExportBudgetOverride ?? maxAttachmentBytes;
     final budget = debugExportBudgetOverride ?? maxExportRawBytes;
-    final documents = await ProfileStoragePaths.profileDataRoot();
+    final documents = await AppStorage.documents();
     final support = await AppStorage.support();
     final scratch = Directory(p.join(support.path, 'profile-snapshot-tmp'));
     await scratch.create(recursive: true);
@@ -304,7 +303,11 @@ class ProfileDatabaseSnapshot {
     File snapshot,
     String name,
   ) async {
-    final db = await openDatabase(source.path, singleInstance: false);
+    final db = await openDatabase(
+      source.path,
+      readOnly: true,
+      singleInstance: false,
+    );
     try {
       final integrity = await db.rawQuery('PRAGMA integrity_check');
       if (!_integrityOk(integrity)) {
@@ -317,11 +320,10 @@ class ProfileDatabaseSnapshot {
       } else {
         try {
           await db.execute("VACUUM INTO '$escaped'");
-        } on DatabaseException {
-          // Some desktop SQLite builds reject VACUUM INTO from the readonly
-          // snapshot connection even though the source database is healthy.
-          // The checkpointed copy has the same integrity validation and is
-          // also the compatibility path for older SQLite versions.
+        } on DatabaseException catch (error) {
+          // VACUUM INTO needs SQLite 3.27 (2019). Android 7-9 falls back to a
+          // checkpointed copy, which is validated before it is accepted.
+          if (!_looksLikeSyntaxError(error)) rethrow;
           await db.close();
           await _checkpointCopySnapshot(source, snapshot);
         }
@@ -509,7 +511,7 @@ class ProfileDatabaseSnapshot {
     Map<Object?, Object?> attachments, {
     ProfileDatabaseFileResolver? fileResolver,
   }) async {
-    final documents = await ProfileStoragePaths.profileDataRoot();
+    final documents = await AppStorage.documents();
     var total = 0;
     var restored = 0;
     for (final entry in attachments.entries) {
@@ -620,7 +622,7 @@ class ProfileDatabaseSnapshot {
     Map<String, String> resourceIds,
   ) async {
     if (resourceIds.isEmpty) return;
-    final documents = await ProfileStoragePaths.profileDataRoot();
+    final documents = await AppStorage.documents();
     for (final name in databaseNames) {
       final file = scope.fileIn(documents, 'documents', name);
       if (!await file.exists()) continue;
@@ -746,6 +748,11 @@ class ProfileDatabaseSnapshot {
       await db.close();
       await _removeCompanions(file);
     }
+  }
+
+  static bool _looksLikeSyntaxError(DatabaseException error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('syntax error');
   }
 
   static Future<void> _removeCompanions(File database) async {

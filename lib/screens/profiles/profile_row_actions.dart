@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../../models/profiles/user_profile.dart';
 import '../../services/live_recording_service.dart';
-import '../../services/profiles/profile_deletion_blockers.dart';
 import '../../services/profiles/profile_authorization.dart';
 import '../../services/profiles/profile_cleanup_ledger.dart';
 import '../../services/profiles/profile_data_generation.dart';
@@ -40,17 +39,10 @@ class ProfileRowActions {
       operationActor = authorization;
       await _validateManagingAdmin(operationActor);
       dependencies = await registry.deletionDependencies(profile.id);
-    } catch (error) {
+    } catch (_) {
       if (!context.mounted) return false;
-      final reason = ProfileDeletionBlockers.describe(error);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            reason == null
-                ? 'Profile deletion is not authorized'
-                : 'Profile deletion is not authorized. $reason',
-          ),
-        ),
+        const SnackBar(content: Text('Profile deletion is not authorized')),
       );
       return false;
     }
@@ -201,18 +193,11 @@ class ProfileRowActions {
       await ProfileDataGenerationManager.deleteAllProfileData(profile.id);
       await ProfileCleanupLedger.completeProfile(profile.id);
       return true;
-    } catch (error) {
+    } catch (_) {
       if (!context.mounted) return false;
-      final reason = ProfileDeletionBlockers.describe(error);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            reason == null
-                ? 'Profile deletion failed'
-                : 'Profile deletion failed. $reason',
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile deletion failed')));
       return false;
     }
   }

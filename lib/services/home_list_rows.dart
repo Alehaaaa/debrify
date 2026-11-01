@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import '../models/stremio_addon.dart';
-import 'storage_service.dart';
 import 'trakt/trakt_list_source.dart';
 import 'watched_filter.dart';
 import 'simkl/simkl_list_source.dart';
 import 'mdblist/mdblist_list_source.dart';
+import 'package:debrify/models/home_preferences.dart';
 
 /// ID grammar for the opt-in extra Home rows (see
 /// [StorageService.getHomeExtraRows]). Kept together so the board, the
@@ -130,29 +130,6 @@ class HomeListSection extends CatalogSection {
          // Fully loaded in one shot — `_loadMoreRow` must never page these.
          exhausted: true,
        );
-}
-
-/// A public, ranked home rail. It is separate from optional tracker rows so a
-/// fresh profile gets one useful discovery shelf without connecting an account.
-class HomeTopTenSection extends CatalogSection {
-  static final StremioAddon placeholderAddon = StremioAddon(
-    id: 'debrify.home.top-ten',
-    name: 'Top 10',
-    manifestUrl: '',
-    baseUrl: '',
-  );
-
-  HomeTopTenSection({required super.items})
-    : super(
-        title: 'Top 10 Today',
-        addon: placeholderAddon,
-        catalog: StremioAddonCatalog(
-          id: 'top-ten-today',
-          type: 'mixed',
-          name: 'Top 10 Today',
-        ),
-        exhausted: true,
-      );
 }
 
 /// Loads the opted-in Trakt/Simkl list rows for the Home board.
@@ -305,9 +282,9 @@ class HomeListRowsService {
       isCurrent: isCurrent,
     );
 
-    // Same order shown in Home Screen settings.
+    // Trakt built-ins, enum order.
     var rank = 0;
-    for (final list in kTraktHomeRowOrder) {
+    for (final list in TraktSeeAllList.values) {
       if (list == TraktSeeAllList.continueWatching) continue;
       final id = HomeExtraRowIds.traktBuiltin(list);
       if (!byId.containsKey(id)) continue;

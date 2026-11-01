@@ -1,5 +1,7 @@
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
+
+import '../../services/analytics_service.dart';
 import '../../services/text_brightness.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -35,6 +37,7 @@ class _TextBrightnessPageState extends State<TextBrightnessPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('text_brightness_settings');
     if (PlatformUtil.isAndroidTvCached) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

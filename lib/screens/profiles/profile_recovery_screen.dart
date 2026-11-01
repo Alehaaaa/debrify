@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/backup_restore_service.dart';
@@ -121,8 +120,8 @@ class _ProfileRecoveryScreenState extends State<ProfileRecoveryScreen> {
 
   Future<void> _restoreBackup() async {
     await _run(() async {
-      final pick = await FilePick.pickFiles(
-        dialogTitle: 'Choose a Nextup backup',
+      final pick = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Choose a Debrify backup',
         type: FileType.any,
         withData: false,
       );
@@ -156,7 +155,7 @@ class _ProfileRecoveryScreenState extends State<ProfileRecoveryScreen> {
           if (!mounted) return 'Restore cancelled.';
           final passphrase = await _promptSecret(
             'Backup passphrase',
-            'Enter the passphrase used by the older Nextup backup.',
+            'Enter the passphrase used by the older Debrify backup.',
           );
           if (passphrase == null) return 'Restore cancelled.';
           legacy = await BackupRestoreService.decryptBackup(legacy, passphrase);
@@ -280,10 +279,10 @@ class _ProfileRecoveryScreenState extends State<ProfileRecoveryScreen> {
                 const SizedBox(height: 12),
                 Text(
                   _deviceVaultRequiresReset
-                      ? 'Nextup cannot open the secure device vault. Existing credentials, addons, and sync bindings will not be mounted. Restart the device once; if the problem continues, erase private app data and reconnect this device.'
+                      ? 'Debrify cannot open the secure device vault. Existing credentials, addons, and sync bindings will not be mounted. Restart the device once; if the problem continues, erase private app data and reconnect this device.'
                       : _hasDeviceVaultFailure
-                      ? 'The secure device vault is temporarily unavailable. Your profiles, credentials, addons, and sync bindings have not been changed. Close Nextup, restart the device, and try again.'
-                      : 'Nextup could not safely open the committed profile registry. Legacy data will not be mounted. A damaged registry is moved aside when you begin recovery, so it remains available for diagnostics.',
+                      ? 'The secure device vault is temporarily unavailable. Your profiles, credentials, addons, and sync bindings have not been changed. Close Debrify, restart the device, and try again.'
+                      : 'Debrify could not safely open the committed profile registry. Legacy data will not be mounted. A damaged registry is moved aside when you begin recovery, so it remains available for diagnostics.',
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 28),
@@ -312,7 +311,7 @@ class _ProfileRecoveryScreenState extends State<ProfileRecoveryScreen> {
                     onPressed: _busy ? null : widget.onResetComplete,
                     autofocus: widget.forceTvSafeInput,
                     icon: const Icon(Icons.close),
-                    label: const Text('Close Nextup'),
+                    label: const Text('Close Debrify'),
                   )
                 else ...[
                   const SizedBox(height: 10),

@@ -1,5 +1,7 @@
+import 'package:debrify/services/storage/detail_page_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../theme/premium_looks.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/detail/theme/detail_theme.dart';
@@ -56,6 +58,7 @@ class _DetailThemePageState extends State<DetailThemePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('detail_theme_settings');
     _load();
   }
 
@@ -66,8 +69,8 @@ class _DetailThemePageState extends State<DetailThemePage> {
   }
 
   Future<void> _load() async {
-    final theme = await StorageService.getDetailTheme();
-    final style = await StorageService.getDetailPageStyle();
+    final theme = await DetailPageStorage.getDetailTheme();
+    final style = await DetailPageStorage.getDetailPageStyle();
     if (!mounted) return;
     setState(() {
       _theme = effectiveDetailTheme(theme);
@@ -87,7 +90,7 @@ class _DetailThemePageState extends State<DetailThemePage> {
   Future<void> _select(String value) async {
     if (value == _theme) return;
     setState(() => _theme = value);
-    await StorageService.setDetailTheme(value);
+    await DetailPageStorage.setDetailTheme(value);
   }
 
   @override

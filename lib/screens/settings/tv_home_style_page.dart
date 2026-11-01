@@ -1,10 +1,17 @@
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import '../../features/home/application/home_layout_policy.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
+
+import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
-import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+
+// Preserve the existing Settings import surface while policy lives in Home.
+export '../../features/home/application/home_layout_policy.dart'
+    show effectiveOffTvHomeStyle, shouldUseOffTvSpotlightShell;
 
 /// One selectable TV Home layout.
 class TvHomeStyleChoice {
@@ -65,31 +72,6 @@ String tvHomeStyleLabel(String style) {
   return 'Canvas';
 }
 
-/// The stored style narrowed to what an off-TV Home can render.
-///
-/// Phones, tablets and desktop draw exactly two layouts — Classic and
-/// Spotlight; the other six are DPAD stage layouts whose focus topology has
-/// no touch equivalent. The stored pref is shared with TV and is **never
-/// rewritten** here: a fresh install carries the TV default `'canvas'`, which
-/// this maps to Classic for display, selection and dispatch alike — while a
-/// TV signing into the same account keeps its Canvas.
-String effectiveOffTvHomeStyle(String raw) =>
-    raw == 'spotlight' ? 'spotlight' : 'classic';
-
-/// Whether an off-TV Home should stay in the Spotlight shell while its
-/// content is being resolved.
-///
-/// A freshly mounted Home has no hero yet. Falling back to Classic solely for
-/// that loading window paints its persistent search bar before the first
-/// catalog arrives, then replaces the whole page with Spotlight. Keep the
-/// selected shell during loading; once loading finishes, a genuinely missing
-/// hero still falls back to Classic so CW/favourites-only homes remain useful.
-bool shouldUseOffTvSpotlightShell({
-  required String rawStyle,
-  required bool loading,
-  required bool hasHero,
-}) => effectiveOffTvHomeStyle(rawStyle) == 'spotlight' && (loading || hasHero);
-
 /// The choices an off-TV picker offers — see [effectiveOffTvHomeStyle].
 List<TvHomeStyleChoice> get kOffTvHomeStyleChoices => [
       for (final c in kTvHomeStyleChoices)
@@ -124,6 +106,7 @@ class _TvHomeStylePageState extends State<TvHomeStylePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('tv_home_style_settings');
     _load();
   }
 
@@ -134,7 +117,7 @@ class _TvHomeStylePageState extends State<TvHomeStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await StorageService.getTvHomeStyle();
+    final style = await HomeAppearanceStorage.getTvHomeStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -164,7 +147,7 @@ class _TvHomeStylePageState extends State<TvHomeStylePage> {
     // Tell an in-flight Look apply that a human just chose this key, so it
     // does not stamp over the choice. See theme/app_looks.dart.
     LookApplier.noteExternalWrite('tv_home_style');
-    await StorageService.setTvHomeStyle(value);
+    await HomeAppearanceStorage.setTvHomeStyle(value);
     // Live-apply: the Home board re-reads the pref and rebuilds.
     MainPageBridge.tvHomeStyleChanged?.call();
   }

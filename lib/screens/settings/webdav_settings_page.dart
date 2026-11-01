@@ -1,19 +1,20 @@
+import 'package:debrify/services/storage/webdav_server_storage.dart';
+import 'package:debrify/services/storage/webdav_storage.dart';
 import 'package:flutter/material.dart';
 import '../../utils/tv_reveal.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/webdav_item.dart';
 import '../../models/profiles/profile_policy.dart';
+import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/profiles/profile_async_authorization.dart';
-import '../../services/storage_service.dart';
 import '../../services/webdav_service.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 /// House DPAD idiom: focus the node, then scroll it into view — plain
 /// `requestFocus` from a key handler skips the traversal policy's
@@ -65,6 +66,7 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('webdav_settings');
     _load();
   }
 
@@ -85,17 +87,17 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   }
 
   Future<void> _load() async {
-    final servers = await StorageService.getWebDavServers(
+    final servers = await WebdavServerStorage.getWebDavServers(
       forSettings: true,
       feature: widget.feature,
     );
-    final selected = await StorageService.getSelectedWebDavServer(
+    final selected = await WebdavServerStorage.getSelectedWebDavServer(
       forSettings: true,
       feature: widget.feature,
     );
-    final enabled = await StorageService.getWebDavEnabled();
-    final hidden = await StorageService.getWebDavHiddenFromNav();
-    final showVideosOnly = await StorageService.getWebDavShowVideosOnly();
+    final enabled = await WebdavStorage.getWebDavEnabled();
+    final hidden = await WebdavStorage.getWebDavHiddenFromNav();
+    final showVideosOnly = await WebdavStorage.getWebDavShowVideosOnly();
     if (!mounted) return;
     setState(() {
       _servers = servers;
@@ -161,7 +163,7 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
       final WebDavConfig savedConfig;
       if (authorization == null) {
         await WebDavService.testConnection(config, feature: widget.feature);
-        savedConfig = await StorageService.upsertWebDavServer(
+        savedConfig = await WebdavServerStorage.upsertWebDavServer(
           config,
           feature: widget.feature,
         );
@@ -173,13 +175,13 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
         // initiating profile scope. A profile switch/revocation cannot redirect
         // this credential into the newly visible profile.
         savedConfig = await authorization.runIfCurrent(
-          () => StorageService.upsertWebDavServer(
+          () => WebdavServerStorage.upsertWebDavServer(
             config,
             feature: widget.feature,
           ),
         );
       }
-      final servers = await StorageService.getWebDavServers(
+      final servers = await WebdavServerStorage.getWebDavServers(
         forSettings: true,
         feature: widget.feature,
       );
@@ -203,16 +205,16 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   Future<void> _disconnect() async {
     if (_editingReadOnly) return;
     if (_editingId != null) {
-      await StorageService.deleteWebDavServer(
+      await WebdavServerStorage.deleteWebDavServer(
         _editingId!,
         feature: widget.feature,
       );
     }
-    final servers = await StorageService.getWebDavServers(
+    final servers = await WebdavServerStorage.getWebDavServers(
       forSettings: true,
       feature: widget.feature,
     );
-    final selected = await StorageService.getSelectedWebDavServer(
+    final selected = await WebdavServerStorage.getSelectedWebDavServer(
       forSettings: true,
       feature: widget.feature,
     );
@@ -270,19 +272,19 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
 
   Future<void> _setEnabled(bool value) async {
     setState(() => _enabled = value);
-    await StorageService.setWebDavEnabled(value);
+    await WebdavStorage.setWebDavEnabled(value);
     MainPageBridge.notifyIntegrationChanged();
   }
 
   Future<void> _setHidden(bool value) async {
     setState(() => _hiddenFromNav = value);
-    await StorageService.setWebDavHiddenFromNav(value);
+    await WebdavStorage.setWebDavHiddenFromNav(value);
     MainPageBridge.notifyIntegrationChanged();
   }
 
   Future<void> _setShowVideosOnly(bool value) async {
     setState(() => _showVideosOnly = value);
-    await StorageService.setWebDavShowVideosOnly(value);
+    await WebdavStorage.setWebDavShowVideosOnly(value);
   }
 
   @override
@@ -466,7 +468,7 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
                               ),
                             ),
                             onTap: () async {
-                              await StorageService.setSelectedWebDavServerId(
+                              await WebdavServerStorage.setSelectedWebDavServerId(
                                 server.id,
                               );
                               _editServer(server);
@@ -548,17 +550,14 @@ class _WebDavSettingsPageState extends State<WebDavSettingsPage> {
   }
 
   Widget _section({required List<Widget> children}) {
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app, radius: BorderRadius.circular(16))
-          : BoxDecoration(
-              color: t.panel,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: t.line),
-            ),
+      decoration: BoxDecoration(
+        color: t.panel,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: t.line),
+      ),
       child: Column(children: children),
     );
   }
@@ -596,8 +595,7 @@ class _FocusRingState extends State<_FocusRing> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     return Focus(
       skipTraversal: true,
       canRequestFocus: false,
@@ -607,11 +605,7 @@ class _FocusRingState extends State<_FocusRing> {
       onFocusChange: (_) => setState(() {}),
       child: Container(
         decoration: BoxDecoration(
-          color: _focused
-              ? (GlassChrome.enabled(app)
-                    ? GlassChrome.fill(app, raised: true)
-                    : t.panel2)
-              : Colors.transparent,
+          color: _focused ? t.panel2 : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _focused ? t.accent : Colors.transparent),
         ),

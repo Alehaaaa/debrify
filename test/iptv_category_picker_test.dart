@@ -36,7 +36,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             selectedCategory: selectedCategory,
@@ -162,7 +162,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             selectedCategory: 'Category 2',
@@ -213,7 +213,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             selectedCategory: 'Category 2',
@@ -259,7 +259,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             sourceName: 'Test Source',
@@ -318,7 +318,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             sourceName: 'Test Source',
@@ -356,7 +356,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () => closed = true,
             categories: categories,
             selectedCategory: 'Category 2',
@@ -409,7 +409,7 @@ void main() {
           body: IptvChannelSheet(
             channels: channels(),
             currentIndex: 0,
-            onChannelSelected: (_, _) async {},
+            onChannelSelected: (_, __) async {},
             onClose: () {},
             categories: categories,
             selectedCategory: 'Category 2',

@@ -163,7 +163,8 @@ class StreamBadgesService {
         ? StreamBadgeMatcher([
             for (final s in sources)
               if (s.enabled)
-                ?StreamBadgeRuleset.tryParse(s.json),
+                if (StreamBadgeRuleset.tryParse(s.json) case final rules?)
+                  rules,
           ])
         : StreamBadgeMatcher.empty;
     _enabled = enabled;

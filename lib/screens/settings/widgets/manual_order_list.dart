@@ -4,13 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../theme/app_theme_scope.dart';
-import '../../../theme/glass_chrome.dart';
 import '../../../utils/platform_util.dart';
 import '../../../utils/tv_keys.dart';
 import '../../../utils/tv_reveal.dart';
 import '../../../widgets/tv_text_field.dart';
 import 'settings_widgets.dart';
-import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// One reorderable row: identity plus what the row displays. The [id] is the
 /// focus/selection identity and must be unique and stable across moves.
@@ -105,8 +103,7 @@ class ManualOrderListState extends State<ManualOrderList> {
   String _query = '';
   int _holdIndex = 0;
 
-  bool get _searchable =>
-      widget.items.length >= ManualOrderList.searchThreshold;
+  bool get _searchable => widget.items.length >= ManualOrderList.searchThreshold;
   bool get _filtering => _query.trim().isNotEmpty;
   int get _pickedIndex => _pickedId == null
       ? -1
@@ -130,7 +127,8 @@ class ManualOrderListState extends State<ManualOrderList> {
     // A selection can be orphaned from outside: a reset replaces the items, a
     // save disables the surface. Never leave a "Moving" badge pointing at
     // nothing.
-    if (_pickedId != null && (!widget.enabled || _pickedIndex < 0)) {
+    if (_pickedId != null &&
+        (!widget.enabled || _pickedIndex < 0)) {
       _pickedId = null;
     }
   }
@@ -277,9 +275,7 @@ class ManualOrderListState extends State<ManualOrderList> {
     if (picked &&
         (key == LogicalKeyboardKey.arrowLeft ||
             key == LogicalKeyboardKey.arrowRight)) {
-      _focusIndex(
-        key == LogicalKeyboardKey.arrowLeft ? index - 10 : index + 10,
-      );
+      _focusIndex(key == LogicalKeyboardKey.arrowLeft ? index - 10 : index + 10);
       return KeyEventResult.handled;
     }
     if (picked &&
@@ -299,14 +295,10 @@ class ManualOrderListState extends State<ManualOrderList> {
     final items = widget.items;
     if (index < 0 || index >= items.length) return;
     final item = items[index];
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     final action = await showModalBottomSheet<String>(
-      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: GlassChrome.enabled(app)
-          ? GlassChrome.fill(app, raised: true)
-          : t.panel,
+      backgroundColor: t.panel,
       builder: (sheetContext) => TvHeldKeyGuard(
         child: SafeArea(
           child: Column(
@@ -386,10 +378,7 @@ class ManualOrderListState extends State<ManualOrderList> {
     // The dialog's exit transition still paints the TextField for a few
     // frames after showDialog resolves; dispose once it is fully gone.
     unawaited(
-      Future<void>.delayed(
-        const Duration(milliseconds: 400),
-        controller.dispose,
-      ),
+      Future<void>.delayed(const Duration(milliseconds: 400), controller.dispose),
     );
     if (!mounted || position == null) return;
     _moveTo(index, position.clamp(1, length) - 1);
@@ -719,19 +708,9 @@ class _ManualOrderRowState extends State<ManualOrderRow> {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: GlassChrome.enabled(app)
-                    ? GlassChrome.fill(app, raised: active)
-                    : active
-                    ? t.panel2
-                    : t.panel,
+                color: active ? t.panel2 : t.panel,
                 borderRadius: app.shape.br(12),
-                border: Border.all(
-                  color: active
-                      ? t.accent
-                      : GlassChrome.enabled(app)
-                      ? GlassChrome.edge(app)
-                      : t.line,
-                ),
+                border: Border.all(color: active ? t.accent : t.line),
               ),
               child: Row(
                 children: [
@@ -834,10 +813,7 @@ class _ManualOrderRowState extends State<ManualOrderRow> {
                         padding: const EdgeInsets.only(left: 4),
                         child: MouseRegion(
                           cursor: SystemMouseCursors.grab,
-                          child: Icon(
-                            Icons.drag_indicator_rounded,
-                            color: t.dim,
-                          ),
+                          child: Icon(Icons.drag_indicator_rounded, color: t.dim),
                         ),
                       ),
                     ),

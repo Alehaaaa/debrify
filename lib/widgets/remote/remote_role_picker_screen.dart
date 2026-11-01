@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 
 import '../../services/android_native_downloader.dart';
 import '../../services/remote_control/remote_control_state.dart';
-import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'remote_control_screen.dart';
 import 'remote_pairing_dialog.dart';
 import 'remote_receive_screen.dart';
+import 'package:debrify/services/storage/remote_control_storage.dart';
 
 /// Entry point for the Remote feature. Lets the user pick whether this
 /// device should act as the **Sender** (controls another device, exports
@@ -56,9 +56,9 @@ class _RemoteRolePickerScreenState extends State<RemoteRolePickerScreen> {
       final isTv = await AndroidNativeDownloader.isTelevision();
       final state = RemoteControlState();
       if (isTv) {
-        var name = await StorageService.getRemoteTvDeviceName();
+        var name = await RemoteControlStorage.getRemoteTvDeviceName();
         name ??= await PlatformUtil.getDeviceName();
-        name ??= 'Nextup TV';
+        name ??= 'Debrify TV';
         await state.switchToReceiverMode(name);
       } else {
         await state.switchToSenderMode();
@@ -88,7 +88,7 @@ class _RemoteRolePickerScreenState extends State<RemoteRolePickerScreen> {
 
   Future<void> _openReceiver() async {
     HapticFeedback.mediumImpact();
-    var name = await StorageService.getRemoteTvDeviceName();
+    var name = await RemoteControlStorage.getRemoteTvDeviceName();
     name ??= await PlatformUtil.getDeviceName();
     name ??= 'This device';
     final state = RemoteControlState();
@@ -314,13 +314,7 @@ class _RoleCardState extends State<_RoleCard> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          transform: Matrix4.identity()
-            ..scaleByDouble(
-              _focused ? 1.015 : 1.0,
-              _focused ? 1.015 : 1.0,
-              _focused ? 1.015 : 1.0,
-              1.0,
-            ),
+          transform: Matrix4.identity()..scale(_focused ? 1.015 : 1.0),
           transformAlignment: Alignment.center,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(

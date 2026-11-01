@@ -141,8 +141,7 @@ class UdpCommandService {
         InternetAddress.anyIPv4,
         _isTv ? commandPort : 0, // receiver uses its listener port
         reuseAddress: true,
-        // Windows supports reuseAddress but its Dart backend rejects reusePort.
-        reusePort: !Platform.isWindows,
+        reusePort: true,
       );
 
       final socket = _socket!;
@@ -174,8 +173,7 @@ class UdpCommandService {
       await stop();
       RemoteTransferDiagnostics.record(
         'command_socket_start_failed',
-        fields: {
-          'errorType': error.runtimeType,
+        fields: {'errorType': error.runtimeType,
           if (error is SocketException) 'osErrorCode': error.osError?.errorCode,
         },
       );
@@ -247,13 +245,10 @@ class UdpCommandService {
           bytes.length;
     } catch (error) {
       debugPrint('UdpCommandService: Failed to send raw message');
-      RemoteTransferDiagnostics.record(
-        'command_send_failed',
-        fields: {
-          'errorType': error.runtimeType,
-          if (error is SocketException) 'osErrorCode': error.osError?.errorCode,
-        },
-      );
+      RemoteTransferDiagnostics.record('command_send_failed', fields: {
+        'errorType': error.runtimeType,
+        if (error is SocketException) 'osErrorCode': error.osError?.errorCode,
+      });
       return false;
     }
   }

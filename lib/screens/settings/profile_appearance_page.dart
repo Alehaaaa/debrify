@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../screens/profiles/profile_wall_screen.dart';
+import '../../services/analytics_service.dart';
 import '../../services/profiles/profile_authorization.dart';
 import '../../services/profiles/profile_bootstrap.dart';
 import '../../services/tvos_top_shelf_service.dart';
@@ -34,6 +35,7 @@ class _ProfileAppearancePageState extends State<ProfileAppearancePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('profile_appearance_settings');
     _load();
   }
 
@@ -123,7 +125,7 @@ class _ProfileAppearancePageState extends State<ProfileAppearancePage> {
                         icon: Icons.switch_account_rounded,
                         title: 'Profile picker',
                         subtitle:
-                            'How Nextup welcomes everyone on this device',
+                            'How Debrify welcomes everyone on this device',
                       ),
                       const SizedBox(height: 24),
                       Focus(

@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import '../../models/metadata_preferences.dart';
 import '../../models/stremio_addon.dart';
 import '../../services/collection_focus_playback.dart';
+import '../../services/imdb_trailer_service.dart';
+import '../../services/metadata_preferences_service.dart';
+import '../../services/metadata_provider_service.dart';
 import '../../services/profiles/profile_runtime.dart';
-import '../../services/title_trailer_resolver.dart';
+import '../../services/stremio_service.dart';
 import '../../services/youtube_service.dart';
 import '../hero_trailer_backdrop.dart';
 
@@ -40,32 +44,54 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
   void initState() {
     super.initState();
     _resolveTimeout = Timer(const Duration(seconds: 20), () {
-      if (mounted) {
-        setState(() {
-          _failed = true;
-          _loading = false;
-        });
-      }
+      if (mounted) setState(() { _failed = true; _loading = false; });
     });
     _resolve();
   }
 
   Future<void> _resolve() async {
     try {
-      final streams = await resolveTitleTrailer(
-        widget.item,
+      final item = widget.item;
+      final prefs = await MetadataPreferencesService.loadForBackground(
         isCurrent: () => _current,
       );
-      if (!_current || _failed || streams == null || !streams.hasPlayable) {
-        return;
+      if (prefs == null || !_current) return;
+      final imdb = item.effectiveImdbId;
+      final candidates = await MetadataProviderService.instance.trailers(
+        item,
+        () async {
+          if ((item.trailerYtId ?? '').isNotEmpty) return item.trailerYtId;
+          if (imdb == null || !_current) return null;
+          return (await StremioService.instance.fetchMetaDetails(
+            imdbId: imdb,
+            type: item.type,
+          ))?.trailerYtId;
+        },
+        preferences: prefs,
+      );
+      if (!_current) return;
+      final youtubeId = candidates.firstOrNull?.key;
+      var streams = youtubeId == null
+          ? null
+          : await YoutubeService.resolveStreams(
+              youtubeId,
+              maxHeightOverride: 480,
+              preferVp9: false,
+            );
+      if (!_current) return;
+      if ((streams == null || !streams.hasPlayable) &&
+          imdb != null &&
+          (prefs.provider(MetadataCategory.trailers) ==
+                  MetadataPreferences.current ||
+              prefs.fallback)) {
+        streams = await ImdbTrailerService.resolveTrailer(imdb, maxHeight: 480);
       }
-      if (!mounted) return;
+      if (!_current || _failed || streams == null || !streams.hasPlayable) return;
       if (ModalRoute.of(context)?.isCurrent == false ||
           (WidgetsBinding.instance.lifecycleState != null &&
               WidgetsBinding.instance.lifecycleState !=
-                  AppLifecycleState.resumed)) {
+                  AppLifecycleState.resumed))
         return;
-      }
       // Notify competing ambient surfaces before mounting this decoder.
       CollectionFocusPlayback.claim(_owner);
       setState(() => _streams = streams);
@@ -89,40 +115,31 @@ class _SpotlightCardTrailerState extends State<SpotlightCardTrailer> {
     final streams = _streams;
     if (!_current || _failed) return const SizedBox.shrink();
     return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (streams != null)
-            HeroTrailerBackdrop(
-              imageUrl: null,
-              videoUrl: streams.playUrl,
-              audioUrl: streams.audioUrl,
-              // Native platform-view renderer on iOS, like the detail page trailer.
-              muxedVideoUrl: streams.muxedPlaybackFallback,
-              enabled: true,
-              focusPreviewOwner: _owner,
-              ambientVolume: widget.volume,
-              imageBlurSigma: 0,
-              videoBlurSigma: 0,
-              startDelay: Duration.zero,
-              firstFrameTimeout: const Duration(seconds: 12),
-              onPlayingChanged: (playing) {
-                if (mounted && playing && _loading) {
-                  setState(() => _loading = false);
-                }
-                widget.onPlayingChanged(playing);
-              },
-              onPlaybackFailed: () {
-                if (!mounted) return;
-                setState(() => _failed = true);
-                CollectionFocusPlayback.release(_owner);
-                widget.onPlayingChanged(false);
-              },
-            ),
-          if (_loading)
-            const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
-        ],
+      child: Stack(fit: StackFit.expand, children: [
+      if (streams != null) HeroTrailerBackdrop(
+        imageUrl: null,
+        videoUrl: streams.playUrl,
+        audioUrl: streams.audioUrl,
+        enabled: true,
+        focusPreviewOwner: _owner,
+        ambientVolume: widget.volume,
+        imageBlurSigma: 0,
+        videoBlurSigma: 0,
+        startDelay: Duration.zero,
+        firstFrameTimeout: const Duration(seconds: 12),
+        onPlayingChanged: (playing) {
+          if (mounted && playing && _loading) setState(() => _loading = false);
+          widget.onPlayingChanged(playing);
+        },
+        onPlaybackFailed: () {
+          if (!mounted) return;
+          setState(() => _failed = true);
+          CollectionFocusPlayback.release(_owner);
+          widget.onPlayingChanged(false);
+        },
       ),
+      if (_loading) const Positioned(top: 12, left: 12, child: _TrailerLoadingDot()),
+      ]),
     );
   }
 }
@@ -133,14 +150,8 @@ class _TrailerLoadingDot extends StatefulWidget {
   State<_TrailerLoadingDot> createState() => _TrailerLoadingDotState();
 }
 
-class _TrailerLoadingDotState extends State<_TrailerLoadingDot>
-    with SingleTickerProviderStateMixin {
-  late final _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 700),
-    lowerBound: .3,
-    upperBound: 1,
-  );
+class _TrailerLoadingDotState extends State<_TrailerLoadingDot> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 700), lowerBound: .3, upperBound: 1);
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -151,27 +162,14 @@ class _TrailerLoadingDotState extends State<_TrailerLoadingDot>
       _pulse.repeat(reverse: true);
     }
   }
-
   @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
+  void dispose() { _pulse.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'Loading trailer',
-    child: FadeTransition(
-      opacity: _pulse,
-      child: Container(
-        width: 7,
-        height: 7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 4)],
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => Semantics(label: 'Loading trailer', child: FadeTransition(
+    opacity: _pulse,
+    child: Container(width: 7, height: 7, decoration: const BoxDecoration(
+      color: Colors.white, shape: BoxShape.circle,
+      boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 4)],
+    )),
+  ));
 }

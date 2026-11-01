@@ -1,26 +1,24 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_theme_scope.dart';
-import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
-import 'launch/launch_ident.dart' show identMarkSheen, identPlayPath;
-import 'menu_pill.dart';
 import 'profiles/profile_avatar_view.dart';
 import 'desktop_sidebar_nav.dart' show DesktopNavEntry;
 
 /// The pointer-world sibling of the TV rail's 'pill' style: no rail at all —
-/// content runs full-bleed and a shared bottom-right Menu pill opens the menu
-/// as an overlay panel over
+/// content runs full-bleed and a floating capsule at the top-left shows the
+/// current tab. Clicking the capsule opens the menu as an overlay panel over
 /// the page; picking an entry, clicking away or pressing Escape closes it.
 ///
 /// Deliberately NOT a reuse of [TvSidebarNav]'s pill: that one is welded to
 /// the DPAD focus model (skip-traversal nodes, the LEFT-only door, edge glow
 /// driven by where content focus sits). This one is pure pointer — hover and
-/// click.
+/// click — with the same *ideas*: the capsule holds its label for a moment
+/// after you arrive somewhere, then fades to a quiet icon.
 ///
 /// Mounted as a `Positioned.fill` layer over the content. Its base Stack has
 /// no full-screen hit surface while closed — only the capsule itself is
@@ -60,6 +58,17 @@ class DesktopPillNav extends StatefulWidget {
 class _DesktopPillNavState extends State<DesktopPillNav> {
   bool _open = false;
 
+  /// The capsule's label is up: briefly after arriving on a tab, and while
+  /// the pointer rests on the capsule. Idle, the capsule quiets down to a
+  /// dim icon so it never competes with the page it floats over.
+  bool _labelUp = true;
+  bool _pillHovered = false;
+  Timer? _hold;
+
+  /// How long the capsule keeps its label after a tab change — long enough
+  /// to read where you are, short enough to be gone before it nags.
+  static const Duration _labelHold = Duration(milliseconds: 1400);
+
   /// Escape-to-close. Requested on open, released on close, so the page's
   /// own keyboard handling is untouched while the menu is shut.
   final FocusNode _panelFocus = FocusNode(debugLabel: 'desktop-pill-panel');
@@ -77,9 +86,34 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
   bool _scrimBlocking = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Orient on mount: show which tab this is, then quiet down.
+    _showLabel();
+  }
+
+  @override
+  void didUpdateWidget(DesktopPillNav old) {
+    super.didUpdateWidget(old);
+    // Arriving somewhere new is exactly when the label earns its keep.
+    if (old.currentIndex != widget.currentIndex) _showLabel();
+  }
+
+  @override
   void dispose() {
+    _hold?.cancel();
     _panelFocus.dispose();
     super.dispose();
+  }
+
+  void _showLabel() {
+    _hold?.cancel();
+    if (!_labelUp) setState(() => _labelUp = true);
+    _labelUp = true;
+    _hold = Timer(_labelHold, () {
+      if (!mounted || _pillHovered) return;
+      setState(() => _labelUp = false);
+    });
   }
 
   void _openPanel() {
@@ -111,6 +145,7 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
     } else {
       _panelFocus.unfocus();
     }
+    _showLabel();
   }
 
   void _pick(int i) {
@@ -156,28 +191,27 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
           ),
         ),
         Positioned(
-          right: 0,
+          left: 0,
           top: 0,
           bottom: 0,
           child: IgnorePointer(
             ignoring: !_open,
             child: AnimatedSlide(
-              // The bottom-right Menu pill opens a genuine edge-connected
-              // sidebar. Keep it fully off-screen while closed so it never
-              // reads as a persistent popup.
-              offset: _open ? Offset.zero : const Offset(1.1, 0),
+              // Past -1.0: the panel casts a shadow, and exactly -1 leaves
+              // its blur peeking in from the edge while closed.
+              offset: _open ? Offset.zero : const Offset(-1.1, 0),
               duration: slide,
               curve: Curves.easeOutCubic,
               child: _panel(context),
             ),
           ),
         ),
-        // Same bottom-right anchor as phone navigation. The scrim and Escape
-        // dismiss the open drawer, so the trigger stays cleanly out of its
-        // way while the sidebar is visible.
+        // The capsule. Kept mounted while the panel is open (the panel
+        // covers it) so the open/close transition never pops it in and out.
         Positioned(
-          right: 16 + insets.right,
-          bottom: 32 + insets.bottom,
+          left: 14 + insets.left,
+          // Below the frameless window's invisible drag strip.
+          top: 34 + insets.top,
           child: AnimatedOpacity(
             opacity: _open ? 0 : 1,
             duration: slide,
@@ -189,19 +223,92 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
   }
 
   Widget _pill(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final motion = AppMotion.of(context);
+    final entry = widget.entries.isEmpty
+        ? null
+        : widget.entries[widget.currentIndex.clamp(
+            0,
+            widget.entries.length - 1,
+          )];
+    if (entry == null) return const SizedBox.shrink();
+    final lit = _labelUp || _pillHovered;
+    final pad = widget.expanded ? 14.0 : 11.0;
+    final vpad = widget.expanded ? 11.0 : 8.0;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: MenuPill(
-        pillKey: DesktopPillNav.pillKey,
-        isOpen: _open,
+      onEnter: (_) {
+        if (!mounted) return;
+        setState(() => _pillHovered = true);
+        _showLabel();
+      },
+      onExit: (_) {
+        if (!mounted) return;
+        setState(() => _pillHovered = false);
+        _showLabel();
+      },
+      child: GestureDetector(
         onTap: _openPanel,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedOpacity(
+          // Quiet at rest — present enough to find, dim enough to ignore.
+          opacity: lit ? 1.0 : 0.55,
+          duration: motion.scaled(const Duration(milliseconds: 180)),
+          child: Container(
+            key: DesktopPillNav.pillKey,
+            padding: EdgeInsets.symmetric(horizontal: pad, vertical: vpad),
+            decoration: BoxDecoration(
+              color: app.shell.railBg,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: app.fade(app.core.tx, 0.10)),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x59000000),
+                  blurRadius: 18,
+                  offset: Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  entry.icon,
+                  size: widget.expanded ? 22 : 19,
+                  color: app.shell.navAccent,
+                ),
+                // The label collapses to nothing when the capsule quiets —
+                // AnimatedSize so the pill shrinks around it instead of
+                // clipping mid-word.
+                AnimatedSize(
+                  duration: motion.scaled(const Duration(milliseconds: 180)),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.centerLeft,
+                  child: lit
+                      ? Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text(
+                            entry.label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontSize: widget.expanded ? 13.5 : 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   Widget _panel(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
     final width = widget.expanded ? 268.0 : 236.0;
     final children = <Widget>[];
     String? lastSection;
@@ -239,160 +346,64 @@ class _DesktopPillNavState extends State<DesktopPillNav> {
         key: DesktopPillNav.panelKey,
         width: width,
         decoration: BoxDecoration(
+          color: app.shell.railBg,
+          border: Border(right: BorderSide(color: app.fade(app.core.tx, 0.08))),
           boxShadow: const [
             BoxShadow(
               color: Color(0x73000000),
               blurRadius: 32,
-              offset: Offset(-6, 0),
+              offset: Offset(6, 0),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.horizontal(
-            left: Radius.circular(24),
-          ),
-          child: Stack(
+        // The panel's INK runs edge to edge; its content steps inside the
+        // system insets (cutout on the left, status bar up top) so every
+        // row stays tappable.
+        child: SafeArea(
+          right: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Positioned.fill(
-                // Filter the artwork behind the drawer, but keep the drawer
-                // contents in a sibling layer. Procedural profile art uses a
-                // screen blend and otherwise gets flattened by this filter.
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      // This drawer sits OVER page art, unlike the fixed rail. A
-                      // low-opacity, two-tone tint lets that art diffuse through
-                      // and makes the material visibly read as frosted glass.
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          app.shell.railBg.withValues(
-                            alpha: frosted ? 0.53 : 0.62,
-                          ),
-                          (frosted ? GlassChrome.fill(app) : app.shell.ink)
-                              .withValues(alpha: frosted ? 0.64 : 0.52),
-                        ],
-                      ),
-                      border: Border(
-                        left: BorderSide(
-                          color: frosted
-                              ? GlassChrome.edge(app)
-                              : app.fade(app.core.tx, 0.20),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // The panel's INK runs edge to edge; its content steps inside
-              // the system insets (cutout on the right, status bar up top) so
-              // every row stays tappable.
-              SafeArea(
-                left: false,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 26, 20, 14),
+                child: Row(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 26, 20, 14),
-                      child: Row(
-                        children: [
-                          // The splash file is a wide lockup. This compact
-                          // header uses its square companion artwork instead.
-                          Image(
-                            image: const ExactAssetImage(
-                              'assets/app_icon_foreground.png',
-                            ),
-                            width: 32,
-                            height: 32,
-                            fit: BoxFit.contain,
-                            errorBuilder: (_, _, _) =>
-                                const _DebrifyHeaderMark(),
-                          ),
-                          const SizedBox(width: 9),
-                          Text(
-                            'Nextup',
-                            style: TextStyle(
-                              color: app.fade(app.core.tx, 0.82),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                        ],
+                    ClipRRect(
+                      borderRadius: app.shape.br(8),
+                      child: Image.asset(
+                        'assets/app_icon.png',
+                        width: 26,
+                        height: 26,
+                        // Tests (and a broken bundle) have no asset — the
+                        // panel must not render a red error box for chrome.
+                        errorBuilder: (_, __, ___) =>
+                            const SizedBox(width: 26, height: 26),
                       ),
                     ),
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.only(top: 2, bottom: 16),
-                        children: children,
-                      ),
-                    ),
-                    if (widget.profile != null && widget.onProfileTap != null)
-                      _PanelProfile(
-                        profile: widget.profile!,
-                        expanded: widget.expanded,
-                        onTap: () {
-                          _close(restoreFocus: false);
-                          widget.onProfileTap!();
-                        },
-                      ),
                   ],
                 ),
               ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.only(top: 2, bottom: 16),
+                  children: children,
+                ),
+              ),
+              if (widget.profile != null && widget.onProfileTap != null)
+                _PanelProfile(
+                  profile: widget.profile!,
+                  expanded: widget.expanded,
+                  onTap: () {
+                    _close(restoreFocus: false);
+                    widget.onProfileTap!();
+                  },
+                ),
             ],
           ),
         ),
       ),
     );
   }
-}
-
-/// The vector form of the same Debrify ribbon used in the launch logo. It is
-/// only an asset-load fallback, never a replacement for the supplied artwork.
-class _DebrifyHeaderMark extends StatelessWidget {
-  const _DebrifyHeaderMark();
-
-  @override
-  Widget build(BuildContext context) => CustomPaint(
-    painter: const _DebrifyHeaderMarkPainter(),
-    size: const Size.square(32),
-  );
-}
-
-class _DebrifyHeaderMarkPainter extends CustomPainter {
-  const _DebrifyHeaderMarkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final side = size.shortestSide;
-    canvas.save();
-    canvas.translate(size.width / 2, size.height / 2);
-    final markSize = side * 1.38;
-    final bounds = Rect.fromCenter(
-      center: Offset.zero,
-      width: markSize,
-      height: markSize,
-    );
-    canvas.drawPath(
-      identPlayPath(markSize),
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF24E7F4), Color(0xFF069CF9), Color(0xFF123ED7)],
-        ).createShader(bounds),
-    );
-    canvas.drawPath(
-      identMarkSheen(markSize),
-      Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.20),
-    );
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant _DebrifyHeaderMarkPainter oldDelegate) => false;
 }
 
 class _PanelProfile extends StatefulWidget {
@@ -444,15 +455,14 @@ class _PanelProfileState extends State<_PanelProfile> {
             child: Row(
               children: [
                 SizedBox(
-                  width: 36,
-                  height: 36,
+                  width: 34,
+                  height: 34,
                   child: ClipOval(
                     child: ProfileAvatarView(
                       profileId: widget.profile.id,
                       avatarKey: widget.profile.avatarKey,
                       role: widget.profile.role,
                       name: widget.profile.name,
-                      focused: true,
                       animateWhenIdle: true,
                     ),
                   ),
@@ -554,21 +564,8 @@ class _PanelItemState extends State<_PanelItem> {
               vertical: widget.expanded ? 12 : 9,
             ),
             decoration: BoxDecoration(
-              gradient: widget.selected
-                  ? LinearGradient(
-                      colors: [
-                        app.shell.navAccent.withValues(alpha: 0.34),
-                        app.shell.navAccent.withValues(alpha: 0.15),
-                      ],
-                    )
-                  : null,
-              color: widget.selected ? null : bg,
+              color: bg,
               borderRadius: app.shape.br(12),
-              border: widget.selected
-                  ? Border.all(
-                      color: app.shell.navAccent.withValues(alpha: 0.26),
-                    )
-                  : null,
             ),
             child: Row(
               children: [

@@ -1,7 +1,10 @@
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
 import '../models/media_identity.dart';
 import '../models/tracking_source.dart';
 import '../models/custom_series_identity.dart';
-import 'storage_service.dart';
 
 export '../models/tracking_source.dart';
 
@@ -14,7 +17,6 @@ class TrackingSourcePolicy {
     required this.scrobbleTargets,
     required this.progressSource,
     required this.homeTickSources,
-    this.syncAllContinueWatching = false,
     this.nativeIdentity = false,
   });
 
@@ -22,7 +24,6 @@ class TrackingSourcePolicy {
   final Set<TrackingSource> scrobbleTargets;
   final WatchProgressSource progressSource;
   final Set<TrackingSource> homeTickSources;
-  final bool syncAllContinueWatching;
 
   TrackingSourcePolicy forContent(String? id) =>
       CustomSeriesIdentity.isCustom(id) ||
@@ -31,7 +32,6 @@ class TrackingSourcePolicy {
           scrobbleTargets: {},
           progressSource: WatchProgressSource.local,
           homeTickSources: {TrackingSource.local},
-          syncAllContinueWatching: false,
         )
       : MediaIdentity.isNative(id)
       ? TrackingSourcePolicy(
@@ -45,14 +45,27 @@ class TrackingSourcePolicy {
               ? WatchProgressSource.local
               : progressSource,
           homeTickSources: homeTickSources,
-          syncAllContinueWatching: syncAllContinueWatching,
           nativeIdentity: true,
         )
       : this;
 
-  static Future<TrackingSourcePolicy> load() async {
-    final scrobbleTargets = await StorageService.getTrackingScrobbleTargets();
-    var progressSource = await StorageService.getWatchProgressSource();
+  static Future<TrackingSourcePolicy> load({
+    bool Function()? canContinue,
+  }) async {
+    void checkCurrent() {
+      if (canContinue?.call() == false) {
+        throw StateError('Tracking action retired');
+      }
+    }
+
+    checkCurrent();
+    final scrobbleTargets =
+        await TrackingSourceStorage.getTrackingScrobbleTargets(
+          canContinue: canContinue,
+        );
+    checkCurrent();
+    var progressSource = await TrackingSourceStorage.getWatchProgressSource();
+    checkCurrent();
     final dedicated = switch (progressSource) {
       WatchProgressSource.trakt => TrackingSource.trakt,
       WatchProgressSource.simkl => TrackingSource.simkl,
@@ -61,28 +74,39 @@ class TrackingSourcePolicy {
     };
     if (dedicated != null) {
       final connected = switch (dedicated) {
-        TrackingSource.trakt => StorageService.hasTraktCredential(),
-        TrackingSource.simkl => StorageService.hasSimklCredential(),
-        TrackingSource.mdblist => StorageService.hasMdblistCredential(),
+        TrackingSource.trakt => TraktStorage.hasTraktCredential(
+          canContinue: canContinue,
+        ),
+        TrackingSource.simkl => SimklStorage.hasSimklCredential(
+          canContinue: canContinue,
+        ),
+        TrackingSource.mdblist => MdblistStorage.hasMdblistCredential(
+          canContinue: canContinue,
+        ),
         TrackingSource.local => Future<bool>.value(true),
       };
-      if (!await connected) {
-        await StorageService.fallbackDisconnectedProgressSource(dedicated);
+      final hasCredential = await connected;
+      checkCurrent();
+      if (!hasCredential) {
+        await TrackingSourceStorage.fallbackDisconnectedProgressSource(
+          dedicated,
+          canContinue: canContinue,
+        );
+        checkCurrent();
         progressSource = WatchProgressSource.smart;
       }
     }
+    final ticks = await TrackingSourceStorage.getHomeTickSources();
+    checkCurrent();
     return TrackingSourcePolicy(
       scrobbleTargets: scrobbleTargets,
       progressSource: progressSource,
-      homeTickSources: await StorageService.getHomeTickSources(),
-      syncAllContinueWatching: await StorageService.getSyncAllContinueWatching(),
+      homeTickSources: ticks,
     );
   }
 
   bool scrobbles(TrackingSource source) =>
-      source == TrackingSource.local ||
-      syncAllContinueWatching ||
-      scrobbleTargets.contains(source);
+      source == TrackingSource.local || scrobbleTargets.contains(source);
 
   /// Smart preserves the legacy merged/recency behavior. A dedicated source
   /// admits only itself; local means data written by this Debrify profile.
@@ -116,7 +140,6 @@ class TrackingSourcePolicy {
     required bool simklScrobble,
     required bool mdblistScrobble,
   }) =>
-      syncAllContinueWatching ||
       forcesLocalCompletion ||
       (!simklScrobble &&
           (nativeIdentity || (!traktScrobble && !mdblistScrobble)));

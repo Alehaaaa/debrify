@@ -6,127 +6,10 @@ import 'package:debrify/services/home_collections_store.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/models/home_collection.dart';
 import 'package:debrify/screens/collections/collection_editor_screen.dart';
-import 'package:debrify/theme/app_theme.dart';
-import 'package:debrify/theme/app_theme_scope.dart';
-import 'package:debrify/theme/glass_chrome.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets(
-    'nested collection action rail follows appearance after reopening',
-    (tester) async {
-      await tester.binding.setSurfaceSize(const Size(940, 760));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final collection = HomeCollection(
-        id: 'collection',
-        title: 'My Collection',
-        folders: [
-          HomeCollectionFolder(id: 'folder', title: 'Folder', sources: []),
-        ],
-      );
-      Widget host(AppTheme app) => MaterialApp(
-        builder: (context, child) => AppThemeScope(theme: app, child: child!),
-        home: CollectionEditorScreen(collection: collection, addons: const []),
-      );
-      final frosted = AppThemes.byId('glass');
-      await tester.pumpWidget(host(frosted));
-      await tester.pumpAndSettle();
-      final move = find.byTooltip('Move up').first;
-      final rail = find
-          .ancestor(of: move, matching: find.byType(Container))
-          .first;
-      expect(
-        tester.widget<Container>(rail).decoration,
-        GlassChrome.decoration(frosted, radius: frosted.shape.br(12)),
-      );
-      await tester.tap(find.text('Folder'));
-      await tester.pumpAndSettle();
-      expect(find.text('Edit folder'), findsOneWidget);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(find.byTooltip('Move up'), findsWidgets);
-
-      await tester.pumpWidget(host(AppThemes.legacy));
-      await tester.pumpAndSettle();
-      final classicRail = find
-          .ancestor(
-            of: find.byTooltip('Move up').first,
-            matching: find.byType(Container),
-          )
-          .first;
-      expect(tester.widget<Container>(classicRail).decoration, isNull);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
-  for (final appearance in ['glass', 'legacy']) {
-    testWidgets('nested collection dropdown follows $appearance appearance', (
-      tester,
-    ) async {
-      await tester.binding.setSurfaceSize(const Size(1000, 1000));
-      addTearDown(() => tester.binding.setSurfaceSize(null));
-      final app = AppThemes.byId(appearance);
-      await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) => AppThemeScope(theme: app, child: child!),
-          home: const CollectionEditorScreen(addons: []),
-        ),
-      );
-      final focusSwitch = tester.widget<SwitchListTile>(
-        find.widgetWithText(SwitchListTile, 'Focus glow'),
-      );
-      if (appearance == 'glass') {
-        expect(focusSwitch.tileColor, GlassChrome.fill(app));
-        expect(focusSwitch.shape, GlassChrome.shape(app, radius: 12));
-      } else {
-        expect(focusSwitch.tileColor, isNull);
-      }
-      await tester.tap(find.text('Focus glow'));
-      await tester.pump();
-      expect(
-        tester
-            .widget<SwitchListTile>(
-              find.widgetWithText(SwitchListTile, 'Focus glow'),
-            )
-            .value,
-        false,
-      );
-      await tester.tap(find.text('Add folder'));
-      await tester.pumpAndSettle();
-      final folderDropdown = find.widgetWithText(
-        DropdownButtonFormField<String>,
-        'Tile shape',
-      );
-      expect(folderDropdown, findsOneWidget);
-      final folderTheme = Theme.of(tester.element(folderDropdown));
-      if (appearance == 'glass') {
-        expect(folderTheme.canvasColor, GlassChrome.fill(app, raised: true));
-      } else {
-        expect(folderTheme.canvasColor, ThemeData().canvasColor);
-      }
-      await tester.ensureVisible(find.text('Add source'));
-      await tester.tap(find.text('Add source'));
-      await tester.pumpAndSettle();
-      final sourceDropdown = find.widgetWithText(
-        DropdownButtonFormField<String>,
-        'Source',
-      );
-      expect(sourceDropdown, findsOneWidget);
-      expect(
-        Theme.of(tester.element(sourceDropdown)).canvasColor,
-        folderTheme.canvasColor,
-      );
-      await tester.tap(sourceDropdown);
-      await tester.pumpAndSettle();
-      expect(find.text('Public Trakt list').last, findsOneWidget);
-      await tester.tap(find.text('Public Trakt list').last);
-      await tester.pumpAndSettle();
-      expect(find.text('Trakt list ID'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
-
   for (final size in [
     const Size(390, 844),
     const Size(900, 700),
@@ -373,21 +256,13 @@ void main() {
           null,
         ),
       );
-      final frosted = AppThemes.byId('glass');
       await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) =>
-              AppThemeScope(theme: frosted, child: child!),
-          home: const CollectionsSettingsPage(),
-        ),
+        const MaterialApp(home: CollectionsSettingsPage()),
       );
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.text('Editable collection'));
       await tester.tap(find.text('Editable collection'));
       await tester.pumpAndSettle();
-      var popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
-      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
-      expect(popup.shape, GlassChrome.shape(frosted));
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Move up').last);
@@ -401,13 +276,8 @@ void main() {
       await tester.ensureVisible(find.text('Editable collection'));
       await tester.tap(find.text('Editable collection'));
       await tester.pumpAndSettle();
-      popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
-      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
       await tester.tap(find.text('Export JSON'));
       await tester.pumpAndSettle();
-      popup = tester.widget<AlertDialog>(find.byType(AlertDialog));
-      expect(popup.backgroundColor, GlassChrome.fill(frosted, raised: true));
-      expect(popup.shape, GlassChrome.shape(frosted));
       await tester.tap(find.text('Copy JSON'));
       await tester.pumpAndSettle();
       final exported = HomeCollectionParser.parse(copied!).single;

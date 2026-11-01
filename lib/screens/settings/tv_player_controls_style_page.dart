@@ -1,5 +1,7 @@
+import 'package:debrify/services/storage/player_appearance_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -87,6 +89,7 @@ class _TvPlayerControlsStylePageState extends State<TvPlayerControlsStylePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('tv_player_controls_style_settings');
     _load();
   }
 
@@ -97,7 +100,7 @@ class _TvPlayerControlsStylePageState extends State<TvPlayerControlsStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await StorageService.getTvPlayerControlsStyle();
+    final style = await PlayerAppearanceStorage.getTvPlayerControlsStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -118,7 +121,7 @@ class _TvPlayerControlsStylePageState extends State<TvPlayerControlsStylePage> {
   Future<void> _select(String value) async {
     if (value == _style) return;
     setState(() => _style = value);
-    await StorageService.setTvPlayerControlsStyle(value);
+    await PlayerAppearanceStorage.setTvPlayerControlsStyle(value);
   }
 
   @override

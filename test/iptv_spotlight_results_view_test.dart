@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:debrify/models/iptv_playlist.dart';
 import 'package:debrify/screens/browse_screen.dart';
+import 'package:debrify/services/storage/iptv_appearance_storage.dart';
+import 'package:debrify/services/storage/iptv_favorites_storage.dart';
+import 'package:debrify/services/storage/iptv_playlist_storage.dart';
+import 'package:debrify/services/storage/tv_display_storage.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:debrify/utils/platform_util.dart';
@@ -11,9 +15,10 @@ import 'package:debrify/services/iptv_catalog_db.dart';
 import 'package:debrify/services/iptv_media_store.dart';
 import 'package:debrify/services/main_page_bridge.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/profiles/profile_session_memory.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:debrify/widgets/browse/browse_search_header.dart';
+import 'package:debrify/widgets/browse/browse_results_focus.dart';
 import 'package:debrify/widgets/iptv/iptv_filters.dart';
 import 'package:debrify/widgets/iptv/iptv_results_view.dart';
 import 'package:debrify/widgets/iptv/spotlight/spotlight_live_timeline.dart';
@@ -21,9 +26,11 @@ import 'package:debrify/widgets/iptv/spotlight/spotlight_shell.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:debrify/services/storage/storage_profile_caches.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -38,6 +45,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
+    // A page torn down by an earlier case remembers its shelf for the session.
+    ProfileSessionMemory.clearAll();
     catalogDirectory = await Directory.systemTemp.createTemp(
       'spotlight-results-view-test',
     );
@@ -58,9 +67,9 @@ void main() {
         );
     IptvCatalogDb.debugDirectoryOverride = catalogDirectory.path;
     await IptvCatalogDb.open();
-    StorageService.resetProfileCaches();
-    await StorageService.setIptvChannelPreviewEnabled(false);
-    await StorageService.setIptvPlaylists([
+    resetStorageProfileCaches();
+    await IptvAppearanceStorage.setIptvChannelPreviewEnabled(false);
+    await IptvPlaylistStorage.setIptvPlaylists([
       IptvPlaylist(
         id: 'local-guide',
         name: 'Living room TV',
@@ -89,6 +98,87 @@ https://example.com/live/two.ts
     await catalogDirectory.delete(recursive: true);
   });
 
+  testWidgets('a reload or a rebuilt page keeps the shelf the user is on', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1280, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.runAsync(() async {
+      final stored = await IptvPlaylistStorage.getIptvPlaylists(
+        forSettings: false,
+      );
+      await IptvPlaylistStorage.setIptvPlaylists([
+        ...stored,
+        IptvPlaylist(
+          id: 'bedroom',
+          name: 'Bedroom TV',
+          url: '',
+          content: '''#EXTM3U
+#EXTINF:-1 group-title="News",Bedroom One
+https://example.com/bedroom/one.ts
+#EXTINF:-1 group-title="News",Bedroom Two
+https://example.com/bedroom/two.ts
+#EXTINF:-1 group-title="News",Bedroom Three
+https://example.com/bedroom/three.ts
+''',
+          addedAt: DateTime(2026, 2),
+        ),
+      ]);
+    });
+    Widget page() => const ProviderScope(
+      child: MaterialApp(
+        home: Scaffold(
+          body: IptvResultsView(searchQuery: '', isTelevision: false),
+        ),
+      ),
+    );
+    Future<void> settle() async {
+      for (var i = 0; i < 20; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    // The bar above the guide names the open playlist.
+    const landing = 'Living room TV';
+    const bedroom = 'Bedroom TV';
+    await tester.pumpWidget(page());
+    await settle();
+    expect(find.text(landing), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('spotlight-rail-tile-playlist-bedroom')),
+    );
+    await settle();
+    expect(find.text(bedroom), findsOneWidget);
+
+    // An addon update or a return from Settings reloads the playlists; it
+    // used to put the landing shelf back.
+    final reload = tester
+        .state<IptvResultsViewState>(find.byType(IptvResultsView))
+        .refreshPlaylists();
+    await settle();
+    await reload;
+    expect(find.text(bedroom), findsOneWidget);
+
+    // The page is torn down and built again in the same profile session.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(page());
+    await settle();
+    expect(find.text(bedroom), findsOneWidget);
+
+    // A new profile session opens on the landing shelf again.
+    await tester.pumpWidget(const SizedBox.shrink());
+    ProfileSessionMemory.clearAll();
+    await tester.pumpWidget(page());
+    await settle();
+    expect(find.text(landing), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   for (final favorites in [true, false]) {
     testWidgets(
       'Spotlight ${favorites ? 'Favorites' : 'custom list'} uses guide navigation',
@@ -99,10 +189,10 @@ https://example.com/live/two.ts
         late String listId;
         await tester.runAsync(() async {
           listId = favorites
-              ? StorageService.iptvFavoritesListId
-              : await StorageService.createIptvList('Mixed shelf');
+              ? IptvFavoritesStorage.iptvFavoritesListId
+              : await IptvFavoritesStorage.createIptvList('Mixed shelf');
           for (var i = 0; i < 2; i++) {
-            await StorageService.setIptvChannelInList(
+            await IptvFavoritesStorage.setIptvChannelInList(
               listId,
               'https://example.com/saved/$i.ts',
               true,
@@ -113,10 +203,12 @@ https://example.com/live/two.ts
           }
         });
         await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData.dark(),
-            home: const Scaffold(
-              body: IptvResultsView(searchQuery: '', isTelevision: true),
+          ProviderScope(
+            child: MaterialApp(
+              theme: ThemeData.dark(),
+              home: const Scaffold(
+                body: IptvResultsView(searchQuery: '', isTelevision: true),
+              ),
             ),
           ),
         );
@@ -182,22 +274,24 @@ https://example.com/live/two.ts
     addTearDown(() => MainPageBridge.focusTvSidebar = previousSidebarCallback);
     MainPageBridge.focusTvSidebar = sidebar.requestFocus;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Row(
-            children: [
-              SizedBox(
-                width: 72,
-                child: TextButton(
-                  focusNode: sidebar,
-                  onPressed: () {},
-                  child: const Text('Home'),
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Row(
+              children: [
+                SizedBox(
+                  width: 72,
+                  child: TextButton(
+                    focusNode: sidebar,
+                    onPressed: () {},
+                    child: const Text('Home'),
+                  ),
                 ),
-              ),
-              const Expanded(
-                child: IptvResultsView(searchQuery: '', isTelevision: true),
-              ),
-            ],
+                const Expanded(
+                  child: IptvResultsView(searchQuery: '', isTelevision: true),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -251,6 +345,16 @@ https://example.com/live/two.ts
     expect(tester.widget<SpotlightShell>(shell).sourcesExpanded, isTrue);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
     final sourceNode = FocusManager.instance.primaryFocus!;
+    // The rail is a lazy list; at this TV height "Manage sources" sits below
+    // the fold (Sports added a Quick Access row), as D-pad would scroll it.
+    await tester.scrollUntilVisible(
+      find.text('Manage sources'),
+      60,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey<String>('spotlight-rail')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     Focus.of(tester.element(find.text('Manage sources'))).requestFocus();
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -320,25 +424,29 @@ https://example.com/live/two.ts
   testWidgets(
     'Desktop Spotlight traverses wrapped hero actions before leaving the panel',
     (tester) async {
-      await tester.runAsync(() => StorageService.createIptvList('Review list'));
+      await tester.runAsync(
+        () => IptvFavoritesStorage.createIptvList('Review list'),
+      );
       tester.view.physicalSize = const Size(896, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       var upExits = 0;
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(),
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(1.5)),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: IptvResultsView(
-              searchQuery: '',
-              isTelevision: false,
-              onUpArrowFromFilters: () => upExits++,
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.5)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: IptvResultsView(
+                searchQuery: '',
+                isTelevision: false,
+                onUpArrowFromFilters: () => upExits++,
+              ),
             ),
           ),
         ),
@@ -422,17 +530,19 @@ https://example.com/live/two.ts
       addTearDown(searchFocus.dispose);
       addTearDown(searchController.dispose);
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(),
-          home: Scaffold(
-            body: IptvResultsView(
-              searchQuery: '',
-              isTelevision: true,
-              searchHeader: BrowseSearchHeader(
-                controller: searchController,
-                focusNode: searchFocus,
-                hintText: 'Search channels',
-                onClear: searchController.clear,
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: IptvResultsView(
+                searchQuery: '',
+                isTelevision: true,
+                searchHeader: BrowseSearchHeader(
+                  controller: searchController,
+                  focusNode: searchFocus,
+                  hintText: 'Search channels',
+                  onClear: searchController.clear,
+                ),
               ),
             ),
           ),
@@ -540,14 +650,16 @@ https://example.com/live/two.ts
       addTearDown(tester.view.reset);
       final surface = GlobalKey();
       await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData.dark(),
-          home: Scaffold(
-            body: RepaintBoundary(
-              key: surface,
-              child: const IptvResultsView(
-                searchQuery: '',
-                isTelevision: false,
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            home: Scaffold(
+              body: RepaintBoundary(
+                key: surface,
+                child: const IptvResultsView(
+                  searchQuery: '',
+                  isTelevision: false,
+                ),
               ),
             ),
           ),
@@ -600,17 +712,19 @@ https://example.com/live/two.ts
     addTearDown(searchFocus.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: ThemeData.dark(),
-        home: Scaffold(
-          body: IptvResultsView(
-            searchQuery: '',
-            isTelevision: true,
-            searchHeader: BrowseSearchHeader(
-              controller: controller,
-              focusNode: searchFocus,
-              hintText: 'Search channels',
-              onClear: controller.clear,
+      ProviderScope(
+        child: MaterialApp(
+          theme: ThemeData.dark(),
+          home: Scaffold(
+            body: IptvResultsView(
+              searchQuery: '',
+              isTelevision: true,
+              searchHeader: BrowseSearchHeader(
+                controller: controller,
+                focusNode: searchFocus,
+                hintText: 'Search channels',
+                onClear: controller.clear,
+              ),
             ),
           ),
         ),
@@ -690,28 +804,30 @@ https://example.com/live/two.ts
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       PlatformUtil.debugSetAndroidTvCached(true);
-      final previousKeyboard = StorageService.tvKeyboardEnabledCached;
-      StorageService.tvKeyboardEnabledCached = true;
+      final previousKeyboard = TvDisplayStorage.tvKeyboardEnabledCached;
+      TvDisplayStorage.tvKeyboardEnabledCached = true;
       addTearDown(() {
         PlatformUtil.debugSetAndroidTvCached(null);
-        StorageService.tvKeyboardEnabledCached = previousKeyboard;
+        TvDisplayStorage.tvKeyboardEnabledCached = previousKeyboard;
       });
       await tester.pumpWidget(
-        MaterialApp(
-          home: AppThemeScope(
-            theme: AppThemes.legacy,
-            child: BrowseScreen(
-              tabIndex: 13,
-              hintText: 'Search channels',
-              submitOnly: false,
-              isTelevision: true,
-              embedSearchHeaderInView: true,
-              viewBuilder: (args) => IptvResultsView(
-                key: args.resultKey,
-                searchQuery: args.query,
-                isTelevision: args.isTelevision,
-                searchHeader: args.searchHeader,
-                onUpArrowFromFilters: args.onUpArrowToSearch,
+        ProviderScope(
+          child: MaterialApp(
+            home: AppThemeScope(
+              theme: AppThemes.legacy,
+              child: BrowseScreen(
+                tabIndex: 13,
+                hintText: 'Search channels',
+                submitOnly: false,
+                isTelevision: true,
+                embedSearchHeaderInView: true,
+                viewBuilder: (args) => IptvResultsView(
+                  key: args.resultKey,
+                  searchQuery: args.query,
+                  isTelevision: args.isTelevision,
+                  searchHeader: args.searchHeader,
+                  onUpArrowFromFilters: args.onUpArrowToSearch,
+                ),
               ),
             ),
           ),
@@ -808,12 +924,14 @@ https://example.com/live/two.ts
       final query = ValueNotifier<String>('');
       addTearDown(query.dispose);
       await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: ValueListenableBuilder<String>(
-              valueListenable: query,
-              builder: (context, value, _) =>
-                  IptvResultsView(searchQuery: value, isTelevision: true),
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<String>(
+                valueListenable: query,
+                builder: (context, value, _) =>
+                    IptvResultsView(searchQuery: value, isTelevision: true),
+              ),
             ),
           ),
         ),
@@ -871,7 +989,7 @@ https://example.com/live/two.ts
         ..writeln('https://example.com/live/$index.ts');
     }
     await tester.runAsync(
-      () => StorageService.setIptvPlaylists([
+      () => IptvPlaylistStorage.setIptvPlaylists([
         IptvPlaylist(
           id: 'local-guide',
           name: 'Large provider',
@@ -951,25 +1069,27 @@ https://example.com/live/two.ts
     tester.view.physicalSize = const Size(900, 600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.runAsync(() => StorageService.setIptvStyle('command'));
+    await tester.runAsync(() => IptvAppearanceStorage.setIptvStyle('command'));
     final height = ValueNotifier<double>(439);
     addTearDown(height.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: ValueListenableBuilder<double>(
-              valueListenable: height,
-              builder: (context, value, _) => SizedBox(
-                width: 900,
-                height: value,
-                child: const IptvResultsView(
-                  searchQuery: '',
-                  isTelevision: true,
-                  searchHeader: SizedBox(
-                    key: ValueKey<String>('fixed-search'),
-                    height: 60,
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ValueListenableBuilder<double>(
+                valueListenable: height,
+                builder: (context, value, _) => SizedBox(
+                  width: 900,
+                  height: value,
+                  child: const IptvResultsView(
+                    searchQuery: '',
+                    isTelevision: true,
+                    searchHeader: SizedBox(
+                      key: ValueKey<String>('fixed-search'),
+                      height: 60,
+                    ),
                   ),
                 ),
               ),
@@ -996,22 +1116,24 @@ https://example.com/live/two.ts
     addTearDown(tester.view.reset);
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    await tester.runAsync(() => StorageService.setIptvStyle('command'));
+    await tester.runAsync(() => IptvAppearanceStorage.setIptvStyle('command'));
     final height = ValueNotifier<double>(559);
     addTearDown(height.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: ValueListenableBuilder<double>(
-              valueListenable: height,
-              builder: (context, value, _) => SizedBox(
-                width: 900,
-                height: value,
-                child: const IptvResultsView(
-                  searchQuery: '',
-                  searchHeader: SizedBox(height: 60),
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: ValueListenableBuilder<double>(
+                valueListenable: height,
+                builder: (context, value, _) => SizedBox(
+                  width: 900,
+                  height: value,
+                  child: const IptvResultsView(
+                    searchQuery: '',
+                    searchHeader: SizedBox(height: 60),
+                  ),
                 ),
               ),
             ),
@@ -1039,62 +1161,140 @@ https://example.com/live/two.ts
     debugDefaultTargetPlatformOverride = null;
   });
 
-  testWidgets('Spotlight startup hands a nonzero row to the timeline', (
-    tester,
-  ) async {
-    tester.view.physicalSize = const Size(896, 540);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-
-    final content = StringBuffer('#EXTM3U\n');
-    for (var index = 0; index < 24; index++) {
-      content
-        ..writeln('#EXTINF:-1 group-title="News",Startup $index')
-        ..writeln('https://example.com/startup/$index.ts');
-    }
-    await tester.runAsync(
-      () => StorageService.setIptvPlaylists([
-        IptvPlaylist(
-          id: 'local-guide',
-          name: 'Startup provider',
-          url: '',
-          content: content.toString(),
-          addedAt: DateTime(2026),
-        ),
-      ]),
-    );
-    MainPageBridge.setIptvStartupChannel({
-      'playlistId': 'local-guide',
-      'url': 'https://example.com/startup/17.ts',
-      'name': 'Startup 17',
-    });
-    final handedIndices = <int>[];
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: IptvResultsView(
-            searchQuery: '',
-            isTelevision: true,
-            debugOnSpotlightStartupFocus: (index) {
-              handedIndices.add(index);
-              MainPageBridge.cancelIptvStartupChannel();
-            },
+  testWidgets(
+    'Spotlight preserves both Browse focus interfaces and GlobalKey dispatch',
+    (tester) async {
+      tester.view.physicalSize = const Size(896, 540);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final GlobalKey key = GlobalKey();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: IptvResultsView(
+                key: key,
+                searchQuery: '',
+                isTelevision: true,
+              ),
+            ),
           ),
         ),
-      ),
-    );
-    for (var attempt = 0; attempt < 80 && handedIndices.isEmpty; attempt++) {
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 25)),
       );
-      await tester.pump(const Duration(milliseconds: 50));
-    }
+      await _pumpUntil(tester, find.byType(SpotlightLiveTimeline));
+      final results = key.currentState!;
+      expect(results, isA<BrowseResultsFocusController>());
+      expect(results, isA<BrowseSearchResultsFocusController>());
+      (results as BrowseResultsFocusController).focusFirstFilter();
+      await tester.pumpAndSettle();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'iptv-playlist-filter',
+      );
+      (results as BrowseSearchResultsFocusController).focusSearchResults();
+      await tester.pumpAndSettle();
+      var timeline = tester.widget<SpotlightLiveTimeline>(
+        find.byType(SpotlightLiveTimeline),
+      );
+      expect(timeline.controller!.hasFocus, isTrue);
+      // main.dart also dispatches this entry point through an untyped key.
+      (key.currentState as dynamic).focusFirstFilter();
+      await tester.pumpAndSettle();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'iptv-playlist-filter',
+      );
+      (key.currentState as dynamic).focusSearchResults();
+      await tester.pumpAndSettle();
+      timeline = tester.widget<SpotlightLiveTimeline>(
+        find.byType(SpotlightLiveTimeline),
+      );
+      expect(timeline.controller!.hasFocus, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 3));
+    },
+  );
 
-    expect(handedIndices, [17]);
-    expect(find.text('Startup 17'), findsWidgets);
-    expect(tester.takeException(), isNull);
-  });
+  for (final startup in [
+    (
+      label: 'Spotlight startup hands a nonzero row to the timeline',
+      payload: <String, dynamic>{
+        'playlistId': 'local-guide',
+        'url': 'https://example.com/startup/17.ts',
+        'name': 'Startup 17',
+      },
+      index: 17,
+    ),
+    (
+      label: 'Spotlight startup number fallback corroborates the row name',
+      payload: <String, dynamic>{
+        'playlistId': 'local-guide',
+        'url': 'https://example.com/old/17.ts',
+        'name': ' Startup 17 ',
+        'channelNumber': 18,
+      },
+      index: 17,
+    ),
+    (
+      label: 'Spotlight first-available startup focuses the landing row',
+      payload: <String, dynamic>{'firstAvailable': true},
+      index: 0,
+    ),
+  ]) {
+    testWidgets(startup.label, (tester) async {
+      tester.view.physicalSize = const Size(896, 540);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final content = StringBuffer('#EXTM3U\n');
+      for (var index = 0; index < 24; index++) {
+        content
+          ..writeln('#EXTINF:-1 group-title="News",Startup $index')
+          ..writeln('https://example.com/startup/$index.ts');
+      }
+      await tester.runAsync(
+        () => IptvPlaylistStorage.setIptvPlaylists([
+          IptvPlaylist(
+            id: 'local-guide',
+            name: 'Startup provider',
+            url: '',
+            content: content.toString(),
+            addedAt: DateTime(2026),
+          ),
+        ]),
+      );
+      MainPageBridge.setIptvStartupChannel(startup.payload);
+      final handedIndices = <int>[];
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            home: Scaffold(
+              body: IptvResultsView(
+                searchQuery: '',
+                isTelevision: true,
+                debugOnSpotlightStartupFocus: (index) {
+                  handedIndices.add(index);
+                  MainPageBridge.cancelIptvStartupChannel();
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      for (var attempt = 0; attempt < 80 && handedIndices.isEmpty; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 25)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(handedIndices, [startup.index]);
+      expect(find.text('Startup ${startup.index}'), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
 
 Future<void> _pumpUntil(WidgetTester tester, Finder finder) async {

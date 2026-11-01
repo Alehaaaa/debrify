@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../../models/iptv_playlist.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
-import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Opens the playlist picker bottom sheet (the same sheet the classic filter
 /// bar's dropdown shows) and returns the chosen playlist, or null on dismiss.
@@ -17,7 +16,6 @@ Future<IptvPlaylist?> showIptvPlaylistPicker(
   VoidCallback? onAddPlaylist,
 }) {
   return showModalBottomSheet<IptvPlaylist?>(
-sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     isScrollControlled: true,
     builder: (context) => _PlaylistPickerSheet(
@@ -310,7 +308,6 @@ class _PlaylistDropdownState extends State<_PlaylistDropdown> {
 
   Future<void> _showPlaylistPicker() async {
     final result = await showModalBottomSheet<IptvPlaylist?>(
-sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       builder: (context) => _PlaylistPickerSheet(
@@ -469,7 +466,6 @@ class _CategoryDropdownState extends State<_CategoryDropdown> {
 
   Future<void> _showCategoryPicker() async {
     final result = await showModalBottomSheet<_CategoryChoice>(
-sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       builder: (context) => _CategoryPickerSheet(

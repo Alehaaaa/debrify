@@ -1,3 +1,4 @@
+import 'package:debrify/services/profiles/profile_playback_preparation.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -7,7 +8,15 @@ import 'package:debrify/services/iptv_media_store.dart';
 import 'package:debrify/services/mdblist/mdblist_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/secret_vault.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/local_completion_storage.dart';
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/movie_progress_storage.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/series_progress_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
+import 'package:debrify/services/storage/video_progress_storage.dart';
+import 'package:debrify/services/storage/video_resume_storage.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:debrify/services/trakt/trakt_service.dart';
 import 'package:debrify/services/video_player_launcher.dart';
@@ -26,12 +35,12 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     SecretVault.debugReset(deviceIdOverride: 'native-player-review-test');
     TraktService.instance.resetProfileScope();
-    await StorageService.setTraktSession(
+    await TraktStorage.setTraktSession(
       accessToken: 'test-access',
       refreshToken: 'test-refresh',
       expiryMs: 9000000000000,
     );
-    await StorageService.setTrackingScrobbleTargets({
+    await TrackingSourceStorage.setTrackingScrobbleTargets({
       TrackingSource.local,
       TrackingSource.trakt,
       TrackingSource.mdblist,
@@ -60,10 +69,10 @@ void main() {
       test(
         '$id local completion at $threshold still delivers remote completion',
         () async {
-          await StorageService.setMovieCompletionThreshold(threshold);
+          await LocalCompletionStorage.setMovieCompletionThreshold(threshold);
           // Local mode also covers the existing IMDb local + remote combination.
           if (id.startsWith('tt')) {
-            await StorageService.setWatchProgressSource(
+            await TrackingSourceStorage.setWatchProgressSource(
               WatchProgressSource.local,
             );
           }
@@ -141,10 +150,10 @@ void main() {
               : {'tmdb': 237243};
           expect(jsonDecode(traktStop.body)['movie']['ids'], expectedIds);
           expect(jsonDecode(mdbStop.body)['movie']['ids'], expectedIds);
-          expect(await StorageService.isMovieFinished(id), isTrue);
-          expect(await StorageService.getVideoResume(resumeId), isNull);
+          expect(await MovieProgressStorage.isMovieFinished(id), isTrue);
+          expect(await VideoResumeStorage.getVideoResume(resumeId), isNull);
           expect(
-            await StorageService.getVideoPlaybackStateByImdbId(id),
+            await VideoProgressStorage.getVideoPlaybackStateByImdbId(id),
             isNull,
           );
         },
@@ -202,7 +211,10 @@ void main() {
         expect(body['episode'], {'season': 4, 'number': 6});
         expect(body['progress'], 20);
       }
-      expect(await StorageService.isMovieFinished('tmdb:237243'), isFalse);
+      expect(
+        await MovieProgressStorage.isMovieFinished('tmdb:237243'),
+        isFalse,
+      );
     },
   );
 
@@ -364,11 +376,11 @@ void main() {
       test(
         '$id $mode keeps S4E6 and local position without borrowing US history',
         () async {
-          await StorageService.setWatchProgressSource(mode);
+          await TrackingSourceStorage.setWatchProgressSource(mode);
           if (mode == WatchProgressSource.mdblist) {
-            await StorageService.saveMdblistApiKey('test-key');
+            await MdblistStorage.saveMdblistApiKey('test-key');
           }
-          await StorageService.saveSeriesPlaybackState(
+          await SeriesProgressStorage.saveSeriesPlaybackState(
             seriesTitle: 'Big Brother',
             season: 4,
             episode: 6,
@@ -376,7 +388,7 @@ void main() {
             durationMs: 100000,
             imdbId: id,
           );
-          await StorageService.saveSeriesPlaybackState(
+          await SeriesProgressStorage.saveSeriesPlaybackState(
             seriesTitle: 'Big Brother',
             season: 20,
             episode: 1,
@@ -415,4 +427,119 @@ void main() {
       );
     }
   }
+  test(
+    'native initial lazy URL rejects retirement during provider response',
+    () async {
+      await RealDebridStorage.saveApiKey('original-rd');
+      var active = true;
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        expect(request.url.path, endsWith('/unrestrict/link'));
+        active = false;
+        return http.Response(
+          jsonEncode({'download': 'https://ready/movie.mp4'}),
+          200,
+        );
+      });
+      addTearDown(client.close);
+      final args = VideoPlayerLaunchArgs(
+        videoUrl: '',
+        title: 'Movie',
+        contentType: 'movie',
+        playlist: const [
+          PlaylistEntry(
+            url: '',
+            title: 'Movie.mkv',
+            restrictedLink: 'https://locked',
+          ),
+        ],
+      );
+      await expectLater(
+        http.runWithClient(
+          () => VideoPlayerLauncher.debugNativePlaybackSession(
+            args,
+            [],
+            canContinue: () => active,
+          ),
+          () => client,
+        ),
+        throwsA(isA<PlaybackPreparationRetired>()),
+      );
+      expect(requests, 1);
+    },
+  );
+
+  test(
+    'retired native redirect cannot populate the URL cache for the next launch',
+    () async {
+      var active = true;
+      var requests = 0;
+      final client = MockClient((_) async {
+        requests++;
+        if (requests == 1) active = false;
+        return http.Response(
+          '',
+          302,
+          headers: {'location': 'https://ready/movie.mp4'},
+        );
+      });
+      addTearDown(client.close);
+      final args = VideoPlayerLaunchArgs(
+        videoUrl: 'https://redirect.test/native-retirement',
+        title: 'Movie',
+        contentType: 'movie',
+      );
+      await http.runWithClient(() async {
+        await expectLater(
+          VideoPlayerLauncher.debugNativePlaybackSession(
+            args,
+            [],
+            canContinue: () => active,
+          ),
+          throwsA(anything),
+        );
+        active = true;
+        final payload = await VideoPlayerLauncher.debugNativePlaybackSession(
+          args,
+          [],
+          canContinue: () => active,
+        );
+        expect(
+          (payload['items'] as List).single['url'],
+          'https://ready/movie.mp4',
+        );
+      }, () => client);
+      expect(requests, 2);
+    },
+  );
+  test(
+    'native preparation rejects retirement during final movie metadata lookup',
+    () async {
+      var active = true;
+      var requests = 0;
+      final client = MockClient((request) async {
+        requests++;
+        active = false;
+        return http.Response('{"metas":[]}', 200);
+      });
+      addTearDown(client.close);
+      await expectLater(
+        http.runWithClient(
+          () => VideoPlayerLauncher.debugNativePlaybackSession(
+            const VideoPlayerLaunchArgs(
+              videoUrl: 'https://example.test/movie.mp4',
+              title: 'Retirement Fixture (2020)',
+              contentType: 'movie',
+            ),
+            [],
+            canContinue: () => active,
+          ),
+          () => client,
+        ),
+        throwsStateError,
+      );
+      expect(requests, greaterThan(0));
+    },
+  );
 }

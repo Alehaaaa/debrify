@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 import '../utils/formatters.dart';
 import '../utils/tv_keys.dart';
@@ -97,10 +96,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
   }
 
   /// Build folder structure from flat file list
-  _FolderItem _buildFolderStructure(
-    List<Map<String, dynamic>> allFiles,
-    String rootName,
-  ) {
+  _FolderItem _buildFolderStructure(List<Map<String, dynamic>> allFiles, String rootName) {
     final Map<String, _FolderItem> folderMap = {};
     final List<Map<String, dynamic>> rootFiles = [];
 
@@ -117,9 +113,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     for (final file in allFiles) {
       // Use _fullPath if available (from API's includePaths: true)
       // Otherwise fall back to name for backward compatibility
-      final fileName =
-          (file['_fullPath'] as String?) ??
-          (file['name'] as String? ?? 'Unknown');
+      final fileName = (file['_fullPath'] as String?) ?? (file['name'] as String? ?? 'Unknown');
 
       // Extract folder path from file name if it contains '/'
       if (fileName.contains('/')) {
@@ -130,9 +124,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
         // Navigate/create folder hierarchy
         for (int i = 0; i < parts.length - 1; i++) {
           final folderName = parts[i];
-          final newPath = currentPath.isEmpty
-              ? folderName
-              : '$currentPath/$folderName';
+          final newPath = currentPath.isEmpty ? folderName : '$currentPath/$folderName';
 
           if (!folderMap.containsKey(newPath)) {
             final newFolder = _FolderItem(
@@ -166,16 +158,12 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     // Sort folders and files alphabetically
     void sortFolder(_FolderItem folder) {
       folder.subfolders.sort((a, b) => a.name.compareTo(b.name));
-      folder.files.sort(
-        (a, b) => (a['_displayName'] as String).compareTo(
-          b['_displayName'] as String,
-        ),
-      );
+      folder.files.sort((a, b) =>
+        (a['_displayName'] as String).compareTo(b['_displayName'] as String));
       for (final subfolder in folder.subfolders) {
         sortFolder(subfolder);
       }
     }
-
     sortFolder(root);
 
     return root;
@@ -190,8 +178,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     _itemFocusStates.clear();
 
     // Create focus nodes for current view items (folders + files)
-    final itemCount =
-        _currentFolder.subfolders.length + _currentFolder.files.length;
+    final itemCount = _currentFolder.subfolders.length + _currentFolder.files.length;
     for (int i = 0; i < itemCount; i++) {
       final node = FocusNode(debugLabel: 'item-$i');
       node.addListener(() {
@@ -366,8 +353,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
       }
     }
 
-    return _currentFolder.subfolders.isNotEmpty ||
-        _currentFolder.files.isNotEmpty;
+    return _currentFolder.subfolders.isNotEmpty || _currentFolder.files.isNotEmpty;
   }
 
   void _onDownloadPressed() {
@@ -405,17 +391,14 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
     final selectedFileCount = _selectedFilesByPath.length;
     final totalFiles = widget.files.length;
     final selectedFolderCount = _getSelectedFolderCount();
-    final allItemsSelectedInCurrentFolder =
-        _areAllItemsSelectedInCurrentFolder();
+    final allItemsSelectedInCurrentFolder = _areAllItemsSelectedInCurrentFolder();
 
     // Build selection count text
     String selectionText;
     if (selectedFolderCount > 0 && selectedFileCount > 0) {
-      selectionText =
-          '$selectedFolderCount folder${selectedFolderCount > 1 ? 's' : ''} + $selectedFileCount file${selectedFileCount > 1 ? 's' : ''} selected';
+      selectionText = '$selectedFolderCount folder${selectedFolderCount > 1 ? 's' : ''} + $selectedFileCount file${selectedFileCount > 1 ? 's' : ''} selected';
     } else if (selectedFolderCount > 0) {
-      selectionText =
-          '$selectedFolderCount folder${selectedFolderCount > 1 ? 's' : ''} selected ($selectedFileCount files)';
+      selectionText = '$selectedFolderCount folder${selectedFolderCount > 1 ? 's' : ''} selected ($selectedFileCount files)';
     } else if (selectedFileCount > 0) {
       selectionText = '$selectedFileCount of $totalFiles files selected';
     } else {
@@ -424,7 +407,9 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
 
     return Dialog(
       backgroundColor: const Color(0xFF1E293B),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
@@ -477,8 +462,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                         onKeyEvent: (node, event) {
                           if (event is KeyDownEvent &&
                               (isActivateKey(event.logicalKey) ||
-                                  event.logicalKey ==
-                                      LogicalKeyboardKey.space)) {
+                                  event.logicalKey == LogicalKeyboardKey.space)) {
                             _navigateBack();
                             return KeyEventResult.handled;
                           }
@@ -487,16 +471,10 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                         child: TextButton.icon(
                           onPressed: _navigateBack,
                           icon: const Icon(Icons.arrow_back, size: 16),
-                          label: const Text(
-                            'Back',
-                            style: TextStyle(fontSize: 12),
-                          ),
+                          label: const Text('Back', style: TextStyle(fontSize: 12)),
                           style: TextButton.styleFrom(
                             foregroundColor: const Color(0xFF3B82F6),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           ),
                         ),
                       ),
@@ -520,8 +498,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
               if (_navigationStack.isNotEmpty) const SizedBox(height: 4),
 
               // Select All / Deselect All (for current folder)
-              if (_currentFolder.files.isNotEmpty ||
-                  _currentFolder.subfolders.isNotEmpty)
+              if (_currentFolder.files.isNotEmpty || _currentFolder.subfolders.isNotEmpty)
                 Focus(
                   focusNode: _selectAllFocusNode,
                   onKeyEvent: (node, event) {
@@ -537,7 +514,10 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                     height: 36,
                     decoration: BoxDecoration(
                       border: _selectAllFocusNode.hasFocus
-                          ? Border.all(color: const Color(0xFF3B82F6), width: 2)
+                          ? Border.all(
+                              color: const Color(0xFF3B82F6),
+                              width: 2,
+                            )
                           : null,
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -548,9 +528,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                       tristate: true,
                       onChanged: (_) => _toggleSelectAllInCurrentFolder(),
                       title: Text(
-                        allItemsSelectedInCurrentFolder
-                            ? 'Deselect All'
-                            : 'Select All',
+                        allItemsSelectedInCurrentFolder ? 'Deselect All' : 'Select All',
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -567,19 +545,18 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                   ),
                 ),
 
-              if (_currentFolder.files.isNotEmpty ||
-                  _currentFolder.subfolders.isNotEmpty)
+              if (_currentFolder.files.isNotEmpty || _currentFolder.subfolders.isNotEmpty)
                 const Divider(color: Colors.white24, height: 12),
 
               // Folder and file list
               Flexible(
                 child: ListView.builder(
-                  scrollCacheExtent: ScrollCacheExtent.pixels(600),
                   controller: _scrollController,
                   shrinkWrap: true,
-                  itemCount:
-                      _currentFolder.subfolders.length +
-                      _currentFolder.files.length,
+                  // Keep a few off-screen rows built so ensureVisible can scroll
+                  // to the next focused item during D-pad navigation.
+                  cacheExtent: 600,
+                  itemCount: _currentFolder.subfolders.length + _currentFolder.files.length,
                   itemBuilder: (context, index) {
                     final isFolder = index < _currentFolder.subfolders.length;
 
@@ -601,22 +578,19 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                               return KeyEventResult.handled;
                             }
                             // Use right arrow to navigate into folder
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowRight) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
                               _navigateToFolder(folder);
                               return KeyEventResult.handled;
                             }
                             // Use left arrow to navigate back
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowLeft) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
                               if (_navigationStack.isNotEmpty) {
                                 _navigateBack();
                                 return KeyEventResult.handled;
                               }
                             }
                             // Arrow down to next item
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowDown) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                               final nextIndex = index + 1;
                               if (nextIndex < _itemFocusNodes.length) {
                                 _itemFocusNodes[nextIndex].requestFocus();
@@ -624,8 +598,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                               }
                             }
                             // Arrow up to previous item
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowUp) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
                               final prevIndex = index - 1;
                               if (prevIndex >= 0) {
                                 _itemFocusNodes[prevIndex].requestFocus();
@@ -651,10 +624,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                             borderRadius: BorderRadius.circular(6),
                             child: CheckboxListTile(
                               dense: true,
-                              contentPadding: const EdgeInsets.only(
-                                left: 8,
-                                right: 4,
-                              ),
+                              contentPadding: const EdgeInsets.only(left: 8, right: 4),
                               visualDensity: VisualDensity.compact,
                               value: isFolderSelected,
                               onChanged: (_) => _toggleFolder(folder),
@@ -678,10 +648,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                               ),
                               subtitle: Text(
                                 '$fileCount file${fileCount != 1 ? 's' : ''}',
-                                style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                ),
+                                style: const TextStyle(color: Colors.white54, fontSize: 11),
                               ),
                               secondary: IconButton(
                                 icon: const Icon(
@@ -707,18 +674,13 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                       );
                     } else {
                       // Render file
-                      final fileIndex =
-                          index - _currentFolder.subfolders.length;
+                      final fileIndex = index - _currentFolder.subfolders.length;
                       final file = _currentFolder.files[fileIndex];
-                      final fileName =
-                          file['_displayName'] as String? ?? 'Unknown';
+                      final fileName = file['_displayName'] as String? ?? 'Unknown';
                       final fullPath = file['_fullPath'] as String;
-                      final sizeBytes =
-                          int.tryParse(file['size']?.toString() ?? '0') ?? 0;
+                      final sizeBytes = int.tryParse(file['size']?.toString() ?? '0') ?? 0;
                       final sizeStr = Formatters.formatFileSize(sizeBytes);
-                      final isSelected = _selectedFilesByPath.containsKey(
-                        fullPath,
-                      );
+                      final isSelected = _selectedFilesByPath.containsKey(fullPath);
                       final isFocused = _itemFocusStates[index];
 
                       return Focus(
@@ -732,16 +694,14 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                               return KeyEventResult.handled;
                             }
                             // Use left arrow to navigate back
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowLeft) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
                               if (_navigationStack.isNotEmpty) {
                                 _navigateBack();
                                 return KeyEventResult.handled;
                               }
                             }
                             // Arrow down to next item
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowDown) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
                               final nextIndex = index + 1;
                               if (nextIndex < _itemFocusNodes.length) {
                                 _itemFocusNodes[nextIndex].requestFocus();
@@ -749,8 +709,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                               }
                             }
                             // Arrow up to previous item
-                            if (event.logicalKey ==
-                                LogicalKeyboardKey.arrowUp) {
+                            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
                               final prevIndex = index - 1;
                               if (prevIndex >= 0) {
                                 _itemFocusNodes[prevIndex].requestFocus();
@@ -773,10 +732,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                           ),
                           child: CheckboxListTile(
                             dense: true,
-                            contentPadding: const EdgeInsets.only(
-                              left: 8,
-                              right: 8,
-                            ),
+                            contentPadding: const EdgeInsets.only(left: 8, right: 8),
                             visualDensity: VisualDensity.compact,
                             value: isSelected,
                             onChanged: (_) => _toggleFile(file),
@@ -788,10 +744,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                             ),
                             subtitle: Text(
                               sizeStr,
-                              style: const TextStyle(
-                                color: Colors.white54,
-                                fontSize: 11,
-                              ),
+                              style: const TextStyle(color: Colors.white54, fontSize: 11),
                             ),
                             secondary: const Icon(
                               Icons.insert_drive_file,
@@ -851,9 +804,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                         return KeyEventResult.ignored;
                       },
                       child: ElevatedButton.icon(
-                        onPressed: selectedFileCount > 0
-                            ? _onDownloadPressed
-                            : null,
+                        onPressed: selectedFileCount > 0 ? _onDownloadPressed : null,
                         style: ElevatedButton.styleFrom(
                           foregroundColor: Colors.white,
                           backgroundColor: const Color(0xFF10B981),
@@ -862,10 +813,7 @@ class _FileSelectionDialogState extends State<FileSelectionDialog> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                         ),
                         icon: const Icon(Icons.download_rounded, size: 18),
                         label: Text(

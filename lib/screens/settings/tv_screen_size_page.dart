@@ -1,5 +1,7 @@
+import 'package:debrify/services/storage/tv_display_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -24,7 +26,7 @@ class TvScreenSizePage extends StatefulWidget {
 
 class _TvScreenSizePageState extends State<TvScreenSizePage> {
   bool _loading = true;
-  int _percent = StorageService.kTvUiScaleDefault;
+  int _percent = TvDisplayStorage.kTvUiScaleDefault;
 
   /// Non-focusable marker around the options card; used on TV to hand entry
   /// focus to its first focusable descendant (the first option row).
@@ -37,6 +39,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('tv_screen_size_settings');
     _load();
   }
 
@@ -47,7 +50,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   }
 
   Future<void> _load() async {
-    final percent = await StorageService.getTvUiScalePercent();
+    final percent = await TvDisplayStorage.getTvUiScalePercent();
     if (!mounted) return;
     setState(() {
       _percent = percent;
@@ -68,11 +71,11 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   Future<void> _select(int percent) async {
     if (percent == _percent) return;
     setState(() => _percent = percent);
-    await StorageService.setTvUiScalePercent(percent);
+    await TvDisplayStorage.setTvUiScalePercent(percent);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Screen size saved — restart Nextup to apply it.'),
+        content: Text('Screen size saved — restart Debrify to apply it.'),
       ),
     );
   }
@@ -100,7 +103,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
                 const SettingsPageHeader(
                   icon: Icons.fit_screen_rounded,
                   title: 'Screen Size',
-                  subtitle: 'How large Nextup is drawn on this TV',
+                  subtitle: 'How large Debrify is drawn on this TV',
                 ),
                 const SizedBox(height: 24),
                 Focus(
@@ -119,7 +122,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
                 Text(
                   'TVs report a high pixel density, so the app is drawn large '
                   'by default. A smaller size fits more on screen without '
-                  'changing any layout. Takes effect the next time Nextup '
+                  'changing any layout. Takes effect the next time Debrify '
                   'starts.',
                   style: TextStyle(
                     fontSize: 12.5,

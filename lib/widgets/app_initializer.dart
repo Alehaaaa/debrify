@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'package:debrify/services/storage/launch_ident_storage.dart';
+import 'package:debrify/services/storage/provider_credential_storage.dart';
 import 'package:flutter/material.dart';
-import '../services/storage_service.dart';
 import '../theme/app_theme_controller.dart';
 import '../theme/app_surfaces.dart';
 import '../theme/legacy_theme_boundary.dart';
@@ -15,7 +16,7 @@ import '../services/remote_control/remote_command_router.dart';
 import '../utils/platform_util.dart';
 import '../widgets/initial_setup_flow.dart';
 import '../main.dart';
-import '../services/startup_connection.dart';
+import 'package:debrify/services/storage/remote_control_storage.dart';
 
 /// How long the corner spinner takes to fade out on TV. Shared so the widget's
 /// fade and _finishSplash's wait for it can never drift apart.
@@ -36,7 +37,6 @@ class AppInitializer extends StatefulWidget {
 class _AppInitializerState extends State<AppInitializer>
     with TickerProviderStateMixin {
   bool _onboardingComplete = false;
-  bool _offlineLaunch = false;
   // True once the splash overlay has fully faded off MainPage. Until then the
   // splash keeps animating ON TOP of the (already-mounted, already-loading)
   // main shell, so the user never sees the Home board's own loading state on
@@ -81,8 +81,8 @@ class _AppInitializerState extends State<AppInitializer>
     // restart path pushes a fresh AppInitializer mid-session.
     AppSurfaceState.instance.publishBootstrap(true);
 
-    _loadingImported = StorageService.importedLaunchAnimationCached != null;
-    _ident = launchIdentFor(StorageService.launchAnimationCached);
+    _loadingImported = LaunchIdentStorage.importedLaunchAnimationCached != null;
+    _ident = launchIdentFor(LaunchIdentStorage.launchAnimationCached);
     // The ident's colours: its own by default, the app theme's when the user
     // opted in.
     //
@@ -92,10 +92,9 @@ class _AppInitializerState extends State<AppInitializer>
     // the feature would silently do nothing. The controller is a singleton
     // already warmed in `main()` before `runApp`, so it is both correct and
     // synchronous, which is what `initState` needs.
-    final theme = AppThemeController.instance.theme;
-    final themed = StorageService.launchIdentPaletteCached == 'theme';
+    final themed = LaunchIdentStorage.launchIdentPaletteCached == 'theme';
     _palette = themed
-        ? IdentPalette.fromTheme(_ident, theme)
+        ? IdentPalette.fromTheme(_ident, AppThemeController.instance.theme)
         : _ident.palette;
     // NULL unless the user opted in. `_ident.palette` exposes `sweepColors`
     // as its accent/ink, which are the LOADING SWEEP's colours — not the
@@ -133,10 +132,7 @@ class _AppInitializerState extends State<AppInitializer>
     );
     _loadingPainter = LoadingSweepPainter(
       _idleController,
-      // The loading status belongs to the app, not the selected splash art.
-      // Its leading comet therefore always uses the active theme accent,
-      // while the trailing ink continues to harmonize with the splash.
-      colors: [theme.core.accent, _palette.ink],
+      colors: _palette.sweep,
     );
 
     _exitAnimation = Tween<double>(
@@ -150,7 +146,6 @@ class _AppInitializerState extends State<AppInitializer>
       if (mounted) unawaited(_startReveal());
     });
 
-    unawaited(StartupConnection.check());
     _checkInitializationStatus();
   }
 
@@ -198,8 +193,10 @@ class _AppInitializerState extends State<AppInitializer>
     }
 
     try {
-      // Version state is local. Essential addon seeding runs in the
-      // background and can never keep the interactive shell behind a splash.
+      // Returning users only pay two prefs reads here. The unseeded-addon
+      // path does network manifest fetches — time-box those so a slow or
+      // offline network can't hold the splash; seeding continues in the
+      // background and is retried next launch if it didn't finish.
       await AppMigrationService.runMigrations().timeout(
         const Duration(seconds: 4),
       );
@@ -220,7 +217,7 @@ class _AppInitializerState extends State<AppInitializer>
     // graph. A wrong guess costs one trip through Home, not a dead screen.
     bool hasCompleted;
     try {
-      hasCompleted = await StorageService.isInitialSetupComplete();
+      hasCompleted = await ProviderCredentialStorage.isInitialSetupComplete();
     } catch (e) {
       debugPrint('AppInitializer: onboarding state unavailable — $e');
       hasCompleted = true;
@@ -228,24 +225,10 @@ class _AppInitializerState extends State<AppInitializer>
 
     if (!mounted) return;
 
-    // Reachability runs in parallel with local initialization and the ident.
-    // Offline (or too slow to answer) enters the local library immediately.
-    _offlineLaunch = !await StartupConnection.check();
-    StartupConnection.setOfflineLaunch(_offlineLaunch);
-    if (!mounted) return;
-    if (_offlineLaunch) MainPageBridge.cancelIptvStartupChannel();
-
     // Hold the splash only until the reveal animation finishes (it runs
     // concurrently with the init work above) — replaces the old fixed
     // 2300ms/1700ms delays.
-    if (_offlineLaunch) {
-      await _launchReady.future;
-      if (!mounted) return;
-      _revealController.stop(canceled: false);
-      _revealController.value = 1;
-    } else {
-      await _waitForReveal();
-    }
+    await _waitForReveal();
     if (!mounted) return;
 
     if (!hasCompleted) {
@@ -262,17 +245,14 @@ class _AppInitializerState extends State<AppInitializer>
         _holdingForHome = true;
       });
       _idleController.repeat();
-      if (_offlineLaunch || MainPageBridge.homeBoardReady.value) {
+      if (MainPageBridge.homeBoardReady.value) {
         _finishSplash();
       } else {
         MainPageBridge.homeBoardReady.addListener(_onHomeBoardReady);
         // Safety valve: if the board never settles (hung network with no
         // timeout of its own, or a future tab-order change breaking the
         // signal), don't strand the user on the splash.
-        _homeReadyTimeout = Timer(
-          Duration(milliseconds: _isAndroidTv ? 2000 : 800),
-          _finishSplash,
-        );
+        _homeReadyTimeout = Timer(const Duration(seconds: 10), _finishSplash);
       }
     }
   }
@@ -341,7 +321,7 @@ class _AppInitializerState extends State<AppInitializer>
   }
 
   Future<void> _startReveal() async {
-    final id = StorageService.importedLaunchAnimationCached;
+    final id = LaunchIdentStorage.importedLaunchAnimationCached;
     final generation = ++_launchLoadGeneration;
     if (id != null) {
       setState(() => _loadingImported = true);
@@ -403,7 +383,7 @@ class _AppInitializerState extends State<AppInitializer>
     // skipped the setState below, so _splashDone stayed false and the app
     // rendered NOTHING: the blank screen after an import-driven restart.
     try {
-      await StorageService.setInitialSetupComplete(true);
+      await ProviderCredentialStorage.setInitialSetupComplete(true);
     } catch (e) {
       debugPrint('AppInitializer: onboarding flag write skipped — $e');
     }
@@ -440,6 +420,7 @@ class _AppInitializerState extends State<AppInitializer>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
+          persist: false, // auto-hide, as before Flutter 3.44
           action: SnackBarAction(
             label: 'OPEN SETTINGS',
             onPressed: () => MainPageBridge.switchTab?.call(MainTab.settings),
@@ -451,12 +432,13 @@ class _AppInitializerState extends State<AppInitializer>
 
   Future<void> _startTvListenerEarly() async {
     try {
-      final remoteEnabled = await StorageService.getRemoteControlEnabled();
+      final remoteEnabled =
+          await RemoteControlStorage.getRemoteControlEnabled();
       if (!remoteEnabled) return;
 
-      var deviceName = await StorageService.getRemoteTvDeviceName();
+      var deviceName = await RemoteControlStorage.getRemoteTvDeviceName();
       deviceName ??= await PlatformUtil.getDeviceName();
-      deviceName ??= 'Nextup TV';
+      deviceName ??= 'Debrify TV';
 
       debugPrint('AppInitializer: Starting TV listener early as "$deviceName"');
 
@@ -497,9 +479,7 @@ class _AppInitializerState extends State<AppInitializer>
         Opacity(
           opacity: _isAndroidTv && !_paintHomeBehindSplash ? 0 : 1,
           child: RepaintBoundary(
-            child:
-                widget.homeBuilder?.call(context) ??
-                MainPage(initialTab: _offlineLaunch ? MainTab.downloads : null),
+            child: widget.homeBuilder?.call(context) ?? const MainPage(),
           ),
         ),
         if (!_splashDone)

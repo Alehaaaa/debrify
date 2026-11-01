@@ -5,7 +5,6 @@ import 'dock_style.dart';
 import 'styled_dock.dart';
 import '../models/gesture_state.dart';
 import '../services/playback_ui_clock.dart';
-import 'glass_dock.dart';
 import 'netflix_control_button.dart';
 
 class Controls extends StatelessWidget {
@@ -37,14 +36,6 @@ class Controls extends StatelessWidget {
   final VoidCallback onSeekBarChangedStart;
   final ValueChanged<double> onSeekBarChanged;
   final VoidCallback onSeekBarChangeEnd;
-
-  /// Glass dock only: the −10 s / +10 s transport buttons. Null hides them.
-  final VoidCallback? onSeekBackward;
-  final VoidCallback? onSeekForward;
-
-  /// Glass dock only: how bright the picture is (0..1), so the dynamic glass
-  /// can thicken over bright scenes. Null uses the token default.
-  final ValueListenable<double>? glassBrightness;
   final VoidCallback? onNext;
   final VoidCallback? onNextChannel;
   final VoidCallback? onShowGuide;
@@ -72,9 +63,6 @@ class Controls extends StatelessWidget {
   final bool showPipButton;
   final VoidCallback? onPip;
 
-  /// Touch lock (phones and tablets); null hides the button.
-  final VoidCallback? onLock;
-
   /// Record control for live IPTV (libmpv `stream-record`). Shown only when a
   /// live channel is playing on a native (libmpv) backend.
   final bool hasRecord;
@@ -96,10 +84,6 @@ class Controls extends StatelessWidget {
   /// the styled branch is a different widget entirely and cannot touch it.
   final PlayerDockStyle dockStyle;
   final PlayerDockPalette dockPalette;
-
-  /// When set, the dock is built from this one colour (App colour or a
-  /// manual pick) instead of [dockPalette].
-  final Color? dockAccent;
   final PlayerDockSize dockSize;
 
   /// Measured info-panel height, or [DockLayoutInput.kInfoPanelBound] before
@@ -157,9 +141,6 @@ class Controls extends StatelessWidget {
     required this.onSeekBarChangedStart,
     required this.onSeekBarChanged,
     required this.onSeekBarChangeEnd,
-    this.onSeekBackward,
-    this.onSeekForward,
-    this.glassBrightness,
     this.onNext,
     this.onNextChannel,
     this.onShowGuide,
@@ -180,7 +161,6 @@ class Controls extends StatelessWidget {
     this.onShowStremioSources,
     this.showPipButton = false,
     this.onPip,
-    this.onLock,
     this.hasRecord = false,
     this.isRecording = false,
     this.onRecord,
@@ -192,7 +172,6 @@ class Controls extends StatelessWidget {
     this.infoPanel,
     this.dockStyle = PlayerDockStyle.classic,
     this.dockPalette = PlayerDockPalette.ultraviolet,
-    this.dockAccent,
     this.dockSize = PlayerDockSize.auto,
     this.infoPanelHeight = DockLayoutInput.kInfoPanelBound,
     this.showRotate = true,
@@ -264,9 +243,7 @@ class Controls extends StatelessWidget {
 
     final dock = StyledDock(
       metrics: metrics,
-      palette: dockAccent != null
-          ? DockPalettes.fromAccent(dockAccent!)
-          : DockPalettes.of(dockPalette),
+      palette: DockPalettes.of(dockPalette),
       arrangement: arrangement,
       title: title,
       subtitle: subtitle,
@@ -298,7 +275,6 @@ class Controls extends StatelessWidget {
       onToggleStartOverTimeline: onToggleStartOverTimeline,
       startOverTimelineVisible: startOverTimelineVisible,
       onPip: onPip,
-      onLock: onLock,
       hasNext: hasNext,
       hasPrevious: hasPrevious,
       hasNextChannel: hasNextChannel,
@@ -384,7 +360,6 @@ class Controls extends StatelessWidget {
   Widget build(BuildContext context) {
     // Branch FIRST. Everything below this line is the legacy tree, reached
     // only by `classic`, which is what makes it provably unchanged.
-    if (dockStyle == PlayerDockStyle.glass) return GlassDock(c: this);
     if (dockStyle.isStyled) {
       final styled = _buildStyled(context);
       if (styled != null) return styled;
@@ -470,15 +445,6 @@ class Controls extends StatelessWidget {
                       ],
                     ),
                   ),
-                  if (onLock != null)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.lock_open_rounded,
-                        color: Colors.white,
-                      ),
-                      tooltip: 'Lock screen',
-                      onPressed: onLock,
-                    ),
                   // Picture-in-picture (Android phone); otherwise empty space
                   // to balance the back button when it's visible.
                   if (showPipButton && onPip != null)
@@ -501,7 +467,7 @@ class Controls extends StatelessWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ?infoPanel,
+                  if (infoPanel != null) infoPanel!,
                   // Netflix-style Bottom Bar with all controls (conditionally shown)
                   if (!hideOptions)
                     Container(

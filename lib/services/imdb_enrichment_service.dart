@@ -6,9 +6,6 @@ import 'package:http/http.dart' as http;
 class CastMember {
   final String name;
   final int? tmdbPersonId;
-
-  /// IMDb name ID (`nm…`) — opens the person's titles without TMDB.
-  final String? imdbPersonId;
   final String? character;
   final String? imageUrl;
   const CastMember({
@@ -16,7 +13,6 @@ class CastMember {
     this.character,
     this.imageUrl,
     this.tmdbPersonId,
-    this.imdbPersonId,
   });
 }
 
@@ -256,7 +252,6 @@ class ImdbEnrichmentService {
           category { text }
           credits(limit: 8) {
             name {
-              id
               nameText { text }
               primaryImage { url }
             }
@@ -354,17 +349,8 @@ class ImdbEnrichmentService {
             if (chars != null && chars.isNotEmpty) {
               character = chars.first['name'] as String?;
             }
-            final personId = nameMap?['id'];
             castList.add(
-              CastMember(
-                name: name,
-                character: character,
-                imageUrl: imageUrl,
-                imdbPersonId: personId is String &&
-                        RegExp(r'^nm\d{7,9}$').hasMatch(personId)
-                    ? personId
-                    : null,
-              ),
+              CastMember(name: name, character: character, imageUrl: imageUrl),
             );
           }
         }

@@ -410,8 +410,7 @@ abstract final class DetailThemes {
     ghostFill: Color(0x00000000),
     ghostBorder: Color(0x4DE8D6BA),
     ghostText: Color(0xFFEFE3D0),
-    // Keep the film texture, but let artwork and type stay the focal point.
-    grain: 0.045,
+    grain: 0.09,
   );
 
   // ── XI · OBSIDIAN ───────────────────────────────────────────────────────
@@ -830,7 +829,7 @@ abstract final class DetailThemes {
     ghostText: Color(0xFFF2E7D5),
     // Asks for 1px; the TV floor lifts it to 2.5.
     focusWidth: 1,
-    grain: 0.025,
+    grain: 0.05,
   );
 
   /// Registry, in picker order: the concept set, then the premium set.

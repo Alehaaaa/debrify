@@ -1051,7 +1051,8 @@ class ProfileRegistry {
         'profile_setup_complete': setupComplete ? 1 : 0,
         'pin_reset_required': 0,
         'lock_on_resume': lockOnResume ? 1 : 0,
-        'inactivity_timeout_minutes': ?inactivityTimeoutMinutes,
+        if (inactivityTimeoutMinutes != null)
+          'inactivity_timeout_minutes': inactivityTimeoutMinutes,
         'created_at_ms': effectiveCreatedAt,
         'updated_at_ms': now,
         if (disabled) 'disabled_at_ms': now,
@@ -1471,7 +1472,7 @@ class ProfileRegistry {
         'user_profiles',
         <String, Object?>{
           if (name != null) 'name': name.trim(),
-          'avatar_key': ?avatarKey,
+          if (avatarKey != null) 'avatar_key': avatarKey,
           'role': nextRole.name,
           'policy_json': nextPolicy.encode(),
           'policy_schema_version': nextPolicy.schemaVersion,
@@ -2306,7 +2307,8 @@ class ProfileRegistry {
           secretPayloadVersion,
           now,
           resourceId,
-          ?expectedResourceAuthorizationRevision,
+          if (expectedResourceAuthorizationRevision != null)
+            expectedResourceAuthorizationRevision,
         ],
       );
       if (changed != 1) throw StateError('Resource is unavailable');
@@ -2436,7 +2438,8 @@ class ProfileRegistry {
             'id = ? ${expectedResourceAuthorizationRevision == null ? '' : 'AND authorization_revision = ?'}',
         whereArgs: <Object>[
           resourceId,
-          ?expectedResourceAuthorizationRevision,
+          if (expectedResourceAuthorizationRevision != null)
+            expectedResourceAuthorizationRevision,
         ],
       );
       if (changed != 1) throw StateError('Connection deletion failed');
@@ -4289,21 +4292,16 @@ class ProfileRegistry {
     );
   }
 
-  /// Settles open jobs of [backend] that are no longer present. A null
-  /// [ownerProfileId] settles every owner's jobs; only pass null when
-  /// [presentExternalJobIds] comes from a device-wide source of truth.
   Future<void> markMissingJobsTerminal({
     required String backend,
-    required String? ownerProfileId,
+    required String ownerProfileId,
     required Set<String> presentExternalJobIds,
   }) async {
     final rows = await _db.query(
       'job_ownership',
       columns: const <String>['external_job_id'],
-      where: ownerProfileId == null
-          ? 'backend = ? AND terminal_at_ms IS NULL'
-          : 'backend = ? AND owner_profile_id = ? AND terminal_at_ms IS NULL',
-      whereArgs: <Object>[backend, ?ownerProfileId],
+      where: 'backend = ? AND owner_profile_id = ? AND terminal_at_ms IS NULL',
+      whereArgs: <Object>[backend, ownerProfileId],
     );
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final row in rows) {
@@ -4899,8 +4897,8 @@ class ProfileRegistry {
     required String operationId,
     required List<String> stagedProfileIds,
   }) async {
-    // Empty is valid: every imported profile can merge into an existing one.
-    if (stagedProfileIds.any((id) => !ProfileScope.isValidProfileId(id))) {
+    if (stagedProfileIds.isEmpty ||
+        stagedProfileIds.any((id) => !ProfileScope.isValidProfileId(id))) {
       throw ArgumentError.value(stagedProfileIds, 'stagedProfileIds');
     }
     await _db.insert('profile_restore_journal', <String, Object?>{
@@ -4933,19 +4931,17 @@ class ProfileRegistry {
       final ids = payload is Map
           ? (payload['stagedProfileIds'] as List?)?.whereType<String>().toList()
           : null;
-      if (ids == null) {
+      if (ids == null || ids.isEmpty) {
         throw StateError('Profile graph restore has no staged profiles');
       }
-      final rows = ids.isEmpty
-          ? const <Map<String, Object?>>[]
-          : await txn.rawQuery(
-              '''SELECT g.profile_id, g.manifest_json, g.manifest_hash
+      final rows = await txn.rawQuery(
+        '''SELECT g.profile_id, g.manifest_json, g.manifest_hash
            FROM profile_data_generations g
            INNER JOIN user_profiles p ON p.id = g.profile_id
            WHERE g.generation = 1 AND p.lifecycle_state = 'staging'
              AND g.profile_id IN (${List.filled(ids.length, '?').join(',')})''',
-              ids,
-            );
+        ids,
+      );
       if (rows.length != ids.length ||
           rows.any(
             (row) =>
@@ -5062,19 +5058,13 @@ class ProfileRegistry {
   }
 
   /// Publishes only rows that have already been staged under lifecycle
-  /// `staging`. Imported resources, grants, bindings and profile visibility
-  /// become visible in this single registry transaction.
-  ///
-  /// [mergedProfileIds] are existing, active profiles the import identified as
-  /// the same users as some imported profiles. They may own and receive the
-  /// imported resources. The connections they owned before are replaced by
-  /// the imported ones (a connection with an active job is kept), and any
-  /// binding slot the import fills is rebound to the imported connection.
+  /// `staging`. The active/recovery Admin remains untouched. Imported
+  /// resources, grants, bindings and profile visibility become visible in
+  /// this single registry transaction.
   Future<void> publishProfileGraphRestore({
     required String operationId,
     required List<String> stagedProfileIds,
     required List<StagedGraphResource> resources,
-    Set<String> mergedProfileIds = const <String>{},
     List<GraphRestoreDefaultGrantPrune> redundantDefaultAddonGrants =
         const <GraphRestoreDefaultGrantPrune>[],
     Iterable<WebDavSyncRegistryRecordId> mergedBaselineRecords =
@@ -5089,16 +5079,9 @@ class ProfileRegistry {
     if (profileIds.length != stagedProfileIds.length) {
       throw ArgumentError('Duplicate staged profile ID');
     }
-    if (mergedProfileIds.any(profileIds.contains)) {
-      throw ArgumentError('A merged profile cannot also be staged');
-    }
-    if (profileIds.isEmpty && mergedProfileIds.isEmpty) {
-      throw ArgumentError('Profile graph restore has no profiles');
-    }
-    final targetIds = <String>{...profileIds, ...mergedProfileIds};
     final pruneKeys = <String>{};
     for (final prune in redundantDefaultAddonGrants) {
-      if (!targetIds.contains(prune.profileId) ||
+      if (!profileIds.contains(prune.profileId) ||
           !pruneKeys.add('${prune.profileId}\u0000${prune.resourceId}')) {
         throw ArgumentError('Invalid redundant default addon grant');
       }
@@ -5129,19 +5112,16 @@ class ProfileRegistry {
           !recordedIds.containsAll(profileIds)) {
         throw StateError('Profile graph journal does not match publication');
       }
-      final stagedRows = profileIds.isEmpty
-          ? const <Map<String, Object?>>[]
-          : await txn.query(
-              'user_profiles',
-              columns: const <String>['id'],
-              where:
-                  "lifecycle_state = 'staging' AND id IN (${List.filled(profileIds.length, '?').join(',')})",
-              whereArgs: profileIds.toList(growable: false),
-            );
+      final stagedRows = await txn.query(
+        'user_profiles',
+        columns: const <String>['id'],
+        where:
+            "lifecycle_state = 'staging' AND id IN (${List.filled(profileIds.length, '?').join(',')})",
+        whereArgs: profileIds.toList(growable: false),
+      );
       if (stagedRows.length != profileIds.length) {
         throw StateError('One or more imported profiles are unavailable');
       }
-
       // Profile staging normally inherits existing shareable resources. When
       // the imported graph supplies the same configured addon, retaining that
       // defaultSeed grant exposes two indistinguishable addons to the profile.
@@ -5179,20 +5159,8 @@ class ProfileRegistry {
           throw StateError('Redundant default addon grant changed');
         }
       }
-      // After the default-grant prune: it may target grants on connections
-      // a merged profile owned, which this deletes.
-      if (mergedProfileIds.isNotEmpty) {
-        await _replaceMergedProfileConnections(
-          txn,
-          mergedProfileIds: mergedProfileIds,
-          resources: resources,
-          outboxTarget: outboxTarget,
-          mergedBaselineRecords: mergedBaselineRecords,
-          now: now,
-        );
-      }
       for (final item in resources) {
-        if (!targetIds.contains(item.ownerProfileId)) {
+        if (!profileIds.contains(item.ownerProfileId)) {
           throw StateError('Imported resource owner is not staged');
         }
         final sealedPayload = await item.readSealedSecret();
@@ -5218,7 +5186,7 @@ class ProfileRegistry {
           sealedPayload,
         );
         for (final grant in item.grants) {
-          if (!targetIds.contains(grant.profileId)) {
+          if (!profileIds.contains(grant.profileId)) {
             throw StateError('Imported grant target is not staged');
           }
           await txn.insert('profile_resource_grants', <String, Object?>{
@@ -5269,17 +5237,15 @@ class ProfileRegistry {
           });
         }
       }
-      if (profileIds.isNotEmpty) {
-        await txn.update(
-          'user_profiles',
-          <String, Object?>{
-            'lifecycle_state': UserProfileLifecycle.active.name,
-            'updated_at_ms': now,
-          },
-          where: "id IN (${List.filled(profileIds.length, '?').join(',')})",
-          whereArgs: profileIds.toList(growable: false),
-        );
-      }
+      await txn.update(
+        'user_profiles',
+        <String, Object?>{
+          'lifecycle_state': UserProfileLifecycle.active.name,
+          'updated_at_ms': now,
+        },
+        where: "id IN (${List.filled(profileIds.length, '?').join(',')})",
+        whereArgs: profileIds.toList(growable: false),
+      );
       await txn.update(
         'profile_restore_journal',
         <String, Object?>{'stage': 'published', 'updated_at_ms': now},
@@ -5289,96 +5255,6 @@ class ProfileRegistry {
       await _assertAdminInvariant(txn);
     });
     await _finishRegistryDelete();
-  }
-
-  /// Inside [publishProfileGraphRestore]: drops the connections a merged
-  /// profile owned before the import and frees the binding slots the import
-  /// is about to fill, so the merged profile ends up with exactly the
-  /// imported configuration instead of both.
-  Future<void> _replaceMergedProfileConnections(
-    Transaction txn, {
-    required Set<String> mergedProfileIds,
-    required List<StagedGraphResource> resources,
-    required WebDavSyncRegistryTombstoneOutboxTarget? outboxTarget,
-    required Iterable<WebDavSyncRegistryRecordId> mergedBaselineRecords,
-    required int now,
-  }) async {
-    final placeholders = List.filled(mergedProfileIds.length, '?').join(',');
-    final mergedArgs = mergedProfileIds.toList(growable: false);
-    final merged = await txn.query(
-      'user_profiles',
-      columns: const <String>['id'],
-      where:
-          "lifecycle_state = 'active' AND disabled_at_ms IS NULL "
-          'AND id IN ($placeholders)',
-      whereArgs: mergedArgs,
-    );
-    if (merged.length != mergedProfileIds.length) {
-      throw StateError('One or more merged profiles are unavailable');
-    }
-    final owned = await txn.rawQuery('''SELECT r.id FROM connection_resources r
-         WHERE r.owner_profile_id IN ($placeholders)
-           AND NOT EXISTS (
-             SELECT 1 FROM job_ownership j
-             WHERE j.resource_id = r.id AND j.terminal_at_ms IS NULL
-           )''', mergedArgs);
-    final replacedResourceIds = owned
-        .map((row) => row['id']! as String)
-        .toSet();
-    final bindingKeys = <String>{
-      for (final item in resources)
-        for (final binding in item.bindings)
-          if (mergedProfileIds.contains(binding.profileId))
-            _registryBindingKey(binding.profileId, binding.slot),
-    };
-    await _recordRegistryDeleteCascade(
-      txn,
-      target: outboxTarget,
-      resourceIds: replacedResourceIds,
-      bindingKeys: bindingKeys,
-      mergedBaselineRecords: mergedBaselineRecords,
-    );
-    final affectedProfiles = <String>{...mergedProfileIds};
-    for (final resourceId in replacedResourceIds) {
-      final grants = await txn.query(
-        'profile_resource_grants',
-        columns: const <String>['profile_id'],
-        where: 'resource_id = ?',
-        whereArgs: <Object>[resourceId],
-      );
-      affectedProfiles.addAll(
-        grants.map((row) => row['profile_id']! as String),
-      );
-      await txn.update(
-        'job_ownership',
-        <String, Object?>{'resource_id': null},
-        where: 'resource_id = ? AND terminal_at_ms IS NOT NULL',
-        whereArgs: <Object>[resourceId],
-      );
-      await txn.delete(
-        'connection_resources',
-        where: 'id = ?',
-        whereArgs: <Object>[resourceId],
-      );
-    }
-    for (final item in resources) {
-      for (final binding in item.bindings) {
-        if (!mergedProfileIds.contains(binding.profileId)) continue;
-        await txn.delete(
-          'profile_connection_bindings',
-          where: 'profile_id = ? AND slot = ?',
-          whereArgs: <Object>[binding.profileId, binding.slot],
-        );
-      }
-    }
-    for (final profileId in affectedProfiles) {
-      await txn.rawUpdate(
-        '''UPDATE user_profiles
-           SET authorization_revision = authorization_revision + 1,
-               updated_at_ms = ? WHERE id = ?''',
-        <Object>[now, profileId],
-      );
-    }
   }
 
   static bool _isDefaultSeedGrantOrigin(Object? encoded) {

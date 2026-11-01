@@ -11,7 +11,6 @@ import '../services/media_server_service.dart';
 import '../services/profiles/profile_runtime.dart';
 import '../services/video_player_launcher.dart';
 import '../theme/app_theme_scope.dart';
-import '../theme/glass_chrome.dart';
 import '../widgets/see_all/stremio_dropdown.dart';
 import '../widgets/tv_text_field.dart';
 import 'settings/media_server_settings_page.dart';
@@ -386,19 +385,14 @@ class _MediaServerLibraryPanelState extends State<MediaServerLibraryPanel> {
                     ),
                     SizedBox(
                       width: MediaQuery.sizeOf(context).width < 600 ? 170 : 280,
-                      child: Container(
-                        decoration: GlassChrome.enabled(app)
-                            ? GlassChrome.decoration(app)
-                            : null,
-                        child: TvTextField(
-                          controller: _search,
-                          hintText: 'Search this library',
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (value) {
-                            _query = value.trim();
-                            _loadPage();
-                          },
-                        ),
+                      child: TvTextField(
+                        controller: _search,
+                        hintText: 'Search this library',
+                        textInputAction: TextInputAction.search,
+                        onSubmitted: (value) {
+                          _query = value.trim();
+                          _loadPage();
+                        },
                       ),
                     ),
                     IconButton(
@@ -504,40 +498,29 @@ class _MediaServerLibraryPanelState extends State<MediaServerLibraryPanel> {
     );
   }
 
-  Widget _notice(String text, {VoidCallback? retry, bool settings = false}) {
-    final app = AppThemeScope.of(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: GlassChrome.enabled(app)
-                ? GlassChrome.decoration(app, raised: true)
-                : null,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  text,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppThemeScope.of(context).core.tx),
+  Widget _notice(String text, {VoidCallback? retry, bool settings = false}) =>
+      Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppThemeScope.of(context).core.tx),
+              ),
+              if (retry != null)
+                TextButton(onPressed: retry, child: const Text('Retry')),
+              if (settings)
+                TextButton(
+                  onPressed: _settings,
+                  child: const Text('Manage servers'),
                 ),
-                if (retry != null)
-                  TextButton(onPressed: retry, child: const Text('Retry')),
-                if (settings)
-                  TextButton(
-                    onPressed: _settings,
-                    child: const Text('Manage servers'),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _LibraryCard extends StatefulWidget {
@@ -596,9 +579,7 @@ class _LibraryCardState extends State<_LibraryCard> {
       button: true,
       label: '${item.name}, ${item.subtitle}',
       child: Material(
-        color: GlassChrome.enabled(app)
-            ? Colors.transparent
-            : app.fade(app.core.tx, 0.06),
+        color: app.fade(app.core.tx, 0.06),
         borderRadius: BorderRadius.circular(12),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -615,22 +596,13 @@ class _LibraryCardState extends State<_LibraryCard> {
             }
           },
           child: Container(
-            decoration: GlassChrome.enabled(app)
-                ? GlassChrome.decoration(
-                    app,
-                    raised: _focused,
-                    active: _focused,
-                    radius: BorderRadius.circular(12),
-                  )
-                : BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _focused
-                          ? app.home.chromeAccent
-                          : Colors.transparent,
-                      width: _focused ? 3 : 1,
-                    ),
-                  ),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _focused ? app.home.chromeAccent : Colors.transparent,
+                width: 3,
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

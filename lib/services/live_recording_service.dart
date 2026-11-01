@@ -480,10 +480,12 @@ class LiveRecordingService {
         'fileName': fileName,
         'channelName': channelName,
         'headers': headers ?? <String, String>{},
-        'maxDurationMs': ?maxDurationMs,
+        if (maxDurationMs != null) 'maxDurationMs': maxDurationMs,
         ...owner,
-        'connectionResourceId': ?connectionResourceId,
-        'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
+        if (connectionResourceId != null)
+          'connectionResourceId': connectionResourceId,
+        if (resourceAuthorizationRevision != null)
+          'resourceAuthorizationRevision': resourceAuthorizationRevision,
       });
       if (id == null) return const RecordingCallResult(errorCode: 'no_task_id');
       if (authorization != null) {
@@ -724,8 +726,10 @@ class LiveRecordingService {
             'headers': headers ?? <String, String>{},
             'force': force,
             ...owner,
-            'connectionResourceId': ?connectionResourceId,
-            'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
+            if (connectionResourceId != null)
+              'connectionResourceId': connectionResourceId,
+            if (resourceAuthorizationRevision != null)
+              'resourceAuthorizationRevision': resourceAuthorizationRevision,
           });
       if (raw == null) return const RecordingCallResult(errorCode: 'no_result');
       final result = RecordingCallResult(

@@ -1,6 +1,8 @@
+import 'package:debrify/services/storage/debrify_tv_storage.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -63,6 +65,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('debrify_tv_style_settings');
     _load();
   }
 
@@ -73,7 +76,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await StorageService.getDebrifyTvStyle();
+    final style = await DebrifyTvStorage.getDebrifyTvStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -97,7 +100,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
     // Tell an in-flight Look apply that a human just chose this key, so it
     // does not stamp over the choice. See theme/app_looks.dart.
     LookApplier.noteExternalWrite('debrify_tv_style');
-    await StorageService.setDebrifyTvStyle(value);
+    await DebrifyTvStorage.setDebrifyTvStyle(value);
   }
 
   @override
@@ -105,13 +108,13 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
     final t = AppThemeScope.of(context).settings;
     if (_loading) {
       return const SettingsPageScaffold(
-        title: 'Nextup TV',
+        title: 'Debrify TV',
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return SettingsPageScaffold(
-      title: 'Nextup TV',
+      title: 'Debrify TV',
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Center(
@@ -122,7 +125,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
               children: [
                 const SettingsPageHeader(
                   icon: Icons.live_tv_rounded,
-                  title: 'Nextup TV',
+                  title: 'Debrify TV',
                   subtitle: 'How the channels screen looks, on every device',
                 ),
                 const SizedBox(height: 24),
@@ -140,7 +143,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  'Applies the next time Nextup TV opens. Playback is '
+                  'Applies the next time Debrify TV opens. Playback is '
                   'identical either way — this changes what the page draws, '
                   'never what it plays.',
                   style: TextStyle(

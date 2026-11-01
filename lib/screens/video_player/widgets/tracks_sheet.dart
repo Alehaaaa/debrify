@@ -10,7 +10,6 @@ import '../constants/color_constants.dart';
 import '../utils/language_mapping.dart';
 import '../services/subtitle_settings_service.dart';
 import '../services/subtitle_track_utils.dart';
-import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class TracksSheetSubtitleSearchResult {
   final List<StremioSubtitle> subtitles;
@@ -166,7 +165,6 @@ class TracksSheet {
 
     subtitleSelectionCorrection?.addListener(reconcileSubtitleSelection);
     await showModalBottomSheet(
-sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -761,7 +759,7 @@ class _AudioTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       itemCount: audios.length + extra,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         if (toggle != null && index == 0) return toggle;
         final audio = audios[index - extra];

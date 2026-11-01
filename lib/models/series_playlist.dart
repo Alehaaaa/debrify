@@ -373,7 +373,7 @@ class SeriesPlaylist {
     // Use forceSeries if provided, otherwise use auto-detection
     final isSeries =
         forceSeries ??
-        (analysis.classification == PlaylistClassification.series);
+        (analysis.classification == PlaylistClassification.SERIES);
 
     debugPrint(
       'SeriesPlaylist: Playlist classification: ${analysis.classification} (confidence: ${analysis.confidenceScore})',
@@ -792,10 +792,7 @@ class SeriesPlaylist {
                   (row['released'] as String).length >= 4)
                 'airdate': row['released'],
               if (row['thumbnail'] is String)
-                'image': {
-                  'medium': row['thumbnail'],
-                  'original': row['thumbnail'],
-                },
+                'image': {'medium': row['thumbnail'], 'original': row['thumbnail']},
             },
         ];
         final byEpisode = {
@@ -803,11 +800,9 @@ class SeriesPlaylist {
             (row['season'], row['number']): row,
         };
         for (final episode in allEpisodes) {
-          final row =
-              byEpisode[(
-                episode.seriesInfo.season,
-                episode.seriesInfo.episode,
-              )];
+          final row = byEpisode[
+            (episode.seriesInfo.season, episode.seriesInfo.episode)
+          ];
           if (row != null) episode.episodeInfo = EpisodeInfo.fromTVMaze(row);
         }
       } catch (error) {
@@ -820,15 +815,11 @@ class SeriesPlaylist {
     final custom = CustomSeriesIdentity.parse(imdbId ?? this.imdbId);
     if (custom != null) {
       this.imdbId = custom.id;
-      final addon = await StremioService.instance.addonForCustomProgress(
-        custom.id,
-      );
+      final addon = await StremioService.instance.addonForCustomProgress(custom.id);
       if (addon == null) return;
-      fullTvmazeEpisodes = await StremioService.instance
-          .customSeriesEpisodeInventory(
-            addonKey: addon.sourceBindingKey,
-            catalogId: custom.catalogId,
-          );
+      fullTvmazeEpisodes = await StremioService.instance.customSeriesEpisodeInventory(
+        addonKey: addon.sourceBindingKey, catalogId: custom.catalogId,
+      );
       return;
     }
     if (!isSeries) {
@@ -1084,9 +1075,7 @@ class SeriesPlaylist {
       if (episodeData != null) {
         return EpisodeInfo.fromTVMaze(episodeData, showInfo: showInfo);
       }
-    } catch (_) {
-      // Optional TVMaze enrichment can fail; keep the original playlist.
-    }
+    } catch (e) {}
     return null;
   }
 

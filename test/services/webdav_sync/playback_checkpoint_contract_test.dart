@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../support/lib_source.dart';
+
+const _vp = 'lib/features/video_player/presentation/legacy_video_player';
+
 String _between(String source, String start, String end) {
   final from = source.indexOf(start);
   expect(from, isNonNegative, reason: 'Missing start marker: $start');
@@ -16,18 +20,29 @@ void main() {
   ).readAsStringSync();
 
   test('pause and settled seek issue explicit persisted checkpoints', () {
-    final toggle = _between(
-      player,
-      'void _togglePlay()',
-      'void _setManualSelectionMode',
+    // The play toggle's live declaration, `VpControlsRuntime.togglePlay`.
+    // Each form is matched exactly; nothing else satisfies these expectations.
+    final toggle = libMember(
+      '$_vp/vp_controls_runtime.dart',
+      'togglePlay',
+      owner: 'VpControlsRuntime',
     );
+    expect(toggle, matches(RegExp(r'^void _?togglePlay\(\) \{')));
     final seek = _between(
       player,
       'onSeekBarChangeEnd: () {',
       '// IPTV episode list',
     );
 
-    expect(toggle, contains('_saveResume(positionOverride: _position)'));
+    expect(
+      toggle,
+      contains(
+        RegExp(
+          r'unawaited\((?:_resumeSave\.saveResume\(positionOverride: _position\)'
+          r'|_host\.saveResume\(positionOverride: _host\.position\))\)',
+        ),
+      ),
+    );
     expect(seek, contains('positionOverride: settledPosition'));
     expect(seek, contains('unawaited('));
   });
@@ -35,27 +50,48 @@ void main() {
   test(
     'resume saves serialize and recheck transition guards after queueing',
     () {
-      final save = _between(
-        player,
-        'bool _resumeSaveBlocked(bool debounced)',
-        'bool _tvAutoHideBlocked',
+      final save = libMember(
+        '$_vp/vp_resume_save.dart',
+        'saveResume',
+        owner: 'VpResumeSave',
       );
-
+      final locked = libMember(
+        '$_vp/vp_resume_save.dart',
+        'saveResumeLocked',
+        owner: 'VpResumeSave',
+      );
+      final blocked = libMember(
+        '$_vp/vp_resume_save.dart',
+        'resumeSaveBlocked',
+        owner: 'VpResumeSave',
+      );
+      const method = '';
+      expect(save, contains('Future<void> saveResume('));
+      const fields = '_host.';
       expect(player, contains('final Lock _resumeSaveLock = Lock();'));
-      expect(save, contains('if (_resumeSaveBlocked(debounced))'));
-      expect(save, contains('if (debounced && _resumeSaveLock.locked)'));
-      expect(save, contains('return _resumeSaveLock.synchronized('));
-      expect(save, contains('Future<void> _saveResumeLocked('));
-      final lockedSave = save.indexOf('Future<void> _saveResumeLocked(');
-      expect(
-        save.indexOf('if (_resumeSaveBlocked(debounced))', lockedSave),
-        greaterThan(lockedSave),
-      );
+      expect(save, contains('if (${method}resumeSaveBlocked(debounced))'));
       expect(
         save,
-        contains('_effectiveIptvChannels != null && _isTransitioning'),
+        contains('if (debounced && ${fields}resumeSaveLock.locked)'),
       );
-      expect(save, contains('_isManualEpisodeSelection && debounced'));
+      expect(save, contains('return ${fields}resumeSaveLock.synchronized('));
+      expect(save, contains('${method}saveResumeLocked('));
+      final recheck = locked.indexOf(
+        'if (${method}resumeSaveBlocked(debounced))',
+      );
+      final position = locked.indexOf('var pos = positionOverride ??');
+      expect(recheck, isNonNegative);
+      expect(position, greaterThan(recheck));
+      expect(
+        blocked,
+        contains(
+          '${fields}effectiveIptvChannels != null && ${fields}isTransitioning',
+        ),
+      );
+      expect(
+        blocked,
+        contains('${fields}isManualEpisodeSelection && debounced'),
+      );
     },
   );
 }

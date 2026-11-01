@@ -40,9 +40,8 @@ class CustomSeriesIdentity {
       final values = jsonDecode(utf8.decode(bytes));
       if (values is! List ||
           values.length != 2 ||
-          values.any((v) => v is! String || v.isEmpty)) {
+          values.any((v) => v is! String || v.isEmpty))
         return null;
-      }
       return CustomSeriesIdentity(values[0] as String, values[1] as String);
     } catch (_) {
       return null;

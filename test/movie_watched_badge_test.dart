@@ -1,6 +1,7 @@
 import 'dart:io';
 
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/movie_progress_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:debrify/services/simkl/simkl_item_transformer.dart';
 import 'package:debrify/services/simkl/simkl_service.dart';
@@ -25,11 +26,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.check_rounded), findsNothing);
 
-    await StorageService.markMovieAsFinished('tt-badge');
+    await MovieProgressStorage.markMovieAsFinished('tt-badge');
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
-    await StorageService.unmarkMovieAsFinished('tt-badge');
+    await MovieProgressStorage.unmarkMovieAsFinished('tt-badge');
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.check_rounded), findsNothing);
   });
@@ -37,7 +38,7 @@ void main() {
   testWidgets('local completion does not mark a series title watched', (
     tester,
   ) async {
-    await StorageService.markMovieAsFinished('tt-series-local');
+    await MovieProgressStorage.markMovieAsFinished('tt-series-local');
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -55,8 +56,8 @@ void main() {
   testWidgets('Home-scoped badge follows Home tick sources only', (
     tester,
   ) async {
-    await StorageService.markMovieAsFinished('tt-home-mask');
-    await StorageService.setHomeTickSources(<TrackingSource>{});
+    await MovieProgressStorage.markMovieAsFinished('tt-home-mask');
+    await TrackingSourceStorage.setHomeTickSources(<TrackingSource>{});
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -75,7 +76,7 @@ void main() {
     // Detail/search consumers remain merged; only the Home instance is masked.
     expect(find.byIcon(Icons.check_rounded), findsOneWidget);
 
-    await StorageService.setHomeTickSources(<TrackingSource>{
+    await TrackingSourceStorage.setHomeTickSources(<TrackingSource>{
       TrackingSource.local,
     });
     await tester.pumpAndSettle();

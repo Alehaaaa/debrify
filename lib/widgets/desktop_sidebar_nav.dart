@@ -1,13 +1,7 @@
-import 'dart:io' show File, Platform;
-import 'dart:ui' show ImageFilter;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
-
 import 'package:flutter/material.dart';
 
 import '../theme/app_motion.dart';
 import '../theme/app_theme_scope.dart';
-import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
 import 'profiles/profile_avatar_view.dart';
 import 'window_drag_area.dart';
@@ -61,7 +55,6 @@ class DesktopSidebarNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final frosted = app.formId == 'glass';
     final children = <Widget>[];
     String? lastSection;
     for (var i = 0; i < entries.length; i++) {
@@ -80,84 +73,44 @@ class DesktopSidebarNav extends StatelessWidget {
       );
     }
 
-    // The rail sits above the shell rather than reading as a second opaque
-    // page. Clip the filter to its narrow bounds: it keeps the frosted depth
-    // while avoiding a full-window save layer on every frame.
-    return SizedBox(
+    return Container(
       width: expanded ? expandedWidth : width,
-      child: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  app.shell.railBg.withValues(alpha: frosted ? 0.59 : 0.84),
-                  (frosted ? app.core.pane : app.shell.railBg).withValues(
-                    alpha: frosted ? 0.43 : 0.70,
-                  ),
-                ],
-              ),
-              border: Border(
-                right: BorderSide(
-                  color: frosted
-                      ? GlassChrome.edge(app)
-                      : app.fade(app.core.tx, 0.14),
-                ),
-              ),
-            ),
-            foregroundDecoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  app.fade(app.core.tx, frosted ? 0.12 : 0.07),
-                  Colors.transparent,
-                ],
-                stops: const [0, 0.13],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Logo doubles as the window drag handle (no AppBar here).
-                WindowDragArea(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 22),
-                    child: Center(
-                      child: ClipRRect(
-                        borderRadius: app.shape.br(9),
-                        child: Image(
-                          image: const ExactAssetImage('assets/app_icon.png'),
-                          width: 32,
-                          height: 32,
-                          // If the asset channel fails (seen in Windows debug
-                          // runs), read the bundled file straight from disk.
-                          // Never paint a red debug box into the chrome.
-                          errorBuilder: (_, _, _) => _logoFromDisk(32),
-                        ),
-                      ),
-                    ),
+      decoration: BoxDecoration(color: app.shell.railBg),
+      foregroundDecoration: BoxDecoration(
+        border: Border(right: BorderSide(color: app.fade(app.core.tx, 0.05))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Logo doubles as the window drag handle (no AppBar here).
+          WindowDragArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              child: Center(
+                child: ClipRRect(
+                  borderRadius: app.shape.br(9),
+                  child: Image.asset(
+                    'assets/app_icon.png',
+                    width: 32,
+                    height: 32,
                   ),
                 ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.only(top: 2, bottom: 16),
-                    children: children,
-                  ),
-                ),
-                if (profile != null && onProfileTap != null)
-                  _RailProfile(
-                    profile: profile!,
-                    expanded: expanded,
-                    onTap: onProfileTap!,
-                  ),
-              ],
+              ),
             ),
           ),
-        ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(top: 2, bottom: 16),
+              children: children,
+            ),
+          ),
+          if (profile != null && onProfileTap != null)
+            _RailProfile(
+              profile: profile!,
+              expanded: expanded,
+              onTap: onProfileTap!,
+            ),
+        ],
       ),
     );
   }
@@ -311,21 +264,8 @@ class _SidebarItemState extends State<_SidebarItem> {
             curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
-              gradient: selected
-                  ? LinearGradient(
-                      colors: [
-                        app.shell.navAccent.withValues(alpha: 0.24),
-                        app.shell.navAccent.withValues(alpha: 0.10),
-                      ],
-                    )
-                  : null,
-              color: selected ? null : bg,
+              color: bg,
               borderRadius: app.shape.br(16),
-              border: selected
-                  ? Border.all(
-                      color: app.shell.navAccent.withValues(alpha: 0.22),
-                    )
-                  : null,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -357,22 +297,4 @@ class _SidebarItemState extends State<_SidebarItem> {
       ),
     );
   }
-}
-
-/// Last-resort logo: the same PNG, read from the installed bundle on disk
-/// (`<exe dir>/data/flutter_assets/...` on Windows and Linux).
-Widget _logoFromDisk(double size) {
-  final empty = SizedBox(width: size, height: size);
-  if (kIsWeb || !(Platform.isWindows || Platform.isLinux)) return empty;
-  final exeDir = File(Platform.resolvedExecutable).parent.path;
-  final sep = Platform.pathSeparator;
-  final file = File(
-    [exeDir, 'data', 'flutter_assets', 'assets', 'app_icon.png'].join(sep),
-  );
-  return Image.file(
-    file,
-    width: size,
-    height: size,
-    errorBuilder: (_, _, _) => empty,
-  );
 }

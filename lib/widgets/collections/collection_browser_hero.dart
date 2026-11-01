@@ -143,7 +143,7 @@ class CollectionBrowserHero extends StatelessWidget {
                         ),
                       ),
                     ),
-                    ?action,
+                    if (action != null) action!,
                   ],
                 ),
                 const Spacer(),

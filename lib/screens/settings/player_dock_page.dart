@@ -1,7 +1,8 @@
+import 'package:debrify/services/storage/player_appearance_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/theme_palette.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -13,62 +14,31 @@ class PlayerDockChoice {
   const PlayerDockChoice(this.value, this.label, this.subtitle);
 }
 
-/// The three genuinely different looks. Adaptive, Compact, Two-Tier and
-/// Cinema Bar are one dock in four arrangements, so they live under
-/// [kPlayerDockLayoutChoices] rather than posing as separate styles.
 const List<PlayerDockChoice> kPlayerDockStyleChoices = [
-  PlayerDockChoice(
-    'glass',
-    'Glass',
-    'Minimal frosted controls: play in the middle, one panel below',
-  ),
-  PlayerDockChoice(
-    'dock',
-    'Dock',
-    'Every tool on screen, in your accent colour',
-  ),
-  PlayerDockChoice(
-    'classic',
-    'Classic',
-    'The original row of labelled buttons',
-  ),
-];
-
-/// How the Dock arranges itself. Stored as the `player_dock_style` value.
-///
-/// Only two real choices: Automatic already picks the one-row, two-row or
-/// wide-bar arrangement from the window size, so forcing two-row or wide is
-/// not offered. Installs that stored `tiers` / `cinema` keep them (the player
-/// still honours both) and show here as Automatic.
-const List<PlayerDockChoice> kPlayerDockLayoutChoices = [
+  PlayerDockChoice('classic', 'Classic', "Today's controls"),
   PlayerDockChoice(
     'auto',
-    'Automatic',
-    'One row on phones, a fuller bar on bigger screens',
+    'Adaptive',
+    'Picks the best layout for the window — recommended',
   ),
-  PlayerDockChoice('compact', 'Compact', 'Always one row, the rest under More'),
+  PlayerDockChoice(
+    'compact',
+    'Compact',
+    'One row: transport, three tools and a More sheet',
+  ),
+  PlayerDockChoice(
+    'tiers',
+    'Two-Tier',
+    'Centred transport above the bar, tools wrapping below',
+  ),
+  PlayerDockChoice(
+    'cinema',
+    'Cinema Bar',
+    'Full-width bar — transport, volume and time, tools right',
+  ),
 ];
 
-/// Stored `player_dock_style` values that mean "the Dock".
-bool isPlayerDockLayout(String style) => const {
-  'auto',
-  'compact',
-  'tiers',
-  'cinema',
-  'two_tier',
-}.contains(style);
-
-/// The Layout radio a stored Dock value belongs to.
-String playerDockLayoutGroup(String style) =>
-    style == 'compact' ? 'compact' : 'auto';
-
-/// The Style radio a stored value belongs to.
-String playerDockStyleGroup(String style) =>
-    isPlayerDockLayout(style) ? 'dock' : style;
-
 const List<PlayerDockChoice> kPlayerDockPaletteChoices = [
-  PlayerDockChoice('app', 'App colour', 'Follows your colour palette'),
-  PlayerDockChoice('custom', 'Manual colour', 'Detached from the app — pick one below'),
   PlayerDockChoice(
     'ultraviolet',
     'Ultraviolet',
@@ -89,19 +59,33 @@ const List<PlayerDockChoice> kPlayerDockSizeChoices = [
 /// Row caption for the Appearance list — the chosen style, plus the palette
 /// when one is actually in effect.
 String playerDockLabel(String style, String palette, [String size = 'auto']) {
-  final group = playerDockStyleGroup(style);
-  String labelOf(List<PlayerDockChoice> list, String value) => list
-      .firstWhere((c) => c.value == value, orElse: () => list.first)
+  // Installs from before the arrangements were selectable still store the old
+  // value; it means what 'auto' means.
+  final normalized = style == 'two_tier' ? 'auto' : style;
+  final styleLabel = kPlayerDockStyleChoices
+      .firstWhere(
+        (c) => c.value == normalized,
+        orElse: () => kPlayerDockStyleChoices.first,
+      )
       .label;
-  final styleLabel = labelOf(kPlayerDockStyleChoices, group);
-  if (group != 'dock') return styleLabel;
-  final layout = playerDockLayoutGroup(style);
-  return [
-    styleLabel,
-    if (layout != 'auto') labelOf(kPlayerDockLayoutChoices, layout),
-    labelOf(kPlayerDockPaletteChoices, palette),
-    if (size != 'auto') labelOf(kPlayerDockSizeChoices, size),
-  ].join(' · ');
+  if (style == 'classic') return styleLabel;
+  final paletteLabel = kPlayerDockPaletteChoices
+      .firstWhere(
+        (c) => c.value == palette,
+        orElse: () => kPlayerDockPaletteChoices.first,
+      )
+      .label;
+  final sizeLabel = size == 'auto'
+      ? null
+      : kPlayerDockSizeChoices
+            .firstWhere(
+              (c) => c.value == size,
+              orElse: () => kPlayerDockSizeChoices.first,
+            )
+            .label;
+  return sizeLabel == null
+      ? '$styleLabel · $paletteLabel'
+      : '$styleLabel · $paletteLabel · $sizeLabel';
 }
 
 /// Player control style, colour and size (`player_dock_style`,
@@ -110,9 +94,9 @@ String playerDockLabel(String style, String palette, [String size = 'auto']) {
 /// Three sections on one page rather than three Appearance rows: the section
 /// is already long, and the three prefs are one decision.
 ///
-/// Layout, colour and size only exist for the Dock, so they only show while
-/// it is selected. Their stored values survive a round trip through Glass or
-/// Classic.
+/// Palette and size are inert under Classic — their sections render disabled
+/// with a hint rather than disappearing, so the options are discoverable and
+/// the stored values survive a round trip through Classic.
 ///
 /// The dock reads all three once at launch, so a change applies to the next
 /// playback session; persist-on-tap is all that is needed.
@@ -125,7 +109,7 @@ class PlayerDockPage extends StatefulWidget {
 
 class _PlayerDockPageState extends State<PlayerDockPage> {
   bool _loading = true;
-  String _style = 'glass';
+  String _style = 'classic';
   String _palette = 'ultraviolet';
   String _size = 'auto';
 
@@ -140,6 +124,7 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('player_dock_settings');
     _load();
   }
 
@@ -150,18 +135,13 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
   }
 
   Future<void> _load() async {
-    final style = await StorageService.getPlayerDockStyle();
-    final palette = await StorageService.getPlayerDockPalette();
-    final size = await StorageService.getPlayerDockSize();
-    final swatch = await StorageService.getPlayerDockCustomSwatch();
+    final style = await PlayerAppearanceStorage.getPlayerDockStyle();
+    final palette = await PlayerAppearanceStorage.getPlayerDockPalette();
+    final size = await PlayerAppearanceStorage.getPlayerDockSize();
     if (!mounted) return;
     setState(() {
       _style = style;
-      if (isPlayerDockLayout(style)) {
-        _lastLayout = playerDockLayoutGroup(style);
-      }
       _palette = palette;
-      _customSwatch = swatch;
       _size = size;
       _loading = false;
     });
@@ -175,102 +155,28 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     }
   }
 
-  /// Remembered Dock layout, so Glass → Dock returns to the last layout.
-  String _lastLayout = 'auto';
-
-  Future<void> _selectStyle(String group) async {
-    if (group == playerDockStyleGroup(_style)) return;
-    final value = group == 'dock' ? _lastLayout : group;
+  Future<void> _selectStyle(String value) async {
+    if (value == _style) return;
     setState(() => _style = value);
-    await StorageService.setPlayerDockStyle(value);
-  }
-
-  Future<void> _selectLayout(String value) async {
-    if (value == _layout) return;
-    setState(() {
-      _style = value;
-      _lastLayout = value;
-    });
-    await StorageService.setPlayerDockStyle(value);
+    await PlayerAppearanceStorage.setPlayerDockStyle(value);
   }
 
   Future<void> _selectPalette(String value) async {
     if (value == _palette) return;
     setState(() => _palette = value);
-    await StorageService.setPlayerDockPalette(value);
-  }
-
-  String? _customSwatch;
-
-  Future<void> _selectSwatch(String id) async {
-    setState(() {
-      _customSwatch = id;
-      _palette = 'custom';
-    });
-    await StorageService.setPlayerDockCustomSwatch(id);
-    await StorageService.setPlayerDockPalette('custom');
-  }
-
-  /// The colour a palette row stands for, for its trailing dot.
-  Color? _dotFor(String value) => switch (value) {
-    'app' => StorageService.appAccentArgb == null
-        ? null
-        : Color(StorageService.appAccentArgb!),
-    'custom' => ThemePalette.colorOf(_customSwatch),
-    'ultraviolet' => const Color(0xFFB03CFF),
-    'crimson' => const Color(0xFFE0243A),
-    'aurum' => const Color(0xFFE0B04A),
-    'ice' => const Color(0xFF3AA8FF),
-    _ => null,
-  };
-
-  Widget _swatchGrid() {
-    final t = AppThemeScope.of(context).settings;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 12, 4, 4),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: [
-          for (final sw in ThemePalette.all)
-            Tooltip(
-              message: sw.label,
-              child: InkWell(
-                customBorder: const CircleBorder(),
-                onTap: _styled ? () => _selectSwatch(sw.id) : null,
-                child: Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: sw.color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: _customSwatch == sw.id && _palette == 'custom'
-                          ? t.accent2
-                          : const Color(0x33FFFFFF),
-                      width: _customSwatch == sw.id && _palette == 'custom'
-                          ? 3
-                          : 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
+    await PlayerAppearanceStorage.setPlayerDockPalette(value);
   }
 
   Future<void> _selectSize(String value) async {
     if (value == _size) return;
     setState(() => _size = value);
-    await StorageService.setPlayerDockSize(value);
+    await PlayerAppearanceStorage.setPlayerDockSize(value);
   }
 
-  /// Layout, colour and size only apply to the Dock.
-  bool get _styled => isPlayerDockLayout(_style);
+  bool get _styled => _style != 'classic';
 
-  String get _layout => playerDockLayoutGroup(_style);
+  bool _isSelected(String value) =>
+      _style == value || (value == 'auto' && _style == 'two_tier');
 
   @override
   Widget build(BuildContext context) {
@@ -310,66 +216,48 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
                       for (final choice in kPlayerDockStyleChoices)
                         _optionRow(
                           choice,
-                          selected: playerDockStyleGroup(_style),
+                          selected: _isSelected(choice.value)
+                              ? choice.value
+                              : _style,
                           onSelect: _selectStyle,
                         ),
                     ],
                   ),
                 ),
-                if (_styled) ...[
-                  const SizedBox(height: 20),
-                  SettingsSection(
-                    title: 'Layout',
-                    children: [
-                      for (final choice in kPlayerDockLayoutChoices)
-                        _optionRow(
-                          choice,
-                          selected: _layout,
-                          onSelect: _selectLayout,
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SettingsSection(
-                    title: 'Colour',
-                    blurb: 'App colour follows your colour palette. Manual '
-                        'colour detaches the player so it keeps its own.',
-                    children: [
-                      for (final choice in kPlayerDockPaletteChoices)
-                        _optionRow(
-                          choice,
-                          selected: _palette,
-                          onSelect: (v) async {
-                            if (v == 'custom' && _customSwatch == null) {
-                              // No manual colour picked yet: start from the
-                              // first swatch, then the grid below takes over.
-                              await _selectSwatch(ThemePalette.all.first.id);
-                              return;
-                            }
-                            await _selectPalette(v);
-                          },
-                          dot: _dotFor(choice.value),
-                        ),
-                    ],
-                  ),
-                  if (_palette == 'custom') _swatchGrid(),
-                  const SizedBox(height: 20),
-                  SettingsSection(
-                    title: 'Size',
-                    children: [
-                      for (final choice in kPlayerDockSizeChoices)
-                        _optionRow(
-                          choice,
-                          selected: _size,
-                          onSelect: _selectSize,
-                        ),
-                    ],
-                  ),
-                ],
+                const SizedBox(height: 20),
+                SettingsSection(
+                  title: 'Colour',
+                  children: [
+                    for (final choice in kPlayerDockPaletteChoices)
+                      _optionRow(
+                        choice,
+                        selected: _palette,
+                        onSelect: _selectPalette,
+                        enabled: _styled,
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SettingsSection(
+                  title: 'Size',
+                  children: [
+                    for (final choice in kPlayerDockSizeChoices)
+                      _optionRow(
+                        choice,
+                        selected: _size,
+                        onSelect: _selectSize,
+                        enabled: _styled,
+                      ),
+                  ],
+                ),
                 const SizedBox(height: 14),
                 Text(
-                  'Applies to the next playback session. Televisions use '
-                  'their own remote-friendly controls and are not affected.',
+                  _styled
+                      ? 'Applies to the next playback session. Televisions '
+                            'use their own remote-friendly controls and are '
+                            'not affected.'
+                      : 'Colour and size apply to control styles other than '
+                            'Classic. Your choices are kept.',
                   style: TextStyle(fontSize: 12.5, height: 1.45, color: t.dim),
                 ),
               ],
@@ -385,7 +273,6 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
     required String selected,
     required Future<void> Function(String) onSelect,
     bool enabled = true,
-    Color? dot,
   }) {
     final t = AppThemeScope.of(context).settings;
     final bool active = selected == choice.value;
@@ -397,25 +284,9 @@ class _PlayerDockPageState extends State<PlayerDockPage> {
             : Icons.radio_button_unchecked_rounded,
         title: choice.label,
         subtitle: choice.subtitle,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (dot != null)
-              Container(
-                width: 14,
-                height: 14,
-                margin: const EdgeInsets.only(right: 10),
-                decoration: BoxDecoration(
-                  color: dot,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: const Color(0x33FFFFFF)),
-                ),
-              ),
-            active
-                ? Icon(Icons.check_rounded, size: 20, color: t.accent2)
-                : const SizedBox(width: 20),
-          ],
-        ),
+        trailing: active
+            ? Icon(Icons.check_rounded, size: 20, color: t.accent2)
+            : const SizedBox.shrink(),
         // A disabled row stays focusable and tappable but does nothing:
         // SettingsTile's onTap is non-nullable, and swallowing the tap keeps
         // the DPAD traversal order identical between enabled and disabled

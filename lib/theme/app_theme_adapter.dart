@@ -7,7 +7,6 @@ import '../services/text_brightness.dart';
 import '../utils/platform_util.dart';
 import '../widgets/detail/theme/detail_theme.dart';
 import 'app_theme.dart';
-import 'glass_chrome.dart';
 import 'app_type.dart';
 
 /// Shared route motion: a restrained fade and lift, with a cheaper fade on TV.
@@ -191,7 +190,9 @@ abstract final class AppThemeAdapter {
       surfaceContainerHigh: Color(0xFF1C2233), // Input fills
       surfaceContainer: Color(0xFF2A3040), // Mid containers
       surfaceContainerLow: Color(0xFF3A4050), // Lighter containers
-      surfaceContainerLowest: Color(0xFF94A3B8),
+      surfaceContainerLowest: Color(0xFF94A3B8), // Slate 400
+      background: Color(0xFF020408), // True near-black
+      onBackground: Colors.white,
       error: Color(0xFFEF4444), // Red 500
       onError: Colors.white,
       errorContainer: Color(0xFF7F1D1D), // Red 900
@@ -339,7 +340,6 @@ abstract final class AppThemeAdapter {
   /// affair until a later phase decides otherwise.
   static ThemeData themed(AppTheme theme, TextBrightness preset) {
     final core = theme.core;
-    final frosted = GlassChrome.enabled(theme);
     final ground = core.ground.withValues(alpha: 1);
     final tx = core.tx;
 
@@ -409,10 +409,8 @@ abstract final class AppThemeAdapter {
       cardTheme: CardThemeData(
         elevation: 8,
         shadowColor: Colors.black.withValues(alpha: 0.3),
-        shape: frosted
-            ? GlassChrome.shape(theme)
-            : RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        color: frosted ? GlassChrome.fill(theme) : step(0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: step(0.10),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -430,25 +428,19 @@ abstract final class AppThemeAdapter {
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          side: BorderSide(
-            color: frosted ? GlassChrome.edge(theme) : step(0.20),
-          ),
+          side: BorderSide(color: step(0.20)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: frosted ? GlassChrome.field(theme) : step(0.14),
+        fillColor: step(0.14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: frosted
-              ? BorderSide(color: GlassChrome.edge(theme))
-              : BorderSide.none,
+          borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: frosted
-              ? BorderSide(color: GlassChrome.edge(theme))
-              : BorderSide.none,
+          borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -465,7 +457,7 @@ abstract final class AppThemeAdapter {
       ),
       appBarTheme: AppBarTheme(
         elevation: 0,
-        backgroundColor: frosted ? GlassChrome.fill(theme) : surface,
+        backgroundColor: surface,
         foregroundColor: tx,
         centerTitle: true,
         // Built here rather than inherited, so it needs the theme's display
@@ -477,37 +469,14 @@ abstract final class AppThemeAdapter {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: frosted
-            ? GlassChrome.fill(theme, raised: true)
-            : surface,
+        backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        shape: frosted ? GlassChrome.shape(theme, radius: 22) : null,
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: frosted ? GlassChrome.fill(theme, raised: true) : step(0.08),
+        color: step(0.08),
         surfaceTintColor: Colors.transparent,
-        shape: frosted ? GlassChrome.shape(theme, radius: 16) : null,
       ),
-      drawerTheme: DrawerThemeData(
-        backgroundColor: frosted
-            ? GlassChrome.fill(theme, raised: true)
-            : step(0.10),
-      ),
-      bottomSheetTheme: frosted
-          ? BottomSheetThemeData(
-              backgroundColor: GlassChrome.fill(theme, raised: true),
-              surfaceTintColor: Colors.transparent,
-              shape: GlassChrome.shape(theme, radius: 22),
-            )
-          : null,
-      chipTheme: frosted
-          ? ChipThemeData(
-              backgroundColor: GlassChrome.fill(theme),
-              selectedColor: theme.core.accent.withValues(alpha: 0.26),
-              side: BorderSide(color: GlassChrome.edge(theme)),
-              shape: GlassChrome.shape(theme, radius: 12),
-            )
-          : null,
+      drawerTheme: DrawerThemeData(backgroundColor: step(0.10)),
       dividerTheme: DividerThemeData(color: line),
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStatePropertyAll(tx.withValues(alpha: 0.30)),
@@ -518,9 +487,7 @@ abstract final class AppThemeAdapter {
         selectionHandleColor: core.accent,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: frosted
-            ? GlassChrome.fill(theme, raised: true)
-            : step(0.10),
+        backgroundColor: step(0.10),
         contentTextStyle: TextStyle(color: tx),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         behavior: SnackBarBehavior.floating,

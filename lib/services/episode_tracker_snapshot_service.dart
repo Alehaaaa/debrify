@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:debrify/services/storage/tracker_episode_progress_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/profiles/profile_policy.dart';
@@ -8,7 +10,6 @@ import 'episode_tracker_snapshot_revision.dart';
 import 'mdblist/mdblist_service.dart';
 import 'profiles/profile_async_authorization.dart';
 import 'simkl/simkl_service.dart';
-import 'storage_service.dart';
 import 'trakt/trakt_service.dart';
 import 'tracking_source_policy.dart';
 import 'tracker_identity_service.dart';
@@ -285,7 +286,7 @@ class EpisodeTrackerSnapshotService {
       final storeWriteKey = _storeWriteKey('trakt', authorization);
       final accessToken = await _runBound(
         authorization,
-        StorageService.getTraktAccessToken,
+        TraktStorage.getTraktAccessToken,
       );
       if (accessToken == null || accessToken.isEmpty) {
         // No credential is an authoritative disconnect, not a transient API
@@ -295,7 +296,7 @@ class EpisodeTrackerSnapshotService {
           storeWriteKey,
           () => _runBound(
             authorization,
-            () => StorageService.saveEpisodeTraktProgress(
+            () => TrackerEpisodeProgressStorage.saveEpisodeTraktProgress(
               imdbId: imdbId,
               percents: const {},
             ),
@@ -325,7 +326,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: snapshotRevision,
       );
 
-      return await _refreshTraktSnapshot(
+      return _refreshTraktSnapshot(
         key: key,
         storeWriteKey: storeWriteKey,
         force: force,
@@ -344,7 +345,7 @@ class EpisodeTrackerSnapshotService {
         ),
         save: (snapshot) => _runBound(
           authorization,
-          () => StorageService.saveEpisodeTraktProgress(
+          () => TrackerEpisodeProgressStorage.saveEpisodeTraktProgress(
             imdbId: imdbId,
             percents: snapshot,
           ),
@@ -449,7 +450,7 @@ class EpisodeTrackerSnapshotService {
           storeWriteKey,
           () => _runBound(
             authorization,
-            () => StorageService.saveEpisodeSimklProgress(
+            () => TrackerEpisodeProgressStorage.saveEpisodeSimklProgress(
               imdbId: imdbId,
               percents: const {},
             ),
@@ -469,7 +470,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: refreshRevision,
       );
 
-      return await _refreshCoordinator.run(
+      return _refreshCoordinator.run(
         key: key,
         ttl: _refreshTtl,
         force: force,
@@ -498,7 +499,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey!,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeSimklProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeSimklProgress(
                 imdbId: imdbId,
                 percents: snapshot,
               ),
@@ -529,7 +530,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey!,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeSimklProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeSimklProgress(
                 imdbId: imdbId,
                 percents: const {},
               ),
@@ -580,7 +581,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeMdblistProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeMdblistProgress(
                 imdbId: imdbId,
                 percents: const {},
               ),
@@ -610,7 +611,7 @@ class EpisodeTrackerSnapshotService {
       // Playback remains fresh on every launch (zero TTL), while concurrent
       // callers share one request. Its read/modify/write is serialized with
       // full-history replacement via [operationKey].
-      return await _refreshCoordinator.run(
+      return _refreshCoordinator.run(
         key: key,
         ttl: Duration.zero,
         force: force,
@@ -627,7 +628,9 @@ class EpisodeTrackerSnapshotService {
           if (!result.isSuccess) return null;
           final previous = await _runBound(
             authorization,
-            () => StorageService.getEpisodeMdblistProgress(imdbId: imdbId),
+            () => TrackerEpisodeProgressStorage.getEpisodeMdblistProgress(
+              imdbId: imdbId,
+            ),
           );
           final snapshot = <String, double>{
             for (final entry in previous.entries)
@@ -653,7 +656,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeMdblistProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeMdblistProgress(
                 imdbId: imdbId,
                 percents: snapshot,
               ),
@@ -709,7 +712,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeMdblistProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeMdblistProgress(
                 imdbId: imdbId,
                 percents: const {},
               ),
@@ -729,7 +732,7 @@ class EpisodeTrackerSnapshotService {
         snapshotRevision: snapshotRevision,
       );
 
-      return await _refreshCoordinator.run(
+      return _refreshCoordinator.run(
         key: key,
         ttl: _refreshTtl,
         force: force,
@@ -753,7 +756,7 @@ class EpisodeTrackerSnapshotService {
             storeWriteKey,
             () => _runBound(
               authorization,
-              () => StorageService.saveEpisodeMdblistProgress(
+              () => TrackerEpisodeProgressStorage.saveEpisodeMdblistProgress(
                 imdbId: imdbId,
                 percents: snapshot,
               ),

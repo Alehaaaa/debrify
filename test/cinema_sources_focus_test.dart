@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:debrify/models/stremio_addon.dart';
@@ -8,7 +9,7 @@ import 'dart:io';
 
 import 'package:debrify/models/advanced_search_selection.dart';
 import 'package:debrify/models/torrent.dart';
-import 'package:debrify/screens/search_screen.dart';
+import 'features/sources/fixtures/sources_screen_factory.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:debrify/services/torrent_service.dart';
 import 'package:debrify/services/series_source_service.dart';
@@ -79,7 +80,7 @@ void main() {
       await tester.runAsync(() async {
         final searched = Completer<void>();
         await tester.pumpWidget(
-          MaterialApp(
+          ProviderScope(child: MaterialApp(
             home: AppThemeScope(
               theme: AppThemes.legacy,
               child: sourcesScreenForTesting(
@@ -103,7 +104,7 @@ void main() {
                 },
               ),
             ),
-          ),
+          )),
         );
         await searched.future.timeout(const Duration(seconds: 5));
       });
@@ -158,6 +159,78 @@ void main() {
   });
 
   testWidgets(
+    'season source browser uses pack policy and preserves returned order',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      await tester.runAsync(TorrentService.ensureInitialized);
+      tester.view.physicalSize = const Size(960, 700);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      Torrent pack(
+        String name,
+        String? coverage, {
+        int? season,
+        bool direct = false,
+      }) => Torrent(
+        rowid: 0,
+        infohash: name,
+        name: name,
+        sizeBytes: 1000000,
+        createdUnix: 0,
+        seeders: 1,
+        leechers: 0,
+        completed: 0,
+        scrapedDate: 0,
+        source: 'fixture',
+        coverageType: coverage,
+        seasonNumber: season,
+        streamType: direct ? StreamType.directUrl : StreamType.torrent,
+        directUrl: direct ? 'https://example.invalid/episode' : null,
+      );
+      final rows = [
+        pack('Other season', 'seasonPack', season: 1),
+        pack('Selected season', 'seasonPack', season: 2),
+        pack('Direct episode', null, direct: true),
+        pack('Complete series', 'completeSeries'),
+      ];
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData.dark(),
+            home: AppThemeScope(
+              theme: AppThemes.legacy,
+              child: sourcesScreenForTesting(
+                selection: const AdvancedSearchSelection(
+                  imdbId: '',
+                  isSeries: true,
+                  title: 'Show',
+                  season: 2,
+                ),
+                meta: const PlaybackMeta(),
+                search: (onBatch) async {
+                  onBatch('fixture', rows);
+                  return {'torrents': rows};
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<SourceRow>(find.byType(SourceRow))
+            .map((row) => row.title),
+        ['Selected season', 'Complete series'],
+      );
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'src_0');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
     'selected direct source is revealed and stays marked after navigation',
     (tester) async {
       const pin = SeriesSource(
@@ -205,7 +278,7 @@ void main() {
         ),
       );
       await tester.pumpWidget(
-        MaterialApp(
+        ProviderScope(child: MaterialApp(
           theme: ThemeData.dark(),
           home: AppThemeScope(
             theme: AppThemes.legacy,
@@ -221,7 +294,7 @@ void main() {
               search: (_) async => {'torrents': results},
             ),
           ),
-        ),
+        )),
       );
       await tester.pumpAndSettle();
       expect(FocusManager.instance.primaryFocus?.debugLabel, 'src_30');
@@ -284,7 +357,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      MaterialApp(
+      ProviderScope(child: MaterialApp(
         theme: ThemeData.dark(),
         home: AppThemeScope(
           theme: AppThemes.legacy,
@@ -300,7 +373,7 @@ void main() {
             },
           ),
         ),
-      ),
+      )),
     );
     await tester.pumpAndSettle();
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'src_0');
@@ -348,7 +421,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
-      MaterialApp(
+      ProviderScope(child: MaterialApp(
         theme: ThemeData.dark(),
         home: AppThemeScope(
           theme: AppThemes.legacy,
@@ -368,7 +441,7 @@ void main() {
             },
           ),
         ),
-      ),
+      )),
     );
     await tester.pumpAndSettle();
     final list = find.descendant(
@@ -419,7 +492,7 @@ void main() {
         final finished = Completer<Map<String, dynamic>>();
         SearchBatchCallback? onBatch;
         await tester.pumpWidget(
-          MaterialApp(
+          ProviderScope(child: MaterialApp(
             theme: ThemeData.dark(),
             home: AppThemeScope(
               theme: AppThemes.legacy,
@@ -436,7 +509,7 @@ void main() {
                 },
               ),
             ),
-          ),
+          )),
         );
         await tester.pump();
         expect(onBatch, isNotNull);

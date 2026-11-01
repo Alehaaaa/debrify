@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -17,8 +18,8 @@ import 'package:debrify/services/profiles/profile_restore_coordinator.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/profiles/profile_session_unavailable.dart';
+import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'package:debrify/services/stremio_service.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -274,6 +275,218 @@ void main() {
     },
   );
 
+  for (final retirement in ['none', 'profile', 'invalidation']) {
+    for (final failed in [false, true]) {
+      test(
+        'addon hydration owns cache, failure memo and persistence: $retirement failed=$failed',
+        () async {
+          final stremio = StremioService.instance;
+          const url = 'https://hydration-owner.invalid/manifest.json';
+          final restored = await service.create(
+            context: await ProfileAuthorizationContext.capture(registry),
+            type: ConnectionResourceType.stremioAddon,
+            label: 'Restored',
+            publicConfig: {'addonName': 'Restored'},
+            secretConfig: {'manifestUrl': url},
+          );
+          final original = (await registry.getSealedResourceSecret(
+            restored.id,
+          ))!.envelope;
+          final entered = Completer<void>(), release = Completer<void>();
+          var fetches = 0;
+          stremio.debugManifestFetcher = (manifestUrl) async {
+            fetches++;
+            if (fetches == 1) {
+              entered.complete();
+              await release.future;
+              if (failed) throw StateError('Unavailable manifest');
+            }
+            return StremioAddon(
+              id: 'hydrated',
+              name: 'Hydrated',
+              manifestUrl: manifestUrl,
+              baseUrl: 'https://hydration-owner.invalid',
+              resources: ['stream'],
+            );
+          };
+          final pending = ProfileRuntime.withCapturedScope(
+            scope,
+            () => stremio.getAddons(),
+          );
+          await entered.future.timeout(const Duration(seconds: 5));
+          if (retirement == 'profile') {
+            final actor = await ProfileAuthorizationContext.capture(registry);
+            final incoming = await registry.createProfile(
+              name: 'Incoming',
+              role: UserProfileRole.admin,
+              actingProfileId: actor.profileId,
+              actingAuthorizationRevision: actor.authorizationRevision,
+              actingSessionEpoch: scope.sessionEpoch,
+            );
+            await registry.setActiveProfile(incoming.id);
+            ProfileRuntime.publish(
+              ProfileScope(
+                profileId: incoming.id,
+                dataGeneration: 1,
+                sessionEpoch: 2,
+              ),
+            );
+            // New profiles inherit addon grants. Disable this shared URL only
+            // for the incoming profile so its accepted inventory is distinct.
+            await ProfileCollectionResourceFacade.setLocalEnabled(
+              resourceId: restored.id,
+              resourceRevision: (await registry.getResource(
+                restored.id,
+              ))!.authorizationRevision,
+              feature: ProfileFeature.addonsAndEngines,
+              enabled: false,
+            );
+            // No explicit service reset: cache ownership must stand on its own.
+            await createAddon('incoming');
+            expect((await read()).map((row) => row['name']).toList(), [
+              'incoming',
+            ]);
+            expect((await stremio.getAddons()).single.name, 'incoming');
+          } else if (retirement == 'invalidation') {
+            stremio.invalidateCache();
+          }
+          release.complete();
+          final result = await pending;
+          if (retirement == 'invalidation') {
+            // A same-profile addon save mid-read still returns the inventory
+            // that was read, as on main. The stale list is neither cached nor
+            // persisted, so the next read hydrates and saves it again.
+            expect(result.single.connectionResourceId, restored.id);
+            expect(result.single.enabled, !failed);
+            if (!failed) expect(result.single.name, 'Hydrated');
+            expect(
+              (await registry.getSealedResourceSecret(restored.id))!.envelope,
+              original,
+            );
+            final next = (await stremio.getAddons()).singleWhere(
+              (addon) => addon.connectionResourceId == restored.id,
+            );
+            // A failed manifest stays memoized for the session, as on main.
+            expect(next.enabled, !failed);
+            expect(fetches, failed ? 1 : 2);
+            if (!failed) {
+              expect(
+                (await registry.getSealedResourceSecret(restored.id))!.envelope,
+                isNot(original),
+              );
+            }
+          } else if (retirement != 'none') {
+            expect(result, isEmpty);
+            expect(
+              (await registry.getSealedResourceSecret(restored.id))!.envelope,
+              original,
+            );
+            if (retirement == 'profile') {
+              expect((await stremio.getAddons()).single.name, 'incoming');
+              await registry.setActiveProfile(scope.profileId);
+              ProfileRuntime.publish(scope);
+            }
+            // A late failure must not memoize the URL for the next accepted read.
+            expect(
+              (await stremio.getAddons())
+                  .singleWhere(
+                    (addon) => addon.connectionResourceId == restored.id,
+                  )
+                  .name,
+              'Hydrated',
+            );
+            expect(fetches, 2);
+          } else if (failed) {
+            expect(result.single.enabled, isFalse);
+            expect(
+              (await registry.getSealedResourceSecret(restored.id))!.envelope,
+              original,
+            );
+            await stremio.getAddons();
+            expect(fetches, 1);
+          } else {
+            expect(result.single.name, 'Hydrated');
+            expect(
+              (await registry.getSealedResourceSecret(restored.id))!.envelope,
+              isNot(original),
+            );
+            expect(
+              (await stremio.getAddons())
+                  .singleWhere(
+                    (addon) => addon.connectionResourceId == restored.id,
+                  )
+                  .name,
+              'Hydrated',
+            );
+            expect(fetches, 1);
+          }
+        },
+      );
+    }
+  }
+
+  test(
+    'borrowed restored addon hydrates without repeating collection saves',
+    () async {
+      final restored = await service.create(
+        context: await ProfileAuthorizationContext.capture(registry),
+        type: ConnectionResourceType.stremioAddon,
+        label: 'Borrowed restore',
+        publicConfig: {'addonName': 'Borrowed restore'},
+        secretConfig: {
+          'manifestUrl': 'https://borrowed-restore.invalid/manifest.json',
+        },
+      );
+      final original = (await registry.getSealedResourceSecret(
+        restored.id,
+      ))!.envelope;
+      final actor = await ProfileAuthorizationContext.capture(registry);
+      final incoming = await registry.createProfile(
+        name: 'Borrower',
+        role: UserProfileRole.admin,
+        actingProfileId: actor.profileId,
+        actingAuthorizationRevision: actor.authorizationRevision,
+        actingSessionEpoch: scope.sessionEpoch,
+      );
+      await registry.setActiveProfile(incoming.id);
+      ProfileRuntime.publish(
+        ProfileScope(
+          profileId: incoming.id,
+          dataGeneration: 1,
+          sessionEpoch: 2,
+        ),
+      );
+      var fetches = 0;
+      StremioService.instance.debugManifestFetcher = (url) async {
+        fetches++;
+        // Bound failure in the regression test too; the old recursive path
+        // otherwise repeatedly saves until the runner's global timeout.
+        if (fetches > 2) throw StateError('Repeated hydration');
+        return StremioAddon(
+          id: 'borrowed',
+          name: 'Borrowed',
+          manifestUrl: url,
+          baseUrl: 'https://borrowed-restore.invalid',
+          resources: ['stream'],
+        );
+      };
+      final result = await StremioService.instance.getAddons();
+      expect(result.single.name, 'Borrowed');
+      expect(result.single.enabled, isTrue);
+      expect(result.single.connectionResourceId, restored.id);
+      expect(fetches, 2);
+      expect(
+        (await registry.getSealedResourceSecret(restored.id))!.envelope,
+        original,
+      );
+      expect(
+        (await StremioService.instance.getAddons()).single.name,
+        'Borrowed',
+      );
+      expect(fetches, 2);
+    },
+  );
+
   test('automatic addon hydration retains an unreadable sibling', () async {
     final bad = await createAddon('bad');
     final original = await corrupt(bad);
@@ -317,10 +530,12 @@ void main() {
       );
       await corrupt(resource);
       expect(
-        (await StorageService.getWebDavServers()).single.credentialsRedacted,
+        (await WebdavServerStorage.getWebDavServers())
+            .single
+            .credentialsRedacted,
         isTrue,
       );
-      await StorageService.deleteWebDavServer(resource.id);
+      await WebdavServerStorage.deleteWebDavServer(resource.id);
       expect(await registry.getResource(resource.id), isNull);
     },
   );

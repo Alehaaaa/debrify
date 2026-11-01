@@ -1,3 +1,6 @@
+import 'package:debrify/services/storage/ambient_trailer_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -16,8 +19,6 @@ import 'package:debrify/widgets/text_field_suggestions.dart';
 import 'package:debrify/widgets/tv_text_field.dart';
 import 'package:debrify/widgets/home/spotlight_board.dart';
 import 'package:debrify/widgets/home/spotlight_card_trailer.dart';
-import 'package:debrify/services/storage_service.dart';
-import 'package:debrify/services/downloaded_media_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,19 +33,10 @@ void main() {
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
     StremioService.instance.invalidateCache();
-    // A Search suggestion test only exercises title routing. Merged details
-    // watch the local downloads library, whose default scan initializes the
-    // native background-downloader runtime outside this test's control.
-    DownloadedMediaService.debugRecords = () async => [];
-    DownloadedMediaService.debugFolders = () async => [];
-    DownloadedMediaService.debugResetCache();
   });
   tearDown(() {
     MainPageBridge.setActiveTab(null);
     StremioService.instance.invalidateCache();
-    DownloadedMediaService.debugRecords = null;
-    DownloadedMediaService.debugFolders = null;
-    DownloadedMediaService.debugResetCache();
     ProfileRuntime.debugReset();
   });
 
@@ -101,26 +93,38 @@ void main() {
     await drive(
       tester,
       () => tester.pumpWidget(
-        MaterialApp(
-          home: (wrap ?? (Widget child) => child)(
-            SearchScreen(
-              isTelevision: television,
-              searchMode: true,
-              titleSearch: search,
-              suggestedTitleResolver:
-                  resolve ??
-                  (item) async => StremioMeta.fromJson({
-                    ...item.toJson(),
-                    'id': 'tt1160419',
-                    'imdb_id': 'tt1160419',
-                  }),
+        ProviderScope(
+          child: MaterialApp(
+            home: (wrap ?? (Widget child) => child)(
+              SearchScreen(
+                isTelevision: television,
+                searchMode: true,
+                titleSearch: search,
+                suggestedTitleResolver:
+                    resolve ??
+                    (item) async => StremioMeta.fromJson({
+                      ...item.toJson(),
+                      'id': 'tt1160419',
+                      'imdb_id': 'tt1160419',
+                    }),
+              ),
             ),
           ),
         ),
       ),
     );
+    // The screen borrows [search]; the test that created it owns disposal.
+    addTearDown(search.dispose);
     return (search: search, requests: requests);
   }
+
+  testWidgets('a borrowed title search survives the screen', (tester) async {
+    final mounted = await mount(tester);
+    await tester.pumpWidget(const SizedBox());
+    // The screen stops listening but must not dispose what it only borrowed.
+    expect(() => mounted.search.addListener(() {}), returnsNormally);
+    expect(() => mounted.search.clear(), returnsNormally);
+  });
 
   testWidgets('TV search uses a compact left-aligned header', (tester) async {
     tester.view.physicalSize = const Size(960, 540);
@@ -197,8 +201,10 @@ void main() {
           () => http.runWithClient(() async {
             await StremioService.instance.getCatalogAddons();
             await tester.pumpWidget(
-              const MaterialApp(
-                home: SearchScreen(isTelevision: true, searchMode: true),
+              const ProviderScope(
+                child: MaterialApp(
+                  home: SearchScreen(isTelevision: true, searchMode: true),
+                ),
               ),
             );
             await Future<void>.delayed(const Duration(milliseconds: 300));
@@ -234,9 +240,9 @@ void main() {
         await tester.pumpAndSettle();
         expect(board().sections.first.nodes[1].hasFocus, isTrue);
         expect(find.byType(SpotlightCardTrailer), findsNothing);
-        await StorageService.setHomeHeroTrailerEnabled(false);
-        await StorageService.setSpotlightFocusDetails(false);
-        await StorageService.setHomeHideCardTitlesAndRatings(true);
+        await AmbientTrailerStorage.setHomeHeroTrailerEnabled(false);
+        await HomeAppearanceStorage.setSpotlightFocusDetails(false);
+        await HomeAppearanceStorage.setHomeHideCardTitlesAndRatings(true);
         MainPageBridge.notifyHomeSettingsChanged();
         await tester.pumpAndSettle();
         expect(board().trailersEnabled, isFalse);
@@ -285,32 +291,27 @@ void main() {
     },
   );
 
-  testWidgets('disabled Keyword keeps Catalog title suggestions available', (
+  testWidgets('Keyword never requests or displays TMDB title suggestions', (
     tester,
   ) async {
     final fixture = await mount(tester);
-    expect(find.text('Keyword'), findsNothing);
+    await drive(tester, () => tester.tap(find.text('Keyword')));
     await tester.enterText(find.byType(TextField).first, 'Dune');
     await tester.pump(const Duration(milliseconds: 350));
     await tester.pump();
-    // Keyword search is deliberately disabled in this build. An old UI
-    // affordance must not send the user into a hidden mode or break Catalog.
-    expect(find.text('Search for “Dune”'), findsOneWidget);
-    expect(find.text('Dune (2021)'), findsOneWidget);
-    expect(find.byType(TextFieldSuggestions), findsOneWidget);
-    expect(fixture.requests, hasLength(1));
+    expect(find.text('Search for “Dune”'), findsNothing);
+    expect(find.text('Dune (2021)'), findsNothing);
+    expect(find.byType(TextFieldSuggestions), findsNothing);
+    expect(fixture.requests, isEmpty);
     final field = tester.widget<TvTextField>(find.byType(TvTextField).first);
-    expect(
-      field.suggestions!.value.map((suggestion) => suggestion.displayText),
-      contains('Dune (2021)'),
-    );
+    expect(field.suggestions, isNull);
     await tester.enterText(
       find.byType(TextField).first,
       'https://example.com/private',
     );
     await tester.pump(const Duration(milliseconds: 400));
     expect(fixture.search.value, isEmpty);
-    expect(fixture.requests, hasLength(1));
+    expect(fixture.requests, isEmpty);
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 
@@ -326,17 +327,16 @@ void main() {
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 
-  testWidgets('disabled Keyword cannot cancel a pending Catalog lookup', (
+  testWidgets('switching to Keyword cancels pending Catalog suggestions', (
     tester,
   ) async {
     final fixture = await mount(tester);
     await tester.enterText(find.byType(TextField).first, 'Dune');
-    expect(find.text('Keyword'), findsNothing);
+    await drive(tester, () => tester.tap(find.text('Keyword')));
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pump();
-    expect(fixture.search.value, hasLength(2));
-    expect(fixture.requests, hasLength(1));
-    expect(find.byType(TextFieldSuggestions), findsOneWidget);
+    expect(fixture.search.value, isEmpty);
+    expect(fixture.requests, isEmpty);
+    expect(find.byType(TextFieldSuggestions), findsNothing);
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 
@@ -380,17 +380,16 @@ void main() {
     expect(detail.item.id, 'tt1160419');
     expect(detail.item.year, '2021');
     expect(fixture.search.value, isEmpty);
-    Navigator.of(tester.element(find.byType(MergedDetailScreen))).pop();
-    await tester.pumpAndSettle();
     await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
   });
 
-  // Native (TMDB) metadata supplies details and episodes without an IMDb
-  // identity, so a suggestion that can't be mapped to IMDb — or whose lookup
-  // fails — opens on its native id instead of falling back to a text search.
   for (final fails in [false, true]) {
     testWidgets(
-      'unresolved suggestion opens its native detail page (error: $fails)',
+      // Native (TMDB) identities open their details directly since the
+      // native-title support (docs/simkl-native-title-support.md): an IMDb
+      // lookup that finds nothing, or fails, no longer falls back to a
+      // catalog text search.
+      'unresolved suggestion opens its details by native id (error: $fails)',
       (tester) async {
         await mount(
           tester,
@@ -403,11 +402,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 350));
         await tester.pump();
         await drive(tester, () => tester.tap(find.text('Dune (2021)')));
-        final detail = tester.widget<MergedDetailScreen>(
-          find.byType(MergedDetailScreen),
-        );
-        expect(detail.item.id, 'tmdb:438631');
+        expect(find.byType(MergedDetailScreen), findsOneWidget);
         expect(find.text('No catalog matches'), findsNothing);
+        expect(find.text('Retry'), findsNothing);
         await drive(tester, () => tester.pumpWidget(const SizedBox.shrink()));
       },
     );

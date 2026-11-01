@@ -10,7 +10,6 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
-import '../hold_feedback.dart';
 
 /// **Marquee** — full-bleed artwork with the identity anchored bottom-left and
 /// the season laid out as a horizontal rail of wide episode cards.
@@ -268,7 +267,7 @@ class _DetailMarqueeState extends State<DetailMarquee> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: episodes.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 11),
+              separatorBuilder: (_, __) => const SizedBox(width: 11),
               itemBuilder: (context, i) {
                 final e = episodes[i];
                 return DetailEdgeTrap(
@@ -371,23 +370,17 @@ class _DetailMarqueeState extends State<DetailMarquee> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: recs.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
               itemBuilder: (context, i) => DetailEdgeTrap(
                 trapLeft: i == 0,
                 trapRight: i == recs.length - 1,
                 trapUp: true,
                 onUp: () => m.focus.focusEntry(),
-                child: HoldableTile(
+                child: _RecCard(
+                  rec: recs[i],
+                  width: cardW,
+                  focusNode: _recNode(i),
                   onTap: () => m.onRecommendationTap!(recs[i]),
-                  onHold: m.onRecommendationOptions == null
-                      ? null
-                      : () => m.onRecommendationOptions!(recs[i]),
-                  child: _RecCard(
-                    rec: recs[i],
-                    width: cardW,
-                    focusNode: _recNode(i),
-                    onTap: () => m.onRecommendationTap!(recs[i]),
-                  ),
                 ),
               ),
             ),
@@ -449,9 +442,9 @@ class _RecCardState extends State<_RecCard> {
                           fit: BoxFit.cover,
                           cacheManager: DebrifyImageCache.manager,
                           memCacheWidth: 300,
-                          placeholder: (_, _) =>
+                          placeholder: (_, __) =>
                               ColoredBox(color: t.placeholder),
-                          errorWidget: (_, _, _) =>
+                          errorWidget: (_, __, ___) =>
                               ColoredBox(color: t.placeholder),
                         )
                       : ColoredBox(color: t.placeholder),

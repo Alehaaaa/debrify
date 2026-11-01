@@ -4,7 +4,7 @@ import 'package:debrify/services/profiles/profile_creation_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/profiles/sanitized_profile_preferences.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/sidebar_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -16,16 +16,18 @@ void main() {
 
   tearDown(ProfileRuntime.debugReset);
 
-  test('defaults use the grouped sidebar order', () {
+  test('defaults preserve the previously shipped grouped sidebar order', () {
     expect(SidebarConfiguration.defaults().order, <String>[
       'search',
       'home',
-      'reels',
       'discover',
-      'watch',
       'calendar',
       'downloads',
+      'iptv',
+      'youtube',
       'cloud',
+      'debrify_tv',
+      'stremio_tv',
       'addons',
       'settings',
     ]);
@@ -56,49 +58,6 @@ void main() {
     expect(configuration.order.take(2), <String>['home', 'settings']);
     expect(configuration.order.toSet(), sidebarDestinationById.keys.toSet());
     expect(configuration.order.length, sidebarDestinations.length);
-  });
-
-  test('optional destinations can be hidden while Home and Settings remain', () {
-    final configuration = SidebarConfiguration(
-      order: const <String>['downloads', 'home', 'settings'],
-      hiddenDestinationIds: const <String>[
-        'downloads',
-        'home',
-        'settings',
-      ],
-    );
-
-    expect(configuration.hiddenDestinationIds, <String>{'downloads'});
-    expect(
-      configuration.orderVisibleTabs(const <int>[
-        MainTab.home,
-        MainTab.downloads,
-        MainTab.settings,
-      ]),
-      <int>[MainTab.home, MainTab.settings],
-    );
-    expect(
-      SidebarConfiguration.tryDecode(configuration.encode())!.hiddenDestinationIds,
-      <String>{'downloads'},
-    );
-  });
-
-  test('phone navigation drops hidden destinations but keeps its order', () {
-    final configuration = SidebarConfiguration(
-      order: const <String>['settings', 'cloud', 'home'],
-      hiddenDestinationIds: const <String>['downloads', 'calendar'],
-    );
-
-    expect(
-      configuration.filterHiddenTabs(const <int>[
-        MainTab.home,
-        MainTab.downloads,
-        MainTab.cloud,
-        MainTab.calendar,
-        MainTab.settings,
-      ]),
-      <int>[MainTab.home, MainTab.cloud, MainTab.settings],
-    );
   });
 
   test('labels are sidebar-only overrides with bounded safe normalization', () {
@@ -158,13 +117,13 @@ void main() {
         order: const <String>['settings', 'home'],
         labels: const <String, String>{'home': 'Start'},
       );
-      expect(await StorageService.setSidebarConfiguration(first), isTrue);
+      expect(await SidebarStorage.setSidebarConfiguration(first), isTrue);
 
       ProfileRuntime.publish(
         ProfileScope(profileId: 'two', dataGeneration: 1, sessionEpoch: 2),
       );
       expect(
-        (await StorageService.getSidebarConfiguration()).isDefault,
+        (await SidebarStorage.getSidebarConfiguration()).isDefault,
         isTrue,
       );
 
@@ -172,12 +131,12 @@ void main() {
         ProfileScope(profileId: 'one', dataGeneration: 1, sessionEpoch: 3),
       );
       expect(
-        (await StorageService.getSidebarConfiguration()).labelForId('home'),
+        (await SidebarStorage.getSidebarConfiguration()).labelForId('home'),
         'Start',
       );
-      expect(await StorageService.resetSidebarConfiguration(), isTrue);
+      expect(await SidebarStorage.resetSidebarConfiguration(), isTrue);
       expect(
-        (await StorageService.getSidebarConfiguration()).isDefault,
+        (await SidebarStorage.getSidebarConfiguration()).isDefault,
         isTrue,
       );
     },

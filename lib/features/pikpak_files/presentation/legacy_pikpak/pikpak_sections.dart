@@ -1,0 +1,96 @@
+import 'package:debrify/services/series_source_service.dart';
+import 'package:flutter/material.dart';
+
+import 'pikpak_back_navigation.dart';
+import 'pikpak_catalog_loading.dart';
+import 'pikpak_catalog_state.dart';
+import 'pikpak_delete_actions.dart';
+import 'pikpak_feedback.dart';
+import 'pikpak_file_download.dart';
+import 'pikpak_file_list.dart';
+import 'pikpak_file_playback.dart';
+import 'pikpak_focus_actions.dart';
+import 'pikpak_focus_state.dart';
+import 'pikpak_folder_download.dart';
+import 'pikpak_folder_navigation.dart';
+import 'pikpak_folder_playback.dart';
+import 'pikpak_link_actions.dart';
+import 'pikpak_link_state.dart';
+import 'pikpak_navigation_state.dart';
+import 'pikpak_playlist_actions.dart';
+import 'pikpak_root_layout.dart';
+import 'pikpak_search_actions.dart';
+import 'pikpak_search_layout.dart';
+import 'pikpak_search_state.dart';
+import 'pikpak_selection_actions.dart';
+import 'pikpak_selection_state.dart';
+import 'pikpak_source_binding.dart';
+import 'pikpak_status_layout.dart';
+import 'pikpak_toolbar_layout.dart';
+import 'pikpak_view_modes.dart';
+import 'pikpak_view_state.dart';
+
+typedef PikpakScope = ({
+  BuildContext Function() context,
+  bool Function() mounted,
+  void Function(VoidCallback) setState,
+  String? Function() initialFolderId,
+  String? Function() initialFolderName,
+  bool Function() isPushedRoute,
+  bool Function() selectSourceMode,
+  Future<void> Function(SeriesSource)? Function() onSourceSelected,
+});
+typedef PikpakOwners = ({
+  PikpakCatalogState catalogState,
+  PikpakNavigationState navigationState,
+  PikpakViewState viewState,
+  PikpakFocusState focusState,
+  PikpakSelectionState selectionState,
+  PikpakSearchState searchState,
+  PikpakLinkState linkState,
+});
+
+class PikpakSections {
+  PikpakFocusActions? focusActionsSlot;
+  PikpakFocusActions get focusActions => focusActionsSlot!;
+  PikpakBackNavigation? backNavigationSlot;
+  PikpakBackNavigation get backNavigation => backNavigationSlot!;
+  PikpakCatalogLoading? catalogLoadingSlot;
+  PikpakCatalogLoading get catalogLoading => catalogLoadingSlot!;
+  PikpakDeleteActions? deleteActionsSlot;
+  PikpakDeleteActions get deleteActions => deleteActionsSlot!;
+  PikpakSelectionActions? selectionActionsSlot;
+  PikpakSelectionActions get selectionActions => selectionActionsSlot!;
+  PikpakFeedback? feedbackSlot;
+  PikpakFeedback get feedback => feedbackSlot!;
+  PikpakFolderNavigation? folderNavigationSlot;
+  PikpakFolderNavigation get folderNavigation => folderNavigationSlot!;
+  PikpakViewModes? viewModesSlot;
+  PikpakViewModes get viewModes => viewModesSlot!;
+  PikpakSearchActions? searchActionsSlot;
+  PikpakSearchActions get searchActions => searchActionsSlot!;
+  PikpakSourceBinding? sourceBindingSlot;
+  PikpakSourceBinding get sourceBinding => sourceBindingSlot!;
+  PikpakFilePlayback? filePlaybackSlot;
+  PikpakFilePlayback get filePlayback => filePlaybackSlot!;
+  PikpakFileDownload? fileDownloadSlot;
+  PikpakFileDownload get fileDownload => fileDownloadSlot!;
+  PikpakFolderDownload? folderDownloadSlot;
+  PikpakFolderDownload get folderDownload => folderDownloadSlot!;
+  PikpakFolderPlayback? folderPlaybackSlot;
+  PikpakFolderPlayback get folderPlayback => folderPlaybackSlot!;
+  PikpakPlaylistActions? playlistActionsSlot;
+  PikpakPlaylistActions get playlistActions => playlistActionsSlot!;
+  PikpakLinkActions? linkActionsSlot;
+  PikpakLinkActions get linkActions => linkActionsSlot!;
+  PikpakRootLayout? rootLayoutSlot;
+  PikpakRootLayout get rootLayout => rootLayoutSlot!;
+  PikpakStatusLayout? statusLayoutSlot;
+  PikpakStatusLayout get statusLayout => statusLayoutSlot!;
+  PikpakFileList? fileListSlot;
+  PikpakFileList get fileList => fileListSlot!;
+  PikpakToolbarLayout? toolbarLayoutSlot;
+  PikpakToolbarLayout get toolbarLayout => toolbarLayoutSlot!;
+  PikpakSearchLayout? searchLayoutSlot;
+  PikpakSearchLayout get searchLayout => searchLayoutSlot!;
+}

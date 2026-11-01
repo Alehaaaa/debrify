@@ -3,10 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/trakt/trakt_calendar_entry.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_theme_scope.dart';
-import '../theme/glass_chrome.dart';
 import 'calendar_display_preferences.dart';
-import 'card_action_menu.dart';
-import 'hold_feedback.dart';
 
 /// Bottom sheet showing all episodes airing on a specific day.
 ///
@@ -18,16 +15,11 @@ class TraktCalendarDaySheet extends StatelessWidget {
     required this.date,
     required this.entries,
     required this.onEpisodeSelected,
-    this.onEpisodeOptions,
   });
 
   final DateTime date;
   final List<TraktCalendarEntry> entries;
   final void Function(TraktCalendarEntry entry) onEpisodeSelected;
-
-  /// Hold / right-click on an episode: the calendar's episode menu. The sheet
-  /// stays open underneath it.
-  final void Function(TraktCalendarEntry entry)? onEpisodeOptions;
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +50,7 @@ class TraktCalendarDaySheet extends StatelessWidget {
                 shrinkWrap: true,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 itemCount: sorted.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
                 itemBuilder: (ctx, i) => _EpisodeRow(
                   // Captured from this build — never read inside the builder.
                   app: app,
@@ -68,9 +60,6 @@ class TraktCalendarDaySheet extends StatelessWidget {
                     Navigator.of(ctx).pop();
                     onEpisodeSelected(sorted[i]);
                   },
-                  onLongPress: onEpisodeOptions == null
-                      ? null
-                      : () => onEpisodeOptions!(sorted[i]),
                 ),
               ),
             ),
@@ -113,13 +102,11 @@ class _EpisodeRow extends StatelessWidget {
     required this.app,
     required this.entry,
     required this.onTap,
-    this.onLongPress,
   });
 
   final AppTheme app;
   final TraktCalendarEntry entry;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -133,93 +120,80 @@ class _EpisodeRow extends StatelessWidget {
         ? 'SEASON PREMIERE'
         : null;
 
-    return HoldFeedback(
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        splashFactory: NoSplash.splashFactory,
-        highlightColor: Colors.transparent,
-        hoverColor: GlassChrome.enabled(app)
-            ? GlassChrome.fill(app, raised: true)
-            : null,
-        focusColor: GlassChrome.enabled(app)
-            ? GlassChrome.fill(app, raised: true)
-            : null,
-        onTap: onTap,
-        onLongPress: withHoldHaptic(onLongPress),
-        onSecondaryTap: CardMenuGesture.secondaryClick(onLongPress),
-        borderRadius: app.shape.br(8),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Row(
-            children: [
-              if (entry.posterUrl != null)
-                ClipRRect(
-                  borderRadius: app.shape.brImg(4),
-                  child: Image.network(
-                    entry.posterUrl!,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: app.shape.br(8),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          children: [
+            if (entry.posterUrl != null)
+              ClipRRect(
+                borderRadius: app.shape.brImg(4),
+                child: Image.network(
+                  entry.posterUrl!,
+                  width: 40,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const SizedBox(
                     width: 40,
                     height: 60,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => const SizedBox(
-                      width: 40,
-                      height: 60,
-                      child: Icon(Icons.tv),
+                    child: Icon(Icons.tv),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: 40, height: 60, child: Icon(Icons.tv)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.showTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'S${entry.seasonNumber.toString().padLeft(2, '0')}E${entry.episodeNumber.toString().padLeft(2, '0')} · $time'
+                    '${entry.episodeTitle != null ? ' · ${entry.episodeTitle}' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    // Colors.white70 is white at 0xB3/0xFF — the sheet's own
+                    // ground is calendar.sheetBg, so this ink may follow the
+                    // theme.
+                    style: TextStyle(
+                      color: app.fade(app.core.tx, 0xB3 / 0xFF),
+                      fontSize: 12,
                     ),
                   ),
-                )
-              else
-                const SizedBox(width: 40, height: 60, child: Icon(Icons.tv)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.showTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'S${entry.seasonNumber.toString().padLeft(2, '0')}E${entry.episodeNumber.toString().padLeft(2, '0')} · $time'
-                      '${entry.episodeTitle != null ? ' · ${entry.episodeTitle}' : ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      // Colors.white70 is white at 0xB3/0xFF — the sheet's own
-                      // ground is calendar.sheetBg, so this ink may follow the
-                      // theme.
-                      style: TextStyle(
-                        color: app.fade(app.core.tx, 0xB3 / 0xFF),
-                        fontSize: 12,
+                  if (badge != null) ...[
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B),
+                        borderRadius: app.shape.br(3),
+                      ),
+                      child: Text(
+                        badge,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
-                    if (badge != null) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B),
-                          borderRadius: app.shape.br(3),
-                        ),
-                        child: Text(
-                          badge,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
-                ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

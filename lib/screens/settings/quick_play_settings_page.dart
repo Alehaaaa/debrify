@@ -1,14 +1,16 @@
 import 'dart:async';
 
+import 'package:debrify/services/storage/quick_play_storage.dart';
+import 'package:debrify/services/storage/torrent_provider_storage.dart';
+import 'package:debrify/services/storage/torrent_search_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/quick_play_rules.dart';
+import '../../services/analytics_service.dart';
 import '../../services/source_priority.dart';
-import '../../services/storage_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../../utils/tv_reveal.dart';
@@ -72,6 +74,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('quick_play_settings');
     _load();
   }
 
@@ -93,12 +96,12 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
   }
 
   Future<void> _load() async {
-    final movie = await StorageService.getQuickPlayRules(isMovie: true);
-    final show = await StorageService.getQuickPlayRules(isMovie: false);
-    final provider = await StorageService.getDefaultTorrentProvider();
-    final playMode = await StorageService.getPlayButtonMode();
-    final addonText = await StorageService.getUseAddonTextFormatting();
-    final addonLogos = await StorageService.getShowAddonLogos();
+    final movie = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final show = await QuickPlayStorage.getQuickPlayRules(isMovie: false);
+    final provider = await TorrentProviderStorage.getDefaultTorrentProvider();
+    final playMode = await QuickPlayStorage.getPlayButtonMode();
+    final addonText = await TorrentSearchStorage.getUseAddonTextFormatting();
+    final addonLogos = await TorrentSearchStorage.getShowAddonLogos();
     if (!mounted) return;
     setState(() {
       _movie = movie;
@@ -141,7 +144,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
         _show = rules;
       }
     });
-    await StorageService.setQuickPlayRules(rules, isMovie: isMovie);
+    await QuickPlayStorage.setQuickPlayRules(rules, isMovie: isMovie);
   }
 
   QuickPlayRules _custom(QuickPlayRules candidate) {
@@ -272,7 +275,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
   );
 
   void _restore() async {
-    await StorageService.restoreQuickPlayDefaults();
+    await QuickPlayStorage.restoreQuickPlayDefaults();
     if (!mounted) return;
     setState(() {
       _movie = QuickPlayRules.debrifyDefault(isMovie: true);
@@ -316,7 +319,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                   icon: Icons.bolt_rounded,
                   title: 'Quick Play',
                   subtitle:
-                      'Choose what Nextup plays automatically. Movies and series have separate rules.',
+                      'Choose what Debrify plays automatically. Movies and series have separate rules.',
                 ),
                 const SizedBox(height: 22),
                 _heading(
@@ -327,35 +330,30 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                 const SizedBox(height: 10),
                 _playModeSelect(),
                 const SizedBox(height: 24),
-                SettingsSection(
-                  title: 'Sources',
-                  children: [
-                    SettingsToggleTile(
-                      icon: Icons.image_outlined,
-                      title: 'Show add-on logos',
-                      subtitle:
-                          'Show the provider logo and name beside each source',
-                      value: _addonLogos,
-                      onChanged: (value) async {
-                        await StorageService.setShowAddonLogos(value);
-                        MainPageBridge.notifyHomeSettingsChanged();
-                        if (mounted) setState(() => _addonLogos = value);
-                      },
-                    ),
-                    SettingsToggleTile(
-                      icon: Icons.notes_rounded,
-                      title: 'Use add-on text formatting',
-                      subtitle:
-                          'Show original stream names, line breaks and emojis from add-ons such as AIOStreams',
-                      value: _addonText,
-                      onChanged: (value) async {
-                        await StorageService.setUseAddonTextFormatting(value);
-                        MainPageBridge.notifyHomeSettingsChanged();
-                        if (mounted) setState(() => _addonText = value);
-                      },
-                    ),
-                  ],
-                ),
+                SettingsSection(title: 'Sources', children: [
+                  SettingsToggleTile(
+                    icon: Icons.image_outlined,
+                    title: 'Show add-on logos',
+                    subtitle: 'Show the provider logo and name beside each source',
+                    value: _addonLogos,
+                    onChanged: (value) async {
+                      await TorrentSearchStorage.setShowAddonLogos(value);
+                      MainPageBridge.notifyHomeSettingsChanged();
+                      if (mounted) setState(() => _addonLogos = value);
+                    },
+                  ),
+                  SettingsToggleTile(
+                    icon: Icons.notes_rounded,
+                    title: 'Use add-on text formatting',
+                    subtitle: 'Show original stream names, line breaks and emojis from add-ons such as AIOStreams',
+                    value: _addonText,
+                    onChanged: (value) async {
+                      await TorrentSearchStorage.setUseAddonTextFormatting(value);
+                      MainPageBridge.notifyHomeSettingsChanged();
+                      if (mounted) setState(() => _addonText = value);
+                    },
+                  ),
+                ]),
                 const SizedBox(height: 24),
                 _tabs(),
                 const SizedBox(height: 20),
@@ -370,7 +368,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                 const SizedBox(height: 24),
                 _heading(
                   'Streams to try',
-                  'When a stream fails to start, Nextup moves down the list '
+                  'When a stream fails to start, Debrify moves down the list '
                       'and tries the next one. This is the count the player '
                       'shows while it works ("Checking stream 1 of '
                       '$_effectiveAttempts…").',
@@ -434,7 +432,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
         SettingsSelectOption(
           'quick',
           'Quick Play',
-          'Nextup picks the source and starts playing.',
+          'Debrify picks the source and starts playing.',
         ),
         SettingsSelectOption(
           'smart',
@@ -455,7 +453,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
 
   Future<void> _setPlayMode(String value) async {
     setState(() => _playMode = value);
-    await StorageService.setPlayButtonMode(value);
+    await QuickPlayStorage.setPlayButtonMode(value);
   }
 
   Widget _tabs() => ConstrainedBox(
@@ -547,7 +545,7 @@ class _QuickPlaySettingsPageState extends State<QuickPlaySettingsPage> {
                     'exception: if a season pack was ranked first, the best '
                     'single episode still gets a try.)',
               5 =>
-                'Nextup’s default — a good balance between starting fast '
+                'Debrify’s default — a good balance between starting fast '
                     'and finding a working stream.',
               _ when n < 5 =>
                 'Gives up sooner. Fails fast when nothing is working.',
@@ -725,11 +723,7 @@ class _PriorityRowState extends State<_PriorityRow> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.provider.isIptv
-                              ? 'IPTV playlist'
-                              : widget.provider.isEngine
-                              ? 'Torrent engine'
-                              : 'Addon',
+                          widget.provider.isIptv ? 'IPTV playlist' : widget.provider.isEngine ? 'Torrent engine' : 'Addon',
                           style: TextStyle(color: t.dim, fontSize: 11),
                         ),
                       ],
@@ -812,13 +806,11 @@ class _Panel extends StatelessWidget {
     final t = app.settings;
     return Container(
       padding: padding,
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app)
-          : BoxDecoration(
-              color: t.panel,
-              borderRadius: app.shape.br(16),
-              border: Border.all(color: t.line),
-            ),
+      decoration: BoxDecoration(
+        color: t.panel,
+        borderRadius: app.shape.br(16),
+        border: Border.all(color: t.line),
+      ),
       clipBehavior: Clip.antiAlias,
       child: child,
     );
@@ -864,11 +856,7 @@ class _FocusButtonState extends State<_FocusButton> {
         constraints: const BoxConstraints(minHeight: 46),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: widget.selected || focused
-              ? (GlassChrome.enabled(app)
-                    ? GlassChrome.fill(app, raised: focused)
-                    : (widget.selected ? t.panel2 : Colors.transparent))
-              : Colors.transparent,
+          color: widget.selected ? t.panel2 : Colors.transparent,
           borderRadius: app.shape.br(10),
           border: Border.all(
             color: focused ? t.accent : Colors.transparent,
@@ -925,9 +913,7 @@ class _ActionRowState extends State<_ActionRow> {
         constraints: const BoxConstraints(minHeight: 62),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: GlassChrome.enabled(app)
-              ? GlassChrome.fill(app, raised: focused)
-              : (focused ? t.panel2 : t.panel),
+          color: focused ? t.panel2 : t.panel,
           borderRadius: app.shape.br(14),
           border: Border.all(color: focused ? t.accent : t.line),
         ),

@@ -2,6 +2,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:debrify/services/storage/alldebrid_storage.dart';
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/pikpak_storage.dart';
+import 'package:debrify/services/storage/premiumize_storage.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage/torbox_storage.dart';
+import 'package:debrify/services/storage/torrent_provider_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
+import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -17,7 +28,6 @@ import '../../services/remote_control/remote_control_state.dart';
 import '../../services/remote_control/remote_session.dart';
 import '../../services/remote_control/remote_transfer_diagnostics.dart';
 import 'remote_pairing_dialog.dart';
-import '../../services/storage_service.dart';
 import '../../services/webdav_sync/webdav_sync_runtime.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/stremio_service.dart';
@@ -137,57 +147,59 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
     });
 
     try {
-      final realDebridApiKey = await StorageService.getApiKey(
+      final realDebridApiKey = await RealDebridStorage.getApiKey(
         forRemoteTransfer: true,
       );
-      final rdEnabled = await StorageService.getRealDebridIntegrationEnabled();
+      final rdEnabled =
+          await RealDebridStorage.getRealDebridIntegrationEnabled();
       final hasRd = (realDebridApiKey?.isNotEmpty ?? false) && rdEnabled;
 
-      final torboxApiKey = await StorageService.getTorboxApiKey(
+      final torboxApiKey = await TorboxStorage.getTorboxApiKey(
         forRemoteTransfer: true,
       );
-      final tbEnabled = await StorageService.getTorboxIntegrationEnabled();
+      final tbEnabled = await TorboxStorage.getTorboxIntegrationEnabled();
       final hasTb = (torboxApiKey?.isNotEmpty ?? false) && tbEnabled;
 
-      final premiumizeApiKey = await StorageService.getPremiumizeApiKey(
+      final premiumizeApiKey = await PremiumizeStorage.getPremiumizeApiKey(
         forRemoteTransfer: true,
       );
-      final pmEnabled = await StorageService.getPremiumizeIntegrationEnabled();
+      final pmEnabled =
+          await PremiumizeStorage.getPremiumizeIntegrationEnabled();
       final hasPm = (premiumizeApiKey?.isNotEmpty ?? false) && pmEnabled;
 
-      final allDebridApiKey = await StorageService.getAllDebridApiKey(
+      final allDebridApiKey = await AllDebridStorage.getAllDebridApiKey(
         forRemoteTransfer: true,
       );
-      final adEnabled = await StorageService.getAllDebridIntegrationEnabled();
+      final adEnabled = await AllDebridStorage.getAllDebridIntegrationEnabled();
       final hasAd = (allDebridApiKey?.isNotEmpty ?? false) && adEnabled;
 
-      final pikpakEmail = await StorageService.getPikPakEmail(
+      final pikpakEmail = await PikpakStorage.getPikPakEmail(
         forRemoteTransfer: true,
       );
-      final ppEnabled = await StorageService.getPikPakEnabled();
+      final ppEnabled = await PikpakStorage.getPikPakEnabled();
       final hasPp = (pikpakEmail?.isNotEmpty ?? false) && ppEnabled;
 
-      final traktAccessToken = await StorageService.getTraktAccessToken(
+      final traktAccessToken = await TraktStorage.getTraktAccessToken(
         forRemoteTransfer: true,
       );
-      final traktRefreshToken = await StorageService.getTraktRefreshToken(
+      final traktRefreshToken = await TraktStorage.getTraktRefreshToken(
         forRemoteTransfer: true,
       );
-      _traktUsername = await StorageService.getTraktUsername();
+      _traktUsername = await TraktStorage.getTraktUsername();
       final hasTrakt =
           (traktAccessToken?.isNotEmpty ?? false) &&
           (traktRefreshToken?.isNotEmpty ?? false);
 
-      final simklAccessToken = await StorageService.getSimklAccessToken(
+      final simklAccessToken = await SimklStorage.getSimklAccessToken(
         forRemoteTransfer: true,
       );
-      _simklUsername = await StorageService.getSimklUsername();
+      _simklUsername = await SimklStorage.getSimklUsername();
       final hasSimkl = simklAccessToken?.isNotEmpty ?? false;
 
       final mdblistApiKey = kMdblistEnabled
-          ? await StorageService.getMdblistApiKey(forRemoteTransfer: true)
+          ? await MdblistStorage.getMdblistApiKey(forRemoteTransfer: true)
           : null;
-      _mdblistUsername = await StorageService.getMdblistUsername();
+      _mdblistUsername = await MdblistStorage.getMdblistUsername();
       final hasMdblist = mdblistApiKey?.isNotEmpty ?? false;
 
       await LocalEngineStorage.instance.initialize();
@@ -206,7 +218,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
       }
 
       try {
-        final servers = await StorageService.getWebDavServers(
+        final servers = await WebdavServerStorage.getWebDavServers(
           forSettings: false,
           forRemoteTransfer: true,
         );
@@ -217,7 +229,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
       }
 
       try {
-        final managers = await StorageService.getIndexerManagerConfigs(
+        final managers = await TorrentProviderStorage.getIndexerManagerConfigs(
           forSettings: false,
           forRemoteTransfer: true,
         );
@@ -1122,15 +1134,15 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           context: context,
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Continue without Nextup TV?'),
+            title: const Text('Continue without Debrify TV?'),
             content: Text(
               'This profile transfer had to be compacted to fit on the TV. '
-              'Nextup TV will not be included: ${omission.contentsLabel} '
+              'Debrify TV will not be included: ${omission.contentsLabel} '
               'will be left out. No empty channels will be created.\n\n'
-              'You can cancel and open Nextup TV → Export first to save a '
+              'You can cancel and open Debrify TV → Export first to save a '
               'ZIP containing the channels and their playable pools. After '
               'the profile transfer, import that ZIP from storage or use '
-              'Remote → Nextup TV Channels.'
+              'Remote → Debrify TV Channels.'
               '${omission.profilesAffected > 1 ? ' Repeat the channel transfer for each affected profile.' : ''}',
             ),
             actions: <Widget>[
@@ -1140,7 +1152,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: const Text('Continue without Nextup TV'),
+                child: const Text('Continue without Debrify TV'),
               ),
             ],
           ),
@@ -1177,25 +1189,25 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
       case ConfigCommand.realDebrid:
         return sendScalar(
           ConfigCommand.realDebrid,
-          () => StorageService.getApiKey(forRemoteTransfer: true),
+          () => RealDebridStorage.getApiKey(forRemoteTransfer: true),
         );
       case ConfigCommand.torbox:
         return sendScalar(
           ConfigCommand.torbox,
-          () => StorageService.getTorboxApiKey(forRemoteTransfer: true),
+          () => TorboxStorage.getTorboxApiKey(forRemoteTransfer: true),
         );
       case ConfigCommand.premiumize:
         return sendScalar(
           ConfigCommand.premiumize,
-          () => StorageService.getPremiumizeApiKey(forRemoteTransfer: true),
+          () => PremiumizeStorage.getPremiumizeApiKey(forRemoteTransfer: true),
         );
       case ConfigCommand.allDebrid:
         return sendScalar(
           ConfigCommand.allDebrid,
-          () => StorageService.getAllDebridApiKey(forRemoteTransfer: true),
+          () => AllDebridStorage.getAllDebridApiKey(forRemoteTransfer: true),
         );
       case ConfigCommand.pikpak:
-        final email = await StorageService.getPikPakEmail(
+        final email = await PikpakStorage.getPikPakEmail(
           forRemoteTransfer: true,
         );
         if (email == null || email.isEmpty) return false;
@@ -1210,10 +1222,10 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           ),
         );
       case ConfigCommand.trakt:
-        final access = await StorageService.getTraktAccessToken(
+        final access = await TraktStorage.getTraktAccessToken(
           forRemoteTransfer: true,
         );
-        final refresh = await StorageService.getTraktRefreshToken(
+        final refresh = await TraktStorage.getTraktRefreshToken(
           forRemoteTransfer: true,
         );
         if (access == null ||
@@ -1222,8 +1234,8 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
             refresh.isEmpty) {
           return false;
         }
-        final expiry = await StorageService.getTraktTokenExpiry();
-        final username = await StorageService.getTraktUsername();
+        final expiry = await TraktStorage.getTraktTokenExpiry();
+        final username = await TraktStorage.getTraktUsername();
         return state.sendConfigCommandToDevice(
           ConfigCommand.trakt,
           targetIp,
@@ -1231,40 +1243,40 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
             jsonEncode({
               'access_token': access,
               'refresh_token': refresh,
-              'expiry_ms': ?expiry,
-              'username': ?username,
+              if (expiry != null) 'expiry_ms': expiry,
+              if (username != null) 'username': username,
             }),
           ),
         );
       case ConfigCommand.simkl:
-        final access = await StorageService.getSimklAccessToken(
+        final access = await SimklStorage.getSimklAccessToken(
           forRemoteTransfer: true,
         );
         if (access == null || access.isEmpty) return false;
-        final username = await StorageService.getSimklUsername();
+        final username = await SimklStorage.getSimklUsername();
         return state.sendConfigCommandToDevice(
           ConfigCommand.simkl,
           targetIp,
           configData: transferData(
             jsonEncode({
               'access_token': access,
-              'username': ?username,
+              if (username != null) 'username': username,
             }),
           ),
         );
       case ConfigCommand.mdblist:
-        final apiKey = await StorageService.getMdblistApiKey(
+        final apiKey = await MdblistStorage.getMdblistApiKey(
           forRemoteTransfer: true,
         );
         if (apiKey == null || apiKey.isEmpty) return false;
-        final username = await StorageService.getMdblistUsername();
+        final username = await MdblistStorage.getMdblistUsername();
         return state.sendConfigCommandToDevice(
           ConfigCommand.mdblist,
           targetIp,
           configData: transferData(
             jsonEncode({
               'api_key': apiKey,
-              'username': ?username,
+              if (username != null) 'username': username,
             }),
           ),
         );
@@ -1273,7 +1285,9 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           ConfigCommand.trackingPreferences,
           targetIp,
           configData: transferData(
-            jsonEncode(await StorageService.buildTrackingPreferencesPayload()),
+            jsonEncode(
+              await TrackingSourceStorage.buildTrackingPreferencesPayload(),
+            ),
           ),
         );
       case ConfigCommand.searchEngines:
@@ -1287,7 +1301,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           configData: transferData(jsonEncode(engineIds)),
         );
       case ConfigCommand.webDav:
-        final servers = await StorageService.getWebDavServers(
+        final servers = await WebdavServerStorage.getWebDavServers(
           forSettings: false,
           forRemoteTransfer: true,
         );
@@ -1300,7 +1314,7 @@ class _RemoteTransferAllState extends State<RemoteTransferAll> {
           ),
         );
       case ConfigCommand.indexerManagers:
-        final managers = await StorageService.getIndexerManagerConfigs(
+        final managers = await TorrentProviderStorage.getIndexerManagerConfigs(
           forSettings: false,
           forRemoteTransfer: true,
         );

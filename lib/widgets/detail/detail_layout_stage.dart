@@ -2,9 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../utils/platform_util.dart';
-import '../../utils/tv_keys.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 import '../../services/debrify_image_cache.dart';
 import '../../services/imdb_enrichment_service.dart';
@@ -124,7 +121,7 @@ class _DetailStageState extends State<DetailStage> {
     if (tabs.isNotEmpty && !tabs.contains(_active)) _active = tabs.first;
     // Sources is a tab-shaped ACTION, so a movie with no panel content still
     // needs the strip drawn — otherwise the button is unreachable.
-    final hasSources = m.onBrowse != null;
+    final hasSources = m.isMovie && m.onBrowse != null;
     final showStrip = tabs.isNotEmpty || hasSources;
     final topFraction = size.isPhone ? 0.38 : 0.52;
 
@@ -193,7 +190,7 @@ class _DetailStageState extends State<DetailStage> {
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   Widget _tabStrip(DetailModel m, List<_Tab> tabs, DetailSize size) {
-    final hasSources = m.onBrowse != null;
+    final hasSources = m.isMovie && m.onBrowse != null;
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: _t.hair)),
@@ -232,7 +229,7 @@ class _DetailStageState extends State<DetailStage> {
             if (hasSources) ...[
               const SizedBox(width: 20),
               _TabButton(
-                label: m.downloadLabel,
+                label: 'Sources',
                 active: false,
                 focusNode: _sourcesNode,
                 trapLeft: tabs.isEmpty,
@@ -240,7 +237,6 @@ class _DetailStageState extends State<DetailStage> {
                 onUp: () => m.focus.focusEntry(),
                 onDown: _focusPanel,
                 onTap: m.onBrowse!,
-                onLongPress: m.onBrowseLongPress,
               ),
             ],
           ],
@@ -328,9 +324,7 @@ class _DetailStageState extends State<DetailStage> {
               border: Border(bottom: BorderSide(color: _t.hair)),
             ),
             child: DetailSeasonControl(
-              onOptions: view.seasonOptions == null
-                  ? null
-                  : () => view.seasonOptions!(view.selectedSeasonNumber),
+              onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
               seasonNumber: view.selectedSeasonNumber,
               episodeCount: episodes.length,
               canPrev: idx > 0,
@@ -356,7 +350,7 @@ class _DetailStageState extends State<DetailStage> {
             controller: _episodeScroll,
             padding: EdgeInsets.fromLTRB(size.gutter, 8, size.gutter, 20),
             itemCount: episodes.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 6),
+            separatorBuilder: (_, __) => const SizedBox(height: 6),
             itemBuilder: (context, i) {
               final e = episodes[i];
               return DetailEdgeTrap(
@@ -527,7 +521,6 @@ class _TabButton extends StatefulWidget {
   final bool trapLeft;
   final bool trapRight;
   final VoidCallback onTap;
-  final VoidCallback? onLongPress;
   final VoidCallback onUp;
   final VoidCallback onDown;
 
@@ -538,7 +531,6 @@ class _TabButton extends StatefulWidget {
     required this.trapLeft,
     required this.trapRight,
     required this.onTap,
-    this.onLongPress,
     required this.onUp,
     required this.onDown,
   });
@@ -550,22 +542,11 @@ class _TabButton extends StatefulWidget {
 class _TabButtonState extends State<_TabButton> {
   bool _focused = false;
   static final _tv = PlatformUtil.isAndroidTvCached;
-  late final TvHoldOk _hold = TvHoldOk(
-    onTap: () => widget.onTap(),
-    onHold: () => widget.onLongPress?.call(),
-  );
-
-  @override
-  void dispose() {
-    _hold.reset();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
     final active = widget.active;
-    final app = AppThemeScope.of(context);
     return DetailEdgeTrap(
       trapLeft: widget.trapLeft,
       trapRight: widget.trapRight,
@@ -577,7 +558,6 @@ class _TabButtonState extends State<_TabButton> {
         focusNode: widget.focusNode,
         onFocusChange: (f) {
           setState(() => _focused = f);
-          if (!f) _hold.reset();
           if (f) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || !context.mounted) return;
@@ -591,10 +571,6 @@ class _TabButtonState extends State<_TabButton> {
           }
         },
         onKeyEvent: (node, event) {
-          // With a hold action, OK opens on release and a held OK holds.
-          if (widget.onLongPress != null && isActivate(event.logicalKey)) {
-            return _hold.handle(event);
-          }
           if (event is KeyDownEvent && isActivate(event.logicalKey)) {
             widget.onTap();
             return KeyEventResult.handled;
@@ -603,7 +579,6 @@ class _TabButtonState extends State<_TabButton> {
         },
         child: GestureDetector(
           onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
           behavior: HitTestBehavior.opaque,
           child: Container(
             padding: const EdgeInsets.fromLTRB(2, 12, 2, 9),
@@ -611,11 +586,7 @@ class _TabButtonState extends State<_TabButton> {
               // Several themes set focus == tx, where an underline alone makes
               // the focused tab identical to the active one. A ground says
               // "the cursor is here" regardless of the palette.
-              color: _focused
-                  ? (GlassChrome.enabled(app)
-                        ? GlassChrome.fill(app, raised: true)
-                        : t.panel)
-                  : null,
+              color: _focused ? t.panel : null,
               border: Border(
                 bottom: BorderSide(
                   // Focus WINS over active. The other way round, landing on the
@@ -672,8 +643,9 @@ class _CastLine extends StatelessWidget {
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 140,
-                    placeholder: (_, _) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
+                    placeholder: (_, __) => ColoredBox(color: t.placeholder),
+                    errorWidget: (_, __, ___) =>
+                        ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),
           ),
@@ -741,8 +713,8 @@ class _StagePosterState extends State<_StagePoster> {
                   fit: BoxFit.cover,
                   cacheManager: DebrifyImageCache.manager,
                   memCacheWidth: 300,
-                  placeholder: (_, _) => ColoredBox(color: t.placeholder),
-                  errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
+                  placeholder: (_, __) => ColoredBox(color: t.placeholder),
+                  errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
                 )
               : ColoredBox(color: t.placeholder),
         ),

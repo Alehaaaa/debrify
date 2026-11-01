@@ -78,9 +78,8 @@ void main() {
             if (!identityStarted.isCompleted) identityStarted.complete();
             return http.Response('{"imdb_id":"tt42"}', 200);
           }
-          if (request.url.queryParameters['page'] == '2') {
+          if (request.url.queryParameters['page'] == '2')
             return slowCatalog.future;
-          }
           return catalog();
         }),
       );

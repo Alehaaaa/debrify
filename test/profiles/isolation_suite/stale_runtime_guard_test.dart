@@ -35,42 +35,55 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// reintroduced and the guard confirmed to fail.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final storageSource = File(
-    'lib/services/storage_service.dart',
+  final storageSources = <String, String>{
+    for (final file in Directory(
+      'lib/services/storage',
+    ).listSync(recursive: true).whereType<File>())
+      if (file.path.endsWith('.dart'))
+        file.path.replaceAll('\\', '/'): file.readAsStringSync(),
+  };
+  final resetEntry = File(
+    'lib/services/storage/storage_profile_caches.dart',
   ).readAsStringSync();
   final participantSource = File(
     'lib/services/profiles/profile_app_lifecycle_participant.dart',
   ).readAsStringSync();
 
   test('every synchronous mirror is cleared on profile switch', () {
-    // StorageService exposes `<name>Cached` statics that the UI reads
+    // Storage owners expose `<name>Cached` statics that the UI reads
     // synchronously, precisely so a rebuild does not have to await a disk
     // read. That speed is why they are the sharpest stale-UI edge in the app:
     // a mirror left holding profile A's value is displayed to profile B
     // immediately, with no relaunch and no error anywhere.
-    final declared = RegExp(
-      r'^\s+static\s+[A-Za-z0-9<>?,\s]+\s+(_?[a-zA-Z0-9]+Cached)\b',
-      multiLine: true,
-    ).allMatches(storageSource).map((m) => m.group(1)!).toSet();
-
+    final allDeclared = <String>{};
+    final resetBodies = <String>[];
+    for (final entry in storageSources.entries) {
+      final declared = RegExp(
+        r'^\s+static\s+[A-Za-z0-9<>?,\s]+\s+(_?[a-zA-Z0-9]+Cached)\b',
+        multiLine: true,
+      ).allMatches(entry.value).map((m) => m.group(1)!).toSet();
+      if (declared.isEmpty) continue;
+      allDeclared.addAll(declared);
+      final body = _bodyOf(entry.value, 'static void resetProfileCaches()');
+      resetBodies.add(body);
+      final unreset = declared.where((name) => !body.contains(name)).toList()
+        ..sort();
+      expect(
+        unreset,
+        isEmpty,
+        reason:
+            '${entry.key}: These storage mirrors survive a profile '
+            'switch. Reset each in its owner resetProfileCaches().',
+      );
+    }
     expect(
-      declared,
+      allDeclared,
       isNotEmpty,
       reason: 'the mirror naming convention changed; update this guard',
     );
-
-    final body = _bodyOf(storageSource, 'static void resetProfileCaches()');
-    final unreset = declared.where((name) => !body.contains(name)).toList()
-      ..sort();
-
-    expect(
-      unreset,
-      isEmpty,
-      reason:
-          'These StorageService mirrors survive a profile switch, so the '
-          'incoming profile sees the previous profile\'s value until the app '
-          'is killed. Reset each in resetProfileCaches().',
-    );
+    final resets = resetBodies.join('\n');
+    expect(resets, contains('_launchSelectionGeneration++;'));
+    expect(resets, contains('_startupIptvChannelCached = null;'));
   });
 
   test('every profile-scoped cache is wired into the switch', () {
@@ -116,6 +129,38 @@ void main() {
       r'clearUserInfo|clearProfileSessionState)\s*\(',
     );
 
+    expect(
+      participantSource,
+      matches(
+        r"_warmed\(\s*'StorageService',\s*scope,\s*resetStorageProfileCaches\s*\)",
+      ),
+      reason:
+          'Reset all storage owners before the single StorageService stamp.',
+    );
+    final entryBody = _bodyOf(resetEntry, 'void resetStorageProfileCaches()');
+    final resetCalls = RegExp(
+      r'\b(\w+)\.resetProfileCaches\(\)',
+    ).allMatches(entryBody).map((m) => m.group(1)!).toList();
+    final owners = <String>{};
+    for (final entry in storageSources.entries) {
+      if (!resetShaped.hasMatch(entry.value)) continue;
+      final owner = RegExp(
+        r'\bclass\s+(\w+)',
+      ).firstMatch(entry.value)!.group(1)!;
+      owners.add(owner);
+      expect(
+        resetCalls.where((name) => name == owner).length,
+        1,
+        reason:
+            '${entry.key} must be reset exactly once through the entry point.',
+      );
+    }
+    expect(
+      resetCalls.toSet(),
+      owners,
+      reason: 'Every reset call must reach a storage owner.',
+    );
+
     final unwired = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
@@ -124,6 +169,7 @@ void main() {
       final source = entity.readAsStringSync();
       if (!resetShaped.hasMatch(source)) continue;
       if (deviceGlobalCaches.containsKey(path)) continue;
+      if (storageSources.containsKey(path)) continue;
 
       // The participant imports by relative path; match on the file's own
       // basename so a rename cannot silently drop the wiring.
@@ -170,10 +216,9 @@ void main() {
 
     // Value reads only. The `(?!\s*\()` excludes method calls: telling a
     // controller something creates no staleness, whereas reading a value does.
-    final read = RegExp(r'(\w+Controller)\.(?:instance\.\w+(?!\s*\()|notifier\b)')
-        .allMatches(appState)
-        .map((m) => m.group(1)!)
-        .toSet();
+    final read = RegExp(
+      r'(\w+Controller)\.(?:instance\.\w+(?!\s*\()|notifier\b)',
+    ).allMatches(appState).map((m) => m.group(1)!).toSet();
 
     expect(
       read,
@@ -181,14 +226,16 @@ void main() {
       reason: 'no controller reads found; the pattern changed',
     );
 
-    final unlistened = read
-        .where(
-          (controller) => !RegExp(
-            '$controller' r'(\.instance|\.notifier)?\.addListener',
-          ).hasMatch(appState),
-        )
-        .toList()
-      ..sort();
+    final unlistened =
+        read
+            .where(
+              (controller) => !RegExp(
+                '$controller'
+                r'(\.instance|\.notifier)?\.addListener',
+              ).hasMatch(appState),
+            )
+            .toList()
+          ..sort();
 
     expect(
       unlistened,

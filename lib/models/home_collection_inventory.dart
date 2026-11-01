@@ -237,7 +237,7 @@ class HomeCollectionInventory {
 
   List<HomeCollection> get collections => [
     for (final id in order)
-      ?records[id],
+      if (records[id] case final c?) c,
   ];
 
   void put(HomeCollection c) {

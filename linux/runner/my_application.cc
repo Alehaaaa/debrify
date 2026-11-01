@@ -45,11 +45,11 @@ static void my_application_activate(GApplication* application) {
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "Nextup");
+    gtk_header_bar_set_title(header_bar, "debrify");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "Nextup");
+    gtk_window_set_title(window, "debrify");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
@@ -60,10 +60,9 @@ static void my_application_activate(GApplication* application) {
   FlView* view = fl_view_new(project);
 
   GdkRGBA background_color;
-  // Match the logo-free native launch surface to Flutter's splash base. This
-  // prevents a black frame between the desktop window appearing and Flutter
-  // painting the one, current launch ident.
-  gdk_rgba_parse(&background_color, "#020617");
+  // Background defaults to black, override it here if necessary, e.g. #00000000
+  // for transparent.
+  gdk_rgba_parse(&background_color, "#000000");
   fl_view_set_background_color(view, &background_color);
 
   gtk_widget_show(GTK_WIDGET(view));

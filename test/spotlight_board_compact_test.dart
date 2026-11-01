@@ -92,7 +92,7 @@ void main() {
               sections: sections,
               heroNode: hero,
               heroAddon: _addon,
-              onHeroOpen: onHeroOpen ?? (_, _) {},
+              onHeroOpen: onHeroOpen ?? (_, __) {},
               onLoadMoreShelves: onLoadMoreShelves,
               dpad: dpad,
               animationsEnabled: snowyMountain,
@@ -475,7 +475,7 @@ void main() {
     });
 
     testWidgets(
-        'the touch hero asks for a trailer after its short delay without paging the reel',
+        'the touch hero asks for a trailer after a short dwell without paging the reel',
         (tester) async {
       // Start useful trailer work as soon as the visible hero is eligible,
       // and change nothing else.
@@ -493,7 +493,7 @@ void main() {
                 sections: [_section('Top', [a, b])],
                 heroNode: hero,
                 heroAddon: _addon,
-                onHeroOpen: (_, _) {},
+                onHeroOpen: (_, __) {},
                 dpad: false,
                 trailersEnabled: true,
                 onDwell: (m) => dwelled.add(m.id),
@@ -503,10 +503,10 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      // The handoff is a short, cancellable delay.
+      expect(dwelled, isEmpty, reason: 'nothing before the dwell');
       await tester.pump(const Duration(seconds: 2));
       expect(dwelled, ['tt1'],
-          reason: 'the resolve starts for the visible slide after the delay');
+          reason: 'the resolve starts for the visible slide after 2 s');
       expect(find.text('Alpha'), findsWidgets,
           reason: 'and the reel has not moved');
 

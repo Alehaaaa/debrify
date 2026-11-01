@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:debrify/services/storage/detail_page_storage.dart';
+import 'package:debrify/services/storage/quick_play_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +10,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/screens/merged_series_detail_screen.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/trakt/trakt_episode_model.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
@@ -30,7 +31,7 @@ void main() {
   }) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     if (!preferSeriesPacks) {
-      await StorageService.setQuickPlayRules(
+      await QuickPlayStorage.setQuickPlayRules(
         QuickPlayRules.debrifyDefault(
           isMovie: false,
         ).copyWith(preferSeriesPacks: false),
@@ -92,13 +93,13 @@ void main() {
     await pumpSeriesDetail(tester, progress: const {});
 
     expect(find.text('Start Watching'), findsOneWidget);
-    expect(find.text('Continue · S1E1'), findsNothing);
+    expect(find.text('Resume · S1E1'), findsNothing);
   });
 
   testWidgets('real S1E1 progress renders Resume', (tester) async {
     await pumpSeriesDetail(tester, progress: const {'1-1': 25});
 
-    expect(find.text('Continue · S1E1'), findsOneWidget);
+    expect(find.text('Resume · S1E1'), findsOneWidget);
   });
 
   // The bug this pins: the label is resolved by this screen's episode engine
@@ -123,9 +124,9 @@ void main() {
     // Engine-derived: the loader stub reports started:false, so a label reading
     // "Resume" can only have come from the watch-progress engine — exactly the
     // source the host cannot see.
-    expect(find.text('Continue · S1E1'), findsOneWidget);
+    expect(find.text('Resume · S1E1'), findsOneWidget);
 
-    await tester.tap(find.text('Continue · S1E1'));
+    await tester.tap(find.text('Resume · S1E1'));
     await tester.pump();
 
     expect(pressed, isTrue);
@@ -173,7 +174,7 @@ void main() {
       onTraktAction: (_) {},
     );
 
-    await tester.longPress(find.text('Continue · S1E1'));
+    await tester.longPress(find.text('Resume · S1E1'));
     await tester.pumpAndSettle();
 
     expect(find.text('Season pack sources'), findsOneWidget);
@@ -335,9 +336,9 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    final previousStyle = StorageService.detailPageStyleCached;
-    StorageService.detailPageStyleCached = 'showcase';
-    addTearDown(() => StorageService.detailPageStyleCached = previousStyle);
+    final previousStyle = DetailPageStorage.detailPageStyleCached;
+    DetailPageStorage.detailPageStyleCached = 'showcase';
+    addTearDown(() => DetailPageStorage.detailPageStyleCached = previousStyle);
     final firstLaunch = Completer<void>();
     var launches = 0;
 
@@ -394,54 +395,5 @@ void main() {
     await tester.tap(find.text('Play'));
     await tester.pump();
     expect(launches, 2);
-  });
-
-  testWidgets('episodeFilter lists only the episodes it accepts', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    await tester.pumpWidget(
-      MaterialApp(
-        builder: (context, child) =>
-            AppThemeScope(theme: AppThemes.legacy, child: child!),
-        home: MergedDetailScreen(
-          item: const StremioMeta(
-            id: 'downloaded-series',
-            type: 'series',
-            name: 'Downloaded Series',
-          ),
-          addon: StremioAddon(
-            id: 'direct-test',
-            name: 'Direct Test',
-            manifestUrl: '',
-            baseUrl: '',
-          ),
-          onResume: (_) async {},
-          resumeInfoLoader: () async =>
-              (started: false, season: null, episode: null),
-          seasonsLoader: () async => [
-            TraktSeason(
-              number: 1,
-              episodeCount: 3,
-              episodes: [
-                TraktEpisode(season: 1, number: 1, title: 'Pilot'),
-                TraktEpisode(season: 1, number: 2, title: 'Second Act'),
-                TraktEpisode(season: 1, number: 3, title: 'Finale'),
-              ],
-            ),
-          ],
-          watchProgressLoader: () async => const {},
-          onPlayEpisode: (_) async {},
-          episodeFilter: (season, episode) => season == 1 && episode == 2,
-        ),
-      ),
-    );
-    for (var frame = 0; frame < 8; frame++) {
-      await tester.pump(const Duration(milliseconds: 50));
-    }
-
-    expect(find.textContaining('Second Act'), findsWidgets);
-    expect(find.textContaining('Pilot'), findsNothing);
-    expect(find.textContaining('Finale'), findsNothing);
   });
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
-import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The two manual source searches available from a series' primary Play hold.
 enum DetailPrimarySourceChoice { seasonPacks, episode }
@@ -20,7 +19,6 @@ Future<DetailPrimarySourceChoice?> showDetailPrimarySourcesSheet(
 }) {
   final app = AppThemeScope.of(context);
   return showModalBottomSheet<DetailPrimarySourceChoice>(
-sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     backgroundColor: app.sheetSurface,
     showDragHandle: true,

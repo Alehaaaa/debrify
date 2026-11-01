@@ -1,8 +1,11 @@
+import 'package:debrify/services/storage/tv_display_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
+
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import 'package:debrify/models/tv_render_quality.dart';
 
 /// Android TV "Rendering" picker — whether the UI is drawn at the panel's own
 /// resolution or at a ~720p buffer the TV's scaler blows back up.
@@ -49,6 +52,7 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('tv_render_quality_settings');
     _load();
   }
 
@@ -59,8 +63,8 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   }
 
   Future<void> _load() async {
-    final quality = await StorageService.getTvRenderQuality();
-    final active = await StorageService.getTvLowResRenderActive();
+    final quality = await TvDisplayStorage.getTvRenderQuality();
+    final active = await TvDisplayStorage.getTvLowResRenderActive();
     if (!mounted) return;
     setState(() {
       _quality = quality;
@@ -82,11 +86,11 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   Future<void> _select(TvRenderQuality quality) async {
     if (quality == _quality) return;
     setState(() => _quality = quality);
-    await StorageService.setTvRenderQuality(quality);
+    await TvDisplayStorage.setTvRenderQuality(quality);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Rendering saved — restart Nextup to apply it.'),
+        content: Text('Rendering saved — restart Debrify to apply it.'),
       ),
     );
   }
@@ -151,9 +155,9 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
                   'feel heavy. Drawing at 720p and letting the TV scale the '
                   'picture up costs a lot less per frame, so menus and rows '
                   'move more smoothly — at the price of softer text and art. '
-                  'Nextup normally picks for you; change this if scrolling '
+                  'Debrify normally picks for you; change this if scrolling '
                   'stutters, or if the picture looks softer than it should. '
-                  'Takes effect the next time Nextup starts.',
+                  'Takes effect the next time Debrify starts.',
                   style: TextStyle(
                     fontSize: 12.5,
                     height: 1.45,

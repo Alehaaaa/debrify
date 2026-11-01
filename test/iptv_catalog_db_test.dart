@@ -86,10 +86,10 @@ void _createV1Schema(String path, {required int rows}) {
       }
       db.execute('COMMIT');
     } finally {
-      insert.close();
+      insert.dispose();
     }
   } finally {
-    db.close();
+    db.dispose();
   }
 }
 
@@ -147,7 +147,7 @@ void main() {
         '0',
       );
     } finally {
-      db.close();
+      db.dispose();
     }
   });
 
@@ -168,7 +168,7 @@ void main() {
       );
       db.execute('DELETE FROM webdav_sync_record_state');
       db.execute('PRAGMA user_version = 2');
-      db.close();
+      db.dispose();
       IptvCatalogDb.debugClose();
 
       await IptvCatalogDb.open();
@@ -197,7 +197,7 @@ void main() {
         expect(categoryOrder['deleted'], 0);
         expect(db.select('PRAGMA user_version').single.values.single, 4);
       } finally {
-        db.close();
+        db.dispose();
       }
     },
   );
@@ -247,7 +247,7 @@ void main() {
       "('old', 1, 2, 'Live B', 'b', -1, 'live', 'live b'), "
       "('old', 1, 3, 'M3U Zero', 'z', 0, NULL, 'm3u zero')",
     );
-    db.close();
+    db.dispose();
 
     await IptvCatalogDb.open();
     await IptvCatalogDb.ensureMigrations();
@@ -269,7 +269,7 @@ void main() {
           .join('\n');
       expect(plan, isNot(contains('CORRELATED')));
     } finally {
-      db.close();
+      db.dispose();
     }
   });
 
@@ -292,7 +292,7 @@ void main() {
     try {
       expect(db.select('PRAGMA user_version').first.values.first, 4);
     } finally {
-      db.close();
+      db.dispose();
     }
   });
 
@@ -344,7 +344,7 @@ void main() {
           0,
         );
       } finally {
-        db.close();
+        db.dispose();
       }
 
       // The retry then succeeds from an untouched v1 database.
@@ -505,7 +505,7 @@ void main() {
             ['stored', 'http://h/live/u/p/2.ts'],
           );
         } finally {
-          db.close();
+          db.dispose();
         }
 
         var snap = IptvCatalogDb.snapshot('stored')!;
@@ -593,7 +593,7 @@ void main() {
               'strand the catalog unnumbered forever',
         );
       } finally {
-        db.close();
+        db.dispose();
       }
     });
 
@@ -631,7 +631,7 @@ void main() {
           'name:sky\u001fgroup:uk\u001f2',
         ]);
       } finally {
-        db.close();
+        db.dispose();
       }
     });
 
@@ -644,7 +644,7 @@ void main() {
           ['${DateTime.now().millisecondsSinceEpoch}'],
         );
       } finally {
-        db.close();
+        db.dispose();
       }
       expect(IptvCatalogDb.adoptionRecentlyFailed('provider-a'), isTrue);
 
@@ -712,7 +712,7 @@ void main() {
           sourceKey: 'provider-a',
         );
       } finally {
-        db.close();
+        db.dispose();
       }
       final grewMb = (ProcessInfo.currentRss - before) / (1024 * 1024);
 
@@ -881,7 +881,7 @@ void main() {
           ],
         );
       } finally {
-        db.close();
+        db.dispose();
       }
       expect(
         IptvCatalogDb.revalidateInterrupted('xc|s|u|live'),
@@ -927,7 +927,7 @@ void main() {
         0,
       );
     } finally {
-      db.close();
+      db.dispose();
     }
   });
 
@@ -956,11 +956,7 @@ void main() {
       await notDirectory.writeAsString('x');
       IptvCatalogDb.debugDirectoryOverride = notDirectory.path;
 
-      // sqlite3 v3 surfaces the open failure as its own SqliteException.
-      await expectLater(
-        IptvCatalogDb.open(),
-        throwsA(anyOf(isA<StateError>(), isA<raw.SqliteException>())),
-      );
+      await expectLater(IptvCatalogDb.open(), throwsA(isA<StateError>()));
       expect(IptvCatalogDb.isOpen, isFalse);
 
       IptvCatalogDb.debugDirectoryOverride = dir.path;
@@ -1258,11 +1254,11 @@ void main() {
         IptvCatalogDb.snapshot('ordered')!,
         'Sports',
       );
-      expect(orderEntries.map((entry) => entry.channel.name), [
-        'Charlie',
-        'Alpha',
-        'Bravo',
-      ], reason: 'the settings loader decodes complete categories off-isolate');
+      expect(
+        orderEntries.map((entry) => entry.channel.name),
+        ['Charlie', 'Alpha', 'Bravo'],
+        reason: 'the settings loader decodes complete categories off-isolate',
+      );
       expect(
         IptvCatalogDb.debugMaintenanceRunCount,
         beforeRead + 1,
@@ -1373,7 +1369,7 @@ void main() {
       ).single;
       expect(orderState['deleted'], 0);
       expect(orderState['origin_device_id'], 'local-device');
-      sidecar.close();
+      sidecar.dispose();
       expect(
         IptvCatalogDb.applyCategoryOrder('category-list', const [
           'News',
@@ -1443,7 +1439,7 @@ void main() {
             .single['value'],
         '2',
       );
-      sidecar.close();
+      sidecar.dispose();
     },
   );
 

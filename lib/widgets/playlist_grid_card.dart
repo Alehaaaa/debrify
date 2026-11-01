@@ -7,8 +7,6 @@ import '../theme/app_theme_scope.dart';
 import '../theme/widgets/glass_surface.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/tv_keys.dart';
-import '../theme/app_motion.dart' show kMenuSheetAnimation;
-import 'hold_feedback.dart';
 
 /// Portrait playlist card optimized for grid layouts on desktop/tablet/mobile.
 ///
@@ -80,7 +78,6 @@ class _PlaylistGridCardState extends State<PlaylistGridCard> {
     final provider = widget.item['provider'] as String?;
 
     showModalBottomSheet(
-sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
@@ -203,7 +200,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
           }
           return KeyEventResult.ignored;
         },
-        child: HoldFeedback(borderRadius: BorderRadius.circular(12), child: GestureDetector(
+        child: GestureDetector(
           onTap: () => _showActionMenu(context),
           // Use TweenAnimationBuilder for smoother GPU-accelerated animations
           child: TweenAnimationBuilder<double>(
@@ -220,8 +217,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
-                // The artwork radius, matching ThemedArtwork's clip below.
-                borderRadius: app.shape.brImg(16),
+                borderRadius: app.shape.br(16),
                 boxShadow: isActive
                     ? [
                         BoxShadow(
@@ -437,7 +433,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
                         duration: const Duration(milliseconds: 200),
                         curve: Curves.easeOutCubic,
                         decoration: BoxDecoration(
-                          borderRadius: app.shape.brImg(16),
+                          borderRadius: app.shape.br(16),
                           border: Border.all(
                             color: isActive
                                 ? app.fade(app.core.tx, 0.25)
@@ -452,7 +448,7 @@ sheetAnimationStyle: kMenuSheetAnimation,
               ),
             ),
           ),
-        )),
+        ),
       ),
     );
   }

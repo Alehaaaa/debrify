@@ -1,3 +1,8 @@
+import 'package:debrify/features/home/presentation/home_hero_trailer_layer.dart';
+import 'package:debrify/services/storage/ambient_trailer_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:debrify/services/storage/home_rows_storage.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -8,7 +13,6 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/main_page_bridge.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/stremio_service.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_ui_refresh.dart';
 import 'package:debrify/services/text_brightness.dart';
 import 'package:debrify/theme/app_theme.dart';
@@ -26,6 +30,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:debrify/models/ambient_trailer_surface.dart';
 
 http.Response page(String name, {int count = 1, int start = 0}) =>
     http.Response(
@@ -48,6 +53,7 @@ class HomeFixture {
     this.fastCount = 1,
     this.television = true,
     this.pendingHero = false,
+    this.fastPage,
   });
 
   final WidgetTester tester;
@@ -58,6 +64,7 @@ class HomeFixture {
   final int fastCount;
   final bool television;
   final bool pendingHero;
+  final http.Response? fastPage;
   final hero = Completer<http.Response>();
   final navigator = GlobalKey<NavigatorState>();
   final slow = Completer<http.Response>();
@@ -72,7 +79,7 @@ class HomeFixture {
     if (path.contains('/tail')) return page('Tail');
     if (path.contains('skip=100')) return secondPage.future;
     if (path.contains('skip=200')) return page('End', count: 0);
-    return page('Fast', count: horizontal ? 100 : fastCount);
+    return fastPage ?? page('Fast', count: horizontal ? 100 : fastCount);
   });
 
   Future<void> drive(
@@ -101,7 +108,11 @@ class HomeFixture {
     await tester.sendKeyEvent(key);
   }, () => client);
 
-  Future<void> mount({Widget Function(Widget)? wrap}) async {
+  Future<void> mount({
+    Widget Function(Widget)? wrap,
+    List<NavigatorObserver> observers = const [],
+    Map<String, Object> initialPreferences = const {},
+  }) async {
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox());
       if (!slow.isCompleted) slow.complete(page('Cancelled', count: 0));
@@ -151,15 +162,17 @@ class HomeFixture {
         'mode': 'custom',
         'ids': [pendingHero ? 'paging:movie:hero' : 'paging:movie:fast'],
       }),
+      ...initialPreferences,
     });
-    StorageService.tvHomeStyleCached = style;
+    HomeAppearanceStorage.tvHomeStyleCached = style;
     StremioService.instance.invalidateCache();
     await drive(() async {
       await StremioService.instance.getCatalogAddons();
       final theme = AppTheme.fromDetail(DetailThemes.byId('signal'));
       await tester.pumpWidget(
-        MaterialApp(
+        ProviderScope(child: MaterialApp(
           navigatorKey: navigator,
+          navigatorObservers: observers,
           theme: AppThemeAdapter.themed(theme, TextBrightness.bright),
           home: AppThemeScope(
             theme: theme,
@@ -167,7 +180,7 @@ class HomeFixture {
                 wrap?.call(SearchScreen(isTelevision: television)) ??
                 SearchScreen(isTelevision: television),
           ),
-        ),
+        )),
       );
     }, waitMs: 300);
     await pump(const Duration(milliseconds: 100));
@@ -392,7 +405,7 @@ void main() {
         tab.value = 8;
         await home.pump(Duration.zero);
         await home.drive(() async {
-          await StorageService.setHomeDisabledSections({'paging:movie:fast'});
+          await HomeRowsStorage.setHomeDisabledSections({'paging:movie:fast'});
           MainPageBridge.notifyHomeSettingsChanged();
         });
         tab.value = 15;
@@ -422,15 +435,13 @@ void main() {
       await home.mount();
       await home.drive(() => home.slow.complete(page('Slow')));
       await home.settle();
-      final trailer = find.byWidgetPredicate(
-        (widget) => widget.runtimeType.toString() == '_HeroTrailerLayer',
-      );
-      double volume() => (tester.widget(trailer) as dynamic).volume as double;
+      final trailer = find.byType(HomeHeroTrailerLayer);
+      double volume() => tester.widget<HomeHeroTrailerLayer>(trailer).volume;
       expect(volume(), 70);
       final state = tester.state(find.byType(SearchScreen));
       final requests = List<String>.of(home.requests);
       await home.drive(() async {
-        await StorageService.setAmbientTrailerVolume(
+        await AmbientTrailerStorage.setAmbientTrailerVolume(
           AmbientTrailerSurface.homeHero,
           20,
         );
@@ -441,11 +452,11 @@ void main() {
       expect(tester.state(find.byType(SearchScreen)), same(state));
       expect(home.requests, requests);
       await home.drive(() async {
-        await StorageService.setAmbientTrailerAudioEnabled(
+        await AmbientTrailerStorage.setAmbientTrailerAudioEnabled(
           AmbientTrailerSurface.homeHero,
           false,
         );
-        await StorageService.setAmbientTrailerVolume(
+        await AmbientTrailerStorage.setAmbientTrailerVolume(
           AmbientTrailerSurface.homeHero,
           30,
         );

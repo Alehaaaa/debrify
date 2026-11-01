@@ -7,7 +7,6 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 
 import 'profile_database_snapshot.dart';
-import 'profile_app_assets_codec.dart';
 import 'profile_avatar_ingest.dart';
 import 'sanitized_profile_preferences.dart';
 import '../../models/profiles/profile_avatar.dart';
@@ -376,7 +375,7 @@ class PortableProfilePackage {
         'compression': 'gzip',
         'expandedBytes': plain.length,
         'data': base64Encode(compressed),
-        'requestId': ?requestId,
+        if (requestId != null) 'requestId': requestId,
       });
       final wrappedBytes = utf8.encode(wrapped).length;
       return wrappedBytes < plain.length
@@ -532,7 +531,7 @@ class PortableProfilePackage {
               Map<String, dynamic>.from(omissions),
             ) ==
             null) {
-      throw const FormatException('Invalid Nextup TV backup omission');
+      throw const FormatException('Invalid Debrify TV backup omission');
     }
     final profiles = body['profiles'];
     final resources = body['resources'];
@@ -753,7 +752,7 @@ class PortableProfilePackage {
       if (decoded['version'] != envelopeVersion) {
         throw const FormatException('Encrypted backup version mismatch');
       }
-      return await _decodeMap(
+      return _decodeMap(
         decoded,
         authenticatedEncryption: true,
         allowMissingPreferences: false,
@@ -1079,12 +1078,6 @@ class PortableProfilePackage {
           throw const FormatException('Portable avatar digest mismatch');
         }
       }
-
-      // Device assets ride on an optional profile field for the same reason
-      // as avatarFile; see [ProfileAppAssetsCodec].
-      await ProfileAppAssetsCodec.validate(
-        profile[ProfileAppAssetsCodec.field],
-      );
 
       final databaseSectionId = profile['databasesSection'];
       if (databaseSectionId == null) continue;

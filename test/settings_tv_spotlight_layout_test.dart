@@ -9,6 +9,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/settings_golden.dart';
+
 Future<void> _noop() async {}
 void _voidNoop() {}
 void _toggleNoop(bool _) {}
@@ -111,6 +113,10 @@ SettingsTvLayout _layout(
   onOpenProfileAppearance: _noop,
   onOpenRecordings: _noop,
   onOpenIptvSettings: _noop,
+  showSupportDonation: false,
+  supportDonationLabel: 'Support Debrify',
+  supportDonationSubtitle: 'Help fund development',
+  onOpenSupportDonation: _noop,
 );
 
 Future<void> _pumpTv(
@@ -170,7 +176,7 @@ void main() {
     await tester.pumpAndSettle();
     entry.requestFocus();
     await tester.pump();
-    for (var i = 0; i < 4; i++) {
+    for (var i = 0; i < 7; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
@@ -200,61 +206,56 @@ void main() {
     await tester.pump();
     expect(
       FocusManager.instance.primaryFocus?.debugLabel,
-      'settings-tv-rail-4',
+      'settings-tv-rail-7',
     );
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'Sync and Migrate is reachable in the Data & Backup TV category',
-    (tester) async {
-      final entry = FocusNode(debugLabel: 'settings-test-entry-sync');
-      addTearDown(entry.dispose);
-      var opened = false;
-      tester.view.physicalSize = const Size(960, 540);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final theme = AppThemes.byId('spotlight');
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppThemeAdapter.themed(theme, TextBrightness.bright),
-          builder: (context, child) =>
-              AppThemeScope(theme: theme, child: child!),
-          home: Scaffold(
-            body: _layout(
-              entry,
-              onOpenSyncAndMigrate: () async => opened = true,
-            ),
-          ),
+  testWidgets('Sync and Migrate has its own reachable TV rail category', (
+    tester,
+  ) async {
+    final entry = FocusNode(debugLabel: 'settings-test-entry-sync');
+    addTearDown(entry.dispose);
+    var opened = false;
+    tester.view.physicalSize = const Size(960, 540);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final theme = AppThemes.byId('spotlight');
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppThemeAdapter.themed(theme, TextBrightness.bright),
+        builder: (context, child) => AppThemeScope(theme: theme, child: child!),
+        home: Scaffold(
+          body: _layout(entry, onOpenSyncAndMigrate: () async => opened = true),
         ),
-      );
-      await tester.pumpAndSettle();
+      ),
+    );
+    await tester.pumpAndSettle();
 
-      entry.requestFocus();
+    entry.requestFocus();
+    await tester.pump();
+    for (var index = 0; index < 13; index++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
-      for (var index = 0; index < 8; index++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-        await tester.pump();
-      }
-      expect(
-        FocusManager.instance.primaryFocus?.debugLabel,
-        'settings-tv-rail-8',
-      );
-      expect(find.text('Sync & versions'), findsWidgets);
+    }
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'settings-tv-rail-13',
+    );
+    expect(find.text('Sync and Migrate'), findsWidgets);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-      await tester.pump();
-      expect(
-        FocusManager.instance.primaryFocus?.debugLabel,
-        'settings-tv-pane-0',
-      );
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pump();
-      expect(opened, isTrue);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'settings-tv-pane-0',
+    );
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(opened, isTrue);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('TV grid keeps deterministic two-dimensional DPAD movement', (
     tester,
@@ -375,13 +376,13 @@ void main() {
 
     entry.requestFocus();
     await tester.pump();
-    for (var index = 0; index < 9; index++) {
+    for (var index = 0; index < 15; index++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
     expect(
       FocusManager.instance.primaryFocus?.debugLabel,
-      'settings-tv-rail-9',
+      'settings-tv-rail-15',
     );
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
@@ -406,7 +407,7 @@ void main() {
     await tester.pump();
     await expectLater(
       find.byType(SettingsTvLayout),
-      matchesGoldenFile('goldens/settings_spotlight_tv.png'),
+      matchesGoldenFile(settingsGoldenPath('settings_spotlight_tv.png')),
     );
   });
 

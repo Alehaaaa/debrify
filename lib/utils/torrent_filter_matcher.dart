@@ -1,7 +1,7 @@
 import '../models/torrent.dart';
 import '../models/torrent_filter_state.dart';
-import '../screens/video_player/utils/language_mapping.dart';
-import '../widgets/torrent_result_row.dart' show TorrentQualityExtension;
+import 'language_mapping.dart';
+import 'torrent_quality.dart' show TorrentQualityExtension;
 import 'format_tag_detector.dart';
 
 /// Pure, name-based torrent filter matching — a faithful copy of Home's
@@ -45,10 +45,6 @@ class TorrentFilterMatcher {
     if (f.dynamicRanges.isNotEmpty &&
         !f.dynamicRanges.contains(detectDynamicRange(t.name))) {
       return false;
-    }
-    if (f.codecs.isNotEmpty) {
-      final codec = detectVideoCodec(t.name);
-      if (codec == null || !f.codecs.contains(codec)) return false;
     }
     return true;
   }
@@ -116,24 +112,6 @@ class TorrentFilterMatcher {
       }
     }
     return DynamicRange.sdr;
-  }
-
-  /// The codec the name carries, read by [FormatTagDetector] like the row's
-  /// codec badge; null when the name names none.
-  static VideoCodec? detectVideoCodec(String rawName) {
-    for (final tag in FormatTagDetector.detect(rawName)) {
-      switch (tag) {
-        case FormatTag.av1:
-          return VideoCodec.av1;
-        case FormatTag.hevc:
-          return VideoCodec.hevc;
-        case FormatTag.avc:
-          return VideoCodec.avc;
-        default:
-          continue;
-      }
-    }
-    return null;
   }
 
   /// Bare "WEB" as its own word — catches dotted scene names like

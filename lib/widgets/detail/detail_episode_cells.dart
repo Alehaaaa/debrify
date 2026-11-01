@@ -5,14 +5,11 @@ import 'package:flutter/services.dart';
 import '../../services/debrify_image_cache.dart';
 import '../../services/trakt/trakt_episode_model.dart';
 import '../../theme/widgets/themed_artwork.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../home/home_theme.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
-import '../hold_feedback.dart';
 
 /// Whether RIGHT is an ADDITIONAL way into the per-episode options menu.
 ///
@@ -87,8 +84,9 @@ class DetailHoldHintScope extends InheritedWidget {
   /// Deliberately NOT a dependency: the controller instance is stable for the
   /// page's life, and cells listen to it directly rather than rebuilding with
   /// the scope.
-  static DetailHoldHintController? maybeOf(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<DetailHoldHintScope>()?.controller;
+  static DetailHoldHintController? maybeOf(BuildContext context) => context
+      .getInheritedWidgetOfExactType<DetailHoldHintScope>()
+      ?.controller;
 
   @override
   bool updateShouldNotify(DetailHoldHintScope old) =>
@@ -238,20 +236,17 @@ class _DetailEpisodeInteractionState extends State<DetailEpisodeInteraction> {
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: HoldFeedback(
-          borderRadius: BorderRadius.circular(10),
-          child: GestureDetector(
-            onTap: widget.onPlay,
-            onLongPress: () {
-              HapticFeedback.mediumImpact();
-              widget.onOptions();
-            },
-            behavior: HitTestBehavior.opaque,
-            // Isolate the repaint: focus flips a ring and an overlay, and without
-            // a boundary every DPAD move repaints the whole rail's layer.
-            child: RepaintBoundary(
-              child: widget.builder(context, _focused || _hovered),
-            ),
+        child: GestureDetector(
+          onTap: widget.onPlay,
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            widget.onOptions();
+          },
+          behavior: HitTestBehavior.opaque,
+          // Isolate the repaint: focus flips a ring and an overlay, and without
+          // a boundary every DPAD move repaints the whole rail's layer.
+          child: RepaintBoundary(
+            child: widget.builder(context, _focused || _hovered),
           ),
         ),
       ),
@@ -317,6 +312,10 @@ class _DetailHoldHintState extends State<DetailHoldHint> {
   }
 }
 
+/// The hold-hint pill's ink: white on its own black glass, the same in every
+/// theme (the pill floats above the page, not on a themed surface).
+const Color _holdPillInk = Color(0xFFFFFFFF);
+
 /// Black glass with white ink, so it reads over artwork and over a light
 /// theme's ground alike — it floats above the page, not inside it.
 class _DetailHoldHintPill extends StatelessWidget {
@@ -329,9 +328,7 @@ class _DetailHoldHintPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.22),
-        ), // theme-independent overlay
+        border: Border.all(color: _holdPillInk.withValues(alpha: 0.22)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -339,17 +336,13 @@ class _DetailHoldHintPill extends StatelessWidget {
           Icon(
             Icons.more_horiz_rounded,
             size: 15,
-            color: Colors.white.withValues(
-              alpha: 0.92,
-            ), // theme-independent overlay
+            color: _holdPillInk.withValues(alpha: 0.92),
           ),
           const SizedBox(width: 6),
           Text(
             'Long press for more actions',
             style: TextStyle(
-              color: Colors.white.withValues(
-                alpha: 0.92,
-              ), // theme-independent overlay
+              color: _holdPillInk.withValues(alpha: 0.92),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -425,8 +418,8 @@ class DetailEpisodeThumb extends StatelessWidget {
               fadeOutDuration: HomeTheme.imageFadeOut(
                 PlatformUtil.isAndroidTvCached,
               ),
-              placeholder: (_, _) => ColoredBox(color: t.placeholder),
-              errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
+              placeholder: (_, __) => ColoredBox(color: t.placeholder),
+              errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
             )
           else
             ColoredBox(color: t.placeholder),
@@ -636,7 +629,6 @@ class DetailEpisodeRow extends StatelessWidget {
     final p = progress ?? 0;
     final watched = p >= 100;
     final partial = p > 0 && p < 100;
-    final app = AppThemeScope.of(context);
     return DetailEpisodeInteraction(
       focusNode: focusNode,
       // Vertical, right-most list — RIGHT is free for options, as in Classic.
@@ -650,11 +642,7 @@ class DetailEpisodeRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: focused
-                ? (GlassChrome.enabled(app)
-                      ? GlassChrome.fill(app, raised: true)
-                      : t.panel)
-                : null,
+            color: focused ? t.panel : null,
             borderRadius: t.brRadius,
           ),
           child: Row(

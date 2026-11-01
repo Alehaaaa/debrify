@@ -1,5 +1,8 @@
 import 'dart:convert';
 
+import 'package:debrify/services/storage/playlist_storage.dart';
+import 'package:debrify/services/storage/webdav_server_storage.dart';
+import 'package:debrify/services/storage/webdav_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -7,15 +10,14 @@ import '../../models/playlist_view_mode.dart';
 import '../../models/profiles/profile_policy.dart';
 import '../../models/webdav_item.dart';
 import '../../screens/video_player/models/playlist_entry.dart';
+import '../../services/analytics_service.dart';
 import '../../services/download_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../widgets/tv_text_field.dart';
-import '../../services/storage_service.dart';
 import '../../services/video_player_launcher.dart';
 import '../../services/webdav_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../utils/file_utils.dart';
 import '../../utils/formatters.dart';
 import '../../utils/series_parser.dart';
@@ -52,13 +54,13 @@ class WebDavFilesDataSource {
   Future<WebDavConfig?> loadSelectedConfig() =>
       WebDavService.getConfig(feature: feature);
 
-  Future<bool> loadShowVideosOnly() => StorageService.getWebDavShowVideosOnly();
+  Future<bool> loadShowVideosOnly() => WebdavStorage.getWebDavShowVideosOnly();
 
   Future<List<WebDavItem>> listDirectory(WebDavConfig config, String path) =>
       WebDavService.listDirectory(config: config, path: path, feature: feature);
 
   Future<void> selectConfig(String id) =>
-      StorageService.setSelectedWebDavServerId(id);
+      WebdavServerStorage.setSelectedWebDavServerId(id);
 }
 
 class WebDavFilesScreen extends StatefulWidget {
@@ -120,6 +122,9 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView(
+      _isPicker ? 'webdav_migrate_picker' : 'webdav_files',
+    );
     _loadSettingsAndRoot();
     if (_usesPushedNavigation) {
       // Pushed from the Cloud hub — system/remote Back should fold the folder
@@ -502,7 +507,7 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
     }
 
     try {
-      final added = await StorageService.addPlaylistItemRaw({
+      final added = await PlaylistStorage.addPlaylistItemRaw({
         'provider': 'webdav',
         'title': FileUtils.cleanPlaylistTitle(file.name),
         'kind': 'single',
@@ -551,7 +556,7 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
         0,
         (sum, file) => sum + (file.sizeBytes ?? 0),
       );
-      final added = await StorageService.addPlaylistItemRaw({
+      final added = await PlaylistStorage.addPlaylistItemRaw({
         'provider': 'webdav',
         'title': FileUtils.cleanPlaylistTitle(folder.name),
         'kind': 'collection',
@@ -892,18 +897,14 @@ class _WebDavFilesScreenState extends State<WebDavFilesScreen> {
               focusNode: _serverDropdownFocusNode,
               initialValue: _config?.id,
               isExpanded: true,
-              dropdownColor: GlassChrome.enabled(app)
-                  ? GlassChrome.fill(app, raised: true)
-                  : app.cloud.menuSurface,
+              dropdownColor: app.cloud.menuSurface,
               decoration: InputDecoration(
                 prefixIcon: Icon(
                   Icons.cloud_sync_rounded,
                   color: app.cloud.accent,
                 ),
                 filled: true,
-                fillColor: GlassChrome.enabled(app)
-                    ? GlassChrome.field(app)
-                    : app.fade(app.core.tx, 0.06),
+                fillColor: app.fade(app.core.tx, 0.06),
                 border: OutlineInputBorder(
                   borderRadius: app.shape.br(10),
                   borderSide: BorderSide(color: app.fade(app.core.tx, 0.12)),

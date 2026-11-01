@@ -40,7 +40,9 @@ abstract final class PremiumLooks {
     ink: Color(0xFFF2F5F8),
     accent: Color(0xFF7FD4FF),
     separation: SeparationModel.glass,
-    // Frost the whole settings group as one pane, not its individual rows.
+    // Settings cannot take glass — a grouped container of translucent rows is
+    // unreadable — so it falls to the hairline model.
+    separationOverrides: {SurfaceFamily.settingsGroup: SeparationModel.rule},
     scrim: ScrimStyle.blurBand,
     frame: ArtFrame.contained,
     focusExpression: FocusExpression.ring,
@@ -197,6 +199,7 @@ abstract final class PremiumLooks {
     sectionGap: 1.1,
   );
 
+
   /// **Spotlight** — the tvOS idiom.
   ///
   /// The only look whose focus expression is [FocusExpression.parallax], and
@@ -271,14 +274,7 @@ abstract final class PremiumLooks {
   );
 
   /// In picker order.
-  static const List<ThemeSpec> all = [
-    glass,
-    field,
-    hearth,
-    console,
-    reel,
-    spotlight,
-  ];
+  static const List<ThemeSpec> all = [glass, field, hearth, console, reel, spotlight];
 
   static ThemeSpec? byId(String id) {
     for (final s in all) {

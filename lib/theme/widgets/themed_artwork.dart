@@ -93,7 +93,7 @@ class ThemedArtwork extends StatelessWidget {
     final app = AppThemeScope.of(context);
     final tv = PlatformUtil.isTelevision;
     final blend = _blend(app, tv);
-    final framed = _framed(app, builder(context, blend), tv, card: overlay != null);
+    final framed = _framed(app, builder(context, blend), tv);
     if (overlay == null) return framed;
     return Stack(
       fit: StackFit.passthrough,
@@ -130,7 +130,7 @@ class ThemedArtwork extends StatelessWidget {
     }
   }
 
-  Widget _framed(AppTheme app, Widget art, bool tv, {bool card = false}) {
+  Widget _framed(AppTheme app, Widget art, bool tv) {
     // A logo sits on a plate or on nothing; it is never given the theme's
     // frame, because a rounded corner on a transparent mark clips the mark.
     if (role == ArtRole.logo || role == ArtRole.chrome) return art;
@@ -140,13 +140,7 @@ class ThemedArtwork extends StatelessWidget {
         return ClipRRect(borderRadius: app.shape.brImg(radius), child: art);
 
       case ArtFrame.bleed:
-        // Runs to the edge with no boundary at all — except on a card. A card
-        // paints its chrome and focus border inside the rounded overlay clip
-        // below (and its shadow at the same radius), so an unclipped image
-        // would square off past that border. Same clip as `contained` there.
-        if (card) {
-          return ClipRRect(borderRadius: app.shape.brImg(radius), child: art);
-        }
+        // Runs to the edge with no boundary at all.
         return art;
 
       case ArtFrame.matted:

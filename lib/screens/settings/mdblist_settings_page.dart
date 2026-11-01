@@ -1,13 +1,15 @@
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
-import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 /// Settings page for the MDBList integration.
 ///
@@ -40,6 +42,7 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('mdblist_settings');
     _load();
   }
 
@@ -54,7 +57,7 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
   }
 
   Future<void> _load() async {
-    final configured = await StorageService.hasMdblistCredential();
+    final configured = await MdblistStorage.hasMdblistCredential();
     if (!mounted) return;
     setState(() {
       _savedApiKey = configured ? '' : null;
@@ -128,6 +131,7 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
     });
     if (!mounted) return;
     _refocusOnTv(_logoutButtonFocusNode);
+    AnalyticsService.integrationConnected('mdblist', {'surface': 'settings'});
     _snack('MDBList connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }
@@ -149,7 +153,8 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
       _isEditing = false;
       _apiKeyController.clear();
     });
-    final fellBack = await StorageService.takeTrackingProgressFallbackNotice();
+    final fellBack =
+        await TrackingSourceStorage.takeTrackingProgressFallbackNotice();
     if (!mounted) return;
     _snack(
       fellBack
@@ -335,20 +340,17 @@ class _MdblistSettingsPageState extends State<MdblistSettingsPage> {
   }
 
   Widget _buildConnectedActions() {
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: GlassChrome.enabled(app)
-              ? GlassChrome.decoration(app, radius: app.shape.br(8))
-              : BoxDecoration(
-                  color: t.panel2,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: t.line),
-                ),
+          decoration: BoxDecoration(
+            color: t.panel2,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: t.line),
+          ),
           child: Row(
             children: [
               Expanded(

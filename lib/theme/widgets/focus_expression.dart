@@ -46,11 +46,6 @@ class FocusExpressionBox extends StatelessWidget {
   /// row past BOTH screen edges and the focused row reads as cut off.
   final ParallaxShape shape;
 
-  /// True when this cursor frames ARTWORK (a poster card): its corners then
-  /// follow the theme's artwork radius, the one the poster is clipped to, so
-  /// the ring hugs the image instead of the poster's corners poking past it.
-  final bool artwork;
-
   const FocusExpressionBox({
     super.key,
     required this.child,
@@ -59,15 +54,11 @@ class FocusExpressionBox extends StatelessWidget {
     this.on,
     this.inverted,
     this.shape = ParallaxShape.poster,
-    this.artwork = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final corners = artwork
-        ? app.shape.brImg(radius)
-        : app.shape.br(radius);
     final tv = PlatformUtil.isTelevision;
     final f = app.focus;
     final motion = AppMotion.of(context);
@@ -103,7 +94,7 @@ class FocusExpressionBox extends StatelessWidget {
       return ParallaxFocus(
         focused: focused,
         shape: shape,
-        radius: corners,
+        radius: app.shape.br(radius),
         child: child,
       );
     }
@@ -123,7 +114,7 @@ class FocusExpressionBox extends StatelessWidget {
         duration: duration,
         curve: motion.standard,
         foregroundDecoration: BoxDecoration(
-          borderRadius: corners,
+          borderRadius: app.shape.br(radius),
           border: Border.all(
             color: focused ? ring : Colors.transparent,
             width: f.widthFor(tv),
@@ -154,7 +145,7 @@ class FocusExpressionBox extends StatelessWidget {
     if (focused && bloom > 0) {
       body = DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: corners,
+          borderRadius: app.shape.br(radius),
           boxShadow: [
             BoxShadow(
               color: ring.withValues(alpha: 0.28),
@@ -174,7 +165,7 @@ class FocusExpressionBox extends StatelessWidget {
         curve: motion.standard,
         transform: Matrix4.translationValues(0, focused ? -f.lift : 0, 0),
         decoration: BoxDecoration(
-          borderRadius: corners,
+          borderRadius: app.shape.br(radius),
           boxShadow: focused
               ? app.surface.shadowFor(app.surface.floatingShadow, tv)
               : app.surface.shadowFor(app.surface.restShadow, tv),

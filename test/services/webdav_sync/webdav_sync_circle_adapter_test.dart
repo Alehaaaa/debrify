@@ -42,7 +42,7 @@ void main() {
   late OpenedWebDavSyncRoot circleRoot;
 
   test(
-    'old pending sync targets apply looks but keep local checkpoints',
+    'old pending sync targets preserve local appearance and unset defaults',
     () async {
       final prefs = await ProfilePreferences.instance();
       await prefs.setString('tv_home_style', 'canvas');
@@ -78,7 +78,7 @@ void main() {
         'tv_sidebar_style': 'pill',
         'default_torrent_provider_v1': 'torbox',
       }, replayingPending: true);
-      expect(prefs.getString('tv_home_style'), 'spotlight');
+      expect(prefs.getString('tv_home_style'), 'canvas');
       expect(prefs.getBool('home_hide_catalog_addon_names'), true);
       expect(prefs.getInt('home_hero_trailer_volume'), 20);
       expect(prefs.getInt('detail_trailer_volume'), 20);
@@ -91,7 +91,7 @@ void main() {
       expect(prefs.getBool('subtitle_bold'), true);
       expect(prefs.getString('subtitle_selected_font_id'), 'notosans');
       expect(prefs.getBool('subtitle_extreme_bottom_default_adopted_v1'), true);
-      expect(prefs.getString('app_theme'), 'aurora');
+      expect(prefs.containsKey('app_theme'), isFalse);
       expect(prefs.containsKey('defaults_generation'), isFalse);
       expect(prefs.getString('default_torrent_provider_v1'), 'torbox');
       expect(prefs.getString('phone_nav_style'), 'floating');
@@ -104,8 +104,6 @@ void main() {
         '["addon:config-b","embedded","addon:config-a"]',
       );
       expect(applied, {
-        'tv_home_style',
-        'app_theme',
         'home_hide_catalog_addon_names',
         'home_hero_trailer_volume',
         'detail_trailer_volume',
@@ -307,9 +305,7 @@ void main() {
     () async {
       final documents = Directory(p.join(directory.path, 'documents'));
       await documents.create();
-      final support = Directory(p.join(directory.path, 'support'));
-      await support.create();
-      AppStorage.debugOverride(documents: documents, support: support);
+      AppStorage.debugOverride(documents: documents);
       addTearDown(AppStorage.debugReset);
       final refresh = _EngineRefreshRecorder();
       final local = ProfileWebDavSyncLocalAdapter(
@@ -340,24 +336,6 @@ version: one
       expect(journalWritten, isTrue);
       expect(applied, {key});
       expect((await ProfilePreferences.instance()).containsKey(key), isFalse);
-      final engineDirectory = ProfileRuntime.capture().storageDirectory(
-        support,
-        'documents',
-      );
-      expect(
-        await File(p.join(engineDirectory.path, 'engines', 'metadata.json'))
-            .exists(),
-        isTrue,
-        reason: 'Synced engines must be stored beside the regular engine files',
-      );
-      final obsoleteDirectory = ProfileRuntime.capture().storageDirectory(
-        documents,
-        'documents',
-      );
-      expect(
-        await Directory(p.join(obsoleteDirectory.path, 'engines')).exists(),
-        isFalse,
-      );
       expect(
         (await local.readProfile(session, activeId)).portablePreferences[key],
         values[key],

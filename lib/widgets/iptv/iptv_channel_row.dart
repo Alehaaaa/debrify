@@ -14,7 +14,6 @@ import '../../theme/app_theme_scope.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'styles/iptv_style.dart';
-import '../hold_feedback.dart';
 
 /// Matches a trailing resolution the M3U names embed, e.g. "(1080p)" / "(576i)".
 final RegExp _resExp = RegExp(r'\((\d{3,4}[pi])\)', caseSensitive: false);
@@ -271,7 +270,7 @@ class _IptvChannelRowState extends State<IptvChannelRow>
     final group = ch.group?.trim();
     final subParts = <String>[
       if (group != null && group.isNotEmpty) group,
-      ?resolution,
+      if (resolution != null) resolution,
     ];
     final sub = subParts.isNotEmpty
         ? subParts.join('  •  ')
@@ -543,17 +542,14 @@ class _IptvChannelRowState extends State<IptvChannelRow>
           setState(() => _hovered = false);
         },
         cursor: SystemMouseCursors.click,
-        child: HoldFeedback(
-          borderRadius: BorderRadius.circular(12),
-          child: GestureDetector(
-            onTap: widget.onTap,
-            // Touch/desktop counterpart of TV's hold-OK. The row had no
-            // long-press before, so this adds a gesture rather than
-            // reinterpreting one.
-            onLongPress: widget.onLongPress ?? widget.onOpenListPicker,
-            behavior: HitTestBehavior.opaque,
-            child: row,
-          ),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          // Touch/desktop counterpart of TV's hold-OK. The row had no
+          // long-press before, so this adds a gesture rather than
+          // reinterpreting one.
+          onLongPress: widget.onLongPress ?? widget.onOpenListPicker,
+          behavior: HitTestBehavior.opaque,
+          child: row,
         ),
       ),
     );
@@ -797,7 +793,7 @@ class _IptvChannelRowState extends State<IptvChannelRow>
           padding: const EdgeInsets.only(left: 8),
           child: AnimatedBuilder(
             animation: _holdController,
-            builder: (_, _) => _FavHint(
+            builder: (_, __) => _FavHint(
               favorited: widget.isFavorited,
               progress: _holdController.value,
               picksList: picksList,
@@ -1504,8 +1500,8 @@ class _LogoChip extends StatelessWidget {
                     // uncapped decodes janked scrolling and thrashed the TV's
                     // small image cache (re-decoding on every scroll-back).
                     memCacheHeight: poster ? 200 : 96,
-                    placeholder: (_, _) => _fallback(),
-                    errorWidget: (_, _, _) => _fallback(),
+                    placeholder: (_, __) => _fallback(),
+                    errorWidget: (_, __, ___) => _fallback(),
                   )
                 : _fallback(),
           ),

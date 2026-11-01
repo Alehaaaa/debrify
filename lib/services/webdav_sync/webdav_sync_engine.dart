@@ -505,7 +505,7 @@ final class WebDavSyncEngine
         ? _localAdapter as WebDavSyncTvLibraryLocalAdapter
         : null;
     if (tvAdapter == null) {
-      throw StateError('WebDAV sync Nextup TV adapter is unavailable');
+      throw StateError('WebDAV sync Debrify TV adapter is unavailable');
     }
     final namespaceId = context.namespaceId!;
     final deviceId = context.deviceId!;
@@ -663,7 +663,7 @@ final class WebDavSyncEngine
       );
       if (outcome.result == WebDavSyncLibraryApplyResult.conflict) {
         _diagnostic(
-          'Deferred manual Nextup TV sync after a concurrent local change',
+          'Deferred manual Debrify TV sync after a concurrent local change',
           null,
         );
         return WebDavSyncTvManualReport(
@@ -749,7 +749,7 @@ final class WebDavSyncEngine
     try {
       callback?.call(stage);
     } catch (error) {
-      _diagnostic('Ignored a failed Nextup TV progress callback', error);
+      _diagnostic('Ignored a failed Debrify TV progress callback', error);
     }
   }
 
@@ -1297,7 +1297,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(replayed)) {
-              return await _persistAmbientCapacityBlock(
+              return _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: listing.deviceIds.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -1849,7 +1849,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(mergedLibraryTarget)) {
-              return await _persistAmbientCapacityBlock(
+              return _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: manifests.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -2340,7 +2340,7 @@ final class WebDavSyncEngine
         return const _TvLibraryRead();
       }
       if (reference.size > WebDavSyncLibraryDocument.maxEncodedBytes) {
-        _diagnostic('Ignored an oversized Nextup TV library section', null);
+        _diagnostic('Ignored an oversized Debrify TV library section', null);
         return const _TvLibraryRead();
       }
       if (!own &&
@@ -2369,7 +2369,7 @@ final class WebDavSyncEngine
               (key) => !WebDavSyncLibraryKinds.isTvWireKey(key),
             )) {
           _diagnostic(
-            'Ignored non-TV records in a Nextup TV library section',
+            'Ignored non-TV records in a Debrify TV library section',
             null,
           );
         }
@@ -2383,9 +2383,9 @@ final class WebDavSyncEngine
         );
       } on WebDavException catch (error) {
         if (error.kind != WebDavErrorKind.notFound) rethrow;
-        _diagnostic('Ignored a removed Nextup TV library section', error);
+        _diagnostic('Ignored a removed Debrify TV library section', error);
       } on Exception catch (error) {
-        _diagnostic('Ignored an invalid Nextup TV library section', error);
+        _diagnostic('Ignored an invalid Debrify TV library section', error);
       }
       return const _TvLibraryRead();
     }
@@ -2897,7 +2897,7 @@ final class WebDavSyncEngine
       }
     }
     return _PeerProfileData(
-      hotDocuments: [?hot, ...collectionDocuments],
+      hotDocuments: [if (hot != null) hot, ...collectionDocuments],
       tombstoneDocuments: tombstone == null
           ? const <WebDavSyncTombstoneDocument>[]
           : <WebDavSyncTombstoneDocument>[tombstone],
@@ -3578,7 +3578,7 @@ final class WebDavSyncEngine
       for (final section in changed) section.reference.name: section.reference,
       ...retainedCollectionReferences,
       ...libraryReferences,
-      ?resourceReference?.name: resourceReference!,
+      if (resourceReference != null) resourceReference.name: resourceReference,
     };
     if (sections.isEmpty) {
       throw StateError('WebDAV sync refuses to publish an empty manifest');
@@ -4187,7 +4187,7 @@ final class WebDavSyncEngine
           document.records.keys.any(WebDavSyncLibraryKinds.isTvWireKey),
     )) {
       _diagnostic(
-        'Ignored Nextup TV records in an ambient library section',
+        'Ignored Debrify TV records in an ambient library section',
         null,
       );
     }
@@ -4259,9 +4259,9 @@ final class WebDavSyncEngine
     }
   }
 
-  static void _ignoreDiagnostic(String _, Object? _) {}
+  static void _ignoreDiagnostic(String _, Object? __) {}
 
-  static void _ignoreAppliedKeys(String _, Set<String> _) {}
+  static void _ignoreAppliedKeys(String _, Set<String> __) {}
 
   static WebDavSyncPendingActiveProfileReason? _activeProfileDeferralReason(
     WebDavSyncProfileValue? value,

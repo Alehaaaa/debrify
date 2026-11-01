@@ -20,7 +20,6 @@ class ProfileCreationService {
   /// the creation form.
   static const Set<String> copyablePreferenceKeys = <String>{
     'app_theme',
-    'app_structure',
     'text_brightness',
     'tv_ui_scale_percent',
     'tv_home_style',

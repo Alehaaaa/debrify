@@ -12,13 +12,6 @@ usage() {
   exit 64
 }
 
-# Xcode refuses to sign bundles containing Finder resource forks or MACL
-# metadata copied from edited image assets.
-xattr -cr "$repo_dir/assets" "$repo_dir/ios/Runner/Assets.xcassets" \
-  "$repo_dir/tvos/Runner/Assets.xcassets" \
-  "$repo_dir/macos/Runner/Assets.xcassets" \
-  "$repo_dir/build/personal" 2>/dev/null || true
-
 case "$platform" in
   android)
     case "$configuration" in

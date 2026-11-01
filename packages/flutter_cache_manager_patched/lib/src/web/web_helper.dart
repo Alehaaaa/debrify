@@ -224,7 +224,8 @@ class WebHelper {
 }
 
 class HttpExceptionWithStatus extends HttpException {
-  const HttpExceptionWithStatus(this.statusCode, super.message, {super.uri});
+  const HttpExceptionWithStatus(this.statusCode, String message, {Uri? uri})
+      : super(message, uri: uri);
 
   final int statusCode;
 }

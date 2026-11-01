@@ -18,16 +18,11 @@ void main() {
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('avatar-view-');
-    AppStorage.debugOverride(documents: root, support: root);
+    AppStorage.debugOverride(documents: root);
   });
 
   tearDown(() async {
     AppStorage.debugReset();
-    // Windows holds decoded GIF file handles while Flutter still retains an
-    // image stream. Release both image caches before removing the fixture.
-    PaintingBinding.instance.imageCache
-      ..clear()
-      ..clearLiveImages();
     if (await root.exists()) await root.delete(recursive: true);
   });
 
@@ -65,17 +60,11 @@ void main() {
     // inside it deadlocks. So: pump to mount, let real IO run, pump again to
     // rebuild with the resolved file.
     await tester.pumpWidget(widget);
-    // Resolution now reads bytes as well as checking the path; wait for that
-    // second asynchronous IO stage before asserting on the rendered image.
-    for (var attempt = 0; attempt < 12; attempt++) {
+    for (var attempt = 0; attempt < 4; attempt++) {
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
       );
       await tester.pump();
-      if (find.byType(Image).evaluate().isNotEmpty ||
-          find.byKey(ProfileAvatarView.stillFrameKey).evaluate().isNotEmpty) {
-        break;
-      }
     }
   }
 
@@ -155,9 +144,7 @@ void main() {
       final key = (await tester.runAsync(writeGif))!;
       await pumpResolved(tester, harness(avatarKey: key, focused: true));
       expect(find.byType(Image), findsOneWidget);
-      expect(tester.widget<Image>(find.byType(Image)).image, isA<MemoryImage>());
       expect(find.byKey(ProfileAvatarView.stillFrameKey), findsNothing);
-      await tester.pumpWidget(const SizedBox.shrink());
     });
 
     testWidgets('animateWhenIdle plays the GIF without focus (touch)', (
@@ -170,7 +157,6 @@ void main() {
       );
       expect(find.byType(Image), findsOneWidget);
       expect(find.byKey(ProfileAvatarView.stillFrameKey), findsNothing);
-      await tester.pumpWidget(const SizedBox.shrink());
     });
 
     testWidgets('the animation switch still outranks animateWhenIdle', (
@@ -255,12 +241,16 @@ void main() {
     });
 
     await tester.pumpWidget(harness(avatarKey: 'file:avatars/a.png'));
-    await pumpResolved(tester, harness(avatarKey: 'file:avatars/b.png'));
+    await tester.pumpWidget(harness(avatarKey: 'file:avatars/b.png'));
+    for (var attempt = 0; attempt < 4; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      );
+      await tester.pump();
+    }
 
     expect(find.byType(Image), findsOneWidget);
-    expect(tester.widget<Image>(find.byType(Image)).image, isA<MemoryImage>());
     expect(find.text('M'), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('a parent refresh resolves bytes repaired under the same key', (
@@ -283,7 +273,6 @@ void main() {
 
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('M'), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets('cache eviction does not dispose images held by mounted tiles', (
@@ -379,11 +368,7 @@ void main() {
     // the scale-down cannot divide by zero.
     for (final art in ProfileArtRegistry.all) {
       if (art.paint == null) continue;
-      for (final size in const <Size>[
-        Size(1, 1),
-        Size(48, 48),
-        Size(320, 96),
-      ]) {
+      for (final size in const <Size>[Size(1, 1), Size(48, 48), Size(320, 96)]) {
         for (var step = 0; step <= 20; step++) {
           final recorder = ui.PictureRecorder();
           final canvas = ui.Canvas(recorder);

@@ -1,0 +1,114 @@
+# Pre-existing analyzer warnings exposed when legacy code moved into the
+# CI-analyzed scope. Each was present in the original file (see its migration's
+# analyze-base evidence) and is kept verbatim by a move-only refactor. Format:
+#   severity | rule | path | message
+# Remove an entry when the code is fixed; check_analyzer_allowlist.py fails on
+# stale entries, on any error, and on any warning not listed here.
+
+# TorBox: originally torbox_downloads_screen.dart (c4f5375a), file-selection card copy button.
+warning | unnecessary_null_comparison | lib/features/torbox_downloads/presentation/legacy_torbox/torbox_file_selection_card.dart | The operand can't be 'null', so the condition is always 'true'. Remove the condition
+
+# Real-Debrid: original cc950ed9 private dormant entries retained by the plan.
+# Verified both in the original screen and under the destination lint configuration;
+# original-cc950-strict-analyze evidence and per-symbol relocation comparison.
+warning | unused_element | lib/features/debrid_downloads/presentation/legacy_debrid/debrid_dormant_series_browser.dart | The declaration '_buildSeriesFileBrowser' isn't referenced. Try removing the declaration of '_buildSeriesFileBrowser'
+warning | unused_element | lib/features/debrid_downloads/presentation/legacy_debrid/debrid_dormant_torrent_actions.dart | The declaration '_handlePlayVideo' isn't referenced. Try removing the declaration of '_handlePlayVideo'
+warning | unused_element | lib/features/debrid_downloads/presentation/legacy_debrid/debrid_dormant_torrent_actions.dart | The declaration '_copyDownloadLink' isn't referenced. Try removing the declaration of '_copyDownloadLink'
+
+# PikPak: original c2e02c0d write-only email, remains private with settings loading.
+warning | unused_field | lib/features/pikpak_files/presentation/legacy_pikpak/pikpak_catalog_loading.dart | The value of the field '_email' isn't used. Try removing the field, or using it
+
+# Playlist content original warnings, 17 observed occurrences; per-member proof retained.
+warning | dead_null_aware_expression | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_content_loading.dart | The left operand can't be null, so the right operand is never executed. Try removing the operator and the right operand
+warning | dead_null_aware_expression | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_debrid_launches.dart | The left operand can't be null, so the right operand is never executed. Try removing the operator and the right operand
+warning | invalid_null_aware_operator | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_series_metadata.dart | The receiver can't be null, so the null-aware operator '?[' is unnecessary. Try replacing the operator '?[' with '['
+warning | unnecessary_non_null_assertion | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_series_metadata.dart | The '!' will have no effect because the receiver can't be null. Try removing the '!' operator
+warning | unnecessary_null_comparison | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_series_metadata.dart | The operand can't be 'null', so the condition is always 'true'. Remove the condition
+warning | unnecessary_null_comparison | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_view_modes.dart | The operand can't be 'null', so the condition is always 'true'. Remove the condition
+warning | unused_element | lib/features/playlist_content/presentation/legacy_playlist_content/playlist_content_dormant.dart | The declaration '_loadProgressData' isn't referenced. Try removing the declaration of '_loadProgressData'
+
+# 2026-10-04 detail_showcase: original unused private retained verbatim in step 1.
+warning | unused_element | lib/features/detail_showcase/presentation/showcase_style.dart | The declaration '_plateFill' isn't referenced. Try removing the declaration of '_plateFill'
+# 2026-10-04 catalog_detail step 3: formatted ORIGINAL adc2e32e write-only field;
+# private field and both writers move together, strict symbol/message identity retained.
+warning | unused_field | lib/features/catalog_detail/presentation/legacy_catalog_detail/catalog_detail_primary_action.dart | The value of the field '_simklStatus' isn't used. Try removing the field, or using it
+
+# 2026-10-05 debrify_tv step 1: ORIGINAL 991029f6 unused parser retained verbatim.
+warning | unused_element | lib/features/debrify_tv/application/debrify_tv_random_start.dart | The declaration '_parseRandomStartPercent' isn't referenced. Try removing the declaration of '_parseRandomStartPercent'
+
+# 2026-10-05 debrify_tv step 5: relocated ORIGINAL 991029f6 warnings.
+# _DebrifyTVScreenState._playNextFromQueue
+warning | unused_element | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_dormant.dart | The declaration '_playNextFromQueue' isn't referenced. Try removing the declaration of '_playNextFromQueue'
+
+# 2026-10-05 debrify_tv step 6: relocated ORIGINAL 991029f6 warnings.
+# _DebrifyTVScreenState._watchTorboxWithCachedTorrents
+warning | unnecessary_cast | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_cached_torbox.dart | Unnecessary cast. Try removing the cast
+
+# 2026-10-05 debrify_tv step 7: relocated ORIGINAL 991029f6 warnings.
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_local_variable | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The value of the local variable 'showChannelName' isn't used. Try removing the variable or using it
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_element | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The declaration 'setShowChannelName' isn't referenced. Try removing the declaration of 'setShowChannelName'
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_local_variable | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The value of the local variable 'showVideoTitle' isn't used. Try removing the variable or using it
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_element | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The declaration 'setShowVideoTitle' isn't referenced. Try removing the declaration of 'setShowVideoTitle'
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_local_variable | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The value of the local variable 'hideOptions' isn't used. Try removing the variable or using it
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_element | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The declaration 'setHideOptions' isn't referenced. Try removing the declaration of 'setHideOptions'
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_local_variable | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The value of the local variable 'hideBackButton' isn't used. Try removing the variable or using it
+# _DebrifyTVScreenState._buildSettingsCard
+warning | unused_element | lib/features/debrify_tv/presentation/legacy_debrify_tv/debrify_tv_settings_card.dart | The declaration 'setHideBackButton' isn't referenced. Try removing the declaration of 'setHideBackButton'
+
+# 2026-10-06 edit_profile step 1: R f9ffe16d5e7ee9a94402950d7debdb359d1fc8f8.
+# Private enum retained verbatim behind its typedef; five destination-probe warnings.
+warning | unused_field | lib/features/edit_profile/models/edit_profile_tv_section.dart | The value of the field 'profile' isn't used. Try removing the field, or using it
+warning | unused_field | lib/features/edit_profile/models/edit_profile_tv_section.dart | The value of the field 'pages' isn't used. Try removing the field, or using it
+warning | unused_field | lib/features/edit_profile/models/edit_profile_tv_section.dart | The value of the field 'access' isn't used. Try removing the field, or using it
+warning | unused_field | lib/features/edit_profile/models/edit_profile_tv_section.dart | The value of the field 'lock' isn't used. Try removing the field, or using it
+warning | unused_field | lib/features/edit_profile/models/edit_profile_tv_section.dart | The value of the field 'data' isn't used. Try removing the field, or using it
+# Recordings: ORIGINAL private constructors through the frozen widget aliases.
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_buttons.dart | A value for optional parameter 'filled' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_buttons.dart | A value for optional parameter 'danger' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_buttons.dart | A value for optional parameter 'autofocus' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_buttons.dart | A value for optional parameter 'onDown' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_buttons.dart | A value for optional parameter 'onDown' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_chrome.dart | A value for optional parameter 'onScheduleDown' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_chrome.dart | A value for optional parameter 'chip' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_chrome.dart | A value for optional parameter 'action' isn't ever given. Try removing the unused parameter
+warning | unused_element_parameter | lib/features/recordings/presentation/recordings_hub_library_row.dart | A value for optional parameter 'focusNode' isn't ever given. Try removing the unused parameter
+
+# 2026-10-11 video_player P1: six original R/S facade warnings; the frozen
+# rename probe also records the retained time_formatters import becoming unused.
+# Import removal is outside the reviewed move substitutions. No new allowances
+# beyond the original/probe identity inventory (infos/counts enforced separately).
+warning | unused_field | lib/screens/video_player_screen.dart | The value of the field '_pikPakRetryCount' isn't used. Try removing the field, or using it
+warning | unused_field | lib/screens/video_player_screen.dart | The value of the field '_isSeekingWithSlider' isn't used. Try removing the field, or using it
+warning | unused_field | lib/screens/video_player_screen.dart | The value of the field '_rainbowOpacity' isn't used. Try removing the field, or using it
+warning | unused_field | lib/screens/video_player_screen.dart | The value of the field '_transitionPhase' isn't used. Try removing the field, or using it
+warning | unused_field | lib/screens/video_player_screen.dart | The value of the field '_transitionPhase2Started' isn't used. Try removing the field, or using it
+warning | invalid_use_of_visible_for_testing_member | lib/features/video_player/presentation/legacy_video_player/vp_video_output_lease.dart | The member 'isHeld' can only be used within 'package:debrify/widgets/video_output_lease.dart' or a test
+
+# 2026-10-12 P3: original facade import retained by frozen import list; unused identity recorded in the Step T receiver probe.
+
+# 2026-10-12 video_player P5: exact retained import now unused; frozen Step-T receiver probe.
+
+# 2026-10-12 video_player P6: five exact retained imports become unused; frozen Step-T probe identities.
+# vplayer P7: original imports retained by the frozen facade directive list.
+
+# 2026-10-14 vplayer P9: three frozen retained imports become unused; identities recorded in the Step-T receiver probe.
+
+# 2026-10-14 vplayer P11: seven frozen retained imports become unused; exact identities/counts recorded in the approved Step-T probe.
+# Phase 12 frozen move/probe: preserved facade directives, six now-unused imports.
+# Phase 13 frozen move/probe: preserved facade directives, five now-unused imports.
+# Phase 14 frozen move/probe: preserved facade directives, six now-unused imports.
+# Phase 18 frozen move/probe: preserved facade directives, sixteen now-unused imports (end-state cleanup in phase 21).
+# Phase 19 frozen move/probe: preserved facade directives, four now-unused imports (end-state cleanup in phase 21); the S2f/P15
+# 'isHeld' read moves with _claimVideoOutput into vp_video_output_lease.dart; the audio-output Host forwarder
+# subtitleAutoSync uses 'media_kit_subtitle_auto_sync.dart' again, so its P9 entry is retired.
+# Phase 20 frozen move/probe: preserved facade directives left unused by the engine II moves (12 imports and the
+# kIsWeb shown name; end-state cleanup in phase 21).
+# Phase 21a frozen move/probe: the facade directive left unused by the controls-runtime moves
+# (`_loadDockPrefs` moved to VpDockLayout; end-state import cleanup in 21b C1).

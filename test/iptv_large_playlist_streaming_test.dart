@@ -172,7 +172,7 @@ http://stream.example/alpha.ts
           reason: 'already committed unpublished chunks must be swept',
         );
       } finally {
-        db.close();
+        db.dispose();
       }
     },
   );

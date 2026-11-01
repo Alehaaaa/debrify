@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/lib_source.dart';
+
+const _vp = 'lib/features/video_player/presentation/legacy_video_player';
+
 String between(String source, String start, String end) {
   final first = source.indexOf(start);
   expect(first, isNonNegative);
@@ -15,7 +19,7 @@ void main() {
     'lib/screens/video_player_screen.dart',
   ).readAsStringSync();
   final native = File(
-    'lib/services/video_player_launcher.dart',
+    'lib/features/player_launch/data/android_tv_native_launch.dart',
   ).readAsStringSync();
   final bridge = File(
     'lib/services/android_tv_player_bridge.dart',
@@ -24,60 +28,77 @@ void main() {
   test(
     'Flutter prepares before opening, arms validation after asynchronous work',
     () {
+      // `_openMedia` lives in VpMediaOpen; State members are reached through
+      // its Host.
+      const host = '_host.';
       final open = between(
-        flutter,
+        libMember('$_vp/vp_media_open.dart', 'openMedia', owner: 'VpMediaOpen'),
         'Future<void> commitOpen()',
         '// Startup direct fallbacks',
       );
-      expect(
-        open.indexOf('_serverWatch.prepare'),
-        lessThan(open.indexOf('_player.open')),
+      final prepare = open.indexOf('${host}serverWatch.prepare');
+      final playerOpen = open.indexOf('${host}player.open');
+      final authorize = open.indexOf('DirectSourceAuthorization.authorize');
+      expect(prepare, isNonNegative);
+      expect(playerOpen, isNonNegative);
+      expect(authorize, isNonNegative);
+      expect(prepare, lessThan(playerOpen));
+      expect(open.indexOf('beforeOpen()'), greaterThan(prepare));
+      expect(open.indexOf('beforeOpen()'), greaterThan(authorize));
+      expect(open, contains('watchEpoch != ${host}watchOpenEpoch'));
+      final commit = libMember(
+        '$_vp/vp_startup_candidates.dart',
+        'commitValidatedStremioSource',
+        owner: 'VpStartupCandidates',
       );
-      expect(
-        open.indexOf('beforeOpen()'),
-        greaterThan(open.indexOf('_serverWatch.prepare')),
-      );
-      expect(
-        open.indexOf('beforeOpen()'),
-        greaterThan(open.indexOf('DirectSourceAuthorization.authorize')),
-      );
-      expect(open, contains('watchEpoch != _watchOpenEpoch'));
-      final commit = between(
-        flutter,
-        'Future<void> _commitValidatedStremioSource',
-        'String _startupSourceFields',
-      );
-      expect(
-        commit.indexOf('_serverWatch.commit'),
-        lessThan(commit.indexOf('commit == null')),
-      );
+      // P16 moved the commit into VpStartupCandidates; the State-owned watch
+      // controller is reached through its facade Host.
+      final watchCommit = commit.indexOf('_host.serverWatch.commit');
+      final optionalCallback = commit.indexOf('commit == null');
+      expect(watchCommit, isNonNegative);
+      expect(optionalCallback, greaterThan(watchCommit));
     },
   );
 
   test(
     'Flutter watch reports respect validation, transitions and resume hold',
     () {
-      final observe = between(
-        flutter,
-        'void _observeServerWatch',
-        'Future<void> _saveResume(',
+      final observe = libMember(
+        '$_vp/vp_resume_save.dart',
+        'observeServerWatch',
+        owner: 'VpResumeSave',
       );
-      expect(observe, contains('!_serverWatch.isActive'));
-      expect(observe, contains('_validationGateActive'));
-      expect(observe, contains('_isTransitioning'));
+      const fields = '_host.';
+      expect(observe, contains('void observeServerWatch('));
+      expect(observe, contains('!${fields}serverWatch.isActive'));
+      expect(observe, contains('${fields}validationGateActive'));
+      expect(observe, contains('${fields}isTransitioning'));
       expect(observe, contains('heldTargetIfBlocked'));
-      expect(observe, contains('final currentEpisode = _traktSeasonEpisode()'));
+      expect(
+        observe,
+        contains('final currentEpisode = ${fields}traktSeasonEpisode()'),
+      );
       expect(observe, contains('season: currentEpisode.season'));
       expect(observe, contains('episode: currentEpisode.episode'));
       final dispose = between(flutter, 'void dispose()', 'final replacedPip');
       expect(dispose, contains('_serverWatch.close()'));
-      final eof = between(
-        flutter,
-        'Future<void> _onPlaybackEnded()',
-        '// LIVE IPTV:',
+      final observation = dispose.indexOf('observeServerWatch(');
+      final closing = dispose.indexOf('_serverWatch.close()');
+      expect(observation, isNonNegative);
+      expect(closing, greaterThan(observation));
+      final eof = libMember(
+        '$_vp/vp_playback_ended.dart',
+        'onPlaybackEnded',
+        owner: 'VpPlaybackEnded',
       );
-      expect(eof, contains('_observeServerWatch(completed: true)'));
+      final live = eof.indexOf('// LIVE IPTV:');
+      final watch = eof.indexOf('_host.observeServerWatch(completed: true)');
+      expect(live, isNonNegative);
+      expect(watch, isNonNegative);
+      expect(watch, lessThan(live));
       expect(eof, isNot(contains('_serverWatch.commit(null)')));
+      expect(eof, isNot(contains('serverWatch.commit(null)')));
+      expect(eof, isNot(contains('commitServerWatch(null)')));
     },
   );
 
@@ -95,11 +116,10 @@ void main() {
       );
       final commit = between(
         launch,
-        'Future<Null> sourceCommitterForTv',
+        'final sourceCommitterForTv',
         '// "Load more sources"',
       );
       expect(commit, isNot(contains('serverWatch.commit')));
-      expect(launch, contains('onCommitStremioSource: sourceCommitterForTv'));
       final progressCommit = between(
         launch,
         'onCommitPlaybackProgressSource:',

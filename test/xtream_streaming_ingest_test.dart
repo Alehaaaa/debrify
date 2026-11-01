@@ -395,7 +395,7 @@ void main() {
             1,
           );
         } finally {
-          db.close();
+          db.dispose();
         }
       },
     );
@@ -422,7 +422,7 @@ void main() {
         try {
           expect(db.select('SELECT COUNT(*) AS n FROM channels').first['n'], 1);
         } finally {
-          db.close();
+          db.dispose();
         }
         body = '[$rows]';
         final result = await fetch();

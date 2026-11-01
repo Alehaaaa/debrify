@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
+import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
@@ -180,6 +181,7 @@ class _SimklSeeAllScreenState extends State<SimklSeeAllScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('simkl_see_all');
     // Land on Continue Watching when the host handed us some (the natural
     // "continue" context); otherwise Trending (public, always populated).
     // A Home list row's See-All overrides the auto-pick with its own list —
@@ -337,6 +339,9 @@ class _SimklSeeAllScreenState extends State<SimklSeeAllScreen> {
   void _playRandom() {
     final play = _quickPlay;
     if (play == null || _visible.isEmpty) return;
+    AnalyticsService.trackInBackground('discover_random_play', {
+      'source': 'simkl',
+    });
     play(_visible[_random.nextInt(_visible.length)]);
   }
 

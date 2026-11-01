@@ -131,50 +131,7 @@ class AppTheme {
     required this.sound,
     required this.brightness,
     required this.sheetSurface,
-    this.form = '',
   });
-
-  /// Which FORM this theme wears (Appearance → Form) — the theme id whose
-  /// structure built it. Empty means its own ([id]). Anything that picks a
-  /// whole visual style — Spotlight's bespoke Settings, for one — must ask
-  /// this, not [id]: [id] is the PALETTE, and a palette change must not
-  /// restyle the app.
-  final String form;
-  String get formId => form.isEmpty ? id : form;
-
-  /// This theme, recorded as wearing [form].
-  AppTheme withForm(String form) => AppTheme._(
-    id: id,
-    label: label,
-    isLegacy: isLegacy,
-    core: core,
-    home: home,
-    seeAll: seeAll,
-    settings: settings,
-    cloud: cloud,
-    calendar: calendar,
-    downloads: downloads,
-    youtube: youtube,
-    playlist: playlist,
-    stremioTv: stremioTv,
-    debrifyTv: debrifyTv,
-    iptv: iptv,
-    shell: shell,
-    shape: shape,
-    type: type,
-    motion: motion,
-    surface: surface,
-    light: light,
-    art: art,
-    focus: focus,
-    idle: idle,
-    wait: wait,
-    density: density,
-    sound: sound,
-    brightness: brightness,
-    sheetSurface: sheetSurface,
-    form: form,
-  );
 
   bool get isLight => brightness == Brightness.light;
 
@@ -1909,7 +1866,7 @@ abstract final class AppThemes {
   /// worth the reading cost.
   static final AppTheme legacy = AppTheme._(
     id: legacyId,
-    label: 'Nextup Classic',
+    label: 'Debrify Classic',
     isLegacy: true,
     core: DetailThemes.signal,
     brightness: Brightness.dark,
@@ -1934,7 +1891,7 @@ abstract final class AppThemes {
     wait: WaitTokens.legacy,
     density: DensityTokens.legacy,
     sound: SoundTokens.legacy,
-    // card_action_menu, the two detail quick-action sheets, the episode sheet
+    // cw_card_menu, the two detail quick-action sheets, the episode sheet
     sheetSurface: const Color(0xFF141019),
     home: HomeTokens(
       bg: const Color(0xFF0D0B1A), // HomeTheme.bg
@@ -1964,7 +1921,7 @@ abstract final class AppThemes {
         0xFFB4A0FF,
       ).withValues(alpha: 0.12),
       wash: _legacyWash, // addon_hub bloom — the same gradient, verified
-      card: const Color(0xFF191B28), // addon_hub _kCardBg
+      card: const Color(0xFF191B28), // addonHubCardBackground
       danger: const Color(0xFFEF4444), // addon_hub destructive
       warning: const Color(0xFFF6B94A), // addon_hub "needs debrid" caveat
       listBg: const Color(0xFF0B0910), // mdblist_lists_see_all ground

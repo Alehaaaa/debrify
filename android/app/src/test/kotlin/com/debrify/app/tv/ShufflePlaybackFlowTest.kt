@@ -16,12 +16,22 @@ import org.robolectric.annotation.Config
 class ShufflePlaybackFlowTest {
     private fun activity() = Robolectric.buildActivity(AndroidTvTorrentPlayerActivity::class.java).get()
     private fun field(activity: Any, name: String, value: Any?) {
-        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.set(activity, value)
+        TvPlayerOriginalAccess.set(activity, name, value)
     }
     private fun call(activity: Any, name: String, vararg args: Any): Any? {
-        val method = activity.javaClass.declaredMethods.first { it.name == name && it.parameterCount == args.size }
+        val owner = when (name) {
+            "watchShufflePlayback", "yieldEpisodeFetchToQueuedShuffle", "clearQueuedShuffle",
+            "failShufflePlayback", "shuffleAttemptCurrent", "resetShuffle" -> {
+                if (activity.javaClass.declaredFields.any { it.name == "playbackStartController" }) {
+                    val start = TvPlayerOriginalAccess.field(activity, "playbackStartController")!!
+                    TvPlayerOriginalAccess.field(start, "navigator")!!
+                } else activity
+            }
+            else -> activity
+        }
+        val method = owner.javaClass.declaredMethods.first { it.name == name && it.parameterCount == args.size }
         method.isAccessible = true
-        return method.invoke(activity, *args)
+        return method.invoke(owner, *args)
     }
     private fun attempt(activity: Any, opened: Boolean = false, failure: () -> Unit, restore: () -> Unit = {}): Any {
         val type = activity.javaClass.declaredClasses.first { it.simpleName == "ShufflePlaybackAttempt" }

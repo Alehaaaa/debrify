@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
+import '../../services/analytics_service.dart';
 import '../../services/app_route_observer.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
@@ -116,6 +117,7 @@ class _ContinueWatchingSeeAllScreenState
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('continue_watching_see_all');
     MainPageBridge.addPlaybackReturnListener(_onPlaybackReturned);
     _items = widget.items;
     _category = widget.initialCategory;
@@ -284,6 +286,9 @@ class _ContinueWatchingSeeAllScreenState
   void _playRandom() {
     final play = widget.onQuickPlay;
     if (play == null || _visible.isEmpty) return;
+    AnalyticsService.trackInBackground('discover_random_play', {
+      'source': 'continue_watching',
+    });
     play(_visible[_random.nextInt(_visible.length)]);
   }
 

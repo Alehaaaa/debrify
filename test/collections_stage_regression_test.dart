@@ -73,42 +73,108 @@ void main() {
     expect(HomeRowOrder.seedCollections([], ['collection:new']), isEmpty);
   });
 
-  // The stage layouts are private parts of SearchScreen. These wiring guards
+  // The stage layout owners retain SearchScreen's wiring. These guards
   // supplement the rendered shared-card tests; they catch a layout reverting
   // to global title geometry while the shared presentation stays correct.
-  final source = File('lib/screens/search_screen.dart').readAsStringSync();
-  for (final (start, end) in [
-    ('Widget _buildCanvasBoard', 'double get _titleCardAspect'),
-    ('Widget _promenadeCell', 'Widget _buildAtriumBoard'),
-    ('Widget _atriumRow', 'Widget _buildMosaicBoard'),
-    ('Widget _mosaicCell', 'Widget _buildDeckBoard'),
-    ('Widget _stageShelfCell', 'Widget _buildTonightBoard'),
+  final source = File(
+    'lib/features/home/presentation/home_stage_cells.dart',
+  ).readAsStringSync();
+  // Every stage layout builds its cells through the shared HomeStageCards
+  // builder, which owns collection shape, artwork and focus preview.
+  final stageCards = File(
+    'lib/features/home/presentation/home_stage_cards.dart',
+  ).readAsStringSync();
+  test(
+    'shared stage cards use collection artwork, shape and focus preview',
+    () {
+      expect(stageCards, contains('aspectOf(rail'));
+      expect(stageCards, contains('artOf(rail'));
+      expect(stageCards, contains('focusArtOf('));
+      expect(stageCards, contains('focusVideoOf('));
+      expect(stageCards, contains('focusGlowEnabled:'));
+      expect(stageCards, contains('hideTitle'));
+      // The screen wires the collection-aware geometry, not global title
+      // geometry, into the shared builder.
+      expect(source, contains('aspectOf: _stageGeometry.stageCardAspect,'));
+      expect(source, contains('artOf: _stageGeometry.stageCardArt,'));
+    },
+  );
+  for (final (identity, file, start, end) in [
+    (
+      'Widget _canvasCell',
+      'home_stage_cells.dart',
+      'Widget canvasCell',
+      'Widget promenadeCell',
+    ),
+    (
+      'Widget _promenadeCell',
+      'home_stage_cells.dart',
+      'Widget promenadeCell',
+      'Widget mosaicCell',
+    ),
+    (
+      'Widget _atriumRow',
+      'home_atrium_section.dart',
+      'Widget atriumRow',
+      '\n}',
+    ),
+    (
+      'Widget _mosaicCell',
+      'home_stage_cells.dart',
+      'Widget mosaicCell',
+      'Widget stageShelfCell',
+    ),
+    (
+      'Widget _stageShelfCell',
+      'home_stage_cells.dart',
+      'Widget stageShelfCell',
+      '\n}',
+    ),
   ]) {
-    test('$start uses collection artwork, shape and focus preview', () {
+    test('$identity uses collection artwork, shape and focus preview', () {
+      final source = File(
+        'lib/features/home/presentation/$file',
+      ).readAsStringSync();
       final from = source.indexOf(start);
       final to = source.indexOf(end, from);
       expect(from, isNonNegative);
       expect(to, greaterThan(from));
       final body = source.substring(from, to);
-      expect(body, contains('_stageCardAspect(rail'));
-      expect(body, contains('_stageCardArt(rail'));
-      expect(body, contains('focusArtOf('));
-      expect(body, contains('focusVideoOf('));
-      expect(body, contains('focusGlowEnabled:'));
-      expect(body, contains('hideTitle'));
+      expect(body, contains('stageCards.build('));
     });
   }
+  test('Canvas board sizes its rail with collection geometry', () {
+    final source = File(
+      'lib/features/home/presentation/home_stage_boards.dart',
+    ).readAsStringSync();
+    final from = source.indexOf('Widget buildCanvasBoard');
+    final to = source.indexOf('Widget buildPromenadeBoard', from);
+    expect(from, isNonNegative);
+    expect(to, greaterThan(from));
+    final body = source.substring(from, to);
+    expect(body, contains('_stageGeometry.stageCardAspect(view.rail)'));
+    expect(body, contains('_stageCells.canvasCell(view, col)'));
+  });
   test('folder focus retires title work and owns the hero', () {
-    final start = source.indexOf('  void _setHero(');
+    final source = File(
+      'lib/features/home/presentation/home_hero_section.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('  void setHero(');
     final body = source.substring(
       start,
       source.indexOf('// A catalog/CW card owns', start),
     );
-    expect(body, contains('_heroReqId++'));
-    expect(body, contains('_heroTimer?.cancel()'));
-    expect(body, contains('_clearHeroTrailer()'));
-    expect(body, contains('_clearHeroLiveIptv()'));
-    expect(body, contains('_heroItem.value = item'));
-    expect(body, contains('_heroEnriched.value = null'));
+    const cancel = '_deps.media().metadata.cancel()';
+    expect(body, contains(cancel));
+    // The loader's executable cancellation tests cover request retirement;
+    // this guard checks the folder caller invokes it before replacing the hero.
+    expect(
+      body.indexOf(cancel),
+      lessThan(body.indexOf('heroItem.value = item')),
+    );
+    expect(body, contains('_deps.preview().clearHeroTrailer()'));
+    expect(body, contains('_deps.clearLive()'));
+    expect(body, contains('heroItem.value = item'));
+    expect(body, contains('heroEnriched.value = null'));
   });
 }

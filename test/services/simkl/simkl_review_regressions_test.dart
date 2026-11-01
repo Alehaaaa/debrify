@@ -6,7 +6,12 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/secret_vault.dart';
 import 'package:debrify/services/series_progress_reset_service.dart';
 import 'package:debrify/services/simkl/simkl_service.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/continue_watching_storage.dart';
+import 'package:debrify/services/storage/episode_resume_storage.dart';
+import 'package:debrify/services/storage/movie_progress_storage.dart';
+import 'package:debrify/services/storage/series_progress_storage.dart';
+import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage/video_progress_storage.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -33,7 +38,7 @@ void main() {
     test(
       'remove $type clears sparse playback before its library alias disappears',
       () async {
-        await StorageService.setSimklAccessToken('synthetic');
+        await SimklStorage.setSimklAccessToken('synthetic');
         var inLibrary = true;
         var paused = true;
         final writes = <String>[];
@@ -117,7 +122,7 @@ void main() {
 
   for (final failure in ['library', 'playback', 'delete']) {
     test('$failure failure retains the library entry for retry', () async {
-      await StorageService.setSimklAccessToken('synthetic');
+      await SimklStorage.setSimklAccessToken('synthetic');
       var removed = false;
       await http.runWithClient(
         () async {
@@ -173,13 +178,13 @@ void main() {
     expect(series.progressId, 'tmdb:42');
     for (final item in [movie, series]) {
       // Even callers with a raw catalog ID get a type-aware CW key.
-      await StorageService.saveContinueWatchingItem(
+      await ContinueWatchingStorage.saveContinueWatchingItem(
         imdbId: item.id,
         title: item.name,
         contentType: item.type,
       );
     }
-    await StorageService.saveSeriesPlaybackState(
+    await SeriesProgressStorage.saveSeriesPlaybackState(
       seriesTitle: series.name,
       season: 4,
       episode: 6,
@@ -187,7 +192,7 @@ void main() {
       durationMs: 1000,
       imdbId: series.progressId,
     );
-    await StorageService.saveVideoPlaybackState(
+    await VideoProgressStorage.saveVideoPlaybackState(
       videoTitle: movie.name,
       videoUrl: 'https://fixture.invalid/movie',
       positionMs: 300,
@@ -195,7 +200,7 @@ void main() {
       imdbId: movie.progressId,
     );
     expect(
-      (await StorageService.getContinueWatchingItems())
+      (await ContinueWatchingStorage.getContinueWatchingItems())
           .map((e) => e['imdbId'])
           .toSet(),
       {'tmdb:movie:42', 'tmdb:42'},
@@ -215,17 +220,18 @@ void main() {
         isEmpty,
       );
       expect(
-        (await StorageService.getContinueWatchingItems()).single['imdbId'],
+        (await ContinueWatchingStorage.getContinueWatchingItems())
+            .single['imdbId'],
         series.progressId,
       );
       expect(
-        (await StorageService.getLastPlayedEpisodeByImdbId(
+        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
           series.progressId!,
         ))?['season'],
         4,
       );
       expect(
-        await StorageService.getVideoPlaybackState(
+        await VideoProgressStorage.getVideoPlaybackState(
           videoTitle: movie.name,
           contentIdentity: movie.progressId,
         ),
@@ -243,11 +249,12 @@ void main() {
         isEmpty,
       );
       expect(
-        (await StorageService.getContinueWatchingItems()).single['imdbId'],
+        (await ContinueWatchingStorage.getContinueWatchingItems())
+            .single['imdbId'],
         movie.progressId,
       );
       expect(
-        await StorageService.getVideoPlaybackState(
+        await VideoProgressStorage.getVideoPlaybackState(
           videoTitle: movie.name,
           contentIdentity: movie.progressId,
         ),
@@ -260,16 +267,17 @@ void main() {
     'finishing a native movie does not clear same-number series progress',
     () async {
       await saveBoth();
-      await StorageService.markMovieAsFinished(' TMDB:42 ');
-      expect(await StorageService.isMovieFinished(movie.id), isTrue);
+      await MovieProgressStorage.markMovieAsFinished(' TMDB:42 ');
+      expect(await MovieProgressStorage.isMovieFinished(movie.id), isTrue);
       expect(
-        (await StorageService.getLastPlayedEpisodeByImdbId(
+        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
           series.progressId!,
         ))?['season'],
         4,
       );
       expect(
-        (await StorageService.getContinueWatchingItems()).single['imdbId'],
+        (await ContinueWatchingStorage.getContinueWatchingItems())
+            .single['imdbId'],
         series.progressId,
       );
     },
@@ -278,7 +286,7 @@ void main() {
   test(
     'movie progress keys use ordinary IDs at Simkl and addon boundaries',
     () async {
-      await StorageService.setSimklAccessToken('synthetic');
+      await SimklStorage.setSimklAccessToken('synthetic');
       expect(MediaIdentity.apiIds(movie.progressId!), {'tmdb': 42});
       await http.runWithClient(
         () async {

@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/lib_source.dart';
+
+const _vp = 'lib/features/video_player/presentation/legacy_video_player';
+
 String _between(String source, String start, String end) {
   final from = source.indexOf(start);
   expect(from, isNonNegative, reason: 'Missing start marker: $start');
@@ -11,8 +15,17 @@ String _between(String source, String start, String end) {
 }
 
 void main() {
-  final source = File(
-    'lib/services/video_player_launcher.dart',
+  final source =
+      File('lib/services/video_player_launcher.dart').readAsStringSync() +
+      Directory('lib/features/player_launch')
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((file) => file.path.endsWith('.dart'))
+          .map((file) => file.readAsStringSync())
+          .join('\n');
+
+  final seeding = File(
+    'lib/features/player_launch/presentation/legacy_launch/tracker_progress_seeding.dart',
   ).readAsStringSync();
 
   test('Android TV source switch carries MDBList episode resume progress', () {
@@ -52,7 +65,7 @@ void main() {
     () {
       final guideBuilder = _between(
         source,
-        'buildUpdates() async {',
+        'Future<\n          ({',
         'Future<bool> pushUpdates',
       );
 
@@ -79,9 +92,9 @@ void main() {
     'MDBList launch seed is lightweight and full history follows cached push',
     () {
       final seed = _between(
-        source,
-        'static Future<void> _seedMdblistEpisodeProgress(String imdbId)',
-        '/// [onPlayerHandoff]',
+        seeding,
+        'static Future<void> seedMdblistEpisodeProgress(String imdbId)',
+        '\n}',
       );
 
       expect(seed, contains('seedMdblistPlayback(imdbId)'));
@@ -98,10 +111,18 @@ void main() {
       final launchSeeds = _between(
         source,
         '// Real packs retain the existing Trakt/Simkl launch-time snapshots',
-        'MainPageBridge.notifyPlayerLaunching(isTrailer: isTrailer);',
+        "AnalyticsService.trackInBackground('playback_started'",
       );
-      expect(launchSeeds, contains('unawaited(_seedMdblistEpisodeProgress'));
-      expect(launchSeeds, isNot(contains('await _seedMdblistEpisodeProgress')));
+      expect(
+        launchSeeds,
+        contains('unawaited(TrackerProgressSeeding.seedMdblistEpisodeProgress'),
+      );
+      expect(
+        launchSeeds,
+        isNot(
+          contains('await TrackerProgressSeeding.seedMdblistEpisodeProgress'),
+        ),
+      );
     },
   );
 
@@ -117,9 +138,9 @@ void main() {
 
   test('legacy Trakt history is never written into local completion again', () {
     final refresh = _between(
-      source,
-      'static Future<void> _refreshTraktEpisodeProgress(String imdbId)',
-      'static Future<void> _seedSimklEpisodeProgress',
+      seeding,
+      'static Future<void> refreshTraktEpisodeProgress(String imdbId)',
+      'static Future<void> seedSimklEpisodeProgress',
     );
 
     expect(refresh, contains('refreshTrakt(imdbId)'));
@@ -132,34 +153,106 @@ void main() {
     final player = File(
       'lib/screens/video_player_screen.dart',
     ).readAsStringSync();
-    final sourceSwitch = _between(
-      player,
-      'Future<bool> _switchToSourcePlaylist(',
-      '// Resume the SAME episode from the new source',
-    );
-    final resumeGetters = _between(
-      player,
-      'void _bindEpisodeTrackerProgressIdentity',
-      '/// Load an external audio track',
+    final sourceSwitch = libMember(
+      '$_vp/vp_source_playlist_switch.dart',
+      'switchToSourcePlaylist',
+      owner: 'VpSourcePlaylistSwitch',
     );
 
     expect(sourceSwitch, contains('final carriedImdbId'));
     expect(sourceSwitch, contains('rebuilt.imdbId ??= carriedImdbId'));
-    expect(resumeGetters, contains('final imdbId = _currentSeriesImdbId'));
-    expect(player, contains('metadataReady: _episodeMetadataReady'));
-
-    final resume = _between(
+    final capture = sourceSwitch.indexOf('final carriedImdbId');
+    final carry = sourceSwitch.indexOf('rebuilt.imdbId ??= carriedImdbId');
+    expect(capture, isNonNegative);
+    expect(carry, greaterThan(capture));
+    for (final (file, owner, member) in [
+      (
+        'vp_trakt_scrobbler.dart',
+        'VpTraktScrobbler',
+        'currentEpisodeTraktPercent',
+      ),
+      (
+        'vp_simkl_scrobbler.dart',
+        'VpSimklScrobbler',
+        'currentEpisodeSimklPercent',
+      ),
+      (
+        'vp_mdblist_scrobbler.dart',
+        'VpMdblistScrobbler',
+        'currentEpisodeMdblistPercent',
+      ),
+    ]) {
+      final body = libMember('$_vp/$file', member, owner: owner);
+      expect(body, contains('final imdbId = _host.currentSeriesImdbId;'));
+      expect(
+        body,
+        contains(
+          'if (_host.episodeTrackerProgressImdbId != imdbId) return null;',
+        ),
+      );
+    }
+    // Each moved percentage declaration reads the identity through this
+    // computed adapter on the facade.
+    expect(
       player,
-      'Future<void> _maybeRestoreResume(',
-      '/// Get enhanced playback state for current content',
+      contains('String? get currentSeriesImdbId => _s._currentSeriesImdbId;'),
     );
+    // Bind each new adapter independently: another tracker's good forwarder
+    // cannot satisfy this assertion for a stale widget-identity forwarding.
+    for (final adapter in [
+      '_VpSimklScrobblerHostAdapter',
+      '_VpMdblistScrobblerHostAdapter',
+    ]) {
+      final body = _between(
+        player,
+        'class $adapter implements',
+        '\n}\n',
+      ).replaceAll(RegExp(r'\s+'), ' ');
+      expect(
+        body,
+        contains('String? get currentSeriesImdbId => _s._currentSeriesImdbId;'),
+      );
+      expect(
+        body,
+        contains(
+          'String? get episodeTrackerProgressImdbId => _s._episodeTrackerProgressImdbId;',
+        ),
+      );
+    }
+    // P17 moved the guide into VpEpisodeGuide; the shared preload future is
+    // still the State field, read through the live guide-host forwarder.
+    expect(
+      libMember(
+        '$_vp/vp_episode_guide.dart',
+        'showPlaylistSheet',
+        owner: 'VpEpisodeGuide',
+      ),
+      contains('metadataReady: _host.episodeMetadataReady'),
+    );
+    expect(
+      _between(
+        player,
+        'class _VpEpisodeGuideHostAdapter implements',
+        '\n}\n',
+      ).replaceAll(RegExp(r'\s+'), ' '),
+      contains(
+        'Future<void>? get episodeMetadataReady => _s._episodeMetadataReady;',
+      ),
+    );
+
+    final resume = libMember(
+      '$_vp/vp_resume_restore.dart',
+      'maybeRestoreResume',
+      owner: 'VpResumeRestore',
+    );
+    expect(resume, contains('Future<void> maybeRestoreResume('));
     expect(resume, contains('hasActiveTraktEpisodeRewatch'));
     expect(resume, contains('localMs = 0'));
   });
 
   test('native TVMaze placeholders render the serialized watch state', () {
     final native = File(
-      'android/app/src/main/kotlin/com/debrify/app/tv/AndroidTvTorrentPlayerActivity.kt',
+      'android/app/src/main/kotlin/com/debrify/app/tv/TvPlaylistAdapter.kt',
     ).readAsStringSync();
     final placeholder = _between(
       native,
@@ -178,12 +271,12 @@ void main() {
 
   test('native actual rows adopt refreshed guide watch state', () {
     final native = File(
-      'android/app/src/main/kotlin/com/debrify/app/tv/AndroidTvTorrentPlayerActivity.kt',
+      'android/app/src/main/kotlin/com/debrify/app/tv/TvEpisodeMetadataReceiver.kt',
     ).readAsStringSync();
     final handler = _between(
       native,
       '// Handle episode metadata updates',
-      'private fun requestMetadataFromFlutter()',
+      'fun requestMetadataFromFlutter()',
     );
 
     expect(handler, contains('hasWatchedUpdate'));
@@ -192,7 +285,10 @@ void main() {
     expect(handler, contains('mergeLateMetadataResumePosition'));
     expect(handler, contains('mergeLateMetadataDuration'));
     expect(handler, contains('traktProgressPercent = newTrackerProgress'));
-    expect(native, contains('if (watched) return 100'));
+    final playbackItem = File(
+      'android/app/src/main/kotlin/com/debrify/app/tv/TvPlaybackItem.kt',
+    ).readAsStringSync();
+    expect(playbackItem, contains('if (watched) return 100'));
   });
 
   test('TVMaze-discovered IMDb id feeds later native resolver callbacks', () {
@@ -204,7 +300,7 @@ void main() {
   test('initial native playlist carries explicit local completion', () {
     final builder = _between(
       source,
-      'class _AndroidTvPlaybackPayloadBuilder',
+      'class AndroidTvPlaybackPayloadBuilder',
       '/// Fetch movie IMDB ID from Cinemeta',
     );
 

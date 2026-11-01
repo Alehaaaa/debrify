@@ -192,9 +192,8 @@ class PipService {
       if (_isIOS) {
         if (value is! Map ||
             _iosPlayerHandle == null ||
-            value['playerHandle'] != _iosPlayerHandle) {
+            value['playerHandle'] != _iosPlayerHandle)
           return null;
-        }
         value = value['value'];
       }
       switch (call.method) {

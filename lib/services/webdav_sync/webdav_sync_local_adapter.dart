@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'webdav_sync_collection_capacity.dart';
 import 'package:collection/collection.dart';
 import '../engine/local_engine_storage.dart';
+import '../../utils/app_storage.dart';
 
 import 'package:crypto/crypto.dart' as crypto;
 
@@ -23,7 +24,6 @@ import '../profiles/profile_preferences.dart';
 import '../profiles/profile_registry.dart';
 import '../profiles/profile_runtime.dart';
 import '../profiles/profile_scope.dart';
-import '../profiles/profile_storage_paths.dart';
 import 'webdav_sync_diagnostics.dart';
 import '../debrify_tv_database.dart';
 import '../iptv_catalog_db.dart';
@@ -373,7 +373,7 @@ final class ProfileWebDavSyncLocalAdapter
       );
       final engineValues = await LocalEngineStorage.forDirectory(
         Directory(
-          '${scope.storageDirectory(await ProfileStoragePaths.profileDataRoot(), 'documents').path}/engines',
+          '${scope.storageDirectory(await AppStorage.documents(), 'documents').path}/engines',
         ),
       ).exportSyncDefinitions();
       raw.addAll(engineValues);
@@ -480,7 +480,7 @@ final class ProfileWebDavSyncLocalAdapter
         if (engineValues.isNotEmpty) {
           engineAppliedKeys = await LocalEngineStorage.forDirectory(
             Directory(
-              '${scope.storageDirectory(await ProfileStoragePaths.profileDataRoot(), 'documents').path}/engines',
+              '${scope.storageDirectory(await AppStorage.documents(), 'documents').path}/engines',
             ),
           ).applySyncDefinitions(engineValues);
           _validateSession(session);
@@ -824,7 +824,7 @@ final class ProfileWebDavSyncLocalAdapter
         final value = entry.value.value;
         final decoded = value == null ? null : _tvChannelValue(value);
         if (channelId == null || value != null && decoded == null) {
-          _diagnostic('Ignored an invalid Nextup TV channel library leaf');
+          _diagnostic('Ignored an invalid Debrify TV channel library leaf');
           continue;
         }
         channelTargets.add(
@@ -849,7 +849,7 @@ final class ProfileWebDavSyncLocalAdapter
         if (channelId == null ||
             generationId is! String ||
             !_validGenerationId.hasMatch(generationId)) {
-          _diagnostic('Ignored an invalid Nextup TV generation library leaf');
+          _diagnostic('Ignored an invalid Debrify TV generation library leaf');
           continue;
         }
         generationTargets.add(
@@ -870,7 +870,7 @@ final class ProfileWebDavSyncLocalAdapter
             !_validInfohash.hasMatch(infohash) ||
             infohash != infohash.toLowerCase() ||
             decoded == null) {
-          _diagnostic('Ignored an invalid Nextup TV pool library leaf');
+          _diagnostic('Ignored an invalid Debrify TV pool library leaf');
           continue;
         }
         poolTargets.add(
@@ -1081,7 +1081,7 @@ final class ProfileWebDavSyncLocalAdapter
         )
         .toList(growable: false);
     if (ignoredTvInAmbientLibrary) {
-      _diagnostic('Ignored Nextup TV records in an ambient library section');
+      _diagnostic('Ignored Debrify TV records in an ambient library section');
     }
     await beforeWrite?.call();
     _validateSession(session);

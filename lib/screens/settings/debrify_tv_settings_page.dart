@@ -5,9 +5,9 @@ import 'widgets/settings_widgets.dart';
 import '../../services/engine/settings_manager.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../services/engine/config_loader.dart';
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 class DebrifyTvSettingsPage extends StatefulWidget {
   const DebrifyTvSettingsPage({super.key});
@@ -28,6 +28,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('debrify_tv_settings');
     // TV: land DPAD focus on the first body row. The builder's rows load
     // async, so retry a few frames until one becomes focusable.
     if (PlatformUtil.isTelevision) {
@@ -73,7 +74,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return SettingsPageScaffold(
-      title: 'Nextup TV',
+      title: 'Debrify TV',
       body: FocusScope(
         node: _bodyScope,
         child: FocusTraversalGroup(
@@ -120,7 +121,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
   Widget _buildHeader(BuildContext context) {
     return const SettingsPageHeader(
       icon: Icons.tv_rounded,
-      title: 'Nextup TV Configuration',
+      title: 'Debrify TV Configuration',
       subtitle: 'Configure search engines and result limits',
     );
   }
@@ -130,13 +131,11 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
     final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app)
-          : BoxDecoration(
-              color: t.panel,
-              borderRadius: app.shape.br(16),
-              border: Border.all(color: t.line),
-            ),
+      decoration: BoxDecoration(
+        color: t.panel,
+        borderRadius: app.shape.br(16),
+        border: Border.all(color: t.line),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -188,7 +187,8 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
             EdgeInsets.symmetric(vertical: 16),
           ),
           backgroundColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.focused) ? t.panel2 : null,
+            (states) =>
+                states.contains(WidgetState.focused) ? t.panel2 : null,
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.focused)
@@ -218,7 +218,7 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('Reset Settings'),
         content: const Text(
-          'Are you sure you want to reset all Nextup TV settings to their default values?',
+          'Are you sure you want to reset all Debrify TV settings to their default values?',
         ),
         actions: [
           TextButton(
@@ -227,8 +227,9 @@ class _DebrifyTvSettingsPageState extends State<DebrifyTvSettingsPage> {
             onPressed: () => Navigator.of(context).pop(),
             style: ButtonStyle(
               backgroundColor: WidgetStateProperty.resolveWith(
-                (states) =>
-                    states.contains(WidgetState.focused) ? t.panel : null,
+                (states) => states.contains(WidgetState.focused)
+                    ? t.panel
+                    : null,
               ),
               side: WidgetStateProperty.resolveWith(
                 (states) => states.contains(WidgetState.focused)

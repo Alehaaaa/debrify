@@ -199,7 +199,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
   /// construction: plain focusable ListTiles in a dialog, first one
   /// autofocused, nothing trailing inside a focused row's rect.
   Future<void> _profileActions(UserProfile profile) async {
-    final action = await showSettingsDialog<String>(
+    final action = await showDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
         title: Text(profile.name),
@@ -275,7 +275,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
       ProfileBootstrap.registry,
     );
     if (!mounted) return;
-    await showSettingsDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Profile diagnostics'),
@@ -475,7 +475,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
         key: const ValueKey('profiles-always-ask'),
         icon: Icons.login_rounded,
         title: 'Ask who\'s watching at startup',
-        subtitle: 'Show the profile picker when Nextup opens',
+        subtitle: 'Show the profile picker when Debrify opens',
         value: ProfileGateAlwaysAsk.cached,
         onChanged: (value) async {
           await ProfileGateAlwaysAsk.set(value);
@@ -614,7 +614,7 @@ class _ProfileRosterTileState extends State<_ProfileRosterTile> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final spotlight = app.formId == 'spotlight';
+    final spotlight = app.id == 'spotlight';
     final lit = _focusNode.hasFocus || _hovered;
     final inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:debrify/services/storage/launch_ident_storage.dart';
+import 'package:debrify/services/storage/provider_credential_storage.dart';
 import 'launch_animation/launch_package_test.dart' show packageBytes, animation;
 import 'package:debrify/services/launch_animation/launch_animation_library.dart';
 import 'dart:io';
@@ -9,7 +11,6 @@ import 'package:debrify/models/profiles/connection_resource.dart';
 import 'package:debrify/models/profiles/profile_avatar.dart';
 import 'package:debrify/services/debrify_tv_database.dart';
 import 'package:debrify/services/profiles/profile_bootstrap.dart';
-import 'package:debrify/services/profiles/profile_avatar_storage.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_remote_lease.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
@@ -26,7 +27,6 @@ import 'package:debrify/services/remote_control/udp_command_service.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/profiles/device_key_provider.dart';
 import 'package:debrify/services/profiles/connection_resource_service.dart';
 import 'package:debrify/services/profiles/profile_authorization.dart';
@@ -172,7 +172,7 @@ void main() {
           isA<RemoteTransferException>().having(
             (error) => error.toString(),
             'message',
-            contains('Update Nextup'),
+            contains('Update Debrify'),
           ),
         ),
       );
@@ -201,8 +201,8 @@ void main() {
       final entry = (await LaunchAnimationLibrary.instance.list()).single;
       expect(entry.animationId, 'portrait');
       expect(entry.background, 0xff123456);
-      await StorageService.getLaunchAnimation();
-      expect(StorageService.importedLaunchAnimationCached, isNull);
+      await LaunchIdentStorage.getLaunchAnimation();
+      expect(LaunchIdentStorage.importedLaunchAnimationCached, isNull);
     },
   );
 
@@ -373,7 +373,7 @@ void main() {
       Map<String, dynamic>? result;
       Object? failure;
       await tester.runAsync(() async {
-        await StorageService.setInitialSetupComplete(true);
+        await ProviderCredentialStorage.setInitialSetupComplete(true);
         final actor = await ProfileAuthorizationContext.capture(registry);
         await registry.createProfile(
           name: 'Second profile',
@@ -586,15 +586,8 @@ void main() {
       ProfileAvatar.tryParse(profile.avatarKey)?.kind,
       ProfileAvatarKind.image,
     );
-    // Avatars are private profile data in Application Support, not Documents.
-    final avatars = await ProfileAvatarStorage.directoryFor(profileId);
+    final avatars = Directory('${root.path}/docs/profiles/$profileId/avatars');
     expect(await avatars.list().length, 1);
-    final saved = await ProfileAvatarStorage.fileFor(
-      profileId,
-      ProfileAvatar.tryParse(profile.avatarKey)!,
-    );
-    expect(await saved.exists(), isTrue);
-    expect(await saved.length(), greaterThan(0));
   });
 
   test(

@@ -1,8 +1,9 @@
+import 'package:debrify/services/storage/stremio_tv_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/storage_service.dart';
+import '../../services/analytics_service.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
 
@@ -113,6 +114,7 @@ class _StremioTvFilterPageState extends State<StremioTvFilterPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('stremio_tv_filter');
     _addons = _buildModel();
     _railNodes = List.generate(
       _addons.length,
@@ -227,7 +229,7 @@ class _StremioTvFilterPageState extends State<StremioTvFilterPage> {
       }
       if (addonAllOff && a.cats.isNotEmpty) out.add(a.id);
     }
-    await StorageService.setStremioTvDisabledFilters(out);
+    await StremioTvStorage.setStremioTvDisabledFilters(out);
   }
 
   // ==========================================================================

@@ -34,30 +34,31 @@ class HorizonIdent extends LaunchIdent {
   Color get baseColor => const Color(0xFF000005);
   @override
   BoxDecoration get backdrop => const BoxDecoration(
-    // Faint violet nebula around the collapse point, pre-blended opaque.
-    gradient: RadialGradient(
-      center: Alignment(0, -0.16),
-      radius: 0.9,
-      colors: [Color(0xFF080718), Color(0xFF000005)],
-    ),
-  );
+        // Faint violet nebula around the collapse point, pre-blended opaque.
+        gradient: RadialGradient(
+          center: Alignment(0, -0.16),
+          radius: 0.9,
+          colors: [Color(0xFF080718), Color(0xFF000005)],
+        ),
+      );
   @override
-  List<Color> get sweepColors => const [Color(0xFF818CF8), Color(0xFFE9EDFF)];
+  List<Color> get sweepColors =>
+      const [Color(0xFF818CF8), Color(0xFFE9EDFF)];
 
   /// The nebula keeps its radial geometry — same centre, same radius, same
   /// stop positions — and only its two colours move. A flat fill here would
   /// throw away the collapse point the whole reveal is composed around.
   @override
   Decoration themedBackdrop(IdentPalette p) => RadialGradient(
-    center: const Alignment(0, -0.16),
-    radius: 0.9,
-    colors: [
-      // The bright inner stop is the base lifted TOWARD the accent, the
-      // same relationship #080718 has to #000005.
-      Color.lerp(p.base, p.accent, 0.14)!,
-      p.base,
-    ],
-  ).let((g) => BoxDecoration(gradient: g));
+        center: const Alignment(0, -0.16),
+        radius: 0.9,
+        colors: [
+          // The bright inner stop is the base lifted TOWARD the accent, the
+          // same relationship #080718 has to #000005.
+          Color.lerp(p.base, p.accent, 0.14)!,
+          p.base,
+        ],
+      ).let((g) => BoxDecoration(gradient: g));
 
   @override
   CustomPainter createPainter(
@@ -82,14 +83,13 @@ class _HorizonPainter extends CustomPainter {
 
   /// The burning ring and the condensing wordmark. A themed palette moves the
   /// hue; the collapse geometry, the star count and the timeline do not move.
-  static const _ownRingInner = Color(0xFF12C8FE);
-  static const _ownRingOuter = Color(0xFF0A5BEA);
+  static const _ownRingInner = Color(0xFF4F74FF);
+  static const _ownRingOuter = Color(0xFF8A5CFF);
   static const _ownMarkInk = Color(0xFFD9DEFF);
 
   Color get _ringInner => palette?.accent ?? _ownRingInner;
-  Color get _ringOuter => palette == null
-      ? _ownRingOuter
-      : Color.lerp(palette!.accent, palette!.ink, 0.35)!;
+  Color get _ringOuter =>
+      palette == null ? _ownRingOuter : Color.lerp(palette!.accent, palette!.ink, 0.35)!;
   Color get _markInk => palette?.ink ?? _ownMarkInk;
 
   /// The ignition glow — Horizon's own indigo, or the theme's accent.
@@ -108,11 +108,11 @@ class _HorizonPainter extends CustomPainter {
   IdentAlphaSets? _letters;
 
   static const double _collapse = 0.58;
-  // Six-letter NEXTUP reveal, ordered from the centre outwards.
-  static const List<int> _order = [2, 3, 1, 4, 0, 5];
+  static const List<int> _order = [3, 2, 4, 1, 5, 0, 6];
 
-  _HorizonPainter(this.animation, {required this.isTelevision, this.palette})
-    : super(repaint: animation);
+  _HorizonPainter(this.animation,
+      {required this.isTelevision, this.palette})
+      : super(repaint: animation);
 
   void _layout(Size size, bool lightweight) {
     if (_word != null && _size == size && _lw == lightweight) return;
@@ -136,7 +136,7 @@ class _HorizonPainter extends CustomPainter {
     _dimBuf = Float32List(count * 4);
     _brightBuf = Float32List(count * 4);
     _mark = identPlayPath(_g);
-    _inner = identMarkSheen(_g);
+    _inner = identPlayPath(_g * 0.52);
     _markRect = Rect.fromCenter(center: Offset.zero, width: _g, height: _g);
     // No longer `const`: the two stops now come from the palette when one is
     // supplied. Still built once per (size, TV-flag) in `_build`, so this is
@@ -169,7 +169,8 @@ class _HorizonPainter extends CustomPainter {
     final ringR = _g * 0.85;
 
     // Stars: fill the two line buffers, then two batched draws.
-    final gone = t > _collapse ? identClamp((t - _collapse) / 0.08, 0, 1) : 0.0;
+    final gone =
+        t > _collapse ? identClamp((t - _collapse) / 0.08, 0, 1) : 0.0;
     if (gone < 1) {
       int di = 0, bi = 0;
       for (final s in _stars) {
@@ -224,36 +225,31 @@ class _HorizonPainter extends CustomPainter {
       canvas.scale(1, 0.62);
       final oval = Rect.fromCircle(center: Offset.zero, radius: rr);
       // Glow: two-stroke idiom on TV, soft blur elsewhere.
-      final glowColor = Color.fromRGBO(
-        129,
-        140,
-        248,
-        0.55 * glow * (1 - shrink),
-      );
+      final glowColor =
+          Color.fromRGBO(129, 140, 248, 0.55 * glow * (1 - shrink));
       if (lightweight) {
         canvas.drawOval(
-          oval,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 10
-            ..color = glowColor.withValues(alpha: glowColor.a * 0.4),
-        );
+            oval,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 10
+              ..color = glowColor.withValues(alpha: glowColor.a * 0.4));
       } else {
         canvas.drawOval(
-          oval,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 6
-            ..color = glowColor
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-        );
+            oval,
+            Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 6
+              ..color = glowColor
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12));
       }
       canvas.drawOval(
         oval,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2 + 3 * rlife
-          ..color = Color.fromRGBO(233, 237, 255, 0.90 * glow * (1 - shrink)),
+          ..color =
+              Color.fromRGBO(233, 237, 255, 0.90 * glow * (1 - shrink)),
       );
       canvas.drawOval(
         Rect.fromCircle(center: Offset.zero, radius: rr * 0.82),
@@ -272,12 +268,10 @@ class _HorizonPainter extends CustomPainter {
       canvas.drawRect(
         fr,
         Paint()
-          ..shader = RadialGradient(
-            colors: [
-              Color.fromRGBO(233, 237, 255, 0.80 * (1 - ft)),
-              const Color(0x00818CF8),
-            ],
-          ).createShader(fr),
+          ..shader = RadialGradient(colors: [
+            Color.fromRGBO(233, 237, 255, 0.80 * (1 - ft)),
+            const Color(0x00818CF8),
+          ]).createShader(fr),
       );
     }
 
@@ -304,15 +298,13 @@ class _HorizonPainter extends CustomPainter {
         Paint()
           ..shader = ma >= 1
               ? _markShader
-              : LinearGradient(
-                  colors: [
-                    // The same two ring stops as `_markShader`, alpha-baked for
-                    // the ignition ramp (shader/Paint.color fades are
-                    // backend-dependent and banned here).
-                    _ringInner.withValues(alpha: ma),
-                    _ringOuter.withValues(alpha: ma),
-                  ],
-                ).createShader(_markRect),
+              : LinearGradient(colors: [
+                  // The same two ring stops as `_markShader`, alpha-baked for
+                  // the ignition ramp (shader/Paint.color fades are
+                  // backend-dependent and banned here).
+                  _ringInner.withValues(alpha: ma),
+                  _ringOuter.withValues(alpha: ma),
+                ]).createShader(_markRect),
       );
       canvas.drawPath(
         _inner,
@@ -330,14 +322,8 @@ class _HorizonPainter extends CustomPainter {
       final e = identOutCubic(lt);
       final set = _letters!.at(e);
       if (set == null) continue;
-      word.paintLetter(
-        canvas,
-        set,
-        i,
-        _startX,
-        _baseY,
-        dy: (1 - e) * word.fontSize * 0.15,
-      );
+      word.paintLetter(canvas, set, i, _startX, _baseY,
+          dy: (1 - e) * word.fontSize * 0.15);
     }
   }
 
@@ -345,6 +331,7 @@ class _HorizonPainter extends CustomPainter {
   bool shouldRepaint(covariant _HorizonPainter old) =>
       old.animation != animation;
 }
+
 
 /// Tiny helper so the gradient above reads as one expression.
 extension _Let<T> on T {

@@ -3,6 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import '../features/recording_output/application/smb_direct_writer.dart';
+import '../features/recording_output/data/recording_output_store.dart';
+import '../features/recording_output/data/smb_direct_recording.dart';
 import '../utils/app_storage.dart';
 import '../models/profiles/profile_policy.dart';
 import 'profiles/device_job_store.dart';
@@ -88,6 +91,21 @@ class DesktopRecordingCapture {
   int _bytes = 0;
   int get bytes => _bytes;
 
+  /// The share file this capture streamed to, when it recorded straight to
+  /// SMB; null for a local-only capture.
+  String? _shareLabel;
+
+  /// Whether any bytes had to go to [path] on this device instead.
+  bool _wroteLocally = false;
+
+  /// Where the recording ended up, for "saved" messages: the share file,
+  /// the local [path], or both when the share dropped mid-recording.
+  String get savedTo {
+    final share = _shareLabel;
+    if (share == null) return path;
+    return _wroteLocally ? '$share (continued in $path)' : share;
+  }
+
   final DateTime startedAt = DateTime.now();
 
   bool _stopRequested = false;
@@ -136,10 +154,53 @@ class DesktopRecordingCapture {
   Future<void> _run() async {
     IOSink? sink;
     var end = DesktopRecordingEnd.failed;
-    try {
+    // Straight to the share when the owner's SMB settings ask for it; the
+    // local file is only opened if the share is unavailable or drops.
+    SmbDirectWriter? share = await DesktopRecordingService.openShare(
+      fileName: path.split(Platform.pathSeparator).last,
+      ownerProfileId: ownerProfileId,
+    );
+    if (share != null) _shareLabel = share.label;
+    Future<IOSink> local() async {
+      final open = sink;
+      if (open != null) return open;
       final file = File(path);
       await file.parent.create(recursive: true);
-      sink = file.openWrite();
+      _wroteLocally = true;
+      return sink = file.openWrite();
+    }
+
+    /// Moves to the local file after the share failed, keeping the bytes it
+    /// never received.
+    Future<void> leaveShare(SmbDirectWriter failed, Object error) async {
+      debugPrint(
+        'DesktopRecording: share write failed, continuing locally '
+        '($error)',
+      );
+      final unsent = failed.takeUnsent();
+      await failed.abandon();
+      share = null;
+      if (unsent.isNotEmpty) (await local()).add(unsent);
+    }
+
+    Future<void> write(List<int> chunk) async {
+      final target = share;
+      if (target != null) {
+        try {
+          await target.add(
+            chunk is Uint8List ? chunk : Uint8List.fromList(chunk),
+          );
+        } catch (error) {
+          // [chunk] is among the unsent bytes leaveShare writes locally.
+          await leaveShare(target, error);
+        }
+        return;
+      }
+      (await local()).add(chunk);
+    }
+
+    try {
+      if (share == null) await local();
 
       var deadConnects = 0;
       var capReached = false;
@@ -182,7 +243,7 @@ class DesktopRecordingCapture {
               end = DesktopRecordingEnd.failed;
               break capture;
             }
-            sink.add(chunk);
+            await write(chunk);
             _bytes += chunk.length;
             gotBytesThisAttempt = true;
             if (DateTime.now().difference(startedAt) > _maxDuration) {
@@ -227,6 +288,17 @@ class DesktopRecordingCapture {
       debugPrint('DesktopRecording: capture crashed: $e');
       end = DesktopRecordingEnd.failed;
     } finally {
+      final open = share;
+      if (open != null) {
+        try {
+          await open.close();
+        } catch (error) {
+          // The last buffered piece never reached the share: keep it here.
+          try {
+            await leaveShare(open, error);
+          } catch (_) {}
+        }
+      }
       try {
         await sink?.flush();
       } catch (_) {}
@@ -292,6 +364,14 @@ class DesktopRecordingService {
   final List<DesktopRecordingCapture> _captures = [];
   int _jobSequence = 0;
 
+  /// Opens the owner's share for a capture, or null to record locally.
+  @visibleForTesting
+  static Future<SmbDirectWriter?> Function({
+    required String fileName,
+    required String ownerProfileId,
+  })
+  openShare = openSmbDirectRecording;
+
   /// The running captures (finished ones are pruned on read), oldest first.
   List<DesktopRecordingCapture> get captures {
     _captures.removeWhere((c) => !c.isActive);
@@ -310,6 +390,10 @@ class DesktopRecordingService {
   }
 
   int get activeCount => _allActive.length;
+
+  /// Files still being written by ANY profile's capture. Device-wide guards
+  /// (upload, delete) must use this: [captures] only lists the active profile's.
+  Set<String> get activePaths => {for (final c in _allActive) c.path};
 
   /// The running capture of [url], or null. Callers match a channel by its
   /// own URL and, for Xtream channels, the `.ts` twin they record under.
@@ -436,14 +520,41 @@ class DesktopRecordingService {
     }
   }
 
-  /// Where desktop recordings live: `<Downloads>/Debrify/Recordings`. One
-  /// truth shared by the capture path builder and the library listing. Not
-  /// created here — captures create it on first write.
+  /// Where desktop recordings live: the custom folder from the
+  /// recording-output settings when it exists and is writable, otherwise
+  /// `<Downloads>/Debrify/Recordings`. One truth shared by the capture path
+  /// builder and the library listing. Not created here — captures create it
+  /// on first write.
   static Future<Directory> recordingsDir() async {
+    final custom = await customRecordingsDir(
+      RecordingOutputStore.cached.directoryPath,
+    );
+    if (custom != null) return custom;
     final base =
         (await getDownloadsDirectory()) ?? await AppStorage.documents();
     final sep = Platform.pathSeparator;
     return Directory('${base.path}${sep}Debrify${sep}Recordings');
+  }
+
+  /// The custom folder only when [path] is non-empty, exists, and a probe
+  /// file can be created and deleted inside it; null otherwise. Never
+  /// throws — an unreadable custom folder falls back to the default instead
+  /// of breaking every recording.
+  @visibleForTesting
+  static Future<Directory?> customRecordingsDir(String? path) async {
+    if (path == null || path.isEmpty) return null;
+    try {
+      final dir = Directory(path);
+      if (!await dir.exists()) return null;
+      final probe = File(
+        '${dir.path}${Platform.pathSeparator}.debrify_write_probe',
+      );
+      await probe.writeAsString('', flush: true);
+      await probe.delete();
+      return dir;
+    } on Object catch (_) {
+      return null;
+    }
   }
 
   static const _libraryExtensions = {'ts', 'mts', 'm2ts', 'mkv', 'mp4'};
@@ -455,7 +566,7 @@ class DesktopRecordingService {
     if (!instance.isSupported) return const [];
     final dir = await recordingsDir();
     if (!await dir.exists()) return const [];
-    final activePaths = {for (final c in instance.captures) c.path};
+    final activePaths = instance.activePaths;
     final out = <RecordingLibraryEntry>[];
     try {
       await for (final item in dir.list(followLinks: false)) {
@@ -491,7 +602,7 @@ class DesktopRecordingService {
 
   /// Delete a finished desktop recording. Refuses any active capture's file.
   static Future<bool> deleteRecordingFile(String path) async {
-    if (instance.captures.any((c) => c.path == path)) return false;
+    if (instance.activePaths.contains(path)) return false;
     try {
       final file = File(path);
       if (await file.exists()) await file.delete();

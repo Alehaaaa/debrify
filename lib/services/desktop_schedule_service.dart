@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'desktop_recording_service.dart';
 import 'live_recording_service.dart';
 import 'recording_capacity.dart' show peakOverlap;
+import '../features/recording_output/data/recording_output_store.dart';
+import '../features/recording_output/models/recording_output_settings.dart';
 import '../models/profiles/profile_policy.dart';
 import 'profiles/device_job_store.dart';
 import 'profiles/device_key_provider.dart';
@@ -162,9 +164,10 @@ class DesktopSchedule {
 ///
 /// Captures go through [DesktopRecordingService] (the raw HTTP copier), so a
 /// scheduled capture is stoppable from the player's Record button when that
-/// channel is playing, and auto-ends at its scheduled end (no pad: desktop
-/// schedules are all manual timers — when the user says 5 minutes they mean
-/// 5 minutes; the +2min EPG-overrun pad is an Android/EPG concern).
+/// channel is playing, and auto-ends at the padded end: the recording-output
+/// settings' start/end pads move the fire and stop timers through
+/// [paddedRecordingWindow] (desktop defaults to no pad). Only the timers
+/// move — the stored schedule keeps its original window and overlap checks.
 class DesktopScheduleService {
   DesktopScheduleService._();
   static final DesktopScheduleService instance = DesktopScheduleService._();
@@ -177,45 +180,29 @@ class DesktopScheduleService {
   final Map<String, Timer> _timers = {};
   Timer? _tick;
   bool _initialized = false;
-  int _lifecycleGeneration = 0;
 
   bool get isSupported => DesktopRecordingService.instance.isSupported;
-
-  @visibleForTesting
-  bool get debugHasActiveTick => _tick?.isActive ?? false;
 
   /// Arm everything at app start. Safe to call repeatedly.
   Future<void> init() async {
     if (!isSupported || _initialized) return;
     _initialized = true;
-    final generation = ++_lifecycleGeneration;
     // Primes LiveRecordingService.maxConcurrentCached for the recording
     // service's synchronous start path.
-    try {
-      await LiveRecordingService.maxConcurrent();
-      if (!_startupCurrent(generation)) return;
-      await _migrateLegacySchedules();
-      if (!_startupCurrent(generation)) return;
-      await _armAll(startupGeneration: generation);
-      if (!_startupCurrent(generation)) return;
-      _tick = Timer.periodic(const Duration(seconds: 30), (_) {
-        // Wall-clock safety net for sleep/wake drift.
-        unawaited(_fireDue());
-      });
-    } catch (_) {
-      // A failed re-arm can already have installed some exact timers. A retry
-      // must start from an entirely stopped scheduler.
-      if (_startupCurrent(generation)) shutdown();
-      rethrow;
-    }
+    await LiveRecordingService.maxConcurrent();
+    // Primes RecordingOutputStore.cached once so the armed timers below read
+    // the user's padding instead of the defaults.
+    await RecordingOutputStore.read();
+    await _migrateLegacySchedules();
+    await _armAll();
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      // Wall-clock safety net for sleep/wake drift.
+      unawaited(_fireDue());
+    });
   }
-
-  bool _startupCurrent(int generation) =>
-      _initialized && generation == _lifecycleGeneration;
 
   /// Stop the tick and every armed timer (tests / teardown). init() re-arms.
   void shutdown() {
-    ++_lifecycleGeneration;
     _tick?.cancel();
     _tick = null;
     for (final timer in _timers.values) {
@@ -453,30 +440,32 @@ class DesktopScheduleService {
     LiveRecordingService.schedulesRevision.value++;
   }
 
-  Future<void> _armAll({int? startupGeneration}) async {
-    bool current() =>
-        startupGeneration == null || _startupCurrent(startupGeneration);
-    if (!current()) return;
+  Future<void> _armAll() async {
     for (final timer in _timers.values) {
       timer.cancel();
     }
     _timers.clear();
     final now = DateTime.now().millisecondsSinceEpoch;
     final schedules = await list(allOwners: true);
-    if (!current()) return;
     final keep = <DesktopSchedule>[];
     for (final schedule in schedules) {
-      if (!current()) return;
       if (schedule.endMs - _minRemaining.inMilliseconds <= now) {
         await DeviceJobStore.markTerminal(
           backend: 'desktopSchedule',
           externalJobId: schedule.id,
         );
-        if (!current()) return;
         continue; // fully missed — drop
       }
       keep.add(schedule);
-      final delay = schedule.startMs - now;
+      // The timer aims at the padded start; the stored schedule keeps its
+      // original window (overlap checks and persistence use that).
+      final window = paddedRecordingWindow(
+        startMs: schedule.startMs,
+        endMs: schedule.endMs,
+        settings: RecordingOutputStore.cached,
+        platform: RecordingPlatform.desktop,
+      );
+      final delay = window.startMs - now;
       if (delay <= 0) {
         unawaited(_fire(schedule));
       } else {
@@ -486,14 +475,20 @@ class DesktopScheduleService {
         );
       }
     }
-    if (keep.length != schedules.length && current()) await _save(keep);
+    if (keep.length != schedules.length) await _save(keep);
   }
 
-  /// Fire anything whose wall-clock start has arrived (safety tick).
+  /// Fire anything whose padded wall-clock start has arrived (safety tick).
   Future<void> _fireDue() async {
     final now = DateTime.now().millisecondsSinceEpoch;
     for (final schedule in await list(allOwners: true)) {
-      if (schedule.startMs <= now) {
+      final window = paddedRecordingWindow(
+        startMs: schedule.startMs,
+        endMs: schedule.endMs,
+        settings: RecordingOutputStore.cached,
+        platform: RecordingPlatform.desktop,
+      );
+      if (window.startMs <= now) {
         await _fire(schedule);
       }
     }
@@ -575,8 +570,14 @@ class DesktopScheduleService {
           ? schedule.programmeTitle
           : schedule.channelName,
     );
+    final window = paddedRecordingWindow(
+      startMs: schedule.startMs,
+      endMs: schedule.endMs,
+      settings: RecordingOutputStore.cached,
+      platform: RecordingPlatform.desktop,
+    );
     final remaining = Duration(
-      milliseconds: schedule.endMs - now.millisecondsSinceEpoch,
+      milliseconds: window.endMs - now.millisecondsSinceEpoch,
     );
     debugPrint(
       'DesktopSchedule: starting ${schedule.channelName} for '
@@ -616,8 +617,9 @@ class DesktopScheduleService {
       backend: 'desktopSchedule',
       externalJobId: schedule.id,
     );
-    // Auto-stop at the scheduled end. The capture's own 6h cap remains the
-    // backstop; this timer is the scheduled end, taken literally (no pad).
+    // Auto-stop at the padded scheduled end (the end-pad comes from the
+    // recording-output settings; desktop defaults to none). The capture's
+    // own 6h cap remains the backstop.
     Timer(remaining, () {
       if (capture.isActive) unawaited(capture.stop());
     });

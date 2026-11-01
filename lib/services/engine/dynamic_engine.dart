@@ -179,7 +179,7 @@ class DynamicEngine extends SearchEngine {
         config: config,
         params: {
           'imdbId': normalizedId,
-          'episode': ?episode,
+          if (episode != null) 'episode': episode,
         },
         betweenPageRequests: _defaultPageDelay,
       );

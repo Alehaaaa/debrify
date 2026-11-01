@@ -1,3 +1,5 @@
+import 'package:debrify/models/home_preferences.dart';
+import 'package:debrify/services/storage/home_rows_storage.dart';
 import 'package:flutter/material.dart';
 import '../../utils/tv_reveal.dart';
 import 'package:flutter/services.dart';
@@ -11,10 +13,8 @@ import '../../services/iptv_media_store.dart' show IptvListMeta;
 import '../../services/simkl/simkl_list_source.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/mdblist/mdblist_list_source.dart';
-import '../../services/storage_service.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../services/trakt/trakt_list_source.dart';
+import '../../services/analytics_service.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/home/home_theme.dart';
 import '../../models/tracking_source.dart';
@@ -160,6 +160,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('home_sections_filter');
     _groups = _buildModel();
     final seededOrder = HomeRowOrder.insertMissingAfter(
       widget.rowOrder,
@@ -245,7 +246,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       _Group('Trakt', [
         cw('trakt:movies', 'Movies', TrackingSource.trakt, badge: 'CW'),
         cw('trakt:shows', 'Shows', TrackingSource.trakt, badge: 'CW'),
-        for (final l in kTraktHomeRowOrder)
+        for (final l in TraktSeeAllList.values)
           if (l != TraktSeeAllList.continueWatching)
             opt(HomeExtraRowIds.traktBuiltin(l), l.label, badge: 'LIST'),
         for (final c in customLists)
@@ -297,7 +298,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       ]),
       _Group('Favorites', [
         _Item('fav:playlist', 'Playlist', on('fav:playlist')),
-        _Item('fav:debrify', 'Nextup TV', on('fav:debrify')),
+        _Item('fav:debrify', 'Debrify TV', on('fav:debrify')),
         _Item('fav:stremio', 'Stremio TV', on('fav:stremio')),
         _Item('fav:iptv', 'IPTV', on('fav:iptv')),
       ]),
@@ -519,9 +520,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
     // A collection can temporarily own/hide an addon leaf. Preserve saved
     // choices which this screen could not edit, including disabled folders.
     out.addAll(widget.disabled.where((id) => !modelIds.contains(id)));
-    await StorageService.setHomeDisabledSections(out);
-    await StorageService.setHomeExtraRows(extras);
-    await StorageService.setHomeRowOrder(_orderIds);
+    await HomeRowsStorage.setHomeDisabledSections(out);
+    await HomeRowsStorage.setHomeExtraRows(extras);
+    await HomeRowsStorage.setHomeRowOrder(_orderIds);
   }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -819,10 +820,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   @override
   Widget build(BuildContext context) {
     final (on, total) = _totals;
-    final app = AppThemeScope.of(context);
-    // The wide header needs room for the title, count and four action pills.
-    // On tablet widths it otherwise overflows before the two panes do.
-    _narrow = MediaQuery.sizeOf(context).width < 1080;
+    _narrow = MediaQuery.sizeOf(context).width < 640;
     if (!_narrow) _narrowList = false;
     return PopScope(
       canPop: false,
@@ -839,9 +837,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Container(
-          decoration: GlassChrome.enabled(app)
-              ? BoxDecoration(color: app.core.ground)
-              : HomeTheme.pageBackground,
+          decoration: HomeTheme.pageBackground,
           child: SafeArea(
             child: Column(
               children: [
@@ -857,20 +853,17 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildHeader(int on, int total) {
-    final app = AppThemeScope.of(context);
     final backButton = IconButton(
       onPressed: _arranging ? () => _setArrangeMode(false) : _saveAndClose,
       icon: Icon(
         Icons.arrow_back_rounded,
-        color: GlassChrome.enabled(app)
-            ? app.settings.dim
-            : Colors.white.withValues(alpha: 0.7),
+        color: Colors.white.withValues(alpha: 0.7),
       ),
     );
     final title = Text(
       _arranging ? 'Arrange Home Rows' : 'Home Screen',
-      style: TextStyle(
-        color: GlassChrome.enabled(app) ? app.core.tx : Colors.white,
+      style: const TextStyle(
+        color: Colors.white,
         fontSize: 19,
         fontWeight: FontWeight.w800,
         letterSpacing: -0.2,
@@ -878,12 +871,10 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
     );
     final countPill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app, radius: BorderRadius.circular(99))
-          : BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(99),
-            ),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(99),
+      ),
       child: Text.rich(
         TextSpan(
           children: [
@@ -898,9 +889,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
           ],
         ),
         style: TextStyle(
-          color: GlassChrome.enabled(app)
-              ? app.settings.dim
-              : Colors.white.withValues(alpha: 0.65),
+          color: Colors.white.withValues(alpha: 0.65),
           fontSize: 12.5,
         ),
       ),
@@ -963,8 +952,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _actionButton(int i, String label) {
-    final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
     final node = _headerNodes[i];
     return Focus(
       focusNode: node,
@@ -995,16 +982,11 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
               decoration: BoxDecoration(
-                color: frosted ? GlassChrome.fill(app, raised: focused) : null,
                 borderRadius: BorderRadius.circular(99),
                 border: Border.all(
                   color: focused
-                      ? (frosted
-                            ? GlassChrome.edge(app, active: true)
-                            : HomeTheme.focusGold)
-                      : (frosted
-                            ? GlassChrome.edge(app)
-                            : Colors.white.withValues(alpha: 0.16)),
+                      ? HomeTheme.focusGold
+                      : Colors.white.withValues(alpha: 0.16),
                   width: focused ? 2 : 1,
                 ),
                 // Bloom only off-TV — an animated/static blur shadow re-rasters
@@ -1051,29 +1033,19 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SizedBox(width: 300, child: _buildRail()),
-        Container(
-          width: 0.5,
-          color: GlassChrome.enabled(AppThemeScope.of(context))
-              ? GlassChrome.edge(AppThemeScope.of(context))
-              : Colors.white.withValues(alpha: 0.07),
-        ),
+        Container(width: 0.5, color: Colors.white.withValues(alpha: 0.07)),
         Expanded(child: _buildItemList()),
       ],
     );
   }
 
   Widget _buildArrangeList() {
-    final app = AppThemeScope.of(context);
     final entries = _arrangeEntries;
     if (entries.isEmpty) {
       return Center(
         child: Text(
           'Turn on at least one row before arranging.',
-          style: TextStyle(
-            color: GlassChrome.enabled(app)
-                ? app.core.tx.withValues(alpha: 0.7)
-                : Colors.white.withValues(alpha: 0.6),
-          ),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
         ),
       );
     }
@@ -1087,9 +1059,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                 ? 'Press OK to pick up a row, move it with ↑↓, then press OK to drop.'
                 : 'Drag rows into the order you want. Hidden rows keep their saved positions.',
             style: TextStyle(
-              color: GlassChrome.enabled(app)
-                  ? app.core.tx.withValues(alpha: 0.68)
-                  : Colors.white.withValues(alpha: 0.55),
+              color: Colors.white.withValues(alpha: 0.55),
               fontSize: 12.5,
             ),
           ),
@@ -1136,27 +1106,18 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                           horizontal: 12,
                           vertical: 10,
                         ),
-                        decoration: GlassChrome.enabled(app)
-                            ? GlassChrome.decoration(
-                                app,
-                                raised: focused || picked,
-                                active: focused || picked,
-                                radius: BorderRadius.circular(13),
-                              )
-                            : BoxDecoration(
-                                color: picked
-                                    ? HomeTheme.chromeAccent.withValues(
-                                        alpha: 0.16,
-                                      )
-                                    : Colors.white.withValues(alpha: 0.025),
-                                borderRadius: BorderRadius.circular(13),
-                                border: Border.all(
-                                  color: focused || picked
-                                      ? HomeTheme.focusGold
-                                      : Colors.white.withValues(alpha: 0.05),
-                                  width: focused || picked ? 2 : 1.5,
-                                ),
-                              ),
+                        decoration: BoxDecoration(
+                          color: picked
+                              ? HomeTheme.chromeAccent.withValues(alpha: 0.16)
+                              : Colors.white.withValues(alpha: 0.025),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(
+                            color: focused || picked
+                                ? HomeTheme.focusGold
+                                : Colors.white.withValues(alpha: 0.05),
+                            width: focused || picked ? 2 : 1.5,
+                          ),
+                        ),
                         child: Row(
                           children: [
                             ReorderableDragStartListener(
@@ -1165,9 +1126,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                 padding: const EdgeInsets.all(4),
                                 child: Icon(
                                   Icons.drag_indicator_rounded,
-                                  color: GlassChrome.enabled(app)
-                                      ? app.settings.dim
-                                      : Colors.white.withValues(alpha: 0.45),
+                                  color: Colors.white.withValues(alpha: 0.45),
                                 ),
                               ),
                             ),
@@ -1178,9 +1137,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                 '${i + 1}',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  color: GlassChrome.enabled(app)
-                                      ? app.settings.dim
-                                      : Colors.white.withValues(alpha: 0.42),
+                                  color: Colors.white.withValues(alpha: 0.42),
                                   fontFeatures: const [
                                     FontFeature.tabularFigures(),
                                   ],
@@ -1196,10 +1153,8 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                     entry.item.label,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: GlassChrome.enabled(app)
-                                          ? app.core.tx
-                                          : Colors.white,
+                                    style: const TextStyle(
+                                      color: Colors.white,
                                       fontSize: 13.5,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -1210,11 +1165,9 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
-                                      color: GlassChrome.enabled(app)
-                                          ? app.settings.dim
-                                          : Colors.white.withValues(
-                                              alpha: 0.45,
-                                            ),
+                                      color: Colors.white.withValues(
+                                        alpha: 0.45,
+                                      ),
                                       fontSize: 11.5,
                                     ),
                                   ),
@@ -1255,7 +1208,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
     required bool enabled,
     required VoidCallback onTap,
   }) {
-    final app = AppThemeScope.of(context);
     return GestureDetector(
       onTap: enabled ? onTap : null,
       behavior: HitTestBehavior.opaque,
@@ -1264,9 +1216,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
         child: Icon(
           icon,
           size: 19,
-          color: GlassChrome.enabled(app)
-              ? app.core.tx.withValues(alpha: enabled ? 0.78 : 0.28)
-              : Colors.white.withValues(alpha: enabled ? 0.72 : 0.18),
+          color: Colors.white.withValues(alpha: enabled ? 0.72 : 0.18),
         ),
       ),
     );
@@ -1274,10 +1224,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
 
   Widget _buildNarrowBreadcrumb() {
     final g = _groups[_selectedGroup];
-    final app = AppThemeScope.of(context);
-    final hintColor = GlassChrome.enabled(app)
-        ? app.core.tx.withValues(alpha: 0.72)
-        : Colors.white.withValues(alpha: 0.6);
     return GestureDetector(
       onTap: _showRailPane,
       behavior: HitTestBehavior.opaque,
@@ -1285,7 +1231,11 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
         padding: const EdgeInsets.fromLTRB(14, 2, 14, 6),
         child: Row(
           children: [
-            Icon(Icons.chevron_left_rounded, size: 18, color: hintColor),
+            Icon(
+              Icons.chevron_left_rounded,
+              size: 18,
+              color: Colors.white.withValues(alpha: 0.6),
+            ),
             const SizedBox(width: 2),
             Flexible(
               child: Text(
@@ -1293,7 +1243,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: hintColor,
+                  color: Colors.white.withValues(alpha: 0.6),
                   fontSize: 12.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1306,7 +1256,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildRail() {
-    final app = AppThemeScope.of(context);
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 10, 12),
       itemCount: _groups.length,
@@ -1342,35 +1291,26 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                     horizontal: 13,
                     vertical: 12,
                   ),
-                  decoration: GlassChrome.enabled(app)
-                      ? GlassChrome.decoration(
-                          app,
-                          raised: focused || selected,
-                          active: focused || selected,
-                          radius: BorderRadius.circular(12),
-                        )
-                      : BoxDecoration(
-                          color: selected
-                              ? HomeTheme.chromeAccent.withValues(alpha: 0.10)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: focused
-                                ? HomeTheme.focusGold
-                                : Colors.transparent,
-                            width: focused ? 2 : 1.5,
-                          ),
-                          boxShadow: focused && !widget.isTelevision
-                              ? [
-                                  BoxShadow(
-                                    color: HomeTheme.focusGoldDeep.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    blurRadius: 12,
-                                  ),
-                                ]
-                              : null,
-                        ),
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? HomeTheme.chromeAccent.withValues(alpha: 0.10)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: focused ? HomeTheme.focusGold : Colors.transparent,
+                      width: focused ? 2 : 1.5,
+                    ),
+                    boxShadow: focused && !widget.isTelevision
+                        ? [
+                            BoxShadow(
+                              color: HomeTheme.focusGoldDeep.withValues(
+                                alpha: 0.4,
+                              ),
+                              blurRadius: 12,
+                            ),
+                          ]
+                        : null,
+                  ),
                   child: Row(
                     children: [
                       _stateDot(g.onCount, g.total),
@@ -1418,7 +1358,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildItemList() {
-    final app = AppThemeScope.of(context);
     final items = _groups[_selectedGroup].items;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(14, 4, 18, 12),
@@ -1451,33 +1390,26 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
                     horizontal: 14,
                     vertical: 12,
                   ),
-                  decoration: GlassChrome.enabled(app)
-                      ? GlassChrome.decoration(
-                          app,
-                          raised: focused || it.on,
-                          active: focused,
-                          radius: BorderRadius.circular(13),
-                        )
-                      : BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.025),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(
-                            color: focused
-                                ? HomeTheme.focusGold
-                                : Colors.white.withValues(alpha: 0.05),
-                            width: focused ? 2 : 1.5,
-                          ),
-                          boxShadow: focused && !widget.isTelevision
-                              ? [
-                                  BoxShadow(
-                                    color: HomeTheme.focusGoldDeep.withValues(
-                                      alpha: 0.4,
-                                    ),
-                                    blurRadius: 12,
-                                  ),
-                                ]
-                              : null,
-                        ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.025),
+                    borderRadius: BorderRadius.circular(13),
+                    border: Border.all(
+                      color: focused
+                          ? HomeTheme.focusGold
+                          : Colors.white.withValues(alpha: 0.05),
+                      width: focused ? 2 : 1.5,
+                    ),
+                    boxShadow: focused && !widget.isTelevision
+                        ? [
+                            BoxShadow(
+                              color: HomeTheme.focusGoldDeep.withValues(
+                                alpha: 0.4,
+                              ),
+                              blurRadius: 12,
+                            ),
+                          ]
+                        : null,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
@@ -1592,8 +1524,6 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
   }
 
   Widget _buildHintBar() {
-    final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
     final hints = _arranging
         ? const [
             ('↑↓', 'navigate · move when picked up'),
@@ -1611,9 +1541,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(
-            color: frosted
-                ? GlassChrome.edge(app)
-                : Colors.white.withValues(alpha: 0.07),
+            color: Colors.white.withValues(alpha: 0.07),
             width: 0.5,
           ),
         ),
@@ -1626,17 +1554,13 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
               margin: const EdgeInsets.only(left: 18),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: frosted
-                    ? GlassChrome.fill(app, raised: true)
-                    : Colors.white.withValues(alpha: 0.07),
+                color: Colors.white.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(5),
               ),
               child: Text(
                 key,
                 style: TextStyle(
-                  color: frosted
-                      ? app.core.tx.withValues(alpha: 0.85)
-                      : Colors.white.withValues(alpha: 0.65),
+                  color: Colors.white.withValues(alpha: 0.65),
                   fontSize: 10.5,
                   fontWeight: FontWeight.w600,
                 ),
@@ -1646,9 +1570,7 @@ class _HomeSectionsFilterPageState extends State<HomeSectionsFilterPage> {
             Text(
               label,
               style: TextStyle(
-                color: frosted
-                    ? app.core.tx.withValues(alpha: 0.62)
-                    : Colors.white.withValues(alpha: 0.38),
+                color: Colors.white.withValues(alpha: 0.38),
                 fontSize: 11,
               ),
             ),

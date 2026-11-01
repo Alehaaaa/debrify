@@ -329,9 +329,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
       // an ancestor walk from one of those asserts.
       if (ctx == null || !ctx.mounted) return;
       final scrollable = Scrollable.maybeOf(ctx);
-      if (scrollable == null || scrollable.position.maxScrollExtent <= 0) {
+      if (scrollable == null || scrollable.position.maxScrollExtent <= 0)
         return;
-      }
       Scrollable.ensureVisible(
         ctx,
         alignment: 0.5,
@@ -744,13 +743,9 @@ class TvSidebarNavState extends State<TvSidebarNav>
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                               colors: [
-                                // Android TV deliberately skips a live blur,
-                                // so the glass has to read through its tint:
-                                // retain enough of the board's art/light for
-                                // depth instead of covering it in navy.
-                                app.fade(app.core.tx, 0.16 * t),
-                                paneMid.withValues(alpha: 0.22 * t),
-                                paneDeep.withValues(alpha: 0.30 * t),
+                                app.fade(app.core.tx, 0.10 * t),
+                                paneMid.withValues(alpha: 0.36 * t),
+                                paneDeep.withValues(alpha: 0.46 * t),
                               ],
                               stops: const [0.0, 0.40, 1.0],
                             ),
@@ -758,9 +753,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
                         ),
                       ),
                       Positioned.fill(child: inner ?? const SizedBox.shrink()),
-                      // Specular streak OVER the content — the gloss. It is
-                      // deliberately stronger than the old 10% wash so this
-                      // no-blur TV material still reads as frosted glass.
+                      // Specular streak OVER the content — the gloss. Capped
+                      // at 10% white so labels stay legible beneath it.
                       Positioned.fill(
                         child: IgnorePointer(
                           child: DecoratedBox(
@@ -770,8 +764,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
                                 end: Alignment.bottomRight,
                                 colors: [
                                   app.fade(app.core.tx, 0.0),
-                                  app.fade(app.core.tx, 0.16 * t),
-                                  app.fade(app.core.tx, 0.035 * t),
+                                  app.fade(app.core.tx, 0.10 * t),
+                                  app.fade(app.core.tx, 0.02 * t),
                                   app.fade(app.core.tx, 0.0),
                                 ],
                                 stops: const [0.30, 0.42, 0.55, 0.62],
@@ -786,7 +780,7 @@ class TvSidebarNavState extends State<TvSidebarNav>
                         right: 0,
                         top: 20,
                         bottom: 20,
-                        width: 2,
+                        width: 1.5,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -796,9 +790,9 @@ class TvSidebarNavState extends State<TvSidebarNav>
                                 end: Alignment.bottomCenter,
                                 colors: [
                                   app.shell.navFocus.withValues(
-                                    alpha: 0.82 * t,
+                                    alpha: 0.70 * t,
                                   ),
-                                  _kRimCyan.withValues(alpha: 0.55 * t),
+                                  _kRimCyan.withValues(alpha: 0.40 * t),
                                   app.shell.navFocus.withValues(
                                     alpha: 0.15 * t,
                                   ),
@@ -947,8 +941,8 @@ class TvSidebarNavState extends State<TvSidebarNav>
       // left-edge brighten.
       animation: Listenable.merge([
         _expand,
-        ?label,
-        ?glow,
+        if (label != null) label,
+        if (glow != null) glow,
       ]),
       builder: (context, _) {
         // Gone by the halfway point of the open: past that the drawer covers
@@ -1130,17 +1124,13 @@ class TvSidebarNavState extends State<TvSidebarNav>
               clipBehavior: Clip.antiAlias,
               child: Padding(
                 padding: const EdgeInsets.all(5),
-                child: Image(
-                  image: const ExactAssetImage('assets/app_icon.png'),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
+                child: Image.asset('assets/app_icon.png', fit: BoxFit.contain),
               ),
             ),
             const SizedBox(width: 9),
             const Expanded(
               child: Text(
-                'Nextup',
+                'Debrify',
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.clip,
@@ -1169,13 +1159,11 @@ class TvSidebarNavState extends State<TvSidebarNav>
             SizedBox(
               width: TvSidebarNav.collapsedWidth,
               child: Center(
-                child: Image(
-                  image: const ExactAssetImage('assets/app_icon.png'),
+                child: Image.asset(
+                  'assets/app_icon.png',
                   width: 26,
                   height: 26,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) =>
-                      const SizedBox(width: 26, height: 26),
                 ),
               ),
             ),
@@ -1184,7 +1172,7 @@ class TvSidebarNavState extends State<TvSidebarNav>
                 child: FadeTransition(
                   opacity: _expand,
                   child: const Text(
-                    'Nextup',
+                    'Debrify',
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.clip,
@@ -1250,7 +1238,7 @@ class _TvProfileItemWidget extends StatelessWidget {
                     : isFocused
                     ? app.shell.navFocus.withValues(alpha: 0.22)
                     : Colors.transparent,
-                borderRadius: app.shape.brPill,
+                borderRadius: BorderRadius.circular(999),
                 border: isFocused && !whiteFocus
                     ? Border.all(color: app.fade(app.core.tx, 0.55), width: 1.5)
                     : null,

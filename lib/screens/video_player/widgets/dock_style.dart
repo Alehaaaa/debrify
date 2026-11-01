@@ -5,12 +5,7 @@
 /// Read once at player launch (alongside `iptv_player_guide_style`), so a
 /// change applies to the next playback session.
 ///
-/// The "App colour" palette follows the app's accent, but NOT through the
-/// theme: the theme controller mirrors the accent into
-/// `StorageService.appAccentArgb`, and the player reads it at launch like any
-/// other preference ([DockPalettes.fromAccent] turns it into a dock).
-///
-/// Otherwise deliberately NOT wired to the app theme. The player is a theme-EXCLUDED
+/// Deliberately NOT wired to the app theme. The player is a theme-EXCLUDED
 /// surface — `pushExcluded` / `FrozenLegacyPageRoute` / `LegacyThemeBoundary`,
 /// with `kStillFrozenPaths` in `test/theme/source_guard_test.dart` covering
 /// `lib/screens/video_player/` — so nothing here may read `AppThemeScope`.
@@ -48,12 +43,7 @@ enum PlayerDockStyle {
 
   /// Force the zoned bar: transport + volume + time / title / icon-only
   /// tools. Needs real width; falls back when it cannot fit.
-  cinema,
-
-  /// Minimal frosted glass: a centred transport, one glass panel with the
-  /// scrubber and the two or three key actions, everything else under More.
-  /// Built by `GlassDock`; ignores palette and size.
-  glass;
+  cinema;
 
   static PlayerDockStyle fromPref(String? raw) => switch (raw) {
     // `two_tier` is the value shipped before the arrangements became
@@ -62,7 +52,6 @@ enum PlayerDockStyle {
     'compact' => PlayerDockStyle.compact,
     'tiers' => PlayerDockStyle.tiers,
     'cinema' => PlayerDockStyle.cinema,
-    'glass' => PlayerDockStyle.glass,
     _ => PlayerDockStyle.classic,
   };
 
@@ -72,7 +61,6 @@ enum PlayerDockStyle {
     PlayerDockStyle.compact => 'compact',
     PlayerDockStyle.tiers => 'tiers',
     PlayerDockStyle.cinema => 'cinema',
-    PlayerDockStyle.glass => 'glass',
   };
 
   bool get isStyled => this != PlayerDockStyle.classic;
@@ -80,9 +68,7 @@ enum PlayerDockStyle {
   /// The arrangement this style demands, or null when it defers to the
   /// viewport.
   DockArrangement? get forcedArrangement => switch (this) {
-    PlayerDockStyle.classic ||
-    PlayerDockStyle.auto ||
-    PlayerDockStyle.glass => null,
+    PlayerDockStyle.classic || PlayerDockStyle.auto => null,
     PlayerDockStyle.compact => DockArrangement.narrow,
     PlayerDockStyle.tiers => DockArrangement.regular,
     PlayerDockStyle.cinema => DockArrangement.wide,
@@ -244,17 +230,6 @@ class DockPalette {
   /// design: the dock stays dark over footage whatever the accent.
   final Color scrim;
 
-  /// Frosted-glass tokens, derived from the accent so the glass carries the
-  /// palette's hue without a new constant per palette: a dark body tinted
-  /// with [deep], a light sheen, and a rim lit by [hot].
-  Color get glassTint => Color.alphaBlend(
-    deep.withValues(alpha: 0.20),
-    const Color(0xFF080A14),
-  ).withValues(alpha: 0.52);
-  Color get glassSheen => const Color(0x1FFFFFFF);
-  Color get glassEdge =>
-      Color.lerp(hot, const Color(0xFFFFFFFF), 0.55)!.withValues(alpha: 0.22);
-
   const DockPalette({
     required this.hot,
     required this.deep,
@@ -358,40 +333,6 @@ abstract final class DockPalettes {
     inactiveTrack: _inactiveTrack,
     scrim: _scrim,
   );
-
-  /// A full dock palette from one colour — the app's accent ("App colour")
-  /// or a manual swatch. Same recipe as the fixed palettes: a hotter,
-  /// lighter top stop falling into a deeper one, the accent itself for glow
-  /// and active states, and the primary's ink picked for contrast.
-  static DockPalette fromAccent(Color c) {
-    final hsl = HSLColor.fromColor(c.withValues(alpha: 1));
-    Color light(double d) =>
-        hsl.withLightness((hsl.lightness + d).clamp(0.0, 0.92)).toColor();
-    final hot = light(0.10);
-    final deep = hsl
-        .withLightness((hsl.lightness * 0.62).clamp(0.14, 0.9))
-        .withSaturation(math.min(1.0, hsl.saturation * 1.05))
-        .toColor();
-    final mid = Color.lerp(hot, deep, 0.5)!;
-    final darkInk = mid.computeLuminance() > 0.42;
-    final base = c.withValues(alpha: 1);
-    return DockPalette(
-      hot: hot,
-      deep: deep,
-      specular: const Color(0x80FFFFFF),
-      glow: base.withValues(alpha: 0.62),
-      tick: light(0.28),
-      activeFill: base.withValues(alpha: 0.22),
-      activeEdge: base.withValues(alpha: 0.55),
-      onPrimary: darkInk ? const Color(0xFF14110A) : _ink,
-      chipFill: _chipFill,
-      chipEdge: _chipEdge,
-      ink: _ink,
-      inkDim: _inkDim,
-      inactiveTrack: _inactiveTrack,
-      scrim: _scrim,
-    );
-  }
 
   static DockPalette of(PlayerDockPalette palette) => switch (palette) {
     PlayerDockPalette.ultraviolet => ultraviolet,

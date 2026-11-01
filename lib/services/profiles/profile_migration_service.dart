@@ -18,7 +18,6 @@ import 'profile_preference_budget.dart';
 import 'profile_preferences.dart';
 import 'profile_registry.dart';
 import 'profile_scope.dart';
-import 'profile_storage_paths.dart';
 
 enum ProfileMigrationStage {
   notStarted,
@@ -608,11 +607,10 @@ class ProfileMigrationService {
   }
 
   Future<List<Map<String, dynamic>>> _copyDatabases(ProfileScope scope) async {
-    final sourceRoot = await AppStorage.documents();
-    final root = await ProfileStoragePaths.profileDataRoot();
+    final root = await AppStorage.documents();
     final out = <Map<String, dynamic>>[];
     for (final name in const <String>['debrify_tv.db', 'iptv_catalog.db']) {
-      final source = File(p.join(sourceRoot.path, name));
+      final source = File(p.join(root.path, name));
       if (!await source.exists()) continue;
       final destination = scope.fileIn(root, 'documents', name);
       await destination.parent.create(recursive: true);
@@ -694,13 +692,10 @@ class ProfileMigrationService {
   }
 
   Future<List<Map<String, dynamic>>> _copyFiles(ProfileScope scope) async {
-    final sourceRoot = await AppStorage.documents();
-    final source = Directory(p.join(sourceRoot.path, 'engines'));
+    final root = await AppStorage.documents();
+    final source = Directory(p.join(root.path, 'engines'));
     if (!await source.exists()) return const <Map<String, dynamic>>[];
-    final destination = scope.storageDirectory(
-      await ProfileStoragePaths.profileDataRoot(),
-      'documents',
-    );
+    final destination = scope.storageDirectory(root, 'documents');
     final manifest = <Map<String, dynamic>>[];
     await for (final entity in source.list(
       recursive: true,
@@ -708,7 +703,7 @@ class ProfileMigrationService {
     )) {
       if (entity is Link) throw StateError('Symlinks are not migratable');
       if (entity is! File) continue;
-      final relative = p.relative(entity.path, from: sourceRoot.path);
+      final relative = p.relative(entity.path, from: root.path);
       final target = File(p.join(destination.path, relative));
       await target.parent.create(recursive: true);
       final sourceBytes = await entity.length();
@@ -874,7 +869,10 @@ class ProfileMigrationService {
     'remote_last_device',
     'update_auto_check_enabled',
     'update_ignored_version',
+    'support_remote_config_cache_v1',
+    'dismissed_donation_campaign_ids_v1',
     'recording_max_concurrent',
+    'recording_output_v1',
     'recording_battery_nudge_dismissed_at',
     'iptv_ios_recording_notice_dismissed',
     'desktop_recording_schedules_v1',

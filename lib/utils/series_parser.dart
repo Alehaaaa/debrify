@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 
 /// Classification of playlist content type
 enum PlaylistClassification {
-  series, // High confidence it's a TV series
-  movies, // High confidence it's a movie collection
-  ambiguous, // Could be either
+  SERIES, // High confidence it's a TV series
+  MOVIES, // High confidence it's a movie collection
+  AMBIGUOUS, // Could be either
 }
 
 /// Analysis result for playlist content
@@ -93,13 +93,13 @@ class SeriesInfo {
 
 class SeriesParser {
   // Special content keywords for Season 0 detection
-  static const deletedKeywords = [
+  static const DELETED_KEYWORDS = [
     'deleted',
     'deletedscenes',
     'deleted.scenes',
     'deleted_scenes',
   ];
-  static const behindKeywords = [
+  static const BEHIND_KEYWORDS = [
     'behind',
     'behindthescenes',
     'behind.the.scenes',
@@ -110,24 +110,24 @@ class SeriesParser {
   ];
   // Note: 'extended' removed - it's commonly used in movie names like "Extended Edition"
   // and would cause false positives. Only standalone "Extras" folders/files should match.
-  static const extrasKeywords = ['extras', 'bonus', 'special', 'feature'];
-  static const interviewKeywords = ['interview', 'featurette', 'interviews'];
-  static const blooperKeywords = [
+  static const EXTRAS_KEYWORDS = ['extras', 'bonus', 'special', 'feature'];
+  static const INTERVIEW_KEYWORDS = ['interview', 'featurette', 'interviews'];
+  static const BLOOPER_KEYWORDS = [
     'bloopers',
     'gag.reel',
     'gagreel',
     'outtakes',
     'mistakes',
   ];
-  static const commentaryKeywords = [
+  static const COMMENTARY_KEYWORDS = [
     'commentary',
     'directors.cut',
     'directors_cut',
   ];
-  static const sampleKeywords = ['sample', 'trailer', 'preview'];
+  static const SAMPLE_KEYWORDS = ['sample', 'trailer', 'preview'];
 
   // Movie false positive patterns
-  static const movieEpisodePatterns = [
+  static const MOVIE_EPISODE_PATTERNS = [
     'star.wars.episode',
     'star_wars_episode',
     'episode.i',
@@ -151,7 +151,7 @@ class SeriesParser {
   ];
 
   // Movie collection indicators - patterns that suggest a movie collection
-  static const movieCollectionKeywords = [
+  static const MOVIE_COLLECTION_KEYWORDS = [
     'collection',
     'complete.collection',
     'box.set',
@@ -397,18 +397,9 @@ class SeriesParser {
     );
     cleaned = cleaned.replaceAll(RegExp(r'\s*[/\\].+$'), '');
 
-    // 4. Trim and remove a number left dangling after a technical tag by a
-    //    truncated title ("… x265 HEVC 1"). Only after such a tag: a trailing
-    //    number is otherwise part of the title ("Beverly Hills 90210") or of
-    //    a season range still to be removed ("Seasons 1 through 5").
+    // 4. Trim and remove trailing numbers that are leftovers (like "HEVC 1" → "1")
     cleaned = cleaned.trim();
-    cleaned = cleaned.replaceAllMapped(
-      RegExp(
-        r'\b(HEVC|AVC|x26[45]|H\.?26[45]|AAC|AC3|E?AC-?3|DDP?|DTS|\d{3,4}p|10bit|8bit)\s+\d{1,2}\s*$',
-        caseSensitive: false,
-      ),
-      (m) => m.group(1)!,
-    );
+    cleaned = cleaned.replaceAll(RegExp(r'\s+\d+\s*$'), '');
 
     // PHASE 1: NORMALIZATION
     // 1. Normalize separators - replace dots and underscores with spaces
@@ -792,7 +783,7 @@ class SeriesParser {
     text = text.replaceAll(RegExp(r'\(\s*\)'), ' ');
     text = text.replaceAll(RegExp(r'\{\s*\}'), ' ');
 
-    // Remove orphaned plus signs (from "+ movies" removal)
+    // Remove orphaned plus signs (from "+ MOVIES" removal)
     text = text.replaceAll(RegExp(r'\s+\+\s*'), ' ');
     text = text.replaceAll(RegExp(r'\+\s+'), ' ');
 
@@ -890,7 +881,7 @@ class SeriesParser {
 
     // Check for movie false positives first
     bool isMoviePattern = false;
-    for (final pattern in movieEpisodePatterns) {
+    for (final pattern in MOVIE_EPISODE_PATTERNS) {
       if (lowerName.contains(pattern)) {
         debugPrint('SeriesParser: Detected movie pattern: $pattern');
         isMoviePattern = true;
@@ -898,23 +889,9 @@ class SeriesParser {
       }
     }
 
-    // A release/product code ("ABCD-222", "WXYZ-456 1080p") is an ID, not a
-    // season+episode: its digits must not read as S2E22. An explicit SxxEyy
-    // anywhere in the name still wins.
-    if (!isMoviePattern &&
-        RegExp(
-          r'^[A-Za-z]{2,6}-\d{2,5}(?=$|[\s._\[(])',
-        ).hasMatch(nameWithoutExt.trim()) &&
-        !RegExp(
-          r's\d{1,2}\s*e\d{1,3}',
-          caseSensitive: false,
-        ).hasMatch(nameWithoutExt)) {
-      isMoviePattern = true;
-    }
-
     // Check if it's a sample file
     bool isSample = false;
-    for (final keyword in sampleKeywords) {
+    for (final keyword in SAMPLE_KEYWORDS) {
       if (lowerName.contains(keyword)) {
         debugPrint('SeriesParser: Detected sample file: $keyword');
         isSample = true;
@@ -1171,7 +1148,7 @@ class SeriesParser {
     String? movieReason;
 
     // Check for existing movie patterns
-    for (final pattern in movieEpisodePatterns) {
+    for (final pattern in MOVIE_EPISODE_PATTERNS) {
       if (lowerName.contains(pattern)) {
         debugPrint(
           'SeriesParser (Conservative): Movie pattern detected: $pattern',
@@ -1227,7 +1204,7 @@ class SeriesParser {
 
     // Check for sample files
     bool isSample = false;
-    for (final keyword in sampleKeywords) {
+    for (final keyword in SAMPLE_KEYWORDS) {
       if (lowerName.contains(keyword)) {
         debugPrint('SeriesParser (Conservative): Sample file detected');
         isSample = true;
@@ -1394,7 +1371,7 @@ class SeriesParser {
       }
     }
 
-    // PHASE 4: series CLASSIFICATION WITH CONSERVATIVE LOGIC
+    // PHASE 4: SERIES CLASSIFICATION WITH CONSERVATIVE LOGIC
     // Only mark as series if we have STRONG evidence AND no movie indicators
     final isSeries =
         foundValidPattern &&
@@ -1548,7 +1525,7 @@ class SeriesParser {
   static bool isSeriesPlaylist(List<String> filenames) {
     final analysis = analyzePlaylistConfidence(filenames);
     // Analysis details already logged in analyzePlaylistConfidence
-    return analysis.classification == PlaylistClassification.series;
+    return analysis.classification == PlaylistClassification.SERIES;
   }
 
   /// Analyze a playlist to determine confidence it's a series vs movie collection
@@ -1556,7 +1533,7 @@ class SeriesParser {
     if (filenames.isEmpty) {
       return const PlaylistAnalysis(
         confidenceScore: 0,
-        classification: PlaylistClassification.ambiguous,
+        classification: PlaylistClassification.AMBIGUOUS,
         detectionMethod: 'Empty playlist',
         scores: {},
       );
@@ -1589,7 +1566,7 @@ class SeriesParser {
         }
       } else {
         // Check if it's a movie pattern
-        for (final pattern in movieEpisodePatterns) {
+        for (final pattern in MOVIE_EPISODE_PATTERNS) {
           if (lowerName.contains(pattern)) {
             moviePatternCount++;
             break;
@@ -1710,7 +1687,7 @@ class SeriesParser {
     String detectionMethod = 'Mixed analysis';
 
     if (totalScore >= 60) {
-      classification = PlaylistClassification.series;
+      classification = PlaylistClassification.SERIES;
       if (animePatternCount > filenames.length / 2) {
         detectionMethod = 'Anime pattern detection';
       } else if (hasConsistentSeasonEpisode) {
@@ -1719,10 +1696,10 @@ class SeriesParser {
         detectionMethod = 'Series pattern matching';
       }
     } else if (totalScore <= 30) {
-      classification = PlaylistClassification.movies;
+      classification = PlaylistClassification.MOVIES;
       detectionMethod = 'Movie collection pattern';
     } else {
-      classification = PlaylistClassification.ambiguous;
+      classification = PlaylistClassification.AMBIGUOUS;
       detectionMethod = 'Ambiguous content';
     }
 
@@ -1745,12 +1722,12 @@ class SeriesParser {
 
     // Check all special content keywords
     final allKeywords = [
-      ...deletedKeywords,
-      ...behindKeywords,
-      ...extrasKeywords,
-      ...interviewKeywords,
-      ...blooperKeywords,
-      ...commentaryKeywords,
+      ...DELETED_KEYWORDS,
+      ...BEHIND_KEYWORDS,
+      ...EXTRAS_KEYWORDS,
+      ...INTERVIEW_KEYWORDS,
+      ...BLOOPER_KEYWORDS,
+      ...COMMENTARY_KEYWORDS,
     ];
 
     for (final keyword in allKeywords) {
@@ -1765,7 +1742,7 @@ class SeriesParser {
   /// Check if filename is a sample file
   static bool isSampleFile(String filename) {
     final lower = filename.toLowerCase();
-    for (final keyword in sampleKeywords) {
+    for (final keyword in SAMPLE_KEYWORDS) {
       if (lower.contains(keyword)) {
         return true;
       }
@@ -1793,22 +1770,22 @@ class SeriesParser {
       return null;
     }
 
-    for (final keyword in deletedKeywords) {
+    for (final keyword in DELETED_KEYWORDS) {
       if (lower.contains(keyword)) return 'Deleted Scenes';
     }
-    for (final keyword in behindKeywords) {
+    for (final keyword in BEHIND_KEYWORDS) {
       if (lower.contains(keyword)) return 'Behind The Scenes';
     }
-    for (final keyword in interviewKeywords) {
+    for (final keyword in INTERVIEW_KEYWORDS) {
       if (lower.contains(keyword)) return 'Interviews';
     }
-    for (final keyword in blooperKeywords) {
+    for (final keyword in BLOOPER_KEYWORDS) {
       if (lower.contains(keyword)) return 'Bloopers';
     }
-    for (final keyword in commentaryKeywords) {
+    for (final keyword in COMMENTARY_KEYWORDS) {
       if (lower.contains(keyword)) return 'Commentary';
     }
-    for (final keyword in extrasKeywords) {
+    for (final keyword in EXTRAS_KEYWORDS) {
       if (lower.contains(keyword)) return 'Extras';
     }
 

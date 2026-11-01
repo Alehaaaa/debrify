@@ -5,7 +5,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -15,15 +14,11 @@ import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import android.os.PowerManager
-import android.os.StatFs
-import android.provider.MediaStore
 import androidx.core.app.NotificationCompat
 import androidx.core.app.TaskStackBuilder
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -117,7 +112,7 @@ class LiveRecordingService : Service() {
 		private const val SERVICE_NOTIFICATION_ID = 9100
 		private const val GROUP_KEY_RECORDINGS = "com.debrify.app.recordings.GROUP"
 
-		private const val MIN_FREE_BYTES = 200L * 1024 * 1024
+		const val MIN_FREE_BYTES = 200L * 1024 * 1024
 
 		/** Sent when the channel declares no User-Agent of its own. Providers
 		 *  routinely block default library UAs (the app's mpv path learned
@@ -303,6 +298,8 @@ class LiveRecordingService : Service() {
 		val resourceAuthorizationRevision: Long?,
 	) {
 		var uri: Uri? = null
+		/** The share file, when the capture started on SMB (kept after a fallback). */
+		var shareLabel: String? = null
 		@Volatile var bytes: Long = 0L
 		@Volatile var stopRequested: Boolean = false
 		@Volatile var connection: HttpURLConnection? = null
@@ -536,50 +533,20 @@ class LiveRecordingService : Service() {
 	 * Never throws.
 	 */
 	private fun runCapture(state: RecordingState): Outcome {
-		if (freeSpaceBytes() in 0 until MIN_FREE_BYTES) {
+		val share = SmbRecordingOutput.targetFor(this, state.ownerProfileId)
+			?.let { SmbRecordingOutput.open(it, state.fileName) }
+		// Measured where the file goes; unknown (-1) for a picked SAF folder.
+		if (share == null && RecordingDestination.freeBytes(this) in 0 until MIN_FREE_BYTES) {
 			return Outcome.Failed("not enough free storage")
 		}
 
-		val uri: Uri
-		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-			try {
-				val values = ContentValues().apply {
-					put(MediaStore.Downloads.DISPLAY_NAME, state.fileName)
-					put(MediaStore.Downloads.MIME_TYPE, MIME_TYPE)
-					put(MediaStore.Downloads.RELATIVE_PATH, RELATIVE_PATH)
-					put(MediaStore.Downloads.IS_PENDING, 1)
-				}
-				uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-					?: return Outcome.Failed("could not create destination")
-			} catch (e: Exception) {
-				return Outcome.Failed(e.message ?: "could not create destination")
+		val uri = share?.uri
+			?: when (val created = RecordingDestination.create(this, state.fileName, MIME_TYPE)) {
+				is RecordingDestination.Created.Ok -> created.uri
+				is RecordingDestination.Created.Failed -> return Outcome.Failed(created.reason)
 			}
-		} else {
-			// Legacy (API 21-28): a plain file in public Download/. No pending
-			// rows, no publish step — a file that exists is already visible,
-			// which also collapses the crash-reconcile story to a media scan.
-			try {
-				val dir = legacyRecordingsDir()
-				if (!dir.exists() && !dir.mkdirs()) {
-					return Outcome.Failed("could not create recordings folder")
-				}
-				var file = java.io.File(dir, state.fileName)
-				if (file.exists()) {
-					// Same collision rule as everywhere else: an existing file
-					// means "in use" — step aside with a suffix.
-					val base = state.fileName.removeSuffix(".ts")
-					var n = 2
-					while (file.exists() && n < 100) {
-						file = java.io.File(dir, "${base}_$n.ts")
-						n++
-					}
-				}
-				uri = Uri.fromFile(file)
-			} catch (e: Exception) {
-				return Outcome.Failed(e.message ?: "could not create destination")
-			}
-		}
 		state.uri = uri
+		state.shareLabel = share?.label
 
 		// Registry BEFORE the persisted `recording` entry: reconcile treats
 		// store-without-registry as dead, so this order (plus the store's
@@ -597,23 +564,38 @@ class LiveRecordingService : Service() {
 		RecordingRegistry.notifyChanged()
 		persist(state, status = "recording")
 
-		var outPfd: ParcelFileDescriptor? = null
-		var outFd: java.io.FileDescriptor? = null
-		var out: BufferedOutputStream? = null
+		var output: RecordingDestination.Output? = null
+		var out: java.io.OutputStream? = null
 		var endedNote: String? = null
 		var storageFailed = false
+		var onShare = share != null
+		// Share dropped: its unacknowledged bytes move to a local file (uploaded later).
+		fun leaveShare(cause: Exception) {
+			onShare = false
+			val unsent = share!!.stream.takeUnsent()
+			if (share.stream.confirmed == 0L) state.shareLabel = null
+			share.stream.abort() // a stalled server would hold a polite close
+			val local = (RecordingDestination.create(this, state.fileName, MIME_TYPE)
+				as? RecordingDestination.Created.Ok)?.uri
+				?.let { RecordingDestination.openWithFallback(this, it, state.fileName, MIME_TYPE) }
+				?: throw IOException("share dropped and no local destination", cause)
+			state.uri = local.first
+			persist(state, status = "recording")
+			output = local.second
+			out = BufferedOutputStream(local.second.stream).also { it.write(unsent) }
+		}
 		try {
-			if (uri.scheme == "file") {
-				val fos = FileOutputStream(java.io.File(uri.path!!))
-				outFd = fos.fd
-				out = BufferedOutputStream(fos)
-			} else {
-				val pfd = contentResolver.openFileDescriptor(uri, "rw")
-					?: return Outcome.Failed("could not open destination")
-				outPfd = pfd
-				outFd = pfd.fileDescriptor
-				out = BufferedOutputStream(FileOutputStream(pfd.fileDescriptor))
+			val opened = if (share != null) uri to share.output
+				else RecordingDestination.openWithFallback(this, uri, state.fileName, MIME_TYPE)
+				?: return Outcome.Failed("could not open destination")
+			if (opened.first != uri) {
+				// The picked folder refused writes: the capture continues in the
+				// default folder, and the entry must point at where bytes really go.
+				state.uri = opened.first
+				persist(state, status = "recording")
 			}
+			output = opened.second
+			out = share?.stream ?: BufferedOutputStream(opened.second.stream)
 
 			val buffer = ByteArray(256 * 1024)
 			var consecutiveDeadConnects = 0
@@ -764,12 +746,20 @@ class LiveRecordingService : Service() {
 								break@capture
 							}
 							try {
-								out.write(buffer, 0, n)
+								try {
+									out!!.write(buffer, 0, n)
+								} catch (e: Exception) {
+									// smbj reports a dropped share as SMBRuntimeException.
+									// These bytes are among the unsent ones moved locally.
+									if (!onShare) throw e
+									leaveShare(e)
+								}
 							} catch (e: IOException) {
 								// The WRITE side failing (disk full, row revoked)
 								// is terminal — no reconnect can fix storage.
 								storageFailed = true
-								endedNote = "storage full"
+								endedNote = if (e.message?.startsWith("share dropped") != true) "storage full"
+									else "network share dropped and local storage failed"
 								break@capture
 							}
 							state.bytes += n
@@ -814,11 +804,14 @@ class LiveRecordingService : Service() {
 				}
 			}
 		} finally {
-			// Bytes must be durable before ANY terminal state is applied.
+			// Bytes must be durable before ANY terminal state is applied; a share
+			// failing this last write hands its bytes to a local file as well.
+			if (onShare) try { out?.flush() } catch (e: Exception) {
+				try { leaveShare(e) } catch (_: Exception) { endedNote = "network share dropped; the end was lost" }
+			}
 			try { out?.flush() } catch (_: Exception) {}
-			try { outFd?.sync() } catch (_: Exception) {}
-			try { out?.close() } catch (_: Exception) {}
-			try { outPfd?.close() } catch (_: Exception) {}
+			output?.syncAndClose() // a share file nothing reached is removed here
+
 		}
 
 		if (state.timeUp && endedNote == null && !state.stopRequested) {
@@ -848,10 +841,14 @@ class LiveRecordingService : Service() {
 				persist(state, status = "done", published = published)
 				val sizeText = fmtBytes(state.bytes)
 				val suffix = outcome.note?.let { " ($it)" } ?: ""
+				// A share that dropped mid-capture: the start is there, the rest here.
+				val where = RecordingDestination.label(this, uri).let { local ->
+					state.shareLabel?.takeIf { !SmbRecordingOutput.isShare(uri) }?.let { "$it, then $local" } ?: local
+				}
 				notifyTask(
 					state,
 					if (published) {
-						"Saved to Downloads/Debrify/Recordings · $sizeText$suffix"
+						"Saved to $where · $sizeText$suffix"
 					} else {
 						"Recording finished ($sizeText) but couldn't be added to " +
 							"Downloads yet — will retry"
@@ -990,12 +987,6 @@ class LiveRecordingService : Service() {
 			}
 		}, STALL_CHECK_INTERVAL_MS)
 	}
-
-	private fun freeSpaceBytes(): Long = try {
-		@Suppress("DEPRECATION")
-		val stat = StatFs(Environment.getExternalStorageDirectory().path)
-		stat.availableBytes
-	} catch (_: Exception) { -1L }
 
 	// ---- Notifications ------------------------------------------------------
 

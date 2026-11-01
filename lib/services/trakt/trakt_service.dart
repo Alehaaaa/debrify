@@ -1,6 +1,8 @@
-import 'dart:async';
 import 'dart:convert';
 
+import 'package:debrify/services/storage/movie_progress_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -12,13 +14,12 @@ import 'trakt_continue_watching_merge.dart';
 import 'trakt_watched_history_reader.dart';
 import '../profiles/profile_async_authorization.dart';
 import '../profiles/profile_runtime.dart';
+import '../profiles/profile_session_memory.dart';
 import '../profiles/profile_credential_facade.dart';
-import '../storage_service.dart';
 import 'trakt_calendar_service.dart';
 import 'trakt_constants.dart';
 import '../../models/media_identity.dart';
 import '../tracker_identity_service.dart';
-import '../tracker_scrobble_outbox.dart';
 
 /// The user's Trakt relationship to a single title — used to render a
 /// state-aware detail page (in watchlist / collection / watched / rating)
@@ -92,6 +93,7 @@ class TraktService {
   final Map<String, ({DateTime at, Object data})> _libCache = {};
   static const Duration _libTtl = Duration(seconds: 45);
   int _libCacheGeneration = 0;
+  ProfileSessionOwner? _libCacheOwner;
   final Map<String, _TraktDeviceAuthorization> _deviceAuthorizations = {};
 
   void _invalidateLibraryCache() {
@@ -107,7 +109,12 @@ class TraktService {
     TraktCalendarService.instance.invalidate();
   }
 
-  Future<T?> _cachedLib<T>(String key, Future<T?> Function() load) async {
+  Future<T?> _cachedLib<T>(
+    String key,
+    Future<T?> Function() load, {
+    required bool Function() canContinue,
+  }) async {
+    if (!canContinue()) return null;
     final hit = _libCache[key];
     if (hit != null && DateTime.now().difference(hit.at) < _libTtl) {
       return hit.data as T;
@@ -117,6 +124,7 @@ class TraktService {
     // Only cache authoritative results — never poison the cache with the empty
     // set a transient failure produces, which would otherwise flip every
     // affected title's badge/menu to "not in library" for the whole TTL.
+    if (!canContinue()) return null;
     if (data != null && generation == _libCacheGeneration) {
       _libCache[key] = (at: DateTime.now(), data: data as Object);
     }
@@ -161,8 +169,23 @@ class TraktService {
   /// callers keep whatever they last showed instead of wrongly rendering the
   /// title as "not in library". A genuine "in none of them" is a non-null
   /// all-false status, distinct from this null.
-  Future<TraktTitleStatus?> fetchTitleStatus(String imdbId, String type) async {
-    if (!await isAuthenticated()) return null;
+  Future<TraktTitleStatus?> fetchTitleStatus(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    final owner = ProfileSessionMemory.captureOwner();
+    final scope = owner.scope;
+    if (scope != null && ProfileRuntime.capture() != scope) return null;
+    bool current() =>
+        owner == ProfileSessionMemory.captureOwner() &&
+        canContinue?.call() != false;
+    if (!current()) return null;
+    if (_libCacheOwner != owner) {
+      _invalidateLibraryCache();
+      _libCacheOwner = owner;
+    }
+    if (!await isAuthenticated(canContinue: current) || !current()) return null;
     final contentType = type == 'series' ? 'shows' : 'movies';
     try {
       // Kick all list fetches off together, then await — they run concurrently.
@@ -170,23 +193,38 @@ class TraktService {
       final watchlistF = _cachedLib<Set<String>>(
         'watchlist:$contentType',
         () async {
-          final l = await fetchListOrNull('watchlist', contentType);
+          final l = await fetchListOrNull(
+            'watchlist',
+            contentType,
+            canContinue: current,
+          );
           return l == null ? null : _extractListImdbIds(l);
         },
+        canContinue: current,
       );
       final collectionF = _cachedLib<Set<String>>(
         'collection:$contentType',
         () async {
-          final l = await fetchListOrNull('collection', contentType);
+          final l = await fetchListOrNull(
+            'collection',
+            contentType,
+            canContinue: current,
+          );
           return l == null ? null : _extractListImdbIds(l);
         },
+        canContinue: current,
       );
       final ratingsF = _cachedLib<Map<String, int>>(
         'ratings:$contentType',
         () async {
-          final l = await fetchListOrNull('ratings', contentType);
+          final l = await fetchListOrNull(
+            'ratings',
+            contentType,
+            canContinue: current,
+          );
           return l == null ? null : _extractRatings(l);
         },
+        canContinue: current,
       );
       // Watched via failure-aware endpoints, so a transient failure returns
       // null (not cached, treated as "unknown watched") instead of poisoning
@@ -197,13 +235,22 @@ class TraktService {
         final normalizedId = imdbId.trim().toLowerCase();
         watchedF = _cachedLib<bool>(
           'watched:show:$normalizedId',
-          () => fetchShowFullyWatchedOrNull(normalizedId),
+          () => fetchShowFullyWatchedOrNull(normalizedId, canContinue: current),
+          canContinue: current,
         );
       } else {
-        watchedF = _cachedLib<Set<String>>('watched:movies', () async {
-          final l = await fetchListOrNull('watched', 'movies');
-          return l == null ? null : _extractListImdbIds(l);
-        }).then((ids) => ids?.contains(imdbId.toLowerCase()));
+        watchedF = _cachedLib<Set<String>>(
+          'watched:movies',
+          () async {
+            final l = await fetchListOrNull(
+              'watched',
+              'movies',
+              canContinue: current,
+            );
+            return l == null ? null : _extractListImdbIds(l);
+          },
+          canContinue: current,
+        ).then((ids) => ids?.contains(imdbId.toLowerCase()));
       }
 
       final watchlist = await watchlistF;
@@ -216,6 +263,7 @@ class TraktService {
       }
       // Null (watched fetch failed) → watched unknown, not "unwatched".
       final titleWatched = await watchedF;
+      if (!current()) return null;
 
       return TraktTitleStatus(
         inWatchlist: watchlist.contains(imdbId),
@@ -308,6 +356,7 @@ class TraktService {
     required String basePath,
     required String logLabel,
     int limit = 250,
+    bool Function()? canContinue,
   }) async {
     final items = <dynamic>[];
     final seenPagePayloads = <String>{};
@@ -315,9 +364,10 @@ class TraktService {
     const maxPages = 100;
 
     while (page <= maxPages) {
+      if (canContinue?.call() == false) return null;
       final separator = _withQuerySeparator(basePath);
       final path = '$basePath${separator}page=$page&limit=$limit';
-      final response = await _authenticatedGet(path);
+      final response = await _authenticatedGet(path, canContinue: canContinue);
       if (response == null || response.statusCode != 200) {
         debugPrint(
           'Trakt: $logLabel failed page=$page (${response?.statusCode})',
@@ -408,16 +458,22 @@ class TraktService {
   }
 
   /// Check if the user is authenticated (has a non-expired access token).
-  Future<bool> isAuthenticated() async {
-    final token = await StorageService.getTraktAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> isAuthenticated({bool Function()? canContinue}) async {
+    if (canContinue?.call() == false) return false;
+    final token = await TraktStorage.getTraktAccessToken(
+      canContinue: canContinue,
+    );
+    if (canContinue?.call() == false || token == null || token.isEmpty) {
+      return false;
+    }
 
     // Check if token is expired
-    final expiryMs = await StorageService.getTraktTokenExpiry();
+    final expiryMs = await TraktStorage.getTraktTokenExpiry();
+    if (canContinue?.call() == false) return false;
     if (expiryMs != null && DateTime.now().millisecondsSinceEpoch >= expiryMs) {
       // Try to refresh
       final refreshed = await refreshAccessToken();
-      return refreshed;
+      return refreshed && canContinue?.call() != false;
     }
 
     return true;
@@ -429,7 +485,7 @@ class TraktService {
       final authorization = await ProfileAsyncAuthorization.capture(
         ProfileFeature.trackersAndDiscovery,
       );
-      if (authorization == null) return await _refreshAccessTokenScoped();
+      if (authorization == null) return _refreshAccessTokenScoped();
       return await authorization.run(_refreshAccessTokenScoped);
     } on StateError {
       return false;
@@ -474,11 +530,11 @@ class TraktService {
       if (shared != null) {
         if (shared) {
           _invalidateLibraryCache();
-          StorageService.movieFinishedRevision.value++;
+          MovieProgressStorage.movieFinishedRevision.value++;
         }
         return shared;
       }
-      final refreshToken = await StorageService.getTraktRefreshToken();
+      final refreshToken = await TraktStorage.getTraktRefreshToken();
       if (refreshToken == null || refreshToken.isEmpty) return false;
       final data = await exchange(refreshToken);
       if (data == null) return false;
@@ -492,11 +548,11 @@ class TraktService {
 
   /// Revoke the current token and clear stored auth data.
   Future<void> logout() async {
-    final accessToken = await StorageService.getTraktAccessToken();
+    final accessToken = await TraktStorage.getTraktAccessToken();
     // Local disposition happens before the upstream side effect. A shared
     // owner fails closed here, while a borrower detaches without revoking the
     // account used by its owner and other grantees.
-    final shouldRevokeRemote = await StorageService.clearTraktAuth();
+    final shouldRevokeRemote = await TraktStorage.clearTraktAuth();
     try {
       if (shouldRevokeRemote && accessToken != null) {
         await http.post(
@@ -516,12 +572,12 @@ class TraktService {
     // Drop cached library state so a later sign-in (possibly a different
     // account) never reads the previous user's watchlist/collection/ratings.
     _invalidateLibraryCache();
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
   }
 
   /// Get the stored username.
   Future<String?> getUsername() async {
-    return StorageService.getTraktUsername();
+    return TraktStorage.getTraktUsername();
   }
 
   /// Store tokens and expiry from a token response.
@@ -537,12 +593,12 @@ class TraktService {
         : DateTime.now()
               .add(Duration(seconds: expiresIn))
               .millisecondsSinceEpoch;
-    await StorageService.setTraktSession(
+    await TraktStorage.setTraktSession(
       accessToken: data['access_token'] as String,
       refreshToken: data['refresh_token'] as String,
       expiryMs: expiryMs,
     );
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
   }
 
   // ============================================================================
@@ -616,7 +672,7 @@ class TraktService {
         _deviceAuthorizations.remove(deviceCode);
         Future<void> commit() async {
           await _storeTokens(data);
-          await StorageService.enableTrackingScrobbleTarget(
+          await TrackingSourceStorage.enableTrackingScrobbleTarget(
             TrackingSource.trakt,
           );
           final accessToken = data['access_token'] as String;
@@ -677,9 +733,13 @@ class TraktService {
     String path,
     Map<String, dynamic> body, {
     bool requireScrobbleEnabled = false,
+    bool Function()? canContinue,
   }) async {
-    var accessToken = await StorageService.getTraktAccessToken();
-    if (accessToken == null) return null;
+    if (canContinue?.call() == false) return null;
+    var accessToken = await TraktStorage.getTraktAccessToken(
+      canContinue: canContinue,
+    );
+    if (accessToken == null || canContinue?.call() == false) return null;
 
     try {
       // Players retain launch-time flags. Recheck the current profile's
@@ -687,9 +747,12 @@ class TraktService {
       // after scrobbling is disabled. Explicit history/rating actions use
       // this helper too, but remain independent of automatic scrobbling.
       if (requireScrobbleEnabled &&
-          !await StorageService.scrobblesTo(TrackingSource.trakt)) {
+          !(await TrackingSourceStorage.getTrackingScrobbleTargets()).contains(
+            TrackingSource.trakt,
+          )) {
         return null;
       }
+      if (canContinue?.call() == false) return null;
       var response = await http
           .post(
             Uri.parse('$kTraktApiBaseUrl$path'),
@@ -700,17 +763,23 @@ class TraktService {
 
       // If unauthorized, try refreshing the token once
       if (response.statusCode == 401) {
+        if (canContinue?.call() == false) return null;
         final refreshed = await refreshAccessToken();
-        if (!refreshed) return null;
+        if (!refreshed || canContinue?.call() == false) return null;
 
-        accessToken = await StorageService.getTraktAccessToken();
-        if (accessToken == null) return null;
+        accessToken = await TraktStorage.getTraktAccessToken(
+          canContinue: canContinue,
+        );
+        if (accessToken == null || canContinue?.call() == false) return null;
 
         // The preference may have changed while the refresh was in flight.
         if (requireScrobbleEnabled &&
-            !await StorageService.scrobblesTo(TrackingSource.trakt)) {
+            !(await TrackingSourceStorage.getTrackingScrobbleTargets()).contains(
+              TrackingSource.trakt,
+            )) {
           return null;
         }
+        if (canContinue?.call() == false) return null;
         response = await http
             .post(
               Uri.parse('$kTraktApiBaseUrl$path'),
@@ -748,7 +817,6 @@ class TraktService {
     int? season,
     int? episode,
     String? contentType,
-    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/start',
@@ -757,7 +825,6 @@ class TraktService {
       season: season,
       episode: episode,
       contentType: contentType,
-      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -768,7 +835,6 @@ class TraktService {
     int? season,
     int? episode,
     String? contentType,
-    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/pause',
@@ -777,7 +843,6 @@ class TraktService {
       season: season,
       episode: episode,
       contentType: contentType,
-      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -788,7 +853,6 @@ class TraktService {
     int? season,
     int? episode,
     String? contentType,
-    bool queueOnFailure = true,
   }) async {
     return _scrobble(
       '/scrobble/stop',
@@ -797,7 +861,6 @@ class TraktService {
       season: season,
       episode: episode,
       contentType: contentType,
-      queueOnFailure: queueOnFailure,
     );
   }
 
@@ -808,11 +871,12 @@ class TraktService {
     int? season,
     int? episode,
     String? contentType,
-    bool queueOnFailure = true,
   }) async {
     final scope = ProfileRuntime.scope.value;
     if (MediaIdentity.isNative(imdbId) &&
-        (!await StorageService.scrobblesTo(TrackingSource.trakt) ||
+        (!(await TrackingSourceStorage.getTrackingScrobbleTargets()).contains(
+              TrackingSource.trakt,
+            ) ||
             !await isAuthenticated())) {
       return false;
     }
@@ -866,45 +930,17 @@ class TraktService {
         'progress': progress,
       },
     );
-    if (response == null) {
-      if (queueOnFailure) {
-        unawaited(
-          TrackerScrobbleOutbox.instance.enqueue(
-            tracker: 'trakt',
-            action: path.split('/').last,
-            imdbId: imdbId,
-            progress: progress,
-            contentType: type,
-            season: season,
-            episode: episode,
-          ),
-        );
-      }
-      return false;
-    }
+    if (response == null) return false;
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (season != null && episode != null) {
         EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', imdbId);
       }
       if (path == '/scrobble/stop' && progress > 80) {
         _invalidateLibraryCache();
-        StorageService.movieFinishedRevision.value++;
+        MovieProgressStorage.movieFinishedRevision.value++;
       }
       debugPrint('Trakt: Scrobble completed');
       return true;
-    }
-    if (queueOnFailure) {
-      unawaited(
-        TrackerScrobbleOutbox.instance.enqueue(
-          tracker: 'trakt',
-          action: path.split('/').last,
-          imdbId: imdbId,
-          progress: progress,
-          contentType: type,
-          season: season,
-          episode: episode,
-        ),
-      );
     }
     debugPrint('Trakt: Scrobble failed (${response.statusCode})');
     return false;
@@ -924,21 +960,33 @@ class TraktService {
     String imdbId,
     String type, {
     Map<String, dynamic>? extraItemFields,
+    bool Function()? canContinue,
   }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
     type = type == 'show' ? 'series' : type;
     final ids = await _idsForContent(imdbId, type);
-    if (ids == null) return false;
+    if (ids == null || canContinue?.call() == false) return false;
     final apiKey = type == 'series' ? 'shows' : 'movies';
-    final item = <String, dynamic>{'ids': ids, ...?extraItemFields};
+    final item = <String, dynamic>{
+      'ids': ids,
+      if (extraItemFields != null) ...extraItemFields,
+    };
     final body = {
       apiKey: [item],
     };
-    final response = await _authenticatedPost(path, body);
-    if (response == null) return false;
-    final ok =
-        response.statusCode >= 200 &&
-        response.statusCode < 300 &&
-        (!path.startsWith('/sync/history') || _historyMatched(response.body));
+    final response = await _authenticatedPost(
+      path,
+      body,
+      canContinue: canContinue,
+    );
+    if (response == null ||
+        (owner != null && owner != ProfileSessionMemory.captureOwner())) {
+      return false;
+    }
+    final ok = response.statusCode >= 200 && response.statusCode < 300;
     if (!ok) {
       debugPrint('Trakt: Sync action failed (${response.statusCode})');
     } else {
@@ -949,64 +997,98 @@ class TraktService {
         if (type == 'series') {
           EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', imdbId);
         }
-        StorageService.movieFinishedRevision.value++;
+        MovieProgressStorage.movieFinishedRevision.value++;
       }
     }
     return ok;
   }
 
-  Future<bool> addToWatchlist(String imdbId, String type) =>
-      _syncAction('/sync/watchlist', imdbId, type);
+  Future<bool> addToWatchlist(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction('/sync/watchlist', imdbId, type, canContinue: canContinue);
 
-  Future<bool> removeFromWatchlist(String imdbId, String type) =>
-      _syncAction('/sync/watchlist/remove', imdbId, type);
+  Future<bool> removeFromWatchlist(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction(
+    '/sync/watchlist/remove',
+    imdbId,
+    type,
+    canContinue: canContinue,
+  );
 
-  Future<bool> addToCollection(String imdbId, String type) =>
-      _syncAction('/sync/collection', imdbId, type);
+  Future<bool> addToCollection(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction('/sync/collection', imdbId, type, canContinue: canContinue);
 
-  Future<bool> removeFromCollection(String imdbId, String type) =>
-      _syncAction('/sync/collection/remove', imdbId, type);
-
-  static bool _historyMatched(String body) {
-    try {
-      final data = jsonDecode(body);
-      if (data is! Map) return false;
-      final missing = data['not_found'];
-      return missing is! Map ||
-          missing.values.every((value) => value is List && value.isEmpty);
-    } catch (_) {
-      return false;
-    }
-  }
+  Future<bool> removeFromCollection(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction(
+    '/sync/collection/remove',
+    imdbId,
+    type,
+    canContinue: canContinue,
+  );
 
   Future<bool> addToHistory(
     String imdbId,
     String type, {
-    DateTime? watchedAt,
+    bool Function()? canContinue,
+  }) => _syncAction('/sync/history', imdbId, type, canContinue: canContinue);
+
+  Future<bool> removeFromHistory(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
   }) => _syncAction(
-    '/sync/history',
+    '/sync/history/remove',
     imdbId,
     type,
-    extraItemFields: {
-      if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
-    },
+    canContinue: canContinue,
   );
 
-  Future<bool> removeFromHistory(String imdbId, String type) =>
-      _syncAction('/sync/history/remove', imdbId, type);
-
-  Future<bool> rateItem(String imdbId, String type, int rating) => _syncAction(
+  Future<bool> rateItem(
+    String imdbId,
+    String type,
+    int rating, {
+    bool Function()? canContinue,
+  }) => _syncAction(
     '/sync/ratings',
     imdbId,
     type,
     extraItemFields: {'rating': rating},
+    canContinue: canContinue,
   );
 
-  Future<bool> removeRating(String imdbId, String type) =>
-      _syncAction('/sync/ratings/remove', imdbId, type);
+  Future<bool> removeRating(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction(
+    '/sync/ratings/remove',
+    imdbId,
+    type,
+    canContinue: canContinue,
+  );
 
-  Future<bool> addToCustomList(String listId, String imdbId, String type) =>
-      _syncAction('/users/me/lists/$listId/items', imdbId, type);
+  Future<bool> addToCustomList(
+    String listId,
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => _syncAction(
+    '/users/me/lists/$listId/items',
+    imdbId,
+    type,
+    canContinue: canContinue,
+  );
 
   Future<bool> removeFromCustomList(
     String listId,
@@ -1025,7 +1107,10 @@ class TraktService {
   }) async {
     final ids = await _idsForContent(showImdbId, 'series');
     if (ids == null) return false;
-    final ep = <String, dynamic>{'number': episode, ...?extraEpisodeFields};
+    final ep = <String, dynamic>{
+      'number': episode,
+      if (extraEpisodeFields != null) ...extraEpisodeFields,
+    };
     final body = {
       'shows': [
         {
@@ -1041,34 +1126,19 @@ class TraktService {
     };
     final response = await _authenticatedPost(path, body);
     if (response == null) return false;
-    final ok =
-        response.statusCode >= 200 &&
-        response.statusCode < 300 &&
-        (!path.startsWith('/sync/history') || _historyMatched(response.body));
+    final ok = response.statusCode >= 200 && response.statusCode < 300;
     if (!ok) {
       debugPrint('Trakt: Episode sync failed (${response.statusCode})');
     } else if (path == '/sync/history' || path == '/sync/history/remove') {
       _invalidateLibraryCache();
       EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', showImdbId);
-      StorageService.movieFinishedRevision.value++;
+      MovieProgressStorage.movieFinishedRevision.value++;
     }
     return ok;
   }
 
-  Future<bool> markEpisodeWatched(
-    String showImdbId,
-    int season,
-    int episode, {
-    DateTime? watchedAt,
-  }) => _syncEpisodeAction(
-    '/sync/history',
-    showImdbId,
-    season,
-    episode,
-    extraEpisodeFields: {
-      if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
-    },
-  );
+  Future<bool> markEpisodeWatched(String showImdbId, int season, int episode) =>
+      _syncEpisodeAction('/sync/history', showImdbId, season, episode);
 
   Future<bool> markEpisodeUnwatched(
     String showImdbId,
@@ -1108,9 +1178,15 @@ class TraktService {
     }
   }
 
-  Future<http.Response?> _authenticatedGet(String path) async {
-    var accessToken = await StorageService.getTraktAccessToken();
-    if (accessToken == null) return null;
+  Future<http.Response?> _authenticatedGet(
+    String path, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    var accessToken = await TraktStorage.getTraktAccessToken(
+      canContinue: canContinue,
+    );
+    if (accessToken == null || canContinue?.call() == false) return null;
 
     try {
       var response = await http
@@ -1122,11 +1198,14 @@ class TraktService {
 
       // If unauthorized, try refreshing the token once
       if (response.statusCode == 401) {
+        if (canContinue?.call() == false) return null;
         final refreshed = await refreshAccessToken();
-        if (!refreshed) return null;
+        if (!refreshed || canContinue?.call() == false) return null;
 
-        accessToken = await StorageService.getTraktAccessToken();
-        if (accessToken == null) return null;
+        accessToken = await TraktStorage.getTraktAccessToken(
+          canContinue: canContinue,
+        );
+        if (accessToken == null || canContinue?.call() == false) return null;
 
         response = await http
             .get(
@@ -1136,16 +1215,22 @@ class TraktService {
             .timeout(const Duration(seconds: 15));
       }
 
-      return response;
+      return canContinue?.call() == false ? null : response;
     } catch (error) {
       debugPrint('Trakt: Authenticated GET error (${error.runtimeType})');
       return null;
     }
   }
 
-  Future<http.Response?> _authenticatedDelete(String path) async {
-    var accessToken = await StorageService.getTraktAccessToken();
-    if (accessToken == null) return null;
+  Future<http.Response?> _authenticatedDelete(
+    String path, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    var accessToken = await TraktStorage.getTraktAccessToken(
+      canContinue: canContinue,
+    );
+    if (accessToken == null || canContinue?.call() == false) return null;
 
     try {
       var response = await http
@@ -1156,11 +1241,14 @@ class TraktService {
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 401) {
+        if (canContinue?.call() == false) return null;
         final refreshed = await refreshAccessToken();
-        if (!refreshed) return null;
+        if (!refreshed || canContinue?.call() == false) return null;
 
-        accessToken = await StorageService.getTraktAccessToken();
-        if (accessToken == null) return null;
+        accessToken = await TraktStorage.getTraktAccessToken(
+          canContinue: canContinue,
+        );
+        if (accessToken == null || canContinue?.call() == false) return null;
 
         response = await http
             .delete(
@@ -1179,72 +1267,19 @@ class TraktService {
 
   /// Remove a playback entry by its ID.
   /// Returns true if successfully deleted (204 No Content).
-  Future<bool> removePlaybackItem(int playbackId) async {
-    final response = await _authenticatedDelete('/sync/playback/$playbackId');
+  Future<bool> removePlaybackItem(
+    int playbackId, {
+    bool Function()? canContinue,
+  }) async {
+    final response = await _authenticatedDelete(
+      '/sync/playback/$playbackId',
+      canContinue: canContinue,
+    );
     if (response == null || response.statusCode != 204) {
       debugPrint('Trakt: removePlaybackItem failed (${response?.statusCode})');
       return false;
     }
     return true;
-  }
-
-  /// Delete the paused playback sessions for a title — a movie, every episode
-  /// of a show, or just [season]x[episode] when both are given — so marking it
-  /// watched also takes it off Trakt's Continue Watching (a history entry on
-  /// its own leaves the paused session behind). True when nothing matching is
-  /// left; false when the read or any delete failed. Never throws.
-  Future<bool> removePlaybackForContent(
-    String id,
-    String contentType, {
-    int? season,
-    int? episode,
-  }) async {
-    try {
-      final series =
-          contentType == 'series' || contentType == 'show' || season != null;
-      final wanted = await _idsForContent(id, series ? 'series' : 'movie');
-      if (wanted == null || wanted.isEmpty) return false;
-      final items = await fetchPlaybackItemsOrNull(
-        series ? 'episodes' : 'movies',
-      );
-      if (items == null) return false;
-      final playbackIds = <int>{};
-      for (final raw in items) {
-        if (raw is! Map) continue;
-        final content = raw[series ? 'show' : 'movie'];
-        final ids = content is Map ? content['ids'] : null;
-        if (ids is! Map) continue;
-        if (!TrackerIdentityService.matches(
-          wanted,
-          Map<String, dynamic>.from(ids),
-        )) {
-          continue;
-        }
-        if (season != null && episode != null) {
-          final ep = raw['episode'];
-          if (ep is! Map) continue;
-          if ((ep['season'] as num?)?.toInt() != season ||
-              (ep['number'] as num?)?.toInt() != episode) {
-            continue;
-          }
-        }
-        final playbackId = (raw['id'] as num?)?.toInt();
-        if (playbackId != null) playbackIds.add(playbackId);
-      }
-      var ok = true;
-      for (final playbackId in playbackIds) {
-        if (!await removePlaybackItem(playbackId)) ok = false;
-      }
-      if (playbackIds.isNotEmpty && series) {
-        EpisodeTrackerSnapshotRevision.invalidateTitle('trakt', id);
-      }
-      return ok;
-    } catch (error) {
-      debugPrint(
-        'Trakt: removePlaybackForContent error (${error.runtimeType})',
-      );
-      return false;
-    }
   }
 
   /// Fetch a standard Trakt list (watchlist, collection, ratings, recommendations).
@@ -1261,8 +1296,10 @@ class TraktService {
   /// that is genuinely empty — the two are visually different states.
   Future<List<dynamic>?> fetchListOrNull(
     String listType,
-    String contentType,
-  ) async {
+    String contentType, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
     final String path;
     // trending/popular/anticipated are public Trakt endpoints — no OAuth token
     // required — so serve them without auth to survive a missing/expired token.
@@ -1284,7 +1321,8 @@ class TraktService {
 
     final response = isPublic
         ? await _publicGet(path)
-        : await _authenticatedGet(path);
+        : await _authenticatedGet(path, canContinue: canContinue);
+    if (canContinue?.call() == false) return null;
     if (response == null || response.statusCode != 200) {
       debugPrint('Trakt: fetchList failed (${response?.statusCode})');
       return null;
@@ -1301,9 +1339,14 @@ class TraktService {
   /// Fetch the user's custom lists.
   Future<List<Map<String, dynamic>>> fetchCustomLists({
     bool strict = false,
+    bool Function()? canContinue,
   }) async {
+    if (canContinue?.call() == false) return [];
     if (strict) return _fetchHomeListDirectory('/users/me/lists');
-    final response = await _authenticatedGet('/users/me/lists');
+    final response = await _authenticatedGet(
+      '/users/me/lists',
+      canContinue: canContinue,
+    );
     if (response == null || response.statusCode != 200) {
       debugPrint('Trakt: fetchCustomLists failed (${response?.statusCode})');
       return [];
@@ -1319,12 +1362,8 @@ class TraktService {
   }
 
   /// Fetch lists the authenticated user has liked on Trakt.
-  Future<List<Map<String, dynamic>>> fetchLikedLists({
-    bool strict = false,
-  }) async {
-    if (strict) {
-      return _fetchHomeListDirectory('/users/me/likes/lists', liked: true);
-    }
+  Future<List<Map<String, dynamic>>> fetchLikedLists({bool strict = false}) async {
+    if (strict) return _fetchHomeListDirectory('/users/me/likes/lists', liked: true);
     final response = await _authenticatedGet('/users/me/likes/lists?limit=100');
     if (response == null || response.statusCode != 200) {
       debugPrint('Trakt: fetchLikedLists failed (${response?.statusCode})');
@@ -1348,9 +1387,8 @@ class TraktService {
   /// Home needs an authoritative directory before removing retained rows.
   /// Never turn a transport/parse failure or partial page walk into emptiness.
   Future<List<Map<String, dynamic>>> _fetchHomeListDirectory(
-    String path, {
-    bool liked = false,
-  }) async {
+    String path, {bool liked = false}
+  ) async {
     final lists = <Map<String, dynamic>>[];
     var pages = 1;
     for (var page = 1; page <= pages; page++) {
@@ -1503,11 +1541,7 @@ class TraktService {
   }) {
     final base = _likedListBasePath(list);
     if (base == null) return Future.value(null);
-    return _fetchListItemsOrderedOrNull(
-      base,
-      'likedList $base',
-      preview: preview,
-    );
+    return _fetchListItemsOrderedOrNull(base, 'likedList $base', preview: preview);
   }
 
   /// Search Trakt for movies or shows by query.
@@ -1574,7 +1608,7 @@ class TraktService {
         final user = data['user'] as Map<String, dynamic>?;
         final username = user?['username'] as String?;
         if (username != null) {
-          await StorageService.setTraktUsername(username);
+          await TraktStorage.setTraktUsername(username);
         }
         return true;
       }
@@ -1615,10 +1649,14 @@ class TraktService {
       await fetchPlaybackItemsOrNull(contentType) ?? <dynamic>[];
 
   /// Failure-aware, pagination-complete playback read.
-  Future<List<dynamic>?> fetchPlaybackItemsOrNull(String contentType) {
+  Future<List<dynamic>?> fetchPlaybackItemsOrNull(
+    String contentType, {
+    bool Function()? canContinue,
+  }) {
     return _fetchAllPagesOrNull(
       basePath: '/sync/playback/$contentType?extended=full',
       logLabel: 'fetchPlaybackItems $contentType',
+      canContinue: canContinue,
     );
   }
 
@@ -1629,12 +1667,15 @@ class TraktService {
   /// dropped progress rules and returns the exact next episode, avoiding the
   /// old approximation based on only 30 recent history entries plus one
   /// progress request per candidate show.
-  Future<List<Map<String, dynamic>>?> fetchContinueWatchingShowsOrNull() async {
+  Future<List<Map<String, dynamic>>?> fetchContinueWatchingShowsOrNull({
+    bool Function()? canContinue,
+  }) async {
     final raw = await _fetchAllPagesOrNull(
       basePath:
           '/sync/progress/up_next_nitro?intent=continue'
           '&sort_by=last_watched_at&sort_how=desc',
       logLabel: 'fetchContinueWatchingShows',
+      canContinue: canContinue,
     );
     if (raw == null) return null;
     return debugNormalizeContinueWatchingShows(raw);
@@ -1642,21 +1683,28 @@ class TraktService {
 
   /// Resume checkpoints and Up Next are independent: a new show can have
   /// paused playback before any episode reaches watched history.
-  Future<List<dynamic>?> fetchContinueWatchingEpisodeItemsOrNull() async {
+  Future<List<dynamic>?> fetchContinueWatchingEpisodeItemsOrNull({
+    bool Function()? canContinue,
+  }) async {
     return loadTraktContinueWatching(
-      upNext: fetchContinueWatchingShowsOrNull,
-      playback: () => fetchPlaybackItemsOrNull('episodes'),
+      upNext: () => fetchContinueWatchingShowsOrNull(canContinue: canContinue),
+      playback: () =>
+          fetchPlaybackItemsOrNull('episodes', canContinue: canContinue),
       hidden: () => _fetchAllPagesOrNull(
         basePath: '/users/hidden/progress_watched',
         logLabel: 'continue watching hidden',
+        canContinue: canContinue,
       ),
       dropped: () => _fetchAllPagesOrNull(
         basePath: '/users/hidden/dropped',
         logLabel: 'continue watching dropped',
+        canContinue: canContinue,
       ),
       // Show-level activity is sufficient to reject a checkpoint superseded
       // by a subsequent watch. Do not request the entire season breakdown.
-      watched: () => readTraktWatchedShowHistory(_authenticatedGet),
+      watched: () => readTraktWatchedShowHistory(
+        (path) => _authenticatedGet(path, canContinue: canContinue),
+      ),
     );
   }
 
@@ -1782,10 +1830,6 @@ class TraktService {
   Future<Map<String, double>> fetchWatchedMovies() async =>
       await fetchWatchedMoviesOrNull() ?? {};
 
-  /// Full completion evidence, including episodes of partially watched shows.
-  Future<List<dynamic>?> fetchWatchedHistoryRows(String type) =>
-      _fetchAllWatchedPages(type, limit: 250);
-
   /// Failure-aware watched movie bulk read for background badge refreshes.
   Future<Map<String, double>?> fetchWatchedMoviesOrNull() async {
     final list = await _fetchAllWatchedPages('movies', limit: 250);
@@ -1838,11 +1882,16 @@ class TraktService {
   /// Failure-aware completion check for one series detail page. This avoids
   /// downloading the user's entire watched-show history merely to label one
   /// title's Trakt pill.
-  Future<bool?> fetchShowFullyWatchedOrNull(String showId) async {
-    final resolvedShowId = await _showId(showId);
-    if (resolvedShowId == null) return null;
+  Future<bool?> fetchShowFullyWatchedOrNull(
+    String showId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    final resolvedShowId = await _showId(showId, canContinue: canContinue);
+    if (canContinue?.call() == false || resolvedShowId == null) return null;
     final response = await _authenticatedGet(
       '/shows/$resolvedShowId/progress/watched?hidden=false&specials=false&count_specials=false',
+      canContinue: canContinue,
     );
     if (response == null || response.statusCode != 200) return null;
     try {
@@ -1941,7 +1990,8 @@ class TraktService {
 
   final _nativeShowIds = <String, ({DateTime at, String id})>{};
 
-  Future<String?> _showId(String id) async {
+  Future<String?> _showId(String id, {bool Function()? canContinue}) async {
+    if (canContinue?.call() == false) return null;
     if (!MediaIdentity.isNative(id)) return id;
     final scope = ProfileRuntime.scope.value;
     final hit = _nativeShowIds[id];
@@ -1950,13 +2000,16 @@ class TraktService {
       return hit.id;
     }
     final ids = await _idsForContent(id, 'series');
-    if (ids == null) return null;
+    if (ids == null || canContinue?.call() == false) return null;
     if (ids['imdb'] case final String imdb) return imdb;
     final provider = ids.keys.single;
     final response = await _authenticatedGet(
       '/search/$provider/${ids[provider]}?type=show',
+      canContinue: canContinue,
     );
-    if (response?.statusCode != 200 || scope != ProfileRuntime.scope.value) {
+    if (canContinue?.call() == false ||
+        response?.statusCode != 200 ||
+        scope != ProfileRuntime.scope.value) {
       return null;
     }
     try {
@@ -2063,11 +2116,16 @@ class TraktService {
 
   /// Fetch the next episode to watch for a show.
   /// Returns (season, episode) or null if show is complete / not started / error.
-  Future<({int season, int episode})?> fetchNextEpisode(String showId) async {
-    final resolvedShowId = await _showId(showId);
-    if (resolvedShowId == null) return null;
+  Future<({int season, int episode})?> fetchNextEpisode(
+    String showId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    final resolvedShowId = await _showId(showId, canContinue: canContinue);
+    if (resolvedShowId == null || canContinue?.call() == false) return null;
     final response = await _authenticatedGet(
       '/shows/$resolvedShowId/progress/watched',
+      canContinue: canContinue,
     );
     return _parseNextEpisode(response);
   }
@@ -2094,9 +2152,13 @@ class TraktService {
   /// Fetch playback progress for episodes of a specific show.
   /// Returns a map of `"season-episode"` → progress percentage (0-100).
   Future<Map<String, double>> fetchEpisodePlaybackProgress(
-    String showImdbId,
-  ) async {
-    return await fetchEpisodePlaybackProgressOrNull(showImdbId) ??
+    String showImdbId, {
+    bool Function()? canContinue,
+  }) async {
+    return await fetchEpisodePlaybackProgressOrNull(
+          showImdbId,
+          canContinue: canContinue,
+        ) ??
         <String, double>{};
   }
 
@@ -2107,10 +2169,12 @@ class TraktService {
   /// can silently erase checkpoints for shows on later pages. Every page must
   /// load and validate before this returns an authoritative map.
   Future<Map<String, double>?> fetchEpisodePlaybackProgressOrNull(
-    String showImdbId,
-  ) async {
+    String showImdbId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
     final ids = await _idsForContent(showImdbId, 'series');
-    if (ids == null) return null;
+    if (ids == null || canContinue?.call() == false) return null;
     // Trakt caps explicitly paginated endpoints at 250. Request the applied
     // maximum rather than 1000 so a missing pagination header plus 250 items
     // is correctly recognized as potentially truncated, not a short page.
@@ -2119,8 +2183,10 @@ class TraktService {
     var page = 1;
 
     while (true) {
+      if (canContinue?.call() == false) return null;
       final response = await _authenticatedGet(
         '/sync/playback/episodes?page=$page&limit=$limit',
+        canContinue: canContinue,
       );
       if (response == null || response.statusCode != 200) {
         debugPrint(

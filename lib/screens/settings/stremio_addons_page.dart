@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
-import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -11,17 +10,6 @@ import '../../services/stremio_service.dart';
 import '../addons_screen.dart';
 import '../../utils/tv_keys.dart';
 import '../../widgets/tv_text_field.dart';
-import '../../theme/app_motion.dart' show kMenuSheetAnimation;
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
-
-/// Page for managing Stremio addons (with Scaffold wrapper)
-class StremioAddonsPage extends StatefulWidget {
-  const StremioAddonsPage({super.key});
-
-  @override
-  State<StremioAddonsPage> createState() => _StremioAddonsPageState();
-}
 
 /// Content widget for embedding in tabs (without Scaffold)
 class StremioAddonsPageContent extends StatefulWidget {
@@ -168,7 +156,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
     });
 
     try {
-      final result = await FilePick.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -185,7 +173,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
       if (file.bytes != null) {
         bytes = file.bytes!;
       } else if (file.path != null) {
-        bytes = await file.readAsBytes();
+        bytes = await file.xFile.readAsBytes();
       } else {
         throw Exception('Could not read the selected file.');
       }
@@ -304,7 +292,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     'shared with other profiles. Deleting all addons will '
                     'also remove those addons from every shared profile.'
               : 'This will remove all $count installed Stremio '
-                    'addon${count == 1 ? '' : 's'} from Nextup.',
+                    'addon${count == 1 ? '' : 's'} from Debrify.',
         ),
         actions: [
           TextButton(
@@ -644,37 +632,30 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
 
   Widget _buildHeroCard() {
     final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(
-              app,
-              raised: true,
-              radius: BorderRadius.circular(20),
-            )
-          : BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.06),
-                  Colors.white.withValues(alpha: 0.02),
-                ],
-              ),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.08),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFED1C24).withValues(alpha: 0.08),
-                  blurRadius: 32,
-                  spreadRadius: -8,
-                ),
-              ],
-            ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.06),
+            Colors.white.withValues(alpha: 0.02),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.08),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFED1C24).withValues(alpha: 0.08),
+            blurRadius: 32,
+            spreadRadius: -8,
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -719,7 +700,10 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     const SizedBox(height: 2),
                     Text(
                       'Paste a manifest URL to install',
-                      style: TextStyle(color: app.settings.dim, fontSize: 12.5),
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.55),
+                        fontSize: 12.5,
+                      ),
                     ),
                   ],
                 ),
@@ -760,20 +744,14 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
   }
 
   Widget _buildUrlField() {
-    final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 150),
       decoration: BoxDecoration(
-        color: frosted
-            ? GlassChrome.field(app)
-            : Colors.black.withValues(alpha: _urlFieldFocused ? 0.45 : 0.3),
+        color: Colors.black.withValues(alpha: _urlFieldFocused ? 0.45 : 0.3),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _urlFieldFocused
               ? const Color(0xFFED1C24).withValues(alpha: 0.9)
-              : frosted
-              ? GlassChrome.edge(app)
               : Colors.white.withValues(alpha: 0.1),
           width: _urlFieldFocused ? 2 : 1,
         ),
@@ -793,14 +771,17 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
           hintText: 'https://addon.example.com/manifest.json',
-          hintStyle: TextStyle(color: app.settings.dim, fontSize: 13.5),
+          hintStyle: TextStyle(
+            color: Colors.white.withValues(alpha: 0.35),
+            fontSize: 13.5,
+          ),
           border: InputBorder.none,
           focusedBorder: InputBorder.none,
           enabledBorder: InputBorder.none,
           prefixIcon: Icon(
             Icons.link_rounded,
             size: 18,
-            color: app.settings.dim,
+            color: Colors.white.withValues(alpha: 0.5),
           ),
           prefixIconConstraints: const BoxConstraints(
             minWidth: 38,
@@ -875,27 +856,24 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
 
   Widget _buildImportActionsCard() {
     final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: GlassChrome.enabled(app)
-          ? GlassChrome.decoration(app, radius: BorderRadius.circular(18))
-          : BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.04),
-                  Colors.white.withValues(alpha: 0.015),
-                ],
-              ),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.06),
-                width: 1,
-              ),
-            ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: 0.04),
+            Colors.white.withValues(alpha: 0.015),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.06),
+          width: 1,
+        ),
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final compact = constraints.maxWidth < 560;
@@ -941,7 +919,7 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
                     Text(
                       'Bulk-import from a Stremio JSON export, or clear all installed addons.',
                       style: TextStyle(
-                        color: app.settings.dim,
+                        color: Colors.white.withValues(alpha: 0.55),
                         fontSize: 12,
                         height: 1.35,
                       ),
@@ -1299,614 +1277,6 @@ class _StremioAddonsPageContentState extends State<StremioAddonsPageContent> {
   }
 }
 
-class _StremioAddonsPageState extends State<StremioAddonsPage> {
-  final StremioService _stremioService = StremioService.instance;
-  final TextEditingController _urlController = TextEditingController();
-  final FocusNode _urlFieldFocusNode = FocusNode(debugLabel: 'url-field');
-  final FocusNode _addButtonFocusNode = FocusNode(debugLabel: 'add-button');
-
-  bool _isLoading = true;
-  bool _isAdding = false;
-  bool _isUpdatingAll = false;
-  String? _error;
-  List<StremioAddon> _addons = [];
-
-  // Focus nodes for addon tiles
-  final Map<String, FocusNode> _addonFocusNodes = {};
-
-  // Track focus state for URL field
-  bool _urlFieldFocused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _urlFieldFocusNode.addListener(_onUrlFieldFocusChanged);
-    _stremioService.addAddonsChangedListener(_onAddonsChanged);
-    _loadAddons();
-  }
-
-  void _onAddonsChanged() {
-    // Reload addons when they change (e.g., added via deep link)
-    if (mounted) {
-      _loadAddons();
-    }
-  }
-
-  void _onUrlFieldFocusChanged() {
-    setState(() {
-      _urlFieldFocused = _urlFieldFocusNode.hasFocus;
-    });
-  }
-
-  @override
-  void dispose() {
-    _stremioService.removeAddonsChangedListener(_onAddonsChanged);
-    _urlController.dispose();
-    _urlFieldFocusNode.removeListener(_onUrlFieldFocusChanged);
-    _urlFieldFocusNode.dispose();
-    _addButtonFocusNode.dispose();
-    for (final node in _addonFocusNodes.values) {
-      node.dispose();
-    }
-    super.dispose();
-  }
-
-  Future<void> _loadAddons() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      _addons = await _stremioService.getAddons(forSettings: true);
-
-      // Clean up old focus nodes
-      for (final node in _addonFocusNodes.values) {
-        node.dispose();
-      }
-      _addonFocusNodes.clear();
-
-      // Create focus nodes for each addon
-      for (final addon in _addons) {
-        _addonFocusNodes[addon.storageKey] = FocusNode(
-          debugLabel: 'addon-${addon.id}',
-        );
-      }
-
-      setState(() {
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _error = e.toString();
-      });
-    }
-  }
-
-  Future<void> _addAddon() async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an addon URL')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isAdding = true;
-    });
-
-    try {
-      final addon = await _stremioService.addAddon(url);
-
-      _urlController.clear();
-      // Note: _loadAddons() is called automatically via the addons changed listener
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${addon.name} added successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        // Clean up error message - remove "Exception: " prefix
-        final errorMessage = e.toString().replaceFirst('Exception: ', '');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isAdding = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _toggleAddon(StremioAddon addon) async {
-    await _stremioService.setAddonEnabled(addon.storageKey, !addon.enabled);
-    // Note: _loadAddons() is called automatically via the addons changed listener
-  }
-
-  Future<void> _updateAddon(StremioAddon addon) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final refreshed = await _stremioService.refreshAddon(addon.manifestUrl);
-    if (!mounted) return;
-    if (refreshed == null) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to update ${addon.displayName}'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } else if (refreshed.version != addon.version) {
-      final from = addon.version;
-      final to = refreshed.version;
-      final detail = (from != null && to != null) ? ' (v$from → v$to)' : '';
-      messenger.showSnackBar(
-        SnackBar(content: Text('${addon.displayName} updated$detail')),
-      );
-    } else {
-      messenger.showSnackBar(
-        SnackBar(content: Text('${addon.displayName} is already up to date')),
-      );
-    }
-  }
-
-  Future<void> _updateAllAddons() async {
-    if (_addons.isEmpty || _isUpdatingAll) return;
-
-    setState(() => _isUpdatingAll = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final result = await _stremioService.refreshAllAddons();
-      if (!mounted) return;
-      final parts = <String>[];
-      if (result.updated > 0) parts.add('${result.updated} updated');
-      if (result.unchanged > 0) parts.add('${result.unchanged} up to date');
-      if (result.failed > 0) parts.add('${result.failed} failed');
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            parts.isEmpty ? 'No addons to update' : parts.join('  ·  '),
-          ),
-          backgroundColor: result.failed > 0 ? Colors.orange.shade800 : null,
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Update failed: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isUpdatingAll = false);
-    }
-  }
-
-  Future<void> _deleteAddon(StremioAddon addon) async {
-    final int borrowerCount;
-    try {
-      borrowerCount = await _stremioService.addonBorrowerCount(
-        addon.storageKey,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to check addon sharing: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    final isShared = borrowerCount > 0;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove Addon'),
-        content: Text(
-          isShared
-              ? '"${addon.displayName}" is shared with $borrowerCount other '
-                    'profile${borrowerCount == 1 ? '' : 's'}. Removing it '
-                    'will also remove it from those shared profiles.'
-              : 'Remove "${addon.displayName}" from your addons?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      await _stremioService.removeAddon(
-        addon.storageKey,
-        revokeSharedProfiles: isShared,
-      );
-      // Note: _loadAddons() is called automatically via the addons changed listener
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('${addon.displayName} removed')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to remove addon: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _showAddonDetails(StremioAddon addon) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(addon.displayName),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (addon.description != null) ...[
-                Text(addon.description!),
-                const SizedBox(height: 16),
-              ],
-              _DetailRow(label: 'ID', value: addon.id),
-              if (addon.version != null)
-                _DetailRow(label: 'Version', value: addon.version!),
-              _DetailRow(
-                label: 'Types',
-                value: addon.types.isEmpty ? 'None' : addon.types.join(', '),
-              ),
-              _DetailRow(
-                label: 'Resources',
-                value: addon.resources.isEmpty
-                    ? 'None'
-                    : addon.resources.join(', '),
-              ),
-              if (addon.idPrefixes != null && addon.idPrefixes!.isNotEmpty)
-                _DetailRow(
-                  label: 'ID Prefixes',
-                  value: addon.idPrefixes!.join(', '),
-                ),
-              _DetailRow(label: 'Added', value: _formatDate(addon.addedAt)),
-              if (addon.lastChecked != null)
-                _DetailRow(
-                  label: 'Last Checked',
-                  value: _formatDate(addon.lastChecked!),
-                ),
-              const SizedBox(height: 16),
-              const Text(
-                'Manifest URL:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 4),
-              if (addon.canRevealManifestUrl)
-                SelectableText(
-                  addon.manifestUrl,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                )
-              else
-                Text(
-                  'Hidden for this shared profile',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          if (addon.canRevealManifestUrl)
-            TextButton(
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: addon.manifestUrl));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('URL copied to clipboard')),
-                );
-              },
-              child: const Text('Copy URL'),
-            ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stremio Addons'),
-        actions: [
-          IconButton(
-            onPressed: _addons.isEmpty || _isUpdatingAll
-                ? null
-                : _updateAllAddons,
-            icon: _isUpdatingAll
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.system_update_alt),
-            tooltip: 'Update all addons',
-          ),
-          IconButton(
-            onPressed: _isLoading ? null : _loadAddons,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Reload',
-          ),
-        ],
-      ),
-      body: FocusTraversalGroup(
-        policy: OrderedTraversalPolicy(),
-        child: _buildBody(),
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    return Column(
-      children: [
-        // Add addon section
-        _buildAddSection(),
-        const Divider(height: 1),
-        // Addons list
-        Expanded(child: _buildAddonsList()),
-      ],
-    );
-  }
-
-  Widget _buildAddSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add Stremio Addon',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Paste the addon manifest URL. Configure the addon on its website first, then paste the personalized URL here.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildUrlTextField()),
-              const SizedBox(width: 12),
-              FocusTraversalOrder(
-                order: const NumericFocusOrder(1),
-                child: FilledButton.icon(
-                  focusNode: _addButtonFocusNode,
-                  onPressed: _isAdding ? null : _addAddon,
-                  icon: _isAdding
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.add),
-                  label: const Text('Add'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUrlTextField() {
-    return FocusTraversalOrder(
-      order: const NumericFocusOrder(0),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: _urlFieldFocused
-              ? Border.all(color: const Color(0xFFED1C24), width: 2)
-              : null,
-        ),
-        child: TvTextField(
-          controller: _urlController,
-          focusNode: _urlFieldFocusNode,
-          decoration: const InputDecoration(
-            hintText: 'https://addon.example.com/manifest.json',
-            border: OutlineInputBorder(),
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          ),
-          keyboardType: TextInputType.url,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _addAddon(),
-          enabled: !_isAdding,
-          onDownArrow: () => _addButtonFocusNode.requestFocus(),
-          onUpArrow: () => FocusScope.of(context).previousFocus(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddonsList() {
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading addons...'),
-          ],
-        ),
-      );
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Failed to load addons',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _loadAddons,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    if (_addons.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(48),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.extension_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No addons configured',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Add a Stremio addon URL above to get started',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _addons.length + 1, // +1 for header
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Row(
-              children: [
-                Icon(Icons.extension, size: 20, color: const Color(0xFFED1C24)),
-                const SizedBox(width: 8),
-                Text(
-                  'Your Addons',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFED1C24).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${_addons.length}',
-                    style: TextStyle(
-                      color: const Color(0xFFED1C24),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-
-        final addon = _addons[index - 1];
-        return _AddonTile(
-          addon: addon,
-          index: index - 1,
-          focusNode: _addonFocusNodes[addon.storageKey]!,
-          onTap: () => _showAddonDetails(addon),
-          onToggle: () => _toggleAddon(addon),
-          onUpdate: () => _updateAddon(addon),
-          onDelete: () => _deleteAddon(addon),
-        );
-      },
-    );
-  }
-}
-
 class _ImportResultRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -2019,7 +1389,6 @@ class _AddonTileState extends State<_AddonTile> {
 
   void _showOptionsSheet() {
     showModalBottomSheet(
-      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => _AddonOptionsSheet(
@@ -2047,7 +1416,6 @@ class _AddonTileState extends State<_AddonTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
     final enabled = widget.addon.enabled;
 
     return FocusTraversalOrder(
@@ -2065,54 +1433,39 @@ class _AddonTileState extends State<_AddonTile> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOut,
-          transform: Matrix4.identity()
-            ..scaleByDouble(
-              _isFocused ? 1.015 : 1.0,
-              _isFocused ? 1.015 : 1.0,
-              _isFocused ? 1.015 : 1.0,
-              1.0,
-            ),
+          transform: Matrix4.identity()..scale(_isFocused ? 1.015 : 1.0),
           transformAlignment: Alignment.center,
-          decoration: GlassChrome.enabled(app)
-              ? GlassChrome.decoration(
-                  app,
-                  raised: _isFocused,
-                  active: _isFocused,
-                  radius: BorderRadius.circular(16),
-                )
-              : BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: _isFocused
-                        ? [
-                            const Color(0xFFED1C24).withValues(alpha: 0.18),
-                            const Color(0xFFED1C24).withValues(alpha: 0.06),
-                          ]
-                        : [
-                            Colors.white.withValues(alpha: 0.05),
-                            Colors.white.withValues(alpha: 0.02),
-                          ],
-                  ),
-                  border: Border.all(
-                    color: _isFocused
-                        ? const Color(0xFFED1C24).withValues(alpha: 0.9)
-                        : Colors.white.withValues(alpha: 0.07),
-                    width: _isFocused ? 2 : 1,
-                  ),
-                  boxShadow: _isFocused
-                      ? [
-                          BoxShadow(
-                            color: const Color(
-                              0xFFED1C24,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 22,
-                            spreadRadius: -4,
-                          ),
-                        ]
-                      : null,
-                ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: _isFocused
+                  ? [
+                      const Color(0xFFED1C24).withValues(alpha: 0.18),
+                      const Color(0xFFED1C24).withValues(alpha: 0.06),
+                    ]
+                  : [
+                      Colors.white.withValues(alpha: 0.05),
+                      Colors.white.withValues(alpha: 0.02),
+                    ],
+            ),
+            border: Border.all(
+              color: _isFocused
+                  ? const Color(0xFFED1C24).withValues(alpha: 0.9)
+                  : Colors.white.withValues(alpha: 0.07),
+              width: _isFocused ? 2 : 1,
+            ),
+            boxShadow: _isFocused
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFED1C24).withValues(alpha: 0.3),
+                      blurRadius: 22,
+                      spreadRadius: -4,
+                    ),
+                  ]
+                : null,
+          ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -2173,7 +1526,9 @@ class _AddonTileState extends State<_AddonTile> {
                             style: theme.textTheme.titleSmall?.copyWith(
                               fontWeight: FontWeight.w700,
                               letterSpacing: -0.1,
-                              color: enabled ? app.core.tx : app.settings.dim,
+                              color: enabled
+                                  ? Colors.white
+                                  : Colors.white.withValues(alpha: 0.6),
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -2183,9 +1538,7 @@ class _AddonTileState extends State<_AddonTile> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 12,
-                              color: GlassChrome.enabled(app)
-                                  ? app.settings.dim
-                                  : Colors.white.withValues(alpha: 0.5),
+                              color: Colors.white.withValues(alpha: 0.5),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -2198,9 +1551,7 @@ class _AddonTileState extends State<_AddonTile> {
                     const SizedBox(width: 6),
                     Icon(
                       Icons.chevron_right_rounded,
-                      color: GlassChrome.enabled(app)
-                          ? app.settings.dim
-                          : Colors.white.withValues(alpha: 0.35),
+                      color: Colors.white.withValues(alpha: 0.35),
                       size: 20,
                     ),
                   ],
@@ -2314,106 +1665,98 @@ class _AddonOptionsSheetState extends State<_AddonOptionsSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
 
     return FocusTraversalGroup(
       policy: OrderedTraversalPolicy(),
       child: Container(
         decoration: BoxDecoration(
-          color: GlassChrome.enabled(app)
-              ? GlassChrome.fill(app, raised: true)
-              : theme.colorScheme.surface,
+          color: theme.colorScheme.surface,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-          border: GlassChrome.enabled(app)
-              ? Border(top: BorderSide(color: GlassChrome.edge(app)))
-              : null,
         ),
         padding: const EdgeInsets.symmetric(vertical: 16),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: widget.addon.enabled
-                          ? const Color(0xFFED1C24).withValues(alpha: 0.2)
-                          : theme.colorScheme.onSurface.withValues(alpha: 0.1),
-                      child: Icon(
-                        Icons.extension,
-                        color: widget.addon.enabled
-                            ? const Color(0xFFED1C24)
-                            : theme.colorScheme.onSurfaceVariant,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: widget.addon.enabled
+                        ? const Color(0xFFED1C24).withValues(alpha: 0.2)
+                        : theme.colorScheme.onSurface.withValues(alpha: 0.1),
+                    child: Icon(
+                      Icons.extension,
+                      color: widget.addon.enabled
+                          ? const Color(0xFFED1C24)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      widget.addon.displayName,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        widget.addon.displayName,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Divider(
-                height: 1,
-                color: theme.dividerColor.withValues(alpha: 0.3),
-              ),
-              const SizedBox(height: 8),
-              // Options
-              FocusTraversalOrder(
-                order: const NumericFocusOrder(0),
-                child: _OptionTile(
-                  focusNode: _toggleFocusNode,
-                  icon: widget.addon.enabled
-                      ? Icons.toggle_off_outlined
-                      : Icons.toggle_on_outlined,
-                  label: widget.addon.enabled ? 'Disable' : 'Enable',
-                  onTap: widget.onToggle,
-                ),
-              ),
-              if (widget.addon.canManage &&
-                  !widget.addon.connectionResourceSecretPending) ...[
-                FocusTraversalOrder(
-                  order: const NumericFocusOrder(1),
-                  child: _OptionTile(
-                    focusNode: _updateFocusNode,
-                    icon: Icons.refresh,
-                    label: 'Update',
-                    onTap: widget.onUpdate,
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Divider(
+              height: 1,
+              color: theme.dividerColor.withValues(alpha: 0.3),
+            ),
+            const SizedBox(height: 8),
+            // Options
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(0),
+              child: _OptionTile(
+                focusNode: _toggleFocusNode,
+                icon: widget.addon.enabled
+                    ? Icons.toggle_off_outlined
+                    : Icons.toggle_on_outlined,
+                label: widget.addon.enabled ? 'Disable' : 'Enable',
+                onTap: widget.onToggle,
+              ),
+            ),
+            if (widget.addon.canManage &&
+                !widget.addon.connectionResourceSecretPending) ...[
               FocusTraversalOrder(
-                order: const NumericFocusOrder(2),
+                order: const NumericFocusOrder(1),
                 child: _OptionTile(
-                  focusNode: _detailsFocusNode,
-                  icon: Icons.info_outline,
-                  label: 'View Details',
-                  onTap: widget.onDetails,
+                  focusNode: _updateFocusNode,
+                  icon: Icons.refresh,
+                  label: 'Update',
+                  onTap: widget.onUpdate,
                 ),
               ),
-              if (widget.addon.canManage)
-                FocusTraversalOrder(
-                  order: const NumericFocusOrder(3),
-                  child: _OptionTile(
-                    focusNode: _deleteFocusNode,
-                    icon: Icons.delete_outline,
-                    label: 'Remove',
-                    isDestructive: true,
-                    onTap: widget.onDelete,
-                  ),
-                ),
-              const SizedBox(height: 8),
             ],
-          ),
+            FocusTraversalOrder(
+              order: const NumericFocusOrder(2),
+              child: _OptionTile(
+                focusNode: _detailsFocusNode,
+                icon: Icons.info_outline,
+                label: 'View Details',
+                onTap: widget.onDetails,
+              ),
+            ),
+            if (widget.addon.canManage)
+              FocusTraversalOrder(
+                order: const NumericFocusOrder(3),
+                child: _OptionTile(
+                  focusNode: _deleteFocusNode,
+                  icon: Icons.delete_outline,
+                  label: 'Remove',
+                  isDestructive: true,
+                  onTap: widget.onDelete,
+                ),
+              ),
+            const SizedBox(height: 8),
+          ],
         ),
       ),
     );
@@ -2467,7 +1810,6 @@ class _OptionTileState extends State<_OptionTile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
     final color = widget.isDestructive
         ? Colors.red.shade400
         : theme.colorScheme.onSurface;
@@ -2486,32 +1828,20 @@ class _OptionTileState extends State<_OptionTile> {
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: GlassChrome.enabled(app)
-            ? GlassChrome.decoration(
-                app,
-                raised: _isFocused,
-                active: _isFocused,
-                radius: BorderRadius.circular(8),
-              )
-            : BoxDecoration(
-                color: _isFocused
-                    ? theme.colorScheme.onSurface.withValues(alpha: 0.1)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(8),
-                border: _isFocused
-                    ? Border.all(color: const Color(0xFFED1C24), width: 2)
-                    : null,
-              ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: ListTile(
-            leading: Icon(widget.icon, color: color),
-            title: Text(widget.label, style: TextStyle(color: color)),
-            onTap: widget.onTap,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
+        decoration: BoxDecoration(
+          color: _isFocused
+              ? theme.colorScheme.onSurface.withValues(alpha: 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: _isFocused
+              ? Border.all(color: const Color(0xFFED1C24), width: 2)
+              : null,
+        ),
+        child: ListTile(
+          leading: Icon(widget.icon, color: color),
+          title: Text(widget.label, style: TextStyle(color: color)),
+          onTap: widget.onTap,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
     );

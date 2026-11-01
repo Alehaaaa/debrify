@@ -396,10 +396,10 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // The identity's Download circle opens the movie source list (the
-    // band's cards go to the BINDING manager).
-    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.download_rounded));
+    // The identity's layers circle (Showcase shipped without ANY route to
+    // the movie source list — the band's cards go to the BINDING manager).
+    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.layers_rounded));
     expect(browsed, 1);
 
     // And the band's labelled entry beside "Pin source".
@@ -424,9 +424,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
 
-    // Download opens the season-pack search for a series.
-    expect(find.byIcon(Icons.download_rounded), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.download_rounded));
+    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.layers_rounded));
     expect(browsed, 1);
 
     await tester.drag(find.byType(DetailShowcase), const Offset(0, -900));
@@ -454,17 +453,16 @@ void main() {
     expect(find.text('⌕  Season packs', skipOffstage: false), findsNothing);
   });
 
-  testWidgets('the compact identity has an inline MORE expander',
+  testWidgets('the compact identity is centered with a MORE expander',
       (tester) async {
     _surface(tester, _phone);
     await tester.pumpWidget(_host(_model(), dpad: false, size: _phone));
     await tester.pumpAndSettle();
 
-    final more = find.textContaining('MORE', findRichText: true);
-    expect(more, findsOneWidget);
-    await tester.tap(more);
+    expect(find.text('MORE'), findsOneWidget);
+    await tester.tap(find.text('MORE'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('LESS', findRichText: true), findsOneWidget,
+    expect(find.text('LESS'), findsOneWidget,
         reason: 'the synopsis expands in place and can be re-collapsed');
   });
 

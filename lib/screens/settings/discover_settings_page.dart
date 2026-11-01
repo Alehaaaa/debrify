@@ -1,12 +1,13 @@
+import 'package:debrify/services/storage/discover_storage.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../models/metadata_preferences.dart';
+import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/metadata_preferences_service.dart';
-import '../../services/storage_service.dart';
 import '../../services/stremio_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
@@ -29,7 +30,7 @@ class DiscoverSettingsPage extends StatefulWidget {
 
 class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
   bool _loading = true;
-  String _defaultSource = StorageService.discoverDefaultRememberLast;
+  String _defaultSource = DiscoverStorage.discoverDefaultRememberLast;
   bool _showTypeTags = true;
   bool _showRatings = true;
   bool _showTitles = true;
@@ -41,6 +42,7 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('discover_settings');
     _load();
   }
 
@@ -52,13 +54,13 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
 
   Future<void> _load() async {
     final values = await Future.wait([
-      StorageService.getDiscoverDefaultSource(),
+      DiscoverStorage.getDiscoverDefaultSource(),
       DiscoverPrefs.warmUp(),
     ]);
     final defaultSource = values[0] as String;
     final options = <SettingsSelectOption>[
       const SettingsSelectOption(
-        StorageService.discoverDefaultRememberLast,
+        DiscoverStorage.discoverDefaultRememberLast,
         'Remember what was opened last time',
         'Reopen the source you last used in Discover',
       ),
@@ -174,7 +176,7 @@ class _DiscoverSettingsPageState extends State<DiscoverSettingsPage> {
   Future<void> _select(String value) async {
     if (value == _defaultSource) return;
     setState(() => _defaultSource = value);
-    await StorageService.setDiscoverDefaultSource(value);
+    await DiscoverStorage.setDiscoverDefaultSource(value);
   }
 
   Future<void> _setShowTypeTags(bool value) async {

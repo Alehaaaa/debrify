@@ -1,6 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:debrify/services/storage/alldebrid_storage.dart';
+import 'package:debrify/services/storage/pikpak_storage.dart';
+import 'package:debrify/services/storage/premiumize_storage.dart';
+import 'package:debrify/services/storage/provider_credential_storage.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/torbox_storage.dart';
 import '../webdav_sync/webdav_foreground_sync.dart';
 
 import 'package:flutter/foundation.dart';
@@ -11,6 +17,7 @@ import '../../screens/settings/profile_backup_flows.dart';
 import '../../screens/webdav_sync/webdav_sync_login_screen.dart';
 import '../../services/account_service.dart';
 import '../../services/alldebrid_account_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/engine/config_loader.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../services/engine/local_engine_storage.dart';
@@ -23,7 +30,6 @@ import '../../services/profiles/profile_restore_coordinator.dart';
 import '../../services/remote_control/remote_command_router.dart';
 import '../../services/remote_control/remote_constants.dart';
 import '../../services/remote_control/remote_control_state.dart';
-import '../../services/storage_service.dart';
 import '../../services/torbox_account_service.dart';
 import '../../services/webdav_sync/webdav_sync_connect_controller.dart';
 import '../../services/webdav_sync/webdav_sync_models.dart';
@@ -44,6 +50,7 @@ import 'steps/services_step.dart';
 import 'steps/trackers_step.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import 'tv_keyboard_slot.dart';
+import 'package:debrify/services/storage/remote_control_storage.dart';
 
 typedef OnboardingValidationOverride =
     Future<bool> Function(
@@ -106,9 +113,9 @@ class InitialSetupFlow extends StatefulWidget {
               reverseTransitionDuration: isTelevision
                   ? Duration.zero
                   : const Duration(milliseconds: 180),
-              pageBuilder: (_, _, _) =>
+              pageBuilder: (_, __, ___) =>
                   OnboardingTheme.scope(const InitialSetupFlow()),
-              transitionsBuilder: (_, animation, _, child) => isTelevision
+              transitionsBuilder: (_, animation, __, child) => isTelevision
                   ? child
                   : FadeTransition(opacity: animation, child: child),
             ),
@@ -535,6 +542,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     final title = integrationMeta[type]!.title;
     if (!_connectedServices.contains(title)) _connectedServices.add(title);
     _hasConfigured = true;
+    AnalyticsService.integrationConnected(type.name, {'surface': 'onboarding'});
     MainPageBridge.notifyIntegrationChanged();
 
     if (type == IntegrationType.pikpak) await _offerPikPakRestriction();
@@ -565,20 +573,20 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
 
   Future<bool> _loginPikPak(String email, String password) async {
     final success = await PikPakApiService.instance.login(email, password);
-    if (success) await StorageService.setPikPakEnabled(true);
+    if (success) await PikpakStorage.setPikPakEnabled(true);
     return success;
   }
 
   Future<void> _hideProviderFromNavigation(IntegrationType type) async {
     switch (type) {
       case IntegrationType.realDebrid:
-        await StorageService.setRealDebridHiddenFromNav(true);
+        await RealDebridStorage.setRealDebridHiddenFromNav(true);
       case IntegrationType.torbox:
-        await StorageService.setTorboxHiddenFromNav(true);
+        await TorboxStorage.setTorboxHiddenFromNav(true);
       case IntegrationType.premiumize:
-        await StorageService.setPremiumizeHiddenFromNav(true);
+        await PremiumizeStorage.setPremiumizeHiddenFromNav(true);
       case IntegrationType.allDebrid:
-        await StorageService.setAllDebridHiddenFromNav(true);
+        await AllDebridStorage.setAllDebridHiddenFromNav(true);
       case IntegrationType.pikpak:
         return;
     }
@@ -591,7 +599,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
       builder: (context) => AlertDialog(
         title: const Text('Restrict PikPak to one folder?'),
         content: const Text(
-          'For extra privacy, Nextup can access one chosen folder instead of your whole PikPak drive. You can skip this now.',
+          'For extra privacy, Debrify can access one chosen folder instead of your whole PikPak drive. You can skip this now.',
         ),
         actions: [
           TextButton(
@@ -611,7 +619,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
       builder: (_) => const PikPakFolderPickerDialog(),
     );
     if (result == null) return;
-    await StorageService.setPikPakRestrictedFolder(
+    await PikpakStorage.setPikPakRestrictedFolder(
       result['folderId'] as String?,
       result['folderName'] as String?,
     );
@@ -836,9 +844,9 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     _transition(OnboardStep.importing);
     _attachImportListeners();
     try {
-      var name = await StorageService.getRemoteTvDeviceName();
+      var name = await RemoteControlStorage.getRemoteTvDeviceName();
       name ??= await PlatformUtil.getDeviceName();
-      name ??= _isTelevision ? 'Nextup TV' : 'This device';
+      name ??= _isTelevision ? 'Debrify TV' : 'This device';
       if (!mounted ||
           attempt != _importAttempt ||
           _step != OnboardStep.importing) {
@@ -967,7 +975,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     MainPageBridge.queuePostSetupSnackBar(
       'Setup skipped. Connect services any time in Settings › Services.',
     );
-    await StorageService.setInitialSetupComplete(true);
+    await ProviderCredentialStorage.setInitialSetupComplete(true);
     if (!mounted) return;
     Navigator.of(context).pop(false);
   }
@@ -975,7 +983,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
   Future<void> _finish({Future<void> Function()? afterSetupComplete}) async {
     if (_finishing) return;
     _finishing = true;
-    await StorageService.setInitialSetupComplete(true);
+    await ProviderCredentialStorage.setInitialSetupComplete(true);
     await afterSetupComplete?.call();
     if (!mounted) return;
     Navigator.of(context).pop(_hasConfigured);
@@ -1025,7 +1033,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     switch (_step) {
       case OnboardStep.mode:
         eyebrow = 'Welcome';
-        title = "Let's set\nNextup up.";
+        title = "Let's set\nDebrify up.";
         subtitle =
             'About two minutes. Every step can be skipped, and everything lives in Settings afterwards.';
         content = _connectingWebDav
@@ -1054,7 +1062,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
         eyebrow = 'Step 1 of 4';
         title = 'Which services\ndo you have?';
         subtitle =
-            'Pick any you already pay for. Nextup uses them to turn a link into a stream.';
+            'Pick any you already pay for. Debrify uses them to turn a link into a stream.';
         final step = ServicesStep(
           layout: layout,
           focusController: _focus,
@@ -1106,7 +1114,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
         eyebrow = 'Step 2 of 4';
         title = 'Where should\nwe search?';
         subtitle =
-            'These are the sources Nextup searches. They all start on; turn off any you do not want.';
+            'These are the sources Debrify searches. They all start on; turn off any you do not want.';
         final step = EnginesStep(
           layout: layout,
           focusController: _focus,

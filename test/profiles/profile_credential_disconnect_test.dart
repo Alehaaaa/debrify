@@ -1,3 +1,4 @@
+import 'package:debrify/services/profiles/profile_session_memory.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -12,7 +13,8 @@ import 'package:debrify/services/profiles/profile_credential_facade.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -91,6 +93,33 @@ void main() {
   }
 
   test(
+    'guarded provider reads use the live owner outside a foreign captured zone',
+    () async {
+      await RealDebridStorage.saveApiKey('origin-fixture');
+      final owner = ProfileSessionMemory.captureOwner();
+      final foreign = ProfileScope(
+        profileId: memberId,
+        dataGeneration: 1,
+        sessionEpoch: 2,
+      );
+      final value = await ProfileRuntime.withCapturedScope(
+        foreign,
+        () => RealDebridStorage.getApiKey(
+          canContinue: () => owner == ProfileSessionMemory.captureOwner(),
+        ),
+      );
+      expect(value, 'origin-fixture');
+      expect(
+        await ProfileRuntime.withCapturedScope(
+          foreign,
+          () => RealDebridStorage.getApiKey(),
+        ),
+        isNull,
+      );
+    },
+  );
+
+  test(
     'borrower logout detaches locally and never requests remote revoke',
     () async {
       final resource = await createTrakt();
@@ -110,9 +139,50 @@ void main() {
         resourceId: resource.id,
       );
 
-      expect(await StorageService.clearTraktAuth(), isFalse);
+      expect(await TraktStorage.clearTraktAuth(), isFalse);
       expect(await registry.getGrant(memberId, resource.id), isNull);
       expect(await registry.getResource(resource.id), isNotNull);
+    },
+  );
+
+  test(
+    'guarded provider read retains remote-transfer permission checks',
+    () async {
+      await RealDebridStorage.saveApiKey('shared-fixture');
+      final id = (await registry.getBoundResourceId(
+        adminId,
+        'provider.realDebrid',
+      ))!;
+      await resources.grant(
+        actor: await ProfileAuthorizationContext.capture(registry),
+        targetProfileId: memberId,
+        resourceId: id,
+        permissions: const {ResourcePermission.use},
+      );
+      await registry.bindResource(
+        profileId: memberId,
+        slot: 'provider.realDebrid',
+        resourceId: id,
+      );
+      await registry.setActiveProfile(memberId);
+      ProfileRuntime.publish(
+        ProfileScope(profileId: memberId, dataGeneration: 1, sessionEpoch: 2),
+      );
+      expect(
+        await RealDebridStorage.getApiKey(canContinue: () => true),
+        'shared-fixture',
+      );
+      expect(
+        await RealDebridStorage.getApiKey(
+          forRemoteTransfer: true,
+          canContinue: () => true,
+        ),
+        isNull,
+      );
+      expect(
+        await RealDebridStorage.getApiKey(forRemoteTransfer: true),
+        isNull,
+      );
     },
   );
 
@@ -134,9 +204,9 @@ void main() {
       ProfileScope(profileId: memberId, dataGeneration: 1, sessionEpoch: 2),
     );
 
-    expect(await StorageService.getTraktAccessToken(), 'access');
+    expect(await TraktStorage.getTraktAccessToken(), 'access');
     expect(
-      await StorageService.getTraktAccessToken(forRemoteTransfer: true),
+      await TraktStorage.getTraktAccessToken(forRemoteTransfer: true),
       isNull,
     );
 
@@ -158,7 +228,7 @@ void main() {
       ProfileScope(profileId: memberId, dataGeneration: 1, sessionEpoch: 4),
     );
     expect(
-      await StorageService.getTraktAccessToken(forRemoteTransfer: true),
+      await TraktStorage.getTraktAccessToken(forRemoteTransfer: true),
       'access',
     );
   });
@@ -210,7 +280,7 @@ void main() {
     );
 
     expect(
-      StorageService.clearTraktAuth,
+      TraktStorage.clearTraktAuth,
       throwsA(isA<ResourceImpactRequiredException>()),
     );
     expect(await registry.getResource(resource.id), isNotNull);
@@ -262,8 +332,8 @@ void main() {
     );
 
     expect((await registry.getResource(resourceId))!.secretPending, isFalse);
-    expect(await StorageService.getApiKey(), 'fresh-key');
-    expect(await StorageService.hasRealDebridCredential(), isTrue);
+    expect(await RealDebridStorage.getApiKey(), 'fresh-key');
+    expect(await RealDebridStorage.hasRealDebridCredential(), isTrue);
   });
 
   test(
@@ -322,7 +392,7 @@ void main() {
       expect(resource, isNotNull);
       expect(resource!.secretPending, isFalse);
       expect(await registry.getGrant(memberId, resourceId), isNotNull);
-      expect(await StorageService.getApiKey(), isNull);
+      expect(await RealDebridStorage.getApiKey(), isNull);
     },
   );
 
@@ -331,7 +401,7 @@ void main() {
     () async {
       final resource = await createTrakt();
 
-      expect(await StorageService.clearTraktAuth(), isTrue);
+      expect(await TraktStorage.clearTraktAuth(), isTrue);
       expect(await registry.getResource(resource.id), isNull);
       expect(
         await registry.getBoundResourceId(adminId, 'tracker.trakt'),

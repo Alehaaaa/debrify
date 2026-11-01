@@ -38,7 +38,7 @@ final class WebDavSyncCredentialsUnavailableException
 final class WebDavSyncLegacyRootException extends WebDavSyncSetupException {
   const WebDavSyncLegacyRootException()
     : super(
-        'This folder was set up by an older version of Nextup. Set up sync '
+        'This folder was set up by an older version of Debrify. Set up sync '
         'again from your main device.',
       );
 }
@@ -667,7 +667,7 @@ final class WebDavSyncSetupService {
         if (opened.document.circleId != binding.circleId) {
           throw const WebDavSyncRootChangedException();
         }
-        return await store.markRootVerified(
+        return store.markRootVerified(
           bindingId: binding.id,
           root: opened.document,
           markerBytes: result.bytes,

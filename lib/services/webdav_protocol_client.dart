@@ -297,8 +297,8 @@ final class WebDavProtocolClient {
     final headers = <String, String>{
       ...authorizationHeaders,
       HttpHeaders.contentTypeHeader: contentType,
-      HttpHeaders.ifNoneMatchHeader: ?ifNoneMatch,
-      HttpHeaders.ifMatchHeader: ?ifMatch,
+      if (ifNoneMatch != null) HttpHeaders.ifNoneMatchHeader: ifNoneMatch,
+      if (ifMatch != null) HttpHeaders.ifMatchHeader: ifMatch,
     };
 
     Future<http.StreamedResponse> send() => _sendFollowingRedirects(

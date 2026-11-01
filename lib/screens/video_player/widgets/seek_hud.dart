@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../models/hud_state.dart';
-import 'frosted_hud.dart';
 
 class SeekHud extends StatelessWidget {
   final SeekHudState hud;
@@ -9,8 +8,12 @@ class SeekHud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final delta = hud.target - hud.base;
-    return FrostedHudCapsule(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -26,8 +29,7 @@ class SeekHud extends StatelessWidget {
             '${format(hud.target)}  (${delta.isNegative ? '-' : '+'}${format(delta)})',
             style: const TextStyle(
               color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontFeatures: [FontFeature.tabularFigures()],
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],

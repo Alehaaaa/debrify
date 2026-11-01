@@ -1,15 +1,14 @@
 import 'dart:async';
+import 'package:debrify/services/storage/pikpak_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
 import '../../services/pikpak_api_service.dart';
+import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/pikpak_folder_picker_dialog.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
-import 'widgets/settings_load_error.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 class PikPakSettingsPage extends StatefulWidget {
   const PikPakSettingsPage({super.key});
@@ -48,8 +47,6 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   bool _isConnected = false;
   bool _isConnecting = false;
   bool _loading = true;
-  bool _loadFailed = false;
-  int _loadGeneration = 0;
   bool _hiddenFromNav = false;
   String? _restrictedFolderId;
   String? _restrictedFolderName;
@@ -58,12 +55,12 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('pikpak_settings');
     _loadSettings();
   }
 
   @override
   void dispose() {
-    _loadGeneration++;
     _emailController.dispose();
     _passwordController.dispose();
     _emailFocusNode.dispose();
@@ -78,72 +75,42 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
   }
 
   Future<void> _loadSettings() async {
-    final generation = ++_loadGeneration;
-    setState(() {
-      _loading = true;
-      _loadFailed = false;
-    });
-    try {
-      final (
-        enabled,
-        showVideosOnly,
-        ignoreSmallVideos,
-        isAuth,
-        restrictedId,
-        restrictedName,
-        hiddenFromNav,
-        postAction,
-      ) = await (() async {
-        final enabled = await StorageService.getPikPakSetupEnabled();
-        final showVideosOnly = await StorageService.getPikPakShowVideosOnly();
-        final ignoreSmallVideos =
-            await StorageService.getPikPakIgnoreSmallVideos();
-        final isAuth = await PikPakApiService.instance.isAuthenticated();
-        final restrictedId = await StorageService.getPikPakRestrictedFolderId();
-        final restrictedName =
-            await StorageService.getPikPakRestrictedFolderName();
-        final hiddenFromNav = await StorageService.getPikPakHiddenFromNav();
-        final postAction = await StorageService.getPikPakPostTorrentAction();
-        return (
-          enabled,
-          showVideosOnly,
-          ignoreSmallVideos,
-          isAuth,
-          restrictedId,
-          restrictedName,
-          hiddenFromNav,
-          postAction,
-        );
-      })().timeout(const Duration(seconds: 5));
-      if (!mounted || generation != _loadGeneration) return;
-      setState(() {
-        _pikpakEnabled = enabled;
-        _showVideosOnly = showVideosOnly;
-        _ignoreSmallVideos = ignoreSmallVideos;
-        // A connected shared account is usable without exposing its credential
-        // fields to this screen. Replacement login always starts empty.
-        _emailController.clear();
-        _isConnected = isAuth;
-        _restrictedFolderId = restrictedId;
-        _restrictedFolderName = restrictedName;
-        _hiddenFromNav = hiddenFromNav;
-        _postTorrentAction = postAction;
-        _loading = false;
-      });
+    final enabled = await PikpakStorage.getPikPakEnabled();
+    final showVideosOnly = await PikpakStorage.getPikPakShowVideosOnly();
+    final ignoreSmallVideos = await PikpakStorage.getPikPakIgnoreSmallVideos();
+    final isAuth = await PikPakApiService.instance.isAuthenticated();
+    final restrictedId = await PikpakStorage.getPikPakRestrictedFolderId();
+    final restrictedName = await PikpakStorage.getPikPakRestrictedFolderName();
+    final hiddenFromNav = await PikpakStorage.getPikPakHiddenFromNav();
+    final postAction = await PikpakStorage.getPikPakPostTorrentAction();
 
-      if (PlatformUtil.isTelevision) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || generation != _loadGeneration) return;
-          final primary = FocusManager.instance.primaryFocus;
-          if (primary != null && primary is! FocusScopeNode) return;
-          _enableToggleFocusNode.requestFocus();
-        });
-      }
-    } catch (_) {
-      if (!mounted || generation != _loadGeneration) return;
-      setState(() {
-        _loading = false;
-        _loadFailed = true;
+    if (!mounted) return;
+
+    setState(() {
+      _pikpakEnabled = enabled;
+      _showVideosOnly = showVideosOnly;
+      _ignoreSmallVideos = ignoreSmallVideos;
+      // A connected shared account is usable without exposing its credential
+      // fields to this screen. Replacement login always starts empty.
+      _emailController.clear();
+      _isConnected = isAuth;
+      _restrictedFolderId = restrictedId;
+      _restrictedFolderName = restrictedName;
+      _hiddenFromNav = hiddenFromNav;
+      _postTorrentAction = postAction;
+      _loading = false;
+    });
+
+    // TV: land DPAD focus on the first interactive row so users aren't
+    // stranded with nothing focused when the page opens.
+    if (PlatformUtil.isTelevision) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        // Only a bare FocusScopeNode as primary focus means DPAD is
+        // stranded — don't steal focus the user already placed somewhere.
+        final primary = FocusManager.instance.primaryFocus;
+        if (primary != null && primary is! FocusScopeNode) return;
+        _enableToggleFocusNode.requestFocus();
       });
     }
   }
@@ -172,11 +139,13 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
           _isConnected = true;
           _pikpakEnabled = true;
         });
-        await StorageService.setPikPakEnabled(true);
+        await PikpakStorage.setPikPakEnabled(true);
+        AnalyticsService.integrationConnected('pikpak', {
+          'surface': 'settings',
+        });
 
         // Notify main page to update navigation immediately
         MainPageBridge.notifyIntegrationChanged();
-        if (!mounted) return;
 
         _showSnackBar('Connected successfully!', isError: false);
 
@@ -184,7 +153,6 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
         _passwordController.clear();
 
         // Ask if user wants to set up folder restriction
-        if (!mounted) return;
         final shouldSetupRestriction = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -259,13 +227,9 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
           if (folderResult != null) {
             final folderId = folderResult['folderId'] as String?;
             final folderName = folderResult['folderName'] as String?;
-            await StorageService.setPikPakRestrictedFolder(
-              folderId,
-              folderName,
-            );
+            await PikpakStorage.setPikPakRestrictedFolder(folderId, folderName);
             // Clear subfolder caches when restriction changes
-            await StorageService.clearPikPakSubfolderCaches();
-            if (!mounted) return;
+            await PikpakStorage.clearPikPakSubfolderCaches();
             setState(() {
               _restrictedFolderId = folderId;
               _restrictedFolderName = folderName;
@@ -308,10 +272,10 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
       await PikPakApiService.instance.logout();
 
       // Clear folder restriction on logout
-      await StorageService.clearPikPakRestrictedFolder();
+      await PikpakStorage.clearPikPakRestrictedFolder();
 
       // Clear the hidden from nav flag on logout
-      await StorageService.clearPikPakHiddenFromNav();
+      await PikpakStorage.clearPikPakHiddenFromNav();
 
       if (!mounted) return;
 
@@ -370,10 +334,9 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
       final folderId = result['folderId'] as String?;
       final folderName = result['folderName'] as String?;
 
-      await StorageService.setPikPakRestrictedFolder(folderId, folderName);
+      await PikpakStorage.setPikPakRestrictedFolder(folderId, folderName);
       // Clear subfolder caches when restriction changes
-      await StorageService.clearPikPakSubfolderCaches();
-      if (!mounted) return;
+      await PikpakStorage.clearPikPakSubfolderCaches();
       setState(() {
         _restrictedFolderId = folderId;
         _restrictedFolderName = folderName;
@@ -406,14 +369,12 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
 
   Future<void> _savePostAction(String action) async {
     setState(() => _postTorrentAction = action);
-    await StorageService.savePikPakPostTorrentAction(action);
-    if (!mounted) return;
+    await PikpakStorage.savePikPakPostTorrentAction(action);
     _showSnackBar('Preference saved', isError: false);
   }
 
   Future<void> _toggleHideFromNav(bool value) async {
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     if (value) {
       // Show confirmation dialog before enabling
       final confirmed = await showDialog<bool>(
@@ -433,9 +394,7 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: GlassChrome.enabled(app)
-                        ? GlassChrome.fill(app, raised: true)
-                        : t.warning.withValues(alpha: 0.1),
+                    color: t.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: t.warning.withValues(alpha: 0.3)),
                   ),
@@ -473,19 +432,16 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
         ),
       );
 
-      if (!mounted || confirmed != true) {
+      if (confirmed != true) {
         return;
       }
 
       // Enable hiding
-      await StorageService.setPikPakHiddenFromNav(true);
-      // The preference belongs to the shell even if this Settings route was
-      // dismissed while the write was pending.
-      MainPageBridge.notifyIntegrationChanged();
-      if (!mounted) return;
+      await PikpakStorage.setPikPakHiddenFromNav(true);
       setState(() {
         _hiddenFromNav = true;
       });
+      MainPageBridge.notifyIntegrationChanged();
       _showSnackBar('PikPak hidden from navigation', isError: false);
     } else {
       // Try to disable - show dialog explaining logout requirement
@@ -534,12 +490,6 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    if (_loadFailed) {
-      return SettingsPageScaffold(
-        title: 'PikPak Settings',
-        body: SettingsLoadError(onRetry: _loadSettings),
-      );
-    }
 
     return SettingsPageScaffold(
       title: 'PikPak Settings',
@@ -573,12 +523,13 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                   ),
                   value: _pikpakEnabled,
                   onChanged: (value) async {
-                    await StorageService.setPikPakEnabled(value);
-                    MainPageBridge.notifyIntegrationChanged();
-                    if (!mounted) return;
+                    await PikpakStorage.setPikPakEnabled(value);
                     setState(() {
                       _pikpakEnabled = value;
                     });
+
+                    // Notify main page to update navigation immediately
+                    MainPageBridge.notifyIntegrationChanged();
 
                     _showSnackBar(
                       value
@@ -664,10 +615,9 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                             ),
                             value: _showVideosOnly,
                             onChanged: (value) async {
-                              await StorageService.setPikPakShowVideosOnly(
+                              await PikpakStorage.setPikPakShowVideosOnly(
                                 value,
                               );
-                              if (!mounted) return;
                               setState(() {
                                 _showVideosOnly = value;
                               });
@@ -699,10 +649,9 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                             ),
                             value: _ignoreSmallVideos,
                             onChanged: (value) async {
-                              await StorageService.setPikPakIgnoreSmallVideos(
+                              await PikpakStorage.setPikPakIgnoreSmallVideos(
                                 value,
                               );
-                              if (!mounted) return;
                               setState(() {
                                 _ignoreSmallVideos = value;
                               });
@@ -782,12 +731,12 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                                   SettingsSelectOption(
                                     'playlist',
                                     'Add to playlist',
-                                    'Keep this torrent handy in your Nextup playlist',
+                                    'Keep this torrent handy in your Debrify playlist',
                                   ),
                                   SettingsSelectOption(
                                     'channel',
                                     'Add to channel',
-                                    'Cache this torrent in a Nextup TV channel',
+                                    'Cache this torrent in a Debrify TV channel',
                                   ),
                                 ],
                               ),
@@ -982,14 +931,14 @@ class _PikPakSettingsPageState extends State<PikPakSettingsPage> {
                             focusNode: _resetDeviceIdButtonFocusNode,
                             onPressed: () async {
                               final currentDeviceId =
-                                  await StorageService.getPikPakDeviceId();
+                                  await PikpakStorage.getPikPakDeviceId();
                               debugPrint(
                                 'PikPak: Current device ID: $currentDeviceId',
                               );
-                              await StorageService.deletePikPakDeviceId();
-                              await StorageService.clearPikPakCaptchaToken();
+                              await PikpakStorage.deletePikPakDeviceId();
+                              await PikpakStorage.clearPikPakCaptchaToken();
                               debugPrint('PikPak: Device ID cleared');
-                              if (context.mounted) {
+                              if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text(
@@ -1101,8 +1050,7 @@ class _FocusRingState extends State<_FocusRing> {
 
   @override
   Widget build(BuildContext context) {
-    final app = AppThemeScope.of(context);
-    final t = app.settings;
+    final t = AppThemeScope.of(context).settings;
     return Focus(
       skipTraversal: true,
       canRequestFocus: false,
@@ -1112,11 +1060,7 @@ class _FocusRingState extends State<_FocusRing> {
       onFocusChange: (_) => setState(() {}),
       child: Container(
         decoration: BoxDecoration(
-          color: _focused
-              ? (GlassChrome.enabled(app)
-                    ? GlassChrome.fill(app, raised: true)
-                    : t.panel2)
-              : Colors.transparent,
+          color: _focused ? t.panel2 : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _focused ? t.accent : Colors.transparent),
         ),

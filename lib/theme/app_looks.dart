@@ -1,12 +1,18 @@
+import 'package:debrify/services/storage/debrify_tv_storage.dart';
+import 'package:debrify/services/storage/detail_page_storage.dart';
+import 'package:debrify/services/storage/discover_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:debrify/services/storage/iptv_appearance_storage.dart';
+import 'package:debrify/services/storage/launch_ident_storage.dart';
+import 'package:debrify/services/storage/sidebar_storage.dart';
+import 'package:debrify/services/storage/theme_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../services/main_page_bridge.dart';
 import 'shipped_themes.dart' show kDetailThemesShipped;
-import '../services/storage_service.dart';
 import '../services/text_brightness.dart';
 import 'app_theme.dart';
 import 'app_theme_controller.dart';
-import '../widgets/detail/theme/detail_themes.dart';
 
 /// One preference a Look is allowed to set.
 ///
@@ -52,7 +58,7 @@ abstract final class LookKeys {
   static final appTheme = LookKey(
     id: 'app_theme',
     label: 'App Theme',
-    read: () => StorageService.appThemeCached,
+    read: () => ThemeStorage.appThemeCached,
     // Through the CONTROLLER, not the setter: it owns the write-through
     // contract (`detail_theme` first, then `app_theme`, so a crash between
     // them leaves an older-build-consistent view) and its own sequence token.
@@ -60,44 +66,34 @@ abstract final class LookKeys {
     write: (v) => AppThemeController.instance.select(v),
   );
 
-  static final appStructure = LookKey(
-    id: 'app_structure',
-    label: 'Structure',
-    // Effective, not stored: "follow the palette" reads as the palette's own
-    // theme, so a structure option can be detected as active without the user
-    // ever having picked one.
-    read: () => AppThemeController.instance.effectiveStructureId,
-    write: (v) => AppThemeController.instance.selectStructure(v),
-  );
-
   static final detailPageStyle = LookKey(
     id: 'detail_page_style',
     label: 'Details Page',
-    read: () => StorageService.detailPageStyleCached,
-    write: StorageService.setDetailPageStyle,
+    read: () => DetailPageStorage.detailPageStyleCached,
+    write: DetailPageStorage.setDetailPageStyle,
   );
 
   static final parentsGuideStyle = LookKey(
     id: 'parents_guide_style',
     label: 'Parents Guide',
-    read: () => StorageService.parentsGuideStyleCached,
-    write: StorageService.setParentsGuideStyle,
+    read: () => DetailPageStorage.parentsGuideStyleCached,
+    write: DetailPageStorage.setParentsGuideStyle,
   );
 
   static final launchAnimation = LookKey(
     id: 'launch_animation',
     label: 'Launch Animation',
-    read: () => StorageService.importedLaunchAnimationCached == null
-        ? StorageService.launchAnimationCached
-        : 'imported:${StorageService.importedLaunchAnimationCached}',
-    write: StorageService.setLaunchAnimation,
+    read: () => LaunchIdentStorage.importedLaunchAnimationCached == null
+        ? LaunchIdentStorage.launchAnimationCached
+        : 'imported:${LaunchIdentStorage.importedLaunchAnimationCached}',
+    write: LaunchIdentStorage.setLaunchAnimation,
   );
 
   static final launchIdentPalette = LookKey(
     id: 'launch_ident_palette',
     label: 'Ident Colour',
-    read: () => StorageService.launchIdentPaletteCached,
-    write: StorageService.setLaunchIdentPalette,
+    read: () => LaunchIdentStorage.launchIdentPaletteCached,
+    write: LaunchIdentStorage.setLaunchIdentPalette,
   );
 
   static final phoneNavStyle = LookKey(
@@ -109,53 +105,53 @@ abstract final class LookKeys {
       // shell reads it synchronously — so it is published before the await
       // for the same reason every other mirror here is.
       MainPageBridge.phoneNavStyleCached = v;
-      await StorageService.setPhoneNavStyle(v);
+      await SidebarStorage.setPhoneNavStyle(v);
     },
   );
 
   static final tvHomeStyle = LookKey(
     id: 'tv_home_style',
     label: 'TV Home Layout',
-    read: () => StorageService.tvHomeStyleCached,
-    write: StorageService.setTvHomeStyle,
+    read: () => HomeAppearanceStorage.tvHomeStyleCached,
+    write: HomeAppearanceStorage.setTvHomeStyle,
     notify: () => MainPageBridge.tvHomeStyleChanged?.call(),
   );
 
   static final tvSidebarStyle = LookKey(
     id: 'tv_sidebar_style',
     label: 'TV Sidebar',
-    read: () => StorageService.tvSidebarStyleCached,
-    write: StorageService.setTvSidebarStyle,
+    read: () => SidebarStorage.tvSidebarStyleCached,
+    write: SidebarStorage.setTvSidebarStyle,
     notify: () => MainPageBridge.tvSidebarStyleChanged?.call(),
   );
 
   static final desktopSidebarStyle = LookKey(
     id: 'desktop_sidebar_style',
     label: 'Desktop Sidebar',
-    read: () => StorageService.desktopSidebarStyleCached,
-    write: StorageService.setDesktopSidebarStyle,
+    read: () => SidebarStorage.desktopSidebarStyleCached,
+    write: SidebarStorage.setDesktopSidebarStyle,
   );
 
   static final discoverLayout = LookKey(
     id: 'discover_layout',
     label: 'Discover Layout',
-    read: () => StorageService.discoverLayoutCached,
-    write: StorageService.setDiscoverLayout,
+    read: () => DiscoverStorage.discoverLayoutCached,
+    write: DiscoverStorage.setDiscoverLayout,
     notify: () => MainPageBridge.discoverLayoutChanged?.call(),
   );
 
   static final iptvStyle = LookKey(
     id: 'iptv_style',
     label: 'Live TV Style',
-    read: () => StorageService.iptvStyleCached,
-    write: StorageService.setIptvStyle,
+    read: () => IptvAppearanceStorage.iptvStyleCached,
+    write: IptvAppearanceStorage.setIptvStyle,
   );
 
   static final debrifyTvStyle = LookKey(
     id: 'debrify_tv_style',
-    label: 'Nextup TV',
-    read: () => StorageService.debrifyTvStyleCached,
-    write: StorageService.setDebrifyTvStyle,
+    label: 'Debrify TV',
+    read: () => DebrifyTvStorage.debrifyTvStyleCached,
+    write: DebrifyTvStorage.setDebrifyTvStyle,
     // No notify, like iptv_style: tabs are keyed by index and rebuilt on
     // switch, so the page re-reads the pref in initState.
   );
@@ -174,7 +170,6 @@ abstract final class LookKeys {
 
   static final List<LookKey> all = [
     appTheme,
-    appStructure,
     detailPageStyle,
     parentsGuideStyle,
     launchAnimation,
@@ -230,16 +225,6 @@ class AppLook {
   /// remembered, so a Look can never go stale against a manual change: touch
   /// one picker afterwards and the answer becomes [kCustom] by itself, with
   /// nothing to keep in sync and no way for the stored answer to lie.
-  /// [isActive] without the `detail_theme` mirror check — for bundles that
-  /// name no `app_theme` (a structure alone).
-  bool get isActiveIgnoringMirror {
-    for (final entry in values.entries) {
-      final key = LookKeys.byId(entry.key);
-      if (key == null || key.read() != entry.value) return false;
-    }
-    return true;
-  }
-
   bool get isActive {
     for (final entry in values.entries) {
       final key = LookKeys.byId(entry.key);
@@ -253,15 +238,12 @@ class AppLook {
     final theme = values['app_theme'];
     if (theme != null &&
         theme != AppThemes.legacyId &&
-        StorageService.detailThemeCached != theme) {
+        DetailPageStorage.detailThemeCached != theme) {
       return false;
     }
     return true;
   }
 }
-
-/// What the picker shows when no bundle matches.
-const String kCustomLookId = 'custom';
 
 abstract final class AppLooks {
   /// The shipped bundles.
@@ -277,10 +259,9 @@ abstract final class AppLooks {
   static const List<AppLook> all = [
     AppLook(
       id: 'classic',
-      label: 'Nextup Classic',
+      label: 'Debrify Classic',
       blurb: 'The app exactly as it has always looked.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'legacy',
         'detail_page_style': 'classic',
         'launch_animation': 'horizon',
@@ -307,7 +288,6 @@ abstract final class AppLooks {
           'The tvOS idiom — full-bleed art, borderless focus that lifts '
           'and tilts, and a details page that dissolves into colour.',
       values: {
-        'app_structure': 'spotlight',
         'app_theme': 'spotlight',
         'detail_page_style': 'showcase',
         'tv_home_style': 'spotlight',
@@ -322,7 +302,6 @@ abstract final class AppLooks {
       label: 'Midnight Signal',
       blurb: 'Today\'s palette, taken app-wide — dark glass and one gold.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'signal',
         'detail_page_style': 'stage',
         'launch_animation': 'horizon',
@@ -338,7 +317,6 @@ abstract final class AppLooks {
       blurb:
           'Squared, monospaced, technical. Everything reads as an instrument.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'blueprint',
         'detail_page_style': 'console',
         'launch_animation': 'blueprint',
@@ -354,7 +332,6 @@ abstract final class AppLooks {
       label: 'Cinema',
       blurb: 'Widescreen and unhurried — grain, deep grounds, room to breathe.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'cinemascope',
         'detail_page_style': 'marquee',
         'launch_animation': 'anamorphic',
@@ -369,7 +346,6 @@ abstract final class AppLooks {
       label: 'Neon Arcade',
       blurb: 'Saturated, rounded and loud. The one that looks like a game.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'aurora',
         'detail_page_style': 'stage',
         'launch_animation': 'neon',
@@ -384,7 +360,6 @@ abstract final class AppLooks {
       label: 'Quiet Hours',
       blurb: 'Low-contrast and calm, for a dark room and a late episode.',
       values: {
-        'app_structure': 'legacy',
         'app_theme': 'obsidian',
         'detail_page_style': 'dossier',
         'launch_animation': 'silk',
@@ -431,128 +406,6 @@ abstract final class AppLooks {
   }
 }
 
-/// Appearance → **Form**: one of the app's genuinely different structures —
-/// how panels separate, how artwork is framed, what focus does, how things
-/// move. Independent of the palette.
-///
-/// There are only these. The rest of the old Looks were the Classic form in
-/// other colours, which is what the palette picker now is.
-@immutable
-class AppForm {
-  /// `legacy` (Classic) or a premium spec id.
-  final String id;
-  final String label;
-  final String blurb;
-
-  const AppForm({required this.id, required this.label, required this.blurb});
-
-  bool get isActive =>
-      AppThemeController.instance.effectiveStructureId == id;
-}
-
-/// Appearance → **Colour palette**: a theme's colours alone. Independent of
-/// the form.
-@immutable
-class LookPalette {
-  /// The theme whose COLOURS these are (`app_theme`).
-  final String themeId;
-  final String label;
-
-  const LookPalette({required this.themeId, required this.label});
-
-  bool get isActive => StorageService.appThemeCached == themeId;
-}
-
-abstract final class LookParts {
-  static const List<AppForm> forms = [
-    AppForm(
-      id: 'legacy',
-      label: 'Classic',
-      blurb: 'Filled cards and a focus ring. Each palette keeps its own '
-          'corners and fonts.',
-    ),
-    AppForm(
-      id: 'spotlight',
-      label: 'Spotlight',
-      blurb: 'Full-bleed artwork, borderless focus that lifts and tilts, and '
-          'its own Settings style.',
-    ),
-    AppForm(
-      id: 'glass',
-      label: 'Glass',
-      blurb: 'Floating panes of tinted glass over the artwork, a focus ring '
-          'and gliding motion.',
-    ),
-    AppForm(
-      id: 'field',
-      label: 'Deep Field',
-      blurb: 'No boxes — artwork bleeds and space separates. Focus scales up.',
-    ),
-    AppForm(
-      id: 'hearth',
-      label: 'Warm Room',
-      blurb: 'Soft filled panels, artwork that fades into the page, focus '
-          'that lifts.',
-    ),
-    AppForm(
-      id: 'console',
-      label: 'Console',
-      blurb: 'Square corners and hairline rules. Focus inverts; motion snaps.',
-    ),
-    AppForm(
-      id: 'reel',
-      label: 'Cinema',
-      blurb: 'Artwork mounted like a print on filled panels, focus that lifts.',
-    ),
-  ];
-
-  static AppForm? activeForm() {
-    for (final f in forms) {
-      if (f.isActive) return f;
-    }
-    return null;
-  }
-
-  static String formLabel() => activeForm()?.label ?? 'Custom';
-
-  /// Classic, then every palette this build ships.
-  static List<LookPalette> palettes(
-    List<({String id, String label})> shippedThemes,
-  ) => [
-    const LookPalette(themeId: 'legacy', label: 'Nextup Classic'),
-    for (final t in shippedThemes) LookPalette(themeId: t.id, label: t.label),
-  ];
-
-  static String paletteLabel(String themeId) =>
-      themeId == AppThemes.legacyId
-          ? 'Nextup Classic'
-          : DetailThemes.byId(themeId).label;
-
-  /// "Spotlight form · Signal" — for the Settings rows.
-  static String currentLabel() =>
-      '${formLabel()} form · ${paletteLabel(StorageService.appThemeCached)}';
-
-  /// Picks a form. Never touches colours.
-  static Future<void> applyForm(AppForm form) async {
-    LookApplier.noteExternalWrite('app_structure');
-    await AppThemeController.instance.selectStructure(form.id);
-  }
-
-  /// Picks a palette while keeping the form exactly where it is.
-  ///
-  /// With no form picked the app follows the palette (a premium palette
-  /// wears its own form), so a palette change could restyle everything.
-  /// Pinning the current form first is what keeps the two isolated.
-  static Future<void> applyPalette(LookPalette palette) async {
-    final controller = AppThemeController.instance;
-    if (controller.structureId.isEmpty) {
-      await controller.selectStructure(controller.effectiveStructureId);
-    }
-    LookApplier.noteExternalWrite('app_theme');
-    await controller.select(palette.themeId);
-  }
-}
-
 /// Applies a Look.
 ///
 /// ## What it guarantees
@@ -592,29 +445,21 @@ abstract final class LookApplier {
       for (final id in look.values.keys) id: generationOf(id),
     };
 
-    // Every write STARTS in this synchronous loop — each publishes its mirror
-    // before its first await — so the whole Look is on screen on the next
-    // frame. Awaiting each write before starting the next left later keys
-    // (the app theme among them) waiting on earlier keys' disk writes.
-    final pending = <Future<void>>[];
     for (final entry in look.values.entries) {
       final key = LookKeys.byId(entry.key);
       if (key == null) continue; // validate() reports these; never throw here
       if (generationOf(entry.key) != before[entry.key]) continue; // human won
       noteExternalWrite(entry.key);
-      pending.add(
-        Future<void>.sync(() => key.write(entry.value))
-            .catchError((Object e) {
-              // A cosmetic preference must never take the app down with it.
-              // The mirror is already published, so the session is correct
-              // either way; the cost of a failed write is stickiness across a
-              // restart.
-              debugPrint('LookApplier: ${entry.key} failed: $e');
-            })
-            .whenComplete(() => key.notify?.call()),
-      );
+      try {
+        await key.write(entry.value);
+      } catch (e) {
+        // A cosmetic preference must never take the app down with it. The
+        // mirror is already published, so the session is correct either way;
+        // the cost of a failed write is stickiness across a restart.
+        debugPrint('LookApplier: ${entry.key} failed: $e');
+      }
+      key.notify?.call();
     }
-    await Future.wait(pending);
   }
 
   @visibleForTesting

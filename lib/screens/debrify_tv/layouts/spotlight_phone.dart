@@ -7,7 +7,6 @@ import '../../../theme/app_theme_scope.dart';
 import '../../../utils/formatters.dart';
 import 'debrify_tv_view.dart';
 import 'spotlight_rail.dart' show SpotlightKick;
-import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The Spotlight touch arm: a phone gets a phone — a list, not a TV grid.
 ///
@@ -83,7 +82,6 @@ class _SpotlightPhoneArmState extends State<SpotlightPhoneArm> {
     // Kick the stats pass before the sheet draws.
     widget.view.onChannelFocused(channel);
     showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -550,7 +548,7 @@ class _PhoneHeader extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: SpotlightKick('Nextup TV', color: tv.accent),
+                    child: SpotlightKick('Debrify TV', color: tv.accent),
                   ),
                   const SizedBox(width: 12),
                   _PhoneSettingsButton(onTap: onSettings),
@@ -565,7 +563,7 @@ class _PhoneHeader extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            SpotlightKick('Nextup TV', color: tv.accent),
+            SpotlightKick('Debrify TV', color: tv.accent),
             const SizedBox(height: 8),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,

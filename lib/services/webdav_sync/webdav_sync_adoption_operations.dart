@@ -22,7 +22,6 @@ import '../profiles/portable_profile_package.dart';
 import '../profiles/profile_registry.dart';
 import '../profiles/profile_restore_coordinator.dart';
 import '../profiles/profile_scope.dart';
-import '../profiles/profile_storage_paths.dart';
 import '../profiles/subtitle_appearance_preferences.dart';
 import 'webdav_sync_adoption.dart';
 import 'webdav_sync_models.dart';
@@ -101,14 +100,11 @@ final class DefaultWebDavSyncAdoptionOperations
   }) async {
     final oldScope = await _scope(oldProfileId);
     final newScope = await _scope(newProfileId);
-    // Database snapshots and normal profile database opens use the private
-    // profile-data root. Copying from user Documents would adopt stale files
-    // (or none) after the move to application support storage.
-    final profileRoot = await ProfileStoragePaths.profileDataRoot();
+    final documents = await AppStorage.documents();
     for (final name in ProfileDatabaseSnapshot.databaseNames.toList()..sort()) {
-      final source = oldScope.fileIn(profileRoot, 'documents', name);
+      final source = oldScope.fileIn(documents, 'documents', name);
       if (!await source.exists()) continue;
-      final destination = newScope.fileIn(profileRoot, 'documents', name);
+      final destination = newScope.fileIn(documents, 'documents', name);
       await _copyDatabaseAtomically(source, destination, name);
     }
   }

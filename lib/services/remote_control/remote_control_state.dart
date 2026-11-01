@@ -1133,7 +1133,7 @@ class RemoteControlState extends ChangeNotifier {
     }
     _sessionManager ??= RemoteSessionManager(
       loadStaticKeyPair: RemotePairingStore.loadOrCreateKeypair,
-      deviceName: () => _receiverName ?? 'Nextup',
+      deviceName: () => _receiverName ?? 'Debrify',
       transferPort: reliable.port,
       onEvent: (event, fields) =>
           RemoteTransferDiagnostics.record(event, fields: fields),
@@ -1623,7 +1623,7 @@ class RemoteControlState extends ChangeNotifier {
       }
       if (session.peerProtocolVersion < kLaunchAnimationProtocolVersion) {
         throw const RemoteTransferException(
-          'Update Nextup on the receiving device to support animation transfers.',
+          'Update Debrify on the receiving device to support animation transfers.',
         );
       }
       final file = await LaunchAnimationLibrary.instance.originalFile(entry.id);

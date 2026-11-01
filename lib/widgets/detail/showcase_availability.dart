@@ -1,6 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import '../viewport_artwork_scope.dart';
-import '../contrast_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,15 +20,10 @@ class ShowcaseAvailabilityEntry {
     this.kind,
     this.id,
     this.link,
-    this.imdbId,
   });
   final String name;
   final String? logo, kind, link;
   final int? id;
-
-  /// IMDb company ID (`co…`) for the token-free studio fallback: opens the
-  /// studio's titles from IMDb instead of TMDB.
-  final String? imdbId;
 }
 
 class ShowcaseAvailabilityRow {
@@ -76,15 +70,10 @@ List<ShowcaseAvailabilityRow> showcaseAvailabilityRows(
               '${entity['name'] ?? ''}',
               id: MetadataDetailsService.positiveId(entity['id']),
               kind: kind,
-              imdbId: entity['imdb_id'] as String?,
-              // IMDb-sourced studios carry a ready logo URL (Wikidata);
-              // TMDB ones carry a TMDB image path.
-              logo:
-                  entity['logo_url'] as String? ??
-                  TmdbMetadataRepository.image(
-                    entity['logo_path'],
-                    size: 'w185',
-                  ),
+              logo: TmdbMetadataRepository.image(
+                entity['logo_path'],
+                size: 'w185',
+              ),
             ),
     ];
     if (entries.isNotEmpty) {
@@ -296,9 +285,7 @@ class _AvailabilityTileState extends State<_AvailabilityTile> {
                 imageUrl: entry.logo!,
                 cacheManager: DebrifyImageCache.manager,
                 memCacheWidth: 185,
-                // Black-on-transparent logos are drawn white so they read on
-                // the dark ground; everything else is drawn as-is.
-                imageBuilder: (_, image) => ContrastLogo(image: image),
+                fit: BoxFit.contain,
                 placeholder: (_, _) => fallback(),
                 errorWidget: (_, _, _) => fallback(),
               ),

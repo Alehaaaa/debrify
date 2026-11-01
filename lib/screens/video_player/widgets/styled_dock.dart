@@ -11,8 +11,6 @@
 /// See `dev/design/plans/PLAYER_DOCK_STYLES_PLAN.md` §3.
 library;
 
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
@@ -85,9 +83,6 @@ class StyledDock extends StatelessWidget {
   final VoidCallback? onToggleStartOverTimeline;
   final bool startOverTimelineVisible;
   final VoidCallback? onPip;
-
-  /// Locks the screen against touches (phones and tablets); null hides it.
-  final VoidCallback? onLock;
 
   final bool hasNext;
   final bool hasPrevious;
@@ -182,7 +177,6 @@ class StyledDock extends StatelessWidget {
     this.onToggleStartOverTimeline,
     this.startOverTimelineVisible = false,
     this.onPip,
-    this.onLock,
     this.hasNext = false,
     this.hasPrevious = false,
     this.hasNextChannel = false,
@@ -316,20 +310,15 @@ class StyledDock extends StatelessWidget {
     final tools = _tools();
     return Stack(
       children: [
-        // Identity always lives up top, with room to breathe; the bottom
-        // glass is only for controls.
-        Positioned(top: 0, left: 0, right: 0, child: _topBar(context)),
-        // Transport in the middle of the picture, like the players people
-        // know; only its buttons take touches, the rest passes through.
-        if (!hideOptions)
-          Positioned.fill(
-            child: Center(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: _transport(),
-              ),
-            ),
-          ),
+        // The wide dock carries identity in its centre zone, so a top bar
+        // title there would render the same string twice — which is exactly
+        // the duplication this redesign set out to remove.
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: _topBar(context, showTitle: !_centreIdentityVisible),
+        ),
         Positioned(
           bottom: 0,
           left: 0,
@@ -346,119 +335,81 @@ class StyledDock extends StatelessWidget {
     );
   }
 
-  /// The title line and the line under it. A "Show — Episode" title splits
-  /// so the show reads as the headline and the episode joins the detail
-  /// line ("Episode name · Season 2, Episode 4").
-  ({String headline, String? detail}) get _identity {
-    final split = title.indexOf(' — ');
-    final headline = split < 0 ? title : title.substring(0, split);
-    final episode = split < 0 ? null : title.substring(split + 3);
-    final detail = [
-      if (episode != null && episode.isNotEmpty) episode,
-      if (subtitle != null && subtitle!.isNotEmpty) subtitle!,
-    ].join('  ·  ');
-    return (headline: headline, detail: detail.isEmpty ? null : detail);
-  }
+  /// True only when the wide centre zone is actually on screen to carry the
+  /// title. `hideOptions` removes the whole controls row, so without this the
+  /// identity vanished from both places at once.
+  bool get _centreIdentityVisible =>
+      arrangement == DockArrangement.wide &&
+      !hideOptions &&
+      (title.isNotEmpty || (subtitle?.isNotEmpty ?? false));
 
-  Widget _topBar(BuildContext context) {
-    final identity = _identity;
+  Widget _topBar(BuildContext context, {bool showTitle = true}) {
     return Container(
-      padding: EdgeInsets.fromLTRB(
-        metrics.padX * 1.8,
-        metrics.padY * 1.6,
-        metrics.padX * 1.8,
-        metrics.padY * 4,
+      padding: EdgeInsets.symmetric(
+        horizontal: metrics.padX * 1.8,
+        vertical: metrics.padY,
       ),
-      // A soft shade, not a band: enough for white type over bright frames.
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xB3000000), Color(0x00000000)],
+          colors: [palette.scrim, const Color(0x00040610)],
         ),
       ),
       child: SafeArea(
         bottom: false,
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (!hideBackButton) ...[
-              DockGlassIconButton(
-                icon: Icons.arrow_back_rounded,
+            if (!hideBackButton)
+              IconButton(
+                icon: Icon(Icons.arrow_back_rounded, color: palette.ink),
+                iconSize: metrics.icon,
                 tooltip: 'Back',
                 onPressed: onBack,
-                metrics: metrics,
-                palette: palette,
               ),
-              SizedBox(width: metrics.gap * 1.5),
-            ],
+            SizedBox(width: metrics.gap),
             Expanded(
-              child: Padding(
-                // Optically centre a one-line title on the round buttons.
-                padding: EdgeInsets.only(top: metrics.padY * 0.4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (identity.headline.isNotEmpty)
-                      Text(
-                        identity.headline,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.ink,
-                          fontSize: metrics.label * 1.7,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                          height: 1.15,
-                          shadows: const [
-                            Shadow(color: Color(0x66000000), blurRadius: 12),
-                          ],
-                        ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showTitle && title.isNotEmpty)
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.ink,
+                        fontSize: metrics.label * 1.25,
+                        fontWeight: FontWeight.w700,
                       ),
-                    if (identity.detail != null) ...[
-                      SizedBox(height: metrics.gap * 0.5),
-                      Text(
-                        identity.detail!,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: palette.inkDim,
-                          fontSize: metrics.label * 1.05,
-                          fontWeight: FontWeight.w500,
-                          height: 1.3,
-                          shadows: const [
-                            Shadow(color: Color(0x66000000), blurRadius: 10),
-                          ],
-                        ),
+                    ),
+                  if (showTitle && subtitle != null && subtitle!.isNotEmpty)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: palette.inkDim,
+                        fontSize: metrics.label,
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                ],
               ),
             ),
-            // Lock and PiP live here, not in the tools row: always in sight,
-            // and independent of `hideOptions` and the overflow menu.
-            if (onLock != null) ...[
-              SizedBox(width: metrics.gap * 1.5),
-              DockGlassIconButton(
-                icon: Icons.lock_open_rounded,
-                tooltip: 'Lock screen',
-                onPressed: onLock!,
-                metrics: metrics,
-                palette: palette,
-              ),
-            ],
-            if (showPipButton && onPip != null) ...[
-              SizedBox(width: metrics.gap * 1.5),
-              DockGlassIconButton(
-                icon: Icons.picture_in_picture_alt_rounded,
+            // PiP lives here, not in the tools row: legacy keeps it reachable
+            // independently of `hideOptions`, and burying it in the tools row
+            // would lose it whenever options are hidden.
+            if (showPipButton && onPip != null)
+              IconButton(
+                icon: Icon(
+                  Icons.picture_in_picture_alt_rounded,
+                  color: palette.ink,
+                ),
+                iconSize: metrics.icon,
                 tooltip: 'Picture in picture',
-                onPressed: onPip!,
-                metrics: metrics,
-                palette: palette,
+                onPressed: onPip,
               ),
-            ],
           ],
         ),
       ),
@@ -466,20 +417,13 @@ class StyledDock extends StatelessWidget {
   }
 
   Widget _bottomUnit(BuildContext context, List<_Tool> tools) {
-    final pad = EdgeInsets.fromLTRB(
-      metrics.padX * 1.8,
-      metrics.padY,
-      metrics.padX * 1.8,
-      metrics.padY * 1.5,
-    );
     return Container(
-      // Just a shade for legibility — no box: the controls float on the
-      // picture.
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
-          colors: [Color(0xB3000000), Color(0x00000000)],
+          colors: [palette.scrim, const Color(0x00040610)],
+          stops: const [0.12, 1.0],
         ),
       ),
       child: SafeArea(
@@ -496,107 +440,156 @@ class StyledDock extends StatelessWidget {
                       child: infoPanel!,
                     ),
             if (!hideOptions)
-              Padding(
-                padding: pad,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (arrangement == DockArrangement.wide && !hideSeekbar)
-                      _scrubber(context, bleed: true),
-                    switch (arrangement) {
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // The wide bar is genuinely edge-to-edge, so it is mounted
+                  // OUTSIDE the dock's horizontal padding rather than trying
+                  // to cancel it (negative padding is not a thing).
+                  if (arrangement == DockArrangement.wide && !hideSeekbar)
+                    Padding(
+                      padding: EdgeInsets.only(top: metrics.padY),
+                      child: _scrubber(context, bleed: true),
+                    ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      metrics.padX * 1.8,
+                      arrangement == DockArrangement.wide ? 0 : metrics.padY,
+                      metrics.padX * 1.8,
+                      metrics.padY * 1.5,
+                    ),
+                    child: switch (arrangement) {
                       DockArrangement.narrow => _narrow(context, tools),
                       DockArrangement.regular => _twoTier(context, tools),
                       DockArrangement.wide => _wide(context, tools),
                     },
-                  ],
-                ),
+                  ),
+                ],
               )
             else if (!hideSeekbar)
-              Padding(padding: pad, child: _scrubber(context)),
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  metrics.padX * 1.8,
+                  metrics.padY,
+                  metrics.padX * 1.8,
+                  metrics.padY * 1.5,
+                ),
+                child: _scrubber(context),
+              ),
           ],
         ),
       ),
     );
   }
 
-  /// The scrubber, then one row of round icon tools flush right; whatever
-  /// doesn't fit goes to More. Transport lives in the middle of the screen.
+  /// One row: transport, then the highest-priority tools, then More.
+  ///
+  /// Degrades in stages rather than jumping straight to a scrolling strip,
+  /// because each stage costs the user less than the next: shrinking gaps is
+  /// invisible, dropping a tool costs one extra tap through More, hiding
+  /// labels costs recognisability, and scrolling hides things entirely.
   Widget _narrow(BuildContext context, List<_Tool> tools) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (!hideSeekbar) _scrubber(context),
-        SizedBox(height: metrics.gap * 0.5),
+        SizedBox(height: metrics.gap),
         LayoutBuilder(
           builder: (context, constraints) {
+            final available = constraints.maxWidth;
+            // Rough per-chip cost: icon + padding, plus ~6.5px per character
+            // at the label size. Deliberately an over-estimate — the ladder
+            // should step down early rather than overflow.
+            // Includes the icon-to-label gap and the LIVE text scaler; an
+            // earlier version omitted both and so kept three labelled tools
+            // on rows that then had to scroll. 0.62em per character is a
+            // deliberate over-estimate for wide glyphs.
             final scaledLabel = MediaQuery.textScalerOf(
               context,
             ).scale(metrics.label);
-            final chipW = math.max(
-              metrics.target,
-              metrics.icon + metrics.padY * 2 + 2,
-            );
-            final gap = metrics.gap * 0.75;
-            // More is the one labelled chip; measure it rather than guess.
-            final morePainter = TextPainter(
-              text: TextSpan(
-                text: 'More',
-                style: TextStyle(
-                  fontSize: scaledLabel,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              textDirection: TextDirection.ltr,
-              maxLines: 1,
-            )..layout();
-            final moreW =
+            double chipWidth(_Tool t, bool labelled) =>
                 metrics.icon +
                 metrics.padX * 2 +
-                metrics.gap * 0.75 +
-                morePainter.width +
-                4;
-            morePainter.dispose();
-            double width(int n, bool more) =>
-                n * chipW +
-                (n > 1 ? (n - 1) * gap : 0) +
-                (more ? (n > 0 ? gap : 0) + moreW : 0);
-            var count = tools.length;
-            if (width(count, false) > constraints.maxWidth) {
-              while (count > 0 && width(count, true) > constraints.maxWidth) {
-                count--;
+                (labelled
+                    ? metrics.gap * 0.75 + t.label.length * scaledLabel * 0.62
+                    : 0);
+            final transportWidth =
+                (hasPrevious && onPrevious != null ? metrics.target : 0) +
+                metrics.target * 1.32 +
+                (hasNext && onNext != null ? metrics.target : 0) +
+                metrics.gap * 3;
+            final moreWidth = metrics.icon + metrics.padX * 2 + 30;
+
+            bool fits(int count, bool labelled, double gap) {
+              var width = transportWidth + moreWidth + gap * (count + 1);
+              for (final t in tools.take(count)) {
+                width += chipWidth(t, labelled);
               }
+              return width <= available;
             }
-            final shown = tools.take(count).toList();
-            final more = count < tools.length;
+
+            // Step down in order until something fits.
+            var count = 3;
+            var labelled = true;
+            var gap = metrics.gap;
+            if (!fits(count, labelled, gap)) {
+              gap = metrics.gap * 0.75; // 1: tighten gaps
+            }
+            if (!fits(count, labelled, gap)) {
+              count = 2; // 2: three tools become two
+            }
+            if (!fits(count, labelled, gap)) {
+              labelled = false; // 3: labels become icons
+            }
+            if (!fits(count, labelled, gap)) {
+              count = 1; // 4: one tool plus More
+            }
+            // 5 (last resort): whatever remains scrolls, with an edge fade.
+
+            final promoted = tools.take(count).toList();
             return Row(
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                for (var i = 0; i < shown.length; i++) ...[
-                  if (i > 0) SizedBox(width: gap),
-                  DockChip(
-                    icon: shown[i].icon,
-                    label: shown[i].value == null
-                        ? shown[i].label
-                        : '${shown[i].label} · ${shown[i].value}',
-                    showLabel: false,
-                    active: shown[i].active,
-                    tint: shown[i].tint,
-                    onPressed: shown[i].onPressed,
-                    metrics: metrics,
-                    palette: palette,
+                ..._transport(),
+                Expanded(
+                  child: ShaderMask(
+                    shaderCallback: (rect) => const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Color(0x00000000), Color(0xFF000000)],
+                      stops: [0.0, 0.06],
+                    ).createShader(rect),
+                    blendMode: BlendMode.dstIn,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: Row(
+                        children: [
+                          for (final tool in promoted) ...[
+                            DockChip(
+                              icon: tool.icon,
+                              label: tool.label,
+                              showLabel: labelled,
+                              active: tool.active,
+                              tint: tool.tint,
+                              onPressed: tool.onPressed,
+                              metrics: metrics,
+                              palette: palette,
+                            ),
+                            SizedBox(width: gap),
+                          ],
+                          DockChip(
+                            icon: Icons.more_horiz_rounded,
+                            label: 'More',
+                            active: true,
+                            onPressed: () => _openOverflow(context, tools),
+                            metrics: metrics,
+                            palette: palette,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ],
-                if (more) ...[
-                  if (shown.isNotEmpty) SizedBox(width: gap),
-                  DockChip(
-                    icon: Icons.more_horiz_rounded,
-                    label: 'More',
-                    active: true,
-                    onPressed: () => _openOverflow(context, tools),
-                    metrics: metrics,
-                    palette: palette,
-                  ),
-                ],
+                ),
               ],
             );
           },
@@ -614,6 +607,11 @@ class StyledDock extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: _transport(),
+        ),
+        SizedBox(height: metrics.gap),
         if (!hideSeekbar) _scrubber(context),
         SizedBox(height: metrics.gap),
         LayoutBuilder(
@@ -680,128 +678,70 @@ class StyledDock extends StatelessWidget {
   }
 
   Widget _wide(BuildContext context, List<_Tool> tools) {
-    // The tool cluster is icon-only chips, whose width is exact: a chip is
-    // its icon plus padY each side plus its 1px border, never under the
-    // touch target. Sizing the cluster to that — rather than giving it a
-    // Flexible share of the bar — is what keeps it flush right: a loose
-    // Flexible keeps whatever share it does not use as an empty strip at
-    // the end of the row, and cuts its content at the left when the share
-    // is too small.
-    final chipW = math.max(metrics.target, metrics.icon + metrics.padY * 2 + 2);
-    final gapW = metrics.gap * 0.75;
-    final chips = <Widget>[
-      for (final tool in tools)
-        DockChip(
-          icon: tool.icon,
-          label: tool.value == null
-              ? tool.label
-              : '${tool.label} · ${tool.value}',
-          showLabel: false,
-          active: tool.active,
-          tint: tool.tint,
-          onPressed: tool.onPressed,
-          metrics: metrics,
-          palette: palette,
-        ),
-      if (showFullscreen && onFullscreen != null)
-        DockChip(
-          icon: Icons.fullscreen_rounded,
-          label: 'Fullscreen',
-          showLabel: false,
-          onPressed: onFullscreen!,
-          metrics: metrics,
-          palette: palette,
-        ),
-    ];
-    // Spacers only BETWEEN chips — a trailing one was the gap at the right.
-    final cluster = Row(
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < chips.length; i++) ...[
-          if (i > 0) SizedBox(width: gapW),
-          chips[i],
-        ],
-      ],
-    );
-    final need = chips.isEmpty
-        ? 0.0
-        : chips.length * chipW + (chips.length - 1) * gapW;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // The tools get what the time readout leaves (the volume bar is the
-        // one thing on the left that shrinks), and scroll past that.
-        final scaledLabel = MediaQuery.textScalerOf(
-          context,
-        ).scale(metrics.label);
-        // Transport sits mid-screen now; the left zone is volume + time.
-        const transportW = 0.0;
-        // The widest readout this session can show, measured, not guessed.
-        final timePainter = TextPainter(
-          text: TextSpan(
-            text: '88:88:88  /  88:88:88',
-            style: TextStyle(
-              fontSize: scaledLabel,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-          maxLines: 1,
-        )..layout();
-        final timeW = timePainter.width;
-        timePainter.dispose();
-        // The gaps around the time and before the tools.
-        final leftNeed = transportW + timeW + metrics.gap * 2.5 + 2;
-        final cap = constraints.maxWidth.isFinite
-            ? math.max(chipW, constraints.maxWidth - leftNeed)
-            : need;
-        final Widget toolsZone;
-        if (chips.isEmpty) {
-          toolsZone = const SizedBox.shrink();
-        } else if (need <= cap) {
-          toolsZone = cluster;
-        } else {
-          // Genuinely too many: a fixed-width strip that keeps the LAST
-          // tools visible and fades out at its left edge, so the cut reads
-          // as "there is more" rather than a rendering fault.
-          toolsZone = SizedBox(
-            width: cap,
-            child: ShaderMask(
-              shaderCallback: (rect) => const LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Color(0x00000000), Color(0xFF000000)],
-                stops: [0.0, 0.08],
-              ).createShader(rect),
-              blendMode: BlendMode.dstIn,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                reverse: true,
-                child: cluster,
-              ),
-            ),
-          );
-        }
-        // The left zone takes what the tools leave; inside it only the
-        // volume bar gives way, so transport and time never get cut.
-        return Row(
+        Row(
           children: [
-            Expanded(
-              child: Row(
-                children: [
-                  if (onVolumeChanged != null) ...[
-                    Flexible(child: _volume(context)),
-                    SizedBox(width: metrics.gap),
-                  ],
-                  _timeReadout(),
-                ],
+            ..._transport(),
+            if (onVolumeChanged != null) ...[
+              SizedBox(width: metrics.gap),
+              _volume(context),
+            ],
+            SizedBox(width: metrics.gap),
+            _timeReadout(),
+            SizedBox(width: metrics.gap * 1.5),
+            Expanded(child: _nowPlaying()),
+            SizedBox(width: metrics.gap * 1.5),
+            Flexible(
+              // reverse: true keeps the last tools visible, so anything that
+              // does not fit is cut at the LEFT. Without a fade that reads as
+              // a rendering fault rather than "there is more".
+              child: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [Color(0x00000000), Color(0xFF000000)],
+                  stops: [0.0, 0.05],
+                ).createShader(rect),
+                blendMode: BlendMode.dstIn,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: Row(
+                    children: [
+                      for (final tool in tools) ...[
+                        DockChip(
+                          icon: tool.icon,
+                          label: tool.value == null
+                              ? tool.label
+                              : '${tool.label} · ${tool.value}',
+                          showLabel: false,
+                          active: tool.active,
+                          tint: tool.tint,
+                          onPressed: tool.onPressed,
+                          metrics: metrics,
+                          palette: palette,
+                        ),
+                        SizedBox(width: metrics.gap * 0.75),
+                      ],
+                      if (showFullscreen && onFullscreen != null)
+                        DockChip(
+                          icon: Icons.fullscreen_rounded,
+                          label: 'Fullscreen',
+                          showLabel: false,
+                          onPressed: onFullscreen!,
+                          metrics: metrics,
+                          palette: palette,
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            if (chips.isNotEmpty) SizedBox(width: metrics.gap * 1.5),
-            toolsZone,
           ],
-        );
-      },
+        ),
+      ],
     );
   }
 
@@ -820,28 +760,26 @@ class StyledDock extends StatelessWidget {
           size: metrics.icon,
           color: palette.ink,
         ),
-        Flexible(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: metrics.target * 2.4),
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: metrics.trackHeight * 0.75,
-                activeTrackColor: palette.ink,
-                inactiveTrackColor: palette.inactiveTrack,
-                thumbColor: palette.ink,
-                thumbShape: RoundSliderThumbShape(
-                  enabledThumbRadius: metrics.knob * 0.35,
-                ),
-                overlayShape: RoundSliderOverlayShape(
-                  overlayRadius: metrics.knob * 0.7,
-                ),
+        SizedBox(
+          width: metrics.target * 2.4,
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: metrics.trackHeight * 0.75,
+              activeTrackColor: palette.ink,
+              inactiveTrackColor: palette.inactiveTrack,
+              thumbColor: palette.ink,
+              thumbShape: RoundSliderThumbShape(
+                enabledThumbRadius: metrics.knob * 0.35,
               ),
-              child: Slider(
-                min: 0,
-                max: 1,
-                value: volume.clamp(0.0, 1.0),
-                onChanged: onVolumeChanged,
+              overlayShape: RoundSliderOverlayShape(
+                overlayRadius: metrics.knob * 0.7,
               ),
+            ),
+            child: Slider(
+              min: 0,
+              max: 1,
+              value: volume.clamp(0.0, 1.0),
+              onChanged: onVolumeChanged,
             ),
           ),
         ),
@@ -864,6 +802,39 @@ class StyledDock extends StatelessWidget {
     );
   }
 
+  /// Centre zone. Carries the subtitle too — the design puts the stream's
+  /// identity here, which is why the wide dock does not repeat the title in a
+  /// top bar the way the narrow arrangements do.
+  Widget _nowPlaying() {
+    final hasSubtitle = subtitle?.isNotEmpty ?? false;
+    if (title.isEmpty && !hasSubtitle) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (title.isNotEmpty)
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: palette.ink,
+              fontSize: metrics.label * 1.05,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        if (hasSubtitle)
+          Text(
+            subtitle!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: palette.inkDim, fontSize: metrics.label),
+          ),
+      ],
+    );
+  }
+
   List<Widget> _transport() {
     return [
       if (hasPrevious && onPrevious != null) ...[
@@ -874,7 +845,7 @@ class StyledDock extends StatelessWidget {
           metrics: metrics,
           palette: palette,
         ),
-        SizedBox(width: metrics.gap * 4),
+        SizedBox(width: metrics.gap * 1.5),
       ],
       DockTransportButton(
         icon: isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
@@ -885,7 +856,7 @@ class StyledDock extends StatelessWidget {
         palette: palette,
       ),
       if (hasNext && onNext != null) ...[
-        SizedBox(width: metrics.gap * 4),
+        SizedBox(width: metrics.gap * 1.5),
         DockTransportButton(
           icon: Icons.skip_next_rounded,
           label: 'Next',

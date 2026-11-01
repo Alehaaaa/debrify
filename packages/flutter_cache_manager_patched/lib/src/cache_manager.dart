@@ -214,12 +214,15 @@ class CacheManager implements BaseCacheManager {
     String fileExtension = 'file',
   }) async {
     key ??= url;
-    final cacheObject = (await _store.retrieveCacheData(key) ?? CacheObject(
+    var cacheObject = await _store.retrieveCacheData(key);
+    cacheObject ??= CacheObject(
       url,
       key: key,
       relativePath: '${const Uuid().v1()}.$fileExtension',
       validTill: DateTime.now().add(maxAge),
-    )).copyWith(
+    );
+
+    cacheObject = cacheObject.copyWith(
       validTill: DateTime.now().add(maxAge),
       eTag: eTag,
     );
@@ -227,7 +230,7 @@ class CacheManager implements BaseCacheManager {
     final file = await _config.fileSystem.createFile(cacheObject.relativePath);
     await _store.whileWriting(cacheObject.relativePath, () async {
       await file.writeAsBytes(fileBytes);
-      await _store.putFile(cacheObject);
+      await _store.putFile(cacheObject!);
       _store.protectFile(cacheObject.relativePath);
     });
     return file;
@@ -250,11 +253,14 @@ class CacheManager implements BaseCacheManager {
     String fileExtension = 'file',
   }) async {
     key ??= url;
-    final cacheObject = (await _store.retrieveCacheData(key) ?? CacheObject(url,
+    var cacheObject = await _store.retrieveCacheData(key);
+    cacheObject ??= CacheObject(url,
         key: key,
         relativePath: '${const Uuid().v1()}'
             '.$fileExtension',
-        validTill: DateTime.now().add(maxAge))).copyWith(
+        validTill: DateTime.now().add(maxAge));
+
+    cacheObject = cacheObject.copyWith(
       validTill: DateTime.now().add(maxAge),
       eTag: eTag,
     );
@@ -269,7 +275,7 @@ class CacheManager implements BaseCacheManager {
           .map((event) => event)
           .pipe(sink);
 
-      await _store.putFile(cacheObject);
+      await _store.putFile(cacheObject!);
       _store.protectFile(cacheObject.relativePath);
     });
     return file;

@@ -5,7 +5,6 @@ import '../../screens/debrify_tv/widgets/tv_focus_scroll_wrapper.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../theme/widgets/focus_expression.dart';
 import '../../utils/tv_keys.dart';
 
@@ -134,13 +133,10 @@ class _CloudFileRowState extends State<CloudFileRow> {
   bool _hovered = false;
 
   FocusNode get _rowNode =>
-      widget.focusNode ??
-      (_internalNode ??= FocusNode(debugLabel: 'cloud-row'));
+      widget.focusNode ?? (_internalNode ??= FocusNode(debugLabel: 'cloud-row'));
 
-  List<CloudRowAction> get _stripActions => [
-    for (final a in widget.actions)
-      if (a.showInStrip && a.enabled) a,
-  ];
+  List<CloudRowAction> get _stripActions =>
+      [for (final a in widget.actions) if (a.showInStrip && a.enabled) a];
 
   bool get _hasMenu => widget.actions.isNotEmpty;
 
@@ -164,14 +160,12 @@ class _CloudFileRowState extends State<CloudFileRow> {
   void _syncStripNodes() {
     final want = _stripSlotCount;
     while (_stripNodes.length < want) {
-      _stripNodes.add(
-        FocusNode(
-          debugLabel: 'cloud-row-action-${_stripNodes.length}',
-          // Reachable only via the row's explicit ←/→ handling (or a route
-          // restoring focus) — never by tab or geometric arrow traversal.
-          skipTraversal: true,
-        ),
-      );
+      _stripNodes.add(FocusNode(
+        debugLabel: 'cloud-row-action-${_stripNodes.length}',
+        // Reachable only via the row's explicit ←/→ handling (or a route
+        // restoring focus) — never by tab or geometric arrow traversal.
+        skipTraversal: true,
+      ));
     }
     while (_stripNodes.length > want) {
       final node = _stripNodes.removeLast();
@@ -215,7 +209,8 @@ class _CloudFileRowState extends State<CloudFileRow> {
   Future<void> _openMenu({Offset? globalPosition}) async {
     if (widget.actions.isEmpty || !mounted) return;
 
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
     RelativeRect position;
     final anchorContext = _moreKey.currentContext ?? context;
     final anchorBox = anchorContext.findRenderObject() as RenderBox?;
@@ -230,10 +225,8 @@ class _CloudFileRowState extends State<CloudFileRow> {
       position = RelativeRect.fromRect(
         Rect.fromPoints(
           anchorBox.localToGlobal(Offset.zero, ancestor: overlay),
-          anchorBox.localToGlobal(
-            anchorBox.size.bottomRight(Offset.zero),
-            ancestor: overlay,
-          ),
+          anchorBox.localToGlobal(anchorBox.size.bottomRight(Offset.zero),
+              ancestor: overlay),
         ),
         Offset.zero & overlay.size,
       );
@@ -244,7 +237,6 @@ class _CloudFileRowState extends State<CloudFileRow> {
     final app = AppThemeScope.of(context);
     final hadFocus = _rowNode.hasFocus;
     final chosen = await showMenu<CloudRowAction>(
-      popUpAnimationStyle: kPopupMenuAnimation,
       context: context,
       position: position,
       color: app.cloud.menuSurface,
@@ -267,8 +259,8 @@ class _CloudFileRowState extends State<CloudFileRow> {
                   color: !action.enabled
                       ? app.fade(app.core.tx, 0.3)
                       : action.destructive
-                      ? app.cloud.destructive
-                      : app.fade(app.core.tx, 0.75),
+                          ? app.cloud.destructive
+                          : app.fade(app.core.tx, 0.75),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -279,8 +271,8 @@ class _CloudFileRowState extends State<CloudFileRow> {
                     color: !action.enabled
                         ? app.fade(app.core.tx, 0.35)
                         : action.destructive
-                        ? app.cloud.destructive
-                        : app.fade(app.core.tx, 0.95),
+                            ? app.cloud.destructive
+                            : app.fade(app.core.tx, 0.95),
                   ),
                 ),
               ],
@@ -365,19 +357,17 @@ class _CloudFileRowState extends State<CloudFileRow> {
   /// Was a `static const` map; a token read needs the resolved theme, and a
   /// static field cannot take one. Same table, same tuples — the kind→style
   /// lookup is just parameterised on the theme now.
-  static (IconData, Color) _iconChipStyle(
-    CloudRowKind kind,
-    AppTheme app,
-  ) => switch (kind) {
-    CloudRowKind.folder => (Icons.folder_rounded, app.cloud.categoryFolder),
-    CloudRowKind.video => (Icons.play_arrow_rounded, app.cloud.categoryVideo),
-    CloudRowKind.file => (Icons.insert_drive_file_rounded, app.core.tx),
-    CloudRowKind.season => (
-      Icons.video_library_rounded,
-      app.cloud.categorySeason,
-    ),
-    CloudRowKind.error => (Icons.error_outline_rounded, app.cloud.statusError),
-  };
+  static (IconData, Color) _iconChipStyle(CloudRowKind kind, AppTheme app) =>
+      switch (kind) {
+        CloudRowKind.folder => (Icons.folder_rounded, app.cloud.categoryFolder),
+        CloudRowKind.video =>
+          (Icons.play_arrow_rounded, app.cloud.categoryVideo),
+        CloudRowKind.file => (Icons.insert_drive_file_rounded, app.core.tx),
+        CloudRowKind.season =>
+          (Icons.video_library_rounded, app.cloud.categorySeason),
+        CloudRowKind.error =>
+          (Icons.error_outline_rounded, app.cloud.statusError),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -415,16 +405,6 @@ class _CloudFileRowState extends State<CloudFileRow> {
       borderColor = Colors.transparent;
       bgColor = Colors.transparent;
     }
-    // The glass look keeps quiet shelf rows visibly connected to the other
-    // panes, while selection and focus retain their semantic accent colours.
-    if (GlassChrome.enabled(app)) {
-      if (!engaged && !(widget.selectionMode && widget.selected)) {
-        bgColor = GlassChrome.fill(app);
-      }
-      if (borderColor == Colors.transparent) {
-        borderColor = GlassChrome.edge(app, active: engaged);
-      }
-    }
 
     final (chipIcon, chipColor) = _iconChipStyle(widget.kind, app);
     final iconChip = Container(
@@ -432,9 +412,7 @@ class _CloudFileRowState extends State<CloudFileRow> {
       height: 34,
       decoration: BoxDecoration(
         color: app.fade(
-          chipColor,
-          widget.kind == CloudRowKind.file ? 0.06 : 0.13,
-        ),
+            chipColor, widget.kind == CloudRowKind.file ? 0.06 : 0.13),
         borderRadius: app.shape.br(9),
       ),
       child: Icon(
@@ -462,7 +440,10 @@ class _CloudFileRowState extends State<CloudFileRow> {
       if (widget.meta != null && widget.meta!.isNotEmpty)
         Text(
           widget.meta!,
-          style: TextStyle(fontSize: 12, color: app.fade(app.core.tx, 0.5)),
+          style: TextStyle(
+            fontSize: 12,
+            color: app.fade(app.core.tx, 0.5),
+          ),
         ),
       for (final badge in widget.badges) _badge(badge, app),
     ];
@@ -476,9 +457,8 @@ class _CloudFileRowState extends State<CloudFileRow> {
           );
 
     final showStrip = !widget.selectionMode && _stripNodes.isNotEmpty;
-    final strip = showStrip
-        ? _buildStrip(engaged: engaged, compact: compact, app: app)
-        : null;
+    final strip =
+        showStrip ? _buildStrip(engaged: engaged, compact: compact, app: app) : null;
 
     final leadingCheckbox = widget.selectionMode
         ? Padding(
@@ -491,7 +471,10 @@ class _CloudFileRowState extends State<CloudFileRow> {
                     : null,
                 activeColor: app.cloud.accent,
                 visualDensity: VisualDensity.compact,
-                side: BorderSide(color: app.fade(app.core.tx, 0.4), width: 1.5),
+                side: BorderSide(
+                  color: app.fade(app.core.tx, 0.4),
+                  width: 1.5,
+                ),
               ),
             ),
           )
@@ -500,11 +483,10 @@ class _CloudFileRowState extends State<CloudFileRow> {
     // One skeleton for both widths; compact only moves the strip onto the
     // meta line (and the title gets its second line via maxLines above).
     final content = Row(
-      crossAxisAlignment: compact
-          ? CrossAxisAlignment.start
-          : CrossAxisAlignment.center,
+      crossAxisAlignment:
+          compact ? CrossAxisAlignment.start : CrossAxisAlignment.center,
       children: [
-        ?leadingCheckbox,
+        if (leadingCheckbox != null) leadingCheckbox,
         iconChip,
         const SizedBox(width: 12),
         Expanded(
@@ -517,7 +499,7 @@ class _CloudFileRowState extends State<CloudFileRow> {
                 Row(
                   children: [
                     Expanded(child: metaLine ?? const SizedBox.shrink()),
-                    ?strip,
+                    if (strip != null) strip,
                   ],
                 ),
               ] else if (!compact && metaLine != null) ...[
@@ -531,7 +513,10 @@ class _CloudFileRowState extends State<CloudFileRow> {
             ],
           ),
         ),
-        if (!compact && strip != null) ...[const SizedBox(width: 8), strip],
+        if (!compact && strip != null) ...[
+          const SizedBox(width: 8),
+          strip,
+        ],
         if (!compact &&
             !widget.selectionMode &&
             widget.kind == CloudRowKind.folder &&
@@ -563,8 +548,7 @@ class _CloudFileRowState extends State<CloudFileRow> {
             onTap: _handlePrimary,
             onLongPressStart: widget.selectionMode
                 ? null
-                : (details) =>
-                      _openMenu(globalPosition: details.globalPosition),
+                : (details) => _openMenu(globalPosition: details.globalPosition),
             // The row's gap moved out of the Container's `margin` and into a
             // Padding above the cursor, because a margin is part of the box the
             // cursor would wrap: left where it was, the theme's ring would draw
@@ -573,22 +557,22 @@ class _CloudFileRowState extends State<CloudFileRow> {
             child: Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: _cursor(
-                app: app,
-                focused: rowFocused,
-                radius: 10,
-                child: AnimatedContainer(
-                  duration: motion.scaled(const Duration(milliseconds: 150)),
-                  padding: compact
-                      ? const EdgeInsets.fromLTRB(12, 10, 8, 8)
-                      : const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: app.shape.br(10),
-                    border: Border.all(color: borderColor, width: 1.5),
-                  ),
-                  child: content,
-                ),
+              app: app,
+              focused: rowFocused,
+              radius: 10,
+              child: AnimatedContainer(
+              duration: motion.scaled(const Duration(milliseconds: 150)),
+              padding: compact
+                  ? const EdgeInsets.fromLTRB(12, 10, 8, 8)
+                  : const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: app.shape.br(10),
+                border: Border.all(color: borderColor, width: 1.5),
               ),
+              child: content,
+            ),
+            ),
             ),
           ),
         ),
@@ -608,17 +592,18 @@ class _CloudFileRowState extends State<CloudFileRow> {
     required bool focused,
     required double radius,
     required Widget child,
-  }) => app.isLegacy
-      ? child
-      : FocusExpressionBox(
-          focused: focused,
-          radius: radius,
-          // Full-width row — same rule as SourceRow: the poster-scale
-          // lift would push the row past both screen edges.
-          shape: ParallaxShape.settingsRow,
-          on: app.core.ground,
-          child: child,
-        );
+  }) =>
+      app.isLegacy
+          ? child
+          : FocusExpressionBox(
+              focused: focused,
+              radius: radius,
+              // Full-width row — same rule as SourceRow: the poster-scale
+              // lift would push the row past both screen edges.
+              shape: ParallaxShape.settingsRow,
+              on: app.core.ground,
+              child: child,
+            );
 
   Widget _buildStrip({
     required bool engaged,
@@ -693,30 +678,30 @@ class _CloudFileRowState extends State<CloudFileRow> {
               focused: focused,
               radius: 8,
               child: AnimatedContainer(
-                key: anchorKey,
-                duration: const Duration(milliseconds: 150),
-                width: size,
-                height: size,
-                decoration: BoxDecoration(
-                  color: focused
-                      ? app.fade(app.core.tx, 0.08)
+              key: anchorKey,
+              duration: const Duration(milliseconds: 150),
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                color: focused
+                    ? app.fade(app.core.tx, 0.08)
+                    : Colors.transparent,
+                borderRadius: app.shape.br(8),
+                border: Border.all(
+                  color: focused && app.isLegacy
+                      ? app.cloud.accent
                       : Colors.transparent,
-                  borderRadius: app.shape.br(8),
-                  border: Border.all(
-                    color: focused && app.isLegacy
-                        ? app.cloud.accent
-                        : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  size: 18,
-                  color: focused
-                      ? app.core.tx
-                      : app.fade(app.core.tx, engaged ? 0.9 : 0.45),
+                  width: 2,
                 ),
               ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: focused
+                    ? app.core.tx
+                    : app.fade(app.core.tx, engaged ? 0.9 : 0.45),
+              ),
+            ),
             ),
           ),
         ),

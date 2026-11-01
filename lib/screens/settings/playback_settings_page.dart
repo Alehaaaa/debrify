@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'external_player_settings_page.dart';
 import 'playback_settings_section.dart';
@@ -18,6 +20,7 @@ class _PlaybackSettingsPageState extends State<PlaybackSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('playback_settings');
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;

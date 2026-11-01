@@ -8,8 +8,6 @@ import '../../services/media_server_watch_sync.dart';
 import '../../services/profiles/profile_collection_resource_facade.dart';
 import '../../services/profiles/profile_runtime.dart';
 import '../../widgets/tv_text_field.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import 'widgets/settings_widgets.dart';
 
 class MediaServerSettingsPage extends StatefulWidget {
@@ -127,14 +125,9 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
       return;
     }
     if (!mounted || ProfileRuntime.scope.value != scope) return;
-    final app = AppThemeScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: GlassChrome.enabled(app)
-            ? GlassChrome.fill(app, raised: true)
-            : null,
-        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: Text('Disconnect ${resource.label}?'),
         content: Text(
           borrowers > 0
@@ -186,7 +179,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
             padding: const EdgeInsets.all(24),
             children: [
               const Text(
-                'Connect a media server to show its movies and episodes in Sources. Files play directly in Nextup; watch progress is saved in Nextup.',
+                'Connect a media server to show its movies and episodes in Sources. Files play directly in Debrify; watch progress is saved in Debrify.',
               ),
               const SizedBox(height: 12),
               const Text(
@@ -197,7 +190,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
                   icon: Icons.sync,
                   title: 'Sync server watch progress',
                   subtitle:
-                      'For this Nextup profile: resume from the selected server and report playback/watched status back. Shared connections update the same server user. Applies to new playback sessions; no background library sync.',
+                      'For this Debrify profile: resume from the selected server and report playback/watched status back. Shared connections update the same server user. Applies to new playback sessions; no background library sync.',
                   subtitleMaxLines: 5,
                   value: _watchSync,
                   onChanged: _setWatchSync,
@@ -209,7 +202,7 @@ class _MediaServerSettingsPageState extends State<MediaServerSettingsPage> {
               ],
               if (!ProfileCollectionResourceFacade.active)
                 const Text(
-                  'An active Nextup profile is required to store server credentials securely.',
+                  'An active Debrify profile is required to store server credentials securely.',
                 ),
               for (final resource in _connections)
                 Card(

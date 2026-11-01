@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/tv_hero_artwork_quality.dart';
+import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/tv_hero_artwork_quality_controller.dart';
 import '../../theme/app_theme_scope.dart';
@@ -61,6 +62,7 @@ class _TvHeroArtworkQualityPageState extends State<TvHeroArtworkQualityPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('tv_hero_artwork_quality_settings');
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -119,7 +121,7 @@ class _TvHeroArtworkQualityPageState extends State<TvHeroArtworkQualityPage> {
                 const SizedBox(height: 14),
                 Text(
                   'The source image is unchanged. This controls the maximum '
-                  'size Nextup decodes into memory for Home hero and stage '
+                  'size Debrify decodes into memory for Home hero and stage '
                   'artwork. Portrait poster fallbacks are also height-bounded '
                   'to avoid oversized textures. Changes apply immediately.',
                   style: TextStyle(fontSize: 12.5, height: 1.45, color: t.dim),

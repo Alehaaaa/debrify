@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:debrify/services/engine/local_engine_storage.dart';
-import 'package:debrify/utils/app_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 // ignore: depend_on_referenced_packages
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -17,13 +16,6 @@ class _FakePathProvider extends PathProviderPlatform {
     await directory.create(recursive: true);
     return directory.path;
   }
-
-  @override
-  Future<String?> getApplicationSupportPath() async {
-    final directory = Directory('$root/support');
-    await directory.create(recursive: true);
-    return directory.path;
-  }
 }
 
 void main() {
@@ -34,7 +26,6 @@ void main() {
 
   setUpAll(() async {
     storageRoot = await Directory.systemTemp.createTemp('engine_transaction');
-    AppStorage.debugReset();
     PathProviderPlatform.instance = _FakePathProvider(storageRoot.path);
     storage = LocalEngineStorage.instance;
     await storage.clearAll();
@@ -42,7 +33,6 @@ void main() {
 
   tearDownAll(() async {
     await storage.clearAll();
-    AppStorage.debugReset();
     await storageRoot.delete(recursive: true);
   });
 

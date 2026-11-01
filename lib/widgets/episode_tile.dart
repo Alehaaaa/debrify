@@ -8,7 +8,6 @@ import '../utils/tv_keys.dart';
 import 'detail/theme/detail_theme.dart';
 import 'trakt/trakt_menu_helpers.dart';
 import 'home/home_theme.dart';
-import 'hold_feedback.dart';
 
 /// OTT episode card. A big 16:9 still (play / resume bar / badge live on the
 /// image), with the title/meta/synopsis on the solid card — below the still
@@ -30,11 +29,6 @@ class EpisodeTile extends StatefulWidget {
   final void Function(TraktEpisodeMenuAction action)? onMenuAction;
   final VoidCallback? onTrackerOptions;
 
-  /// Downloads library: delete this episode's downloaded file, inline on the
-  /// row. Null everywhere else, so the trash action only appears for a
-  /// downloaded episode.
-  final VoidCallback? onDeleteDownload;
-
   const EpisodeTile({
     super.key,
     required this.episode,
@@ -48,7 +42,6 @@ class EpisodeTile extends StatefulWidget {
     this.focusNode,
     this.onMenuAction,
     this.onTrackerOptions,
-    this.onDeleteDownload,
   });
 
   @override
@@ -124,13 +117,6 @@ class _EpisodeTileState extends State<EpisodeTile> {
           iconOnly: true,
           onTap: widget.onTrackerOptions!,
         ),
-      if (widget.onDeleteDownload != null)
-        _EpAction(
-          icon: Icons.delete_outline_rounded,
-          label: 'Delete download',
-          iconOnly: true,
-          onTap: widget.onDeleteDownload!,
-        ),
     ];
   }
 
@@ -180,48 +166,43 @@ class _EpisodeTileState extends State<EpisodeTile> {
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
-        child: HoldFeedback(
-          borderRadius: BorderRadius.circular(16),
-          child: GestureDetector(
-            onTap: _primary,
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedScale(
+        child: GestureDetector(
+          onTap: _primary,
+          behavior: HitTestBehavior.opaque,
+          child: AnimatedScale(
+            duration: _fx,
+            curve: Curves.easeOutCubic,
+            scale: _active ? 1.012 : 1.0,
+            child: AnimatedContainer(
               duration: _fx,
-              curve: Curves.easeOutCubic,
-              scale: _active ? 1.012 : 1.0,
-              child: AnimatedContainer(
-                duration: _fx,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF14141C),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _active
-                        ? _t.focus
-                        : Colors.white.withValues(alpha: 0.06),
-                    width: _active ? 2.5 : 1,
+              decoration: BoxDecoration(
+                color: const Color(0xFF14141C),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _active
+                      ? _t.focus
+                      : Colors.white.withValues(alpha: 0.06),
+                  width: _active ? 2.5 : 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: _active ? 0.55 : 0.3),
+                    blurRadius: _active ? 28 : 12,
+                    offset: const Offset(0, 10),
                   ),
-                  boxShadow: [
+                  if (_active)
                     BoxShadow(
-                      color: Colors.black.withValues(
-                        alpha: _active ? 0.55 : 0.3,
-                      ),
-                      blurRadius: _active ? 28 : 12,
-                      offset: const Offset(0, 10),
+                      color: _t.fade(_t.focus, 0.38),
+                      blurRadius: 32,
+                      spreadRadius: 1,
                     ),
-                    if (_active)
-                      BoxShadow(
-                        color: _t.fade(_t.focus, 0.38),
-                        blurRadius: 32,
-                        spreadRadius: 1,
-                      ),
-                  ],
-                ),
-                child: LayoutBuilder(
-                  builder: (context, c) {
-                    final wide = c.maxWidth >= 560;
-                    return wide ? _horizontal() : _vertical();
-                  },
-                ),
+                ],
+              ),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  final wide = c.maxWidth >= 560;
+                  return wide ? _horizontal() : _vertical();
+                },
               ),
             ),
           ),
@@ -316,8 +297,8 @@ class _EpisodeTileState extends State<EpisodeTile> {
       fit: BoxFit.cover,
       color: blend?.$1,
       colorBlendMode: blend?.$2,
-      placeholder: (_, _) => _imgFallback(e),
-      errorWidget: (_, _, _) => _imgFallback(e),
+      placeholder: (_, __) => _imgFallback(e),
+      errorWidget: (_, __, ___) => _imgFallback(e),
     );
   }
 

@@ -1,11 +1,12 @@
+import 'package:debrify/services/storage/mdblist_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../theme/widgets/parallax_focus.dart';
+import '../../../services/analytics_service.dart';
 import '../../../services/main_page_bridge.dart';
 import '../../../services/mdblist/mdblist_service.dart';
-import '../../../services/storage_service.dart';
 import '../../tv_text_field.dart';
 import '../controllers/tracker_auth_controller.dart';
 import '../onboarding_focus.dart';
@@ -53,7 +54,7 @@ class TrackersStep extends StatelessWidget {
       return ListView.separated(
         padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: cards.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (_, index) => SizedBox(height: 210, child: cards[index]),
       );
     }
@@ -206,7 +207,11 @@ class TrackersStep extends StatelessWidget {
                         });
                         return;
                       }
-                      await StorageService.setMdblistSyncCatalogItems(true);
+                      await MdblistStorage.setMdblistSyncCatalogItems(true);
+                      AnalyticsService.integrationConnected('mdblist', {
+                        'surface': 'onboarding',
+                        'method': 'api_key',
+                      });
                       MainPageBridge.notifyIntegrationChanged();
                       onMdblistConnected();
                       if (dialogContext.mounted) Navigator.pop(dialogContext);

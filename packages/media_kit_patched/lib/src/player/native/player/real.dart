@@ -1,8 +1,8 @@
-// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-//
-// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-// All rights reserved.
-// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+///
+/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+/// All rights reserved.
+/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:io';
 import 'dart:ffi';
 import 'dart:async';
@@ -69,12 +69,6 @@ void nativeEnsureInitialized({String? libmpv}) {
     final cmd = 'quit'.toNativeUtf8();
     try {
       for (final reference in references) {
-        // Detach the previous isolate's wakeup callback FIRST. It died with
-        // that isolate, and mpv calls it for every event — including the
-        // load/unload hooks it runs while honouring `quit` — which aborts the
-        // VM ("Callback invoked after it has been deleted"). The regular
-        // dispose path does the same before releasing a handle.
-        mpv.mpv_set_wakeup_callback(reference.cast(), nullptr, nullptr);
         mpv.mpv_command_string(reference.cast(), cmd.cast());
       }
     } finally {
@@ -795,6 +789,8 @@ class NativePlayer extends PlatformPlayer {
             await _setPropertyString('loop-playlist', 'yes');
             break;
           }
+        default:
+          break;
       }
 
       state = state.copyWith(playlistMode: playlistMode);

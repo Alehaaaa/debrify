@@ -1,6 +1,7 @@
+import 'package:debrify/services/storage/premiumize_storage.dart';
 import 'package:flutter/material.dart';
-import '../../services/storage_service.dart';
 import '../../services/premiumize_account_service.dart';
+import '../../services/analytics_service.dart';
 import '../../widgets/premiumize_account_status_widget.dart';
 import '../../services/main_page_bridge.dart';
 import '../../utils/platform_util.dart';
@@ -34,16 +35,17 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenView('premiumize_settings');
     _load();
   }
 
   Future<void> _load() async {
-    final configured = await StorageService.hasPremiumizeCredential();
+    final configured = await PremiumizeStorage.hasPremiumizeCredential();
     final integrationEnabled =
-        await StorageService.getPremiumizeIntegrationEnabled();
-    final cachePref = await StorageService.getPremiumizeCacheCheckEnabled();
-    final postAction = await StorageService.getPremiumizePostTorrentAction();
-    final hiddenFromNav = await StorageService.getPremiumizeHiddenFromNav();
+        await PremiumizeStorage.getPremiumizeIntegrationEnabled();
+    final cachePref = await PremiumizeStorage.getPremiumizeCacheCheckEnabled();
+    final postAction = await PremiumizeStorage.getPremiumizePostTorrentAction();
+    final hiddenFromNav = await PremiumizeStorage.getPremiumizeHiddenFromNav();
     setState(() {
       _savedApiKey = configured ? '' : null;
       _integrationEnabled = integrationEnabled;
@@ -95,12 +97,12 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
 
   Future<void> _updateCacheCheck(bool value) async {
     setState(() => _checkCacheBeforeSearch = value);
-    await StorageService.setPremiumizeCacheCheckEnabled(value);
+    await PremiumizeStorage.setPremiumizeCacheCheckEnabled(value);
   }
 
   Future<void> _savePostAction(String value) async {
     setState(() => _postTorrentAction = value);
-    await StorageService.savePremiumizePostTorrentAction(value);
+    await PremiumizeStorage.savePremiumizePostTorrentAction(value);
     _snack('Preference saved');
   }
 
@@ -145,13 +147,16 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
       _apiKeyController.clear();
     });
     _refocusOnTv(_logoutButtonFocusNode);
+    AnalyticsService.integrationConnected('premiumize', {
+      'surface': 'settings',
+    });
     _snack('Premiumize connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }
 
   Future<void> _deleteKey() async {
     try {
-      await StorageService.deletePremiumizeApiKey();
+      await PremiumizeStorage.deletePremiumizeApiKey();
     } catch (_) {
       _snack(
         'This connection is shared. Revoke or transfer profile access before disconnecting.',
@@ -161,7 +166,7 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
     }
     // Reset the hide-from-nav flag so the tab reappears after re-login
     // (matches the Torbox/PikPak logout-to-unhide security model).
-    await StorageService.clearPremiumizeHiddenFromNav();
+    await PremiumizeStorage.clearPremiumizeHiddenFromNav();
     PremiumizeAccountService.clearUserInfo();
     if (mounted) {
       setState(() => _hiddenFromNav = false);
@@ -220,7 +225,7 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
 
       if (confirmed != true) return;
 
-      await StorageService.setPremiumizeHiddenFromNav(true);
+      await PremiumizeStorage.setPremiumizeHiddenFromNav(true);
       setState(() => _hiddenFromNav = true);
       MainPageBridge.notifyIntegrationChanged();
       _snack('Premiumize hidden from navigation', err: false);
@@ -257,7 +262,7 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
         _isEditing = false;
       }
     });
-    await StorageService.setPremiumizeIntegrationEnabled(value);
+    await PremiumizeStorage.setPremiumizeIntegrationEnabled(value);
     MainPageBridge.notifyIntegrationChanged();
     if (!mounted) return;
     if (value && _savedApiKey != null) {
@@ -711,7 +716,7 @@ class _PremiumizeSettingsPageState extends State<PremiumizeSettingsPage> {
                                         SettingsSelectOption(
                                           'channel',
                                           'Add to channel',
-                                          'Cache this torrent in a Nextup TV channel',
+                                          'Cache this torrent in a Debrify TV channel',
                                         ),
                                       ],
                                     ),

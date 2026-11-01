@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../utils/platform_util.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 
 /// Design tokens for the cinematic Home screen.
 ///
@@ -102,13 +100,13 @@ class HomeTheme {
   // snapping in. A short fade is the soft landing at negligible cost.
   static Duration imageFadeIn(bool isTelevision) => isTelevision
       ? (PlatformUtil.isAndroidTvCached
-            ? const Duration(milliseconds: 220)
-            : const Duration(milliseconds: 150))
+          ? const Duration(milliseconds: 220)
+          : const Duration(milliseconds: 150))
       : const Duration(milliseconds: 500);
   static Duration imageFadeOut(bool isTelevision) => isTelevision
       ? (PlatformUtil.isAndroidTvCached
-            ? const Duration(milliseconds: 180)
-            : const Duration(milliseconds: 150))
+          ? const Duration(milliseconds: 180)
+          : const Duration(milliseconds: 150))
       : const Duration(milliseconds: 1000);
 
   // ── Responsive ────────────────────────────────────────────────────────────
@@ -162,78 +160,3 @@ class HomeMetrics {
   );
 }
 
-/// Cinematic section header used by all Home sections.
-///
-/// Apple-TV-inspired: oversized bold title, no chrome. An inline muted count
-/// sits to the right of the title for tally without distracting from content.
-class HomeSectionHeader extends StatelessWidget {
-  final String title;
-  final int? count;
-  final Widget? trailing;
-  final bool isTelevision;
-  final EdgeInsetsGeometry? padding;
-
-  const HomeSectionHeader({
-    super.key,
-    required this.title,
-    this.count,
-    this.trailing,
-    this.isTelevision = false,
-    this.padding,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final m = HomeTheme.metricsOf(context, isTelevision: isTelevision);
-    final app = AppThemeScope.of(context);
-    final frosted = GlassChrome.enabled(app);
-    final fontSize = m.headerFontSize + 4;
-
-    return Padding(
-      padding:
-          padding ??
-          EdgeInsets.fromLTRB(
-            m.sectionHPadding,
-            m.sectionVPadding + 18,
-            m.sectionHPadding,
-            m.sectionVPadding + 6,
-          ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Flexible(
-            child: Text(
-              title,
-              style: TextStyle(
-                color: frosted ? app.core.tx : Colors.white,
-                fontSize: fontSize,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-                height: 1.1,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (count != null && count! > 0) ...[
-            const SizedBox(width: 10),
-            Text(
-              '$count',
-              style: TextStyle(
-                color: frosted
-                    ? app.core.tx.withValues(alpha: 0.52)
-                    : Colors.white.withValues(alpha: 0.32),
-                fontSize: fontSize - 6,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
-          const Spacer(),
-          ?trailing,
-        ],
-      ),
-    );
-  }
-}

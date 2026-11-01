@@ -1,52 +1,13 @@
 import 'package:flutter/services.dart';
 
+import '../models/local_source_document.dart';
 import '../screens/video_player/models/playlist_entry.dart';
 import '../utils/file_utils.dart';
 import '../utils/series_parser.dart';
 import 'series_source_service.dart';
 
-/// Document URIs stay opaque: display names are used only for episode parsing.
-class LocalSourceDocument {
-  const LocalSourceDocument({
-    required this.uri,
-    required this.name,
-    required this.relativePath,
-    required this.isDirectory,
-    required this.sizeBytes,
-    required this.modifiedAt,
-  });
-
-  factory LocalSourceDocument.fromMap(Map<dynamic, dynamic> map) =>
-      LocalSourceDocument(
-        uri: map['uri'] as String,
-        name: map['name'] as String,
-        relativePath: map['relativePath'] as String,
-        isDirectory: map['isDirectory'] == true,
-        sizeBytes: (map['sizeBytes'] as num?)?.toInt() ?? 0,
-        modifiedAt: (map['modifiedAt'] as num?)?.toInt() ?? 0,
-      );
-
-  final String uri;
-  final String name;
-  final String relativePath;
-  final bool isDirectory;
-  final int sizeBytes;
-  final int modifiedAt;
-
-  SeriesSource toSource() => SeriesSource(
-    torrentHash: SeriesSource.localSourceHash(uri),
-    torrentName: name,
-    debridService: SeriesSource.localService,
-    debridTorrentId: uri,
-    boundAt: DateTime.now().millisecondsSinceEpoch,
-    localUri: uri,
-    localKind: isDirectory
-        ? SeriesSource.localKindSeriesFolder
-        : SeriesSource.localKindMovieFile,
-    localSizeBytes: sizeBytes,
-    localModifiedAt: modifiedAt,
-  );
-}
+export '../models/local_source_document.dart'
+    show LocalSourceDocument, LocalSourceUnavailable;
 
 class AndroidLocalEpisode {
   const AndroidLocalEpisode(this.document, this.season, this.episode);
@@ -59,11 +20,6 @@ class AndroidLocalResolution {
   const AndroidLocalResolution(this.playlist, this.startIndex);
   final List<PlaylistEntry> playlist;
   final int startIndex;
-}
-
-class LocalSourceUnavailable implements Exception {
-  const LocalSourceUnavailable(this.message);
-  final String message;
 }
 
 abstract final class AndroidLocalSourceService {

@@ -1,5 +1,9 @@
 import 'dart:async';
 
+import 'package:debrify/models/home_preferences.dart';
+import 'package:debrify/services/storage/discover_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:debrify/services/storage/home_page_storage.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_save_feedback.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_scheduler.dart';
 
@@ -9,7 +13,6 @@ import 'package:debrify/services/profiles/profile_preferences.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/profiles/sanitized_profile_preferences.dart';
-import 'package:debrify/services/storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -58,50 +61,68 @@ void main() {
     'Midnight rain persists and validates as a portable animation choice',
     () async {
       ProfileRuntime.initializeLegacy();
-      for (final style in const [
-        'snowy_mountain',
-        'midnight_rain',
+      await HomeAppearanceStorage.setHomeAnimationStyle('moonlit_ocean');
+      expect(
+        await HomeAppearanceStorage.getHomeAnimationStyle(),
         'moonlit_ocean',
-        'northern_lights',
-        'ember_dusk',
-        'meteor_night',
-      ]) {
-        await StorageService.setHomeAnimationStyle(style);
-        expect(await StorageService.getHomeAnimationStyle(), style);
-        expect(
-          SanitizedProfilePreferences.allowsEntry(
-            'home_animation_style',
-            style,
-          ),
-          isTrue,
-        );
-      }
+      );
+      expect(
+        SanitizedProfilePreferences.allowsEntry(
+          'home_animation_style',
+          'moonlit_ocean',
+        ),
+        isTrue,
+      );
+      await HomeAppearanceStorage.setHomeAnimationStyle('midnight_rain');
+      expect(
+        await HomeAppearanceStorage.getHomeAnimationStyle(),
+        'midnight_rain',
+      );
+      expect(
+        SanitizedProfilePreferences.allowsEntry(
+          'home_animation_style',
+          'midnight_rain',
+        ),
+        isTrue,
+      );
       await expectLater(
-        StorageService.setHomeAnimationStyle('unknown'),
+        HomeAppearanceStorage.setHomeAnimationStyle('unknown'),
         throwsArgumentError,
       );
-      expect(await StorageService.getHomeAnimationStyle(), 'meteor_night');
+      expect(
+        await HomeAppearanceStorage.getHomeAnimationStyle(),
+        'midnight_rain',
+      );
       final prefs = await ProfilePreferences.instance();
       await prefs.setString('home_animation_style', 'future-style');
-      expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
+      expect(
+        await HomeAppearanceStorage.getHomeAnimationStyle(),
+        'snowy_mountain',
+      );
     },
   );
 
   test('Home animations default off, persist per profile and reset', () async {
     ProfileRuntime.initializeLegacy();
-    expect(await StorageService.getHomeAnimationsEnabled(), isFalse);
-    expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
-    await StorageService.setHomeAnimationsEnabled(true);
-    await StorageService.setHomeAnimationStyle('snowy_mountain');
-    expect(await StorageService.getHomeAnimationsEnabled(), isTrue);
+    expect(await HomeAppearanceStorage.getHomeAnimationsEnabled(), isFalse);
+    expect(
+      await HomeAppearanceStorage.getHomeAnimationStyle(),
+      'snowy_mountain',
+    );
+    await HomeAppearanceStorage.setHomeAnimationsEnabled(true);
+    await HomeAppearanceStorage.setHomeAnimationStyle('snowy_mountain');
+    expect(await HomeAppearanceStorage.getHomeAnimationsEnabled(), isTrue);
     ProfileRuntime.initializeCommitted(
       ProfileScope(profileId: 'one', dataGeneration: 1, sessionEpoch: 1),
     );
-    expect(await StorageService.getHomeAnimationsEnabled(), isFalse);
-    await StorageService.setHomeAnimationsEnabled(true);
-    await StorageService.clearAllHomePageSettings();
-    expect(await StorageService.getHomeAnimationsEnabled(), isFalse);
-    expect(await StorageService.getHomeAnimationStyle(), 'snowy_mountain');
+    expect(await HomeAppearanceStorage.getHomeAnimationsEnabled(), isFalse);
+    await HomeAppearanceStorage.setHomeAnimationsEnabled(true);
+    await HomePageStorage.clearAllHomePageSettings();
+    expect(await HomeAppearanceStorage.getHomeAnimationsEnabled(), isFalse);
+    expect(
+      await HomeAppearanceStorage.getHomeAnimationStyle(),
+      'snowy_mountain',
+    );
     expect(
       (await SharedPreferences.getInstance()).getBool(
         'home_animations_enabled',
@@ -306,16 +327,16 @@ void main() {
     // Landscape is the unset default; an explicit portrait choice is the
     // per-profile state that must not leak.
     expect(
-      await StorageService.getHomeCardOrientation(),
+      await HomePageStorage.getHomeCardOrientation(),
       HomeCardOrientation.landscape,
     );
-    await StorageService.setHomeCardOrientation(HomeCardOrientation.portrait);
+    await HomePageStorage.setHomeCardOrientation(HomeCardOrientation.portrait);
 
     ProfileRuntime.publish(
       ProfileScope(profileId: 'two', dataGeneration: 1, sessionEpoch: 2),
     );
     expect(
-      await StorageService.getHomeCardOrientation(),
+      await HomePageStorage.getHomeCardOrientation(),
       HomeCardOrientation.landscape,
     );
 
@@ -323,7 +344,7 @@ void main() {
       ProfileScope(profileId: 'one', dataGeneration: 1, sessionEpoch: 3),
     );
     expect(
-      await StorageService.getHomeCardOrientation(),
+      await HomePageStorage.getHomeCardOrientation(),
       HomeCardOrientation.portrait,
     );
   });
@@ -336,30 +357,30 @@ void main() {
       );
 
       expect(
-        await StorageService.getDiscoverDefaultSource(),
-        StorageService.discoverDefaultRememberLast,
+        await DiscoverStorage.getDiscoverDefaultSource(),
+        DiscoverStorage.discoverDefaultRememberLast,
       );
-      expect(await StorageService.getDiscoverLastSource(), 'cw');
-      await StorageService.setDiscoverDefaultSource('a:catalog-addon');
-      await StorageService.setDiscoverLastSource('simkl');
+      expect(await DiscoverStorage.getDiscoverLastSource(), 'cw');
+      await DiscoverStorage.setDiscoverDefaultSource('a:catalog-addon');
+      await DiscoverStorage.setDiscoverLastSource('simkl');
 
       ProfileRuntime.publish(
         ProfileScope(profileId: 'two', dataGeneration: 1, sessionEpoch: 2),
       );
       expect(
-        await StorageService.getDiscoverDefaultSource(),
-        StorageService.discoverDefaultRememberLast,
+        await DiscoverStorage.getDiscoverDefaultSource(),
+        DiscoverStorage.discoverDefaultRememberLast,
       );
-      expect(await StorageService.getDiscoverLastSource(), 'cw');
+      expect(await DiscoverStorage.getDiscoverLastSource(), 'cw');
 
       ProfileRuntime.publish(
         ProfileScope(profileId: 'one', dataGeneration: 1, sessionEpoch: 3),
       );
       expect(
-        await StorageService.getDiscoverDefaultSource(),
+        await DiscoverStorage.getDiscoverDefaultSource(),
         'a:catalog-addon',
       );
-      expect(await StorageService.getDiscoverLastSource(), 'simkl');
+      expect(await DiscoverStorage.getDiscoverLastSource(), 'simkl');
     },
   );
 
@@ -1003,4 +1024,99 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'a nested ordinary write cannot deadlock against a snapshot barrier',
+    () async {
+      // Outer writer registers, then a WebDAV snapshot raises the exclusive
+      // barrier and waits for active writers to drain, then the outer writer
+      // reaches its nested write. Without re-entrancy the nested write waits
+      // on the barrier while the barrier waits on the outer writer.
+      final before = await ProfilePreferences.captureMutationToken();
+      final outerRegistered = Completer<void>();
+      final reachNested = Completer<void>();
+      var nestedRan = false;
+      final outer = ProfilePreferences.synchronizeExternalMutation(() async {
+        outerRegistered.complete();
+        await reachNested.future;
+        await ProfilePreferences.synchronizeExternalMutation(() async {
+          nestedRan = true;
+        }, marksMutation: true);
+      }, marksMutation: false);
+      await outerRegistered.future;
+      var snapshotRan = false;
+      final snapshot = ProfilePreferences.captureMutationSnapshot((_) async {
+        snapshotRan = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(snapshotRan, isFalse, reason: 'the barrier waits for the writer');
+      reachNested.complete();
+      await outer.timeout(const Duration(seconds: 2));
+      await snapshot.timeout(const Duration(seconds: 2));
+      expect(nestedRan, isTrue);
+      expect(snapshotRan, isTrue);
+      // The nested write still counts as a mutation for snapshot tokens.
+      final after = await ProfilePreferences.captureMutationToken();
+      expect(
+        () => ProfilePreferences.runIfMutationSnapshotCurrent(
+          before,
+          () async {},
+        ),
+        throwsA(isA<ProfilePreferenceMutationConflict>()),
+      );
+      await ProfilePreferences.runIfMutationSnapshotCurrent(after, () async {});
+    },
+  );
+
+  test('work inheriting a finished writer\'s zone registers normally', () async {
+    late Zone writerZone;
+    await ProfilePreferences.synchronizeExternalMutation(() async {
+      writerZone = Zone.current;
+    }, marksMutation: false);
+    // A timer or unawaited future started inside the finished writer still runs
+    // in its zone; it must hold the snapshot barrier off like any writer.
+    final gate = Completer<void>();
+    final late = writerZone.run(
+      () => ProfilePreferences.synchronizeExternalMutation(
+        () => gate.future,
+        marksMutation: true,
+      ),
+    );
+    await Future<void>.delayed(Duration.zero);
+    var snapshotRan = false;
+    final snapshot = ProfilePreferences.captureMutationSnapshot((_) async {
+      snapshotRan = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(snapshotRan, isFalse);
+    gate.complete();
+    await late;
+    await snapshot.timeout(const Duration(seconds: 2));
+    expect(snapshotRan, isTrue);
+  });
+
+  test(
+    'a nested write that outlives its writer still holds the barrier off',
+    () async {
+      final gate = Completer<void>();
+      late Future<void> nested;
+      await ProfilePreferences.synchronizeExternalMutation(() async {
+        // Started inside the open writer but not awaited by it.
+        nested = ProfilePreferences.synchronizeExternalMutation(
+          () => gate.future,
+          marksMutation: true,
+        );
+      }, marksMutation: false);
+      var snapshotRan = false;
+      final snapshot = ProfilePreferences.captureMutationSnapshot((_) async {
+        snapshotRan = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(snapshotRan, isFalse, reason: 'the nested write is still running');
+      gate.complete();
+      await nested;
+      await snapshot.timeout(const Duration(seconds: 2));
+      expect(snapshotRan, isTrue);
+    },
+  );
 }

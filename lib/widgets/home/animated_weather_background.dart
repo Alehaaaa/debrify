@@ -139,7 +139,7 @@ class _AnimatedWeatherBackgroundState extends State<AnimatedWeatherBackground>
                           fit: BoxFit.cover,
                           alignment: widget.alignment,
                           filterQuality: FilterQuality.medium,
-                          errorBuilder: (_, _, _) =>
+                          errorBuilder: (_, __, ___) =>
                               const ColoredBox(color: Color(0xFF07111E)),
                         ),
                   ),

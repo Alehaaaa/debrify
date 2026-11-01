@@ -285,22 +285,15 @@ class StreamBadgeChip extends StatelessWidget {
                   fadeInDuration: Duration.zero,
                   imageBuilder: (_, provider) {
                     onImageReady?.call();
-                    // CachedNetworkImage hands this builder its UNRESIZED
-                    // provider; reuse the same memCacheHeight resize it just
-                    // loaded, or the badge decodes a second time at full size.
                     return Image(
-                      image: ResizeImage.resizeIfNeeded(
-                        null,
-                        (inner * 3).round(),
-                        provider,
-                      ),
+                      image: provider,
                       height: inner,
                       fit: BoxFit.contain,
                     );
                   },
-                  placeholder: (_, _) => _imageLabel(appearance),
+                  placeholder: (_, __) => _imageLabel(appearance),
                   // The backing already frames the fallback; no second chip.
-                  errorWidget: (_, _, _) => isBadgeBitmapUrl(image)
+                  errorWidget: (_, __, ___) => isBadgeBitmapUrl(image)
                       ? _failedImage(appearance)
                       : _svgImage(image, inner, appearance),
                 ),
@@ -327,7 +320,7 @@ class StreamBadgeChip extends StatelessWidget {
       onImageReady?.call();
       return child;
     },
-    errorBuilder: (_, _, _) => _failedImage(appearance),
+    errorBuilder: (_, __, ___) => _failedImage(appearance),
   );
 
   Widget _failedImage(StreamBadgeAppearance appearance) {

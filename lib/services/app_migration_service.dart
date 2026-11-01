@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -64,7 +63,7 @@ class AppMigrationService {
       // and restored profiles must contain only addons explicitly installed
       // or shared with them.
       if (shouldSeedEssentialAddons()) {
-        unawaited(_ensureEssentialAddons(prefs));
+        await _ensureEssentialAddons(prefs);
       }
 
       // Never a bare fromPlatform() here: this call sits AFTER the essential

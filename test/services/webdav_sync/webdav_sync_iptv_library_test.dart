@@ -22,7 +22,9 @@ import 'package:debrify/services/profiles/profile_lock_controller.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/iptv_favorites_storage.dart';
+import 'package:debrify/services/storage/iptv_history_storage.dart';
+import 'package:debrify/services/storage/video_resume_storage.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_circle_models.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_hot_merge.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_hot_models.dart';
@@ -413,7 +415,7 @@ void main() {
     expect(outcome.result, WebDavSyncLibraryApplyResult.applied);
     expect(await DebrifyTvRepository.instance.fetchAllChannels(), isEmpty);
     expect(diagnostics, <String>[
-      'Ignored Nextup TV records in an ambient library section',
+      'Ignored Debrify TV records in an ambient library section',
     ]);
   });
 
@@ -782,19 +784,21 @@ void main() {
         )['duration'],
         -1,
       );
-      final history = await StorageService.getIptvWatchHistory();
+      final history = await IptvHistoryStorage.getIptvWatchHistory();
       expect(
         history['https://panel.invalid/movie/9']?['httpHeaders'],
         <String, String>{'Authorization': 'Bearer secret'},
       );
       expect(
-        (await StorageService.getVideoResume(
+        (await VideoResumeStorage.getVideoResume(
           'https://panel.invalid/movie/9',
         ))?['positionMs'],
         42000,
       );
       expect(
-        (await StorageService.getVideoResume('generic-title'))?['positionMs'],
+        (await VideoResumeStorage.getVideoResume(
+          'generic-title',
+        ))?['positionMs'],
         7000,
       );
 
@@ -1149,8 +1153,8 @@ void main() {
       );
 
       expect(outcome.result, WebDavSyncLibraryApplyResult.conflict);
-      expect(await StorageService.getVideoResume(remoteKey), isNull);
-      expect(await StorageService.getVideoResume('local-race'), isNotNull);
+      expect(await VideoResumeStorage.getVideoResume(remoteKey), isNull);
+      expect(await VideoResumeStorage.getVideoResume('local-race'), isNotNull);
     },
   );
 
@@ -1408,7 +1412,7 @@ void main() {
       final headers = <String, String>{'Authorization': 'x' * 2100};
       await IptvMediaStore.setChannelFavorited(url, true, httpHeaders: headers);
       expect(
-        (await StorageService.getIptvFavoriteChannels())[url]?['httpHeaders'],
+        (await IptvFavoritesStorage.getIptvFavoriteChannels())[url]?['httpHeaders'],
         headers,
       );
 

@@ -171,6 +171,16 @@ object RecordingTaskStore {
 					if (RecordingRegistry.live.containsKey(taskId)) continue
 					if (now - entry.updatedAt < DEAD_MIN_AGE_MS) continue
 					val uri = entry.uri?.let { Uri.parse(it) }
+					if (SmbRecordingOutput.isShare(uri)) {
+						// Whatever reached the share stays there; the entry only
+						// stops claiming to record (shares are not in the library).
+						put(context, entry.copy(
+							status = "done",
+							updatedAt = now,
+							errorMessage = "finalized after interruption",
+						))
+						continue
+					}
 					val size = uri?.let { fileSize(context, it) } ?: -1L
 					if (uri != null && size > 0L) {
 						val published = publishRow(context, uri)
@@ -188,6 +198,13 @@ object RecordingTaskStore {
 							),
 						)
 					} else {
+						// A picked folder (or drive) that is merely unreachable must
+						// not lose the capture: wait until it answers "absent" for sure.
+						if (uri != null && RecordingDestination.isDocument(context, uri) &&
+							destinationExists(context, uri) != false
+						) continue
+						// A file on an unplugged drive: neither there nor known gone.
+						if (uri?.scheme == "file" && destinationExists(context, uri) == null) continue
 						uri?.let { deleteDestination(context, it) }
 						put(
 							context,
@@ -227,7 +244,8 @@ object RecordingTaskStore {
 					// a revoked pre-Q grant makes exists() lie "false", and a
 					// down provider answers with null — neither may prune.
 					val uri = entry.uri?.let { Uri.parse(it) }
-					if (uri == null) {
+					// Share recordings are not indexed: only age them out.
+					if (uri == null || SmbRecordingOutput.isShare(uri)) {
 						if (now - entry.updatedAt > TERMINAL_TTL_MS) remove(context, taskId)
 					} else if (
 						checkFiles &&
@@ -253,9 +271,33 @@ object RecordingTaskStore {
 	 * index entry.
 	 */
 	fun destinationExists(context: Context, uri: Uri): Boolean? {
+		if (SmbRecordingOutput.isShare(uri)) return null
 		if (uri.scheme == "file") {
 			return try {
-				java.io.File(uri.path!!).exists()
+				val file = java.io.File(uri.path!!)
+				when {
+					file.exists() -> true
+					// An unplugged drive: its recordings are away, not gone.
+					android.os.Environment.getExternalStorageState(file) !=
+						android.os.Environment.MEDIA_MOUNTED -> null
+					else -> false
+				}
+			} catch (_: Exception) { null }
+		}
+		if (RecordingDestination.isDocument(context, uri)) {
+			// A picked folder (USB stick, network share) can be unplugged,
+			// offline or have its grant revoked. DocumentFile.exists() maps all
+			// of that to "absent", which would prune the library entry, so ask
+			// the provider directly: a row = present, an answered empty query
+			// = gone, anything else (exception, null cursor) = unknown.
+			return try {
+				context.contentResolver.query(
+					uri,
+					arrayOf(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID),
+					null,
+					null,
+					null,
+				)?.use { it.count > 0 }
 			} catch (_: Exception) { null }
 		}
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
@@ -287,6 +329,7 @@ object RecordingTaskStore {
 	}
 
 	fun fileSize(context: Context, uri: Uri): Long {
+		if (SmbRecordingOutput.isShare(uri)) return -1L
 		if (uri.scheme == "file") {
 			return try {
 				val file = java.io.File(uri.path!!)
@@ -307,6 +350,8 @@ object RecordingTaskStore {
 	 *  MediaStore row could NOT be published (callers persist that so the
 	 *  file stays recoverable instead of silently invisible). */
 	fun publishRow(context: Context, uri: Uri): Boolean {
+		// A file in a picked folder (or on a share) is visible once written.
+		if (SmbRecordingOutput.isShare(uri) || RecordingDestination.isDocument(context, uri)) return true
 		if (uri.scheme == "file") {
 			runCatching {
 				android.media.MediaScannerConnection.scanFile(
@@ -327,11 +372,23 @@ object RecordingTaskStore {
 
 	/** Remove a recording destination, whichever kind it is. */
 	fun deleteDestination(context: Context, uri: Uri): Boolean {
+		// The capture removes an empty share file itself, while still logged on.
+		if (SmbRecordingOutput.isShare(uri)) return true
 		if (uri.scheme == "file") {
 			return runCatching {
 				val file = java.io.File(uri.path!!)
 				!file.exists() || file.delete()
 			}.getOrDefault(false)
+		}
+		if (RecordingDestination.isDocument(context, uri)) {
+			return try {
+				android.provider.DocumentsContract.deleteDocument(context.contentResolver, uri)
+				true
+			} catch (_: java.io.FileNotFoundException) {
+				true // already gone: an idempotent delete is satisfied
+			} catch (_: Exception) {
+				false
+			}
 		}
 		return runCatching {
 			// A provider returning zero means the row was already absent, which

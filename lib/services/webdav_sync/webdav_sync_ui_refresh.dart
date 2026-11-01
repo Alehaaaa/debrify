@@ -1,9 +1,9 @@
+import 'package:debrify/services/storage/tracking_source_storage.dart';
 import '../home_row_refresh.dart';
 import '../hide_watched_prefs.dart';
 import '../iptv_channel_order.dart';
 import '../iptv_media_store.dart';
 import '../main_page_bridge.dart';
-import '../storage_service.dart';
 
 enum _WebDavSyncUiRefreshTarget {
   trackingSourceRevision,
@@ -55,16 +55,12 @@ abstract final class WebDavSyncUiRefresh {
     },
     'home_hide_catalog_addon_names': {_WebDavSyncUiRefreshTarget.homeSettings},
     'home_hide_collection_names': {_WebDavSyncUiRefreshTarget.homeSettings},
-    'home_animations_enabled': {_WebDavSyncUiRefreshTarget.homeSettings},
-    'home_animation_style': {_WebDavSyncUiRefreshTarget.homeSettings},
     'spotlight_focus_details': {_WebDavSyncUiRefreshTarget.homeSettings},
     'sources_use_addon_text': {_WebDavSyncUiRefreshTarget.homeSettings},
     'sources_show_addon_logos': {_WebDavSyncUiRefreshTarget.homeSettings},
     'home_disabled_sections_v1': {_WebDavSyncUiRefreshTarget.homeSettings},
     'home_extra_rows_v1': {_WebDavSyncUiRefreshTarget.homeSettings},
-    'remote_home_collections_sync_deferred': {
-      _WebDavSyncUiRefreshTarget.homeSettings,
-    },
+    'remote_home_collections_sync_deferred': {_WebDavSyncUiRefreshTarget.homeSettings},
     'remote_home_collections_v2': {_WebDavSyncUiRefreshTarget.homeSettings},
     'home_collections_v1': {_WebDavSyncUiRefreshTarget.homeSettings},
     'home_collections_gif_touch': {_WebDavSyncUiRefreshTarget.homeSettings},
@@ -84,15 +80,15 @@ abstract final class WebDavSyncUiRefresh {
     // TrackingSettingsPage setters bump this revision; progress and tick
     // changes also refresh Home. Synced tracking policy treats the three keys
     // as one policy group so every consumer observes one coherent revision.
-    StorageService.trackingScrobbleTargetsKey: {
+    TrackingSourceStorage.trackingScrobbleTargetsKey: {
       _WebDavSyncUiRefreshTarget.trackingSourceRevision,
       _WebDavSyncUiRefreshTarget.homeSettings,
     },
-    StorageService.homeTickSourcesKey: {
+    TrackingSourceStorage.homeTickSourcesKey: {
       _WebDavSyncUiRefreshTarget.trackingSourceRevision,
       _WebDavSyncUiRefreshTarget.homeSettings,
     },
-    StorageService.watchProgressSourceKey: {
+    TrackingSourceStorage.watchProgressSourceKey: {
       _WebDavSyncUiRefreshTarget.trackingSourceRevision,
       _WebDavSyncUiRefreshTarget.homeSettings,
     },
@@ -135,7 +131,7 @@ abstract final class WebDavSyncUiRefresh {
       try {
         switch (target) {
           case _WebDavSyncUiRefreshTarget.trackingSourceRevision:
-            StorageService.trackingSourceRevision.value++;
+            TrackingSourceStorage.trackingSourceRevision.value++;
           case _WebDavSyncUiRefreshTarget.homeSettings:
             MainPageBridge.notifyHomeSettingsChanged();
           case _WebDavSyncUiRefreshTarget.navPreferences:

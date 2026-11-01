@@ -37,7 +37,6 @@ VERSION="${VERSION/+/-}"
 IPA="$OUT_DIR/debrify-${VERSION:-local}.ipa"
 
 if [ "$DO_BUILD" -eq 1 ]; then
-  xattr -cr assets ios/Runner/Assets.xcassets build/ios 2>/dev/null || true
   say "flutter build ios --release --no-codesign"
   flutter build ios --release --no-codesign
 fi
@@ -51,7 +50,6 @@ fi
 # dylibs -> frameworks -> app bundle.
 # Mirrors the "Ad-hoc sign for sideloading" step in .github/workflows/build.yml.
 say "ad-hoc signing"
-xattr -cr "$APP" 2>/dev/null || true
 for d in "$APP"/Frameworks/*.dylib; do
   [ -f "$d" ] && codesign -f -s - --timestamp=none "$d"
 done

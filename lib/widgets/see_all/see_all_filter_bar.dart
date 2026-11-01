@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
-import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Lays out a See-All screen's filter dropdowns responsively.
 ///
@@ -110,17 +108,11 @@ class _SeeAllFilterBarState extends State<SeeAllFilterBar> {
   Future<void> _openSheet() async {
     final app = AppThemeScope.of(context);
     await showModalBottomSheet<void>(
-      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
-      backgroundColor: GlassChrome.enabled(app)
-          ? GlassChrome.fill(app, raised: true)
-          : app.seeAll.panel,
+      backgroundColor: app.seeAll.panel,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-        side: GlassChrome.enabled(app)
-            ? BorderSide(color: GlassChrome.edge(app))
-            : BorderSide.none,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
@@ -136,11 +128,8 @@ class _SeeAllFilterBarState extends State<SeeAllFilterBar> {
                   children: [
                     Row(
                       children: [
-                        Icon(
-                          Icons.tune_rounded,
-                          size: 18,
-                          color: app.core.tx.withValues(alpha: 0xB3 / 0xFF),
-                        ),
+                        Icon(Icons.tune_rounded,
+                            size: 18, color: app.core.tx.withValues(alpha: 0xB3 / 0xFF)),
                         const SizedBox(width: 8),
                         const Text(
                           'Filters',
@@ -152,10 +141,8 @@ class _SeeAllFilterBarState extends State<SeeAllFilterBar> {
                         const Spacer(),
                         IconButton(
                           onPressed: () => Navigator.of(innerContext).pop(),
-                          icon: Icon(
-                            Icons.close_rounded,
-                            color: app.core.tx.withValues(alpha: 0x8A / 0xFF),
-                          ),
+                          icon: Icon(Icons.close_rounded,
+                              color: app.core.tx.withValues(alpha: 0x8A / 0xFF)),
                         ),
                       ],
                     ),
@@ -299,36 +286,29 @@ class _FiltersButtonState extends State<_FiltersButton> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
           decoration: BoxDecoration(
-            color: GlassChrome.enabled(app)
-                ? GlassChrome.fill(app, raised: _hovered)
-                : app.seeAll.panel,
+            color: app.seeAll.panel,
             borderRadius: app.shape.br(11),
             border: Border.all(
-              color: GlassChrome.enabled(app)
-                  ? GlassChrome.edge(app, active: _hovered)
-                  : (_hovered ? app.seeAll.accentBorder : app.seeAll.line),
+              color: _hovered ? app.seeAll.accentBorder : app.seeAll.line,
             ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.tune_rounded,
-                size: 16,
-                color: app.core.tx.withValues(alpha: 0xB3 / 0xFF),
-              ),
+              Icon(Icons.tune_rounded, size: 16, color: app.core.tx.withValues(alpha: 0xB3 / 0xFF)),
               const SizedBox(width: 8),
               const Text(
                 'Filters',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               if (widget.count > 0) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 1,
-                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
                   decoration: BoxDecoration(
                     color: app.seeAll.accent,
                     borderRadius: app.shape.br(9),

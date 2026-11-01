@@ -134,9 +134,7 @@ class UdpDiscoveryService {
         InternetAddress.anyIPv4,
         kDiscoveryPort,
         reuseAddress: true,
-        // The Windows Dart socket backend rejects SO_REUSEPORT. Reusing the
-        // address is sufficient for discovery on that platform.
-        reusePort: !Platform.isWindows,
+        reusePort: true,
       );
 
       _socket!.broadcastEnabled = true;
@@ -155,9 +153,7 @@ class UdpDiscoveryService {
             _socket = null;
             _broadcastTimer?.cancel();
             _discoveryTimeoutTimer?.cancel();
-            onError?.call(
-              'Discovery stopped. Check local network access and retry.',
-            );
+            onError?.call('Discovery stopped. Check local network access and retry.');
           }
           debugPrint('UdpDiscoveryService: Socket closed');
         },
@@ -215,13 +211,10 @@ class UdpDiscoveryService {
       debugPrint('UdpDiscoveryService: Sent discovery broadcast');
     } catch (error) {
       debugPrint('UdpDiscoveryService: Failed to send discovery broadcast');
-      RemoteTransferDiagnostics.record(
-        'discovery_broadcast_failed',
-        fields: {
-          'errorType': error.runtimeType,
-          if (error is SocketException) 'osErrorCode': error.osError?.errorCode,
-        },
-      );
+      RemoteTransferDiagnostics.record('discovery_broadcast_failed', fields: {
+        'errorType': error.runtimeType,
+        if (error is SocketException) 'osErrorCode': error.osError?.errorCode,
+      });
     }
 
     // Send limited broadcast from each local address. Let the OS deliver it
@@ -241,10 +234,7 @@ class UdpDiscoveryService {
           source.send(data, InternetAddress(kBroadcastAddress), kDiscoveryPort);
         } on SocketException catch (error) {
           debugPrint('UdpDiscoveryService: Interface broadcast unavailable');
-          RemoteTransferDiagnostics.record(
-            'discovery_interface_failed',
-            fields: {'osErrorCode': error.osError?.errorCode},
-          );
+          RemoteTransferDiagnostics.record('discovery_interface_failed', fields: {'osErrorCode': error.osError?.errorCode});
         } finally {
           source?.close();
         }
@@ -316,7 +306,7 @@ class UdpDiscoveryService {
     // and spk fields are invisible to old phones (they read only deviceName).
     final response = jsonEncode({
       'type': RemoteMessageType.discoveryResponse,
-      'deviceName': _tvDeviceName ?? 'Nextup TV',
+      'deviceName': _tvDeviceName ?? 'Debrify TV',
       'ip': _getLocalIp() ?? senderAddress.address,
       'proto': kProtoVersion,
       if (advertisedStaticKey != null) 'spk': advertisedStaticKey,

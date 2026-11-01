@@ -1,0 +1,1 @@
+enum TorboxDownloadsView { torrents, webDownloads }

@@ -7,12 +7,9 @@ import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../tracker_brand_marks.dart';
 import '../season_action_region.dart';
-import '../rotten_tomatoes_score.dart';
-import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
-import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Shared identity + action vocabulary for the alternate detail layouts.
 ///
@@ -185,24 +182,16 @@ class DetailGhostButton extends StatefulWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-
-  /// Touch long-press, or OK held on a remote.
-  final VoidCallback? onLongPress;
   final bool busy;
   final FocusNode? focusNode;
-
-  /// 0..1: a progress ring replaces the icon (a download in flight).
-  final double? progress;
 
   const DetailGhostButton({
     super.key,
     required this.label,
     required this.icon,
     required this.onTap,
-    this.onLongPress,
     this.busy = false,
     this.focusNode,
-    this.progress,
   });
 
   @override
@@ -211,32 +200,9 @@ class DetailGhostButton extends StatefulWidget {
 
 class _DetailGhostButtonState extends State<DetailGhostButton> {
   bool _focused = false;
-  late final TvHoldOk _hold = TvHoldOk(
-    onTap: () => widget.onTap(),
-    onHold: () => widget.onLongPress?.call(),
-  );
-
-  @override
-  void dispose() {
-    _hold.reset();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final button = _buildButton(context);
-    if (widget.onLongPress == null) return button;
-    return Focus(
-      canRequestFocus: false,
-      skipTraversal: true,
-      onKeyEvent: (_, event) => isActivateOrSpaceKey(event.logicalKey)
-          ? _hold.handle(event)
-          : KeyEventResult.ignored,
-      child: button,
-    );
-  }
-
-  Widget _buildButton(BuildContext context) {
     final t = DetailThemeScope.of(context);
     return DetailFocusRing(
       focused: _focused,
@@ -248,11 +214,7 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
           focusNode: widget.focusNode,
           borderRadius: t.brBtn,
           onTap: widget.onTap,
-          onLongPress: widget.onLongPress,
-          onFocusChange: (f) {
-            setState(() => _focused = f);
-            if (!f) _hold.reset();
-          },
+          onFocusChange: (f) => setState(() => _focused = f),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -272,18 +234,7 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
                     ),
                   )
                 else
-                  if (widget.progress != null)
-                    SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(
-                        value: widget.progress,
-                        strokeWidth: 2.2,
-                        color: t.ghostText,
-                        backgroundColor: t.ghostText.withValues(alpha: 0.25),
-                      ),
-                    )
-                  else
-                    Icon(widget.icon, color: t.ghostText, size: 16),
+                  Icon(widget.icon, color: t.ghostText, size: 16),
                 const SizedBox(width: 7),
                 Text(
                   widget.label,
@@ -612,66 +563,43 @@ class DetailMetaBar extends StatelessWidget {
         ),
       );
     }
-    Widget imdbRow(double value) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value.toStringAsFixed(1),
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-            color: t.tx,
-          ),
-        ),
-        const SizedBox(width: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-          decoration: BoxDecoration(
-            // The IMDb badge is a LOGO, not a colour choice — it keeps its
-            // own yellow in every theme, exactly as the Trakt and Simkl
-            // marks do.
-            color: const Color(0xFFF5C518),
-            borderRadius: t.brSm,
-          ),
-          child: const Text(
-            'IMDb',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
-    );
     final r = model.rating;
-    if (r != null) add(imdbRow(r));
-    // Rotten Tomatoes + Metacritic from OMDb (and IMDb when the model has
-    // none), in the same "value + mark" grammar, marks in the theme's ink.
-    final before = parts.length;
-    parts.add(
-      OmdbRatingsBuilder(
-        imdbId: model.item.effectiveImdbId,
-        builder: (context, omdb) {
-          final readouts = omdbDetailReadouts(
-            omdb,
-            style: TextStyle(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              color: t.tx,
+    if (r != null) {
+      add(
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              r.toStringAsFixed(1),
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                color: t.tx,
+              ),
             ),
-            glyphColor: t.tx,
-            glyphSize: fontSize + 2,
-            gap: 14,
-            hasImdb: r != null,
-            imdbBadge: imdbRow,
-          );
-          if (readouts.isEmpty) return const SizedBox.shrink();
-          if (before == 0) readouts.removeAt(0);
-          return Row(mainAxisSize: MainAxisSize.min, children: readouts);
-        },
-      ),
-    );
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                // The IMDb badge is a LOGO, not a colour choice — it keeps its
+                // own yellow in every theme, exactly as the Trakt and Simkl
+                // marks do.
+                color: const Color(0xFFF5C518),
+                borderRadius: t.brSm,
+              ),
+              child: const Text(
+                'IMDb',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     if (parts.isEmpty) return const SizedBox.shrink();
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -739,8 +667,8 @@ class DetailLogo extends StatelessWidget {
         // Logo art is often a huge transparent PNG; never decode it at full
         // resolution for a 70px lockup on a 2 GB box.
         memCacheHeight: (height * 3).round(),
-        placeholder: (_, _) => const SizedBox.shrink(),
-        errorWidget: (_, _, _) => Text(
+        placeholder: (_, __) => const SizedBox.shrink(),
+        errorWidget: (_, __, ___) => Text(
           t.displayCase(model.name),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -812,13 +740,11 @@ class DetailActionRow extends StatelessWidget {
           busy: model.trailerBusy,
           onTap: model.onTrailer,
         ),
-      if (model.onBrowse != null)
+      if (model.isMovie && model.onBrowse != null)
         DetailGhostButton(
-          label: model.downloadLabel,
-          icon: model.downloadState.icon,
+          label: 'Sources',
+          icon: Icons.layers_rounded,
           onTap: model.onBrowse!,
-          onLongPress: model.onBrowseLongPress,
-          progress: model.downloadProgress,
         ),
       if (model.onToggleMyWatchlist != null)
         DetailGhostButton(
@@ -849,11 +775,7 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasTrakt && model.onTraktMenu != null)
         DetailTrackerPill(
-          mark: TraktMark(
-            size: 19,
-            dark: !model.traktTracked,
-            color: Colors.white,
-          ),
+          mark: TraktMark(size: 19, opacity: model.traktTracked ? 1 : 0.55),
           brand: 'TRAKT',
           state: model.traktLabel,
           rating: model.traktRating,
@@ -864,10 +786,7 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasSimkl && model.onSimklMenu != null)
         DetailTrackerPill(
-          mark: SimklMark(
-            size: 19,
-            color: model.simklTracked ? kSimklCyan : Colors.white,
-          ),
+          mark: SimklMark(size: 19, opacity: model.simklTracked ? 1 : 0.55),
           brand: 'SIMKL',
           state: model.simklLabel,
           rating: model.simklRating,
@@ -1043,7 +962,6 @@ Future<void> showDetailSeasonPicker({
   required DetailTheme theme,
 }) {
   return showModalBottomSheet<void>(
-sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     backgroundColor: theme.pane,
     showDragHandle: true,

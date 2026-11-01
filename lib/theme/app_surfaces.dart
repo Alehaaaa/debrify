@@ -14,7 +14,7 @@ enum SurfaceKind { themed, frozen }
 /// entry is added.
 abstract final class AppSurfaces {
   /// Must equal the length of `_MainPageState._titles`. Asserted by test.
-  static const int tabCount = 21;
+  static const int tabCount = 20;
 
   static const Map<int, SurfaceKind> tabs = {
     0: SurfaceKind.frozen, //  inert slot (deprecated old Home)
@@ -37,7 +37,6 @@ abstract final class AppSurfaces {
     17: SurfaceKind.themed, // Search
     18: SurfaceKind.themed, // Discover
     19: SurfaceKind.themed, // Calendar
-    20: SurfaceKind.themed, // Reels
   };
 
   static SurfaceKind kindForTab(int index) =>
@@ -164,22 +163,12 @@ class FrozenLegacyPageRoute<T> extends MaterialPageRoute<T> {
     required WidgetBuilder builder,
     super.settings,
     super.fullscreenDialog,
-    this.swipeToPopEnabled = true,
   }) : super(
          builder: (context) => LegacyThemeBoundary(
            withMessenger: true,
            child: Builder(builder: builder),
          ),
        );
-
-  /// When false, the iOS left-edge back-swipe gesture is disabled for this
-  /// route (the HUD back button and Android system back still pop it). The
-  /// player passes false: a stray edge swipe must never drop playback, locked
-  /// or not.
-  final bool swipeToPopEnabled;
-
-  @override
-  bool get popGestureEnabled => swipeToPopEnabled && super.popGestureEnabled;
 }
 
 /// Push an excluded screen. The player above all: every external

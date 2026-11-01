@@ -5,30 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:debrify/services/tmdb_http_client.dart';
-import 'package:path/path.dart' as p;
-
-Future<String> _opensslExecutable() async {
-  // On Windows, Git for Windows bundles OpenSSL but doesn't always expose it
-  // on PATH. TLS tests still need real CA and hostname verification there.
-  if (Platform.isWindows) {
-    final git = await Process.run('where.exe', ['git.exe']);
-    if (git.exitCode == 0) {
-      for (final line in (git.stdout as String).split(RegExp(r'[\r\n]+'))) {
-        final path = line.trim();
-        if (path.isEmpty) continue;
-        final root = p.dirname(p.dirname(path));
-        for (final relative in [
-          ['usr', 'bin', 'openssl.exe'],
-          ['mingw64', 'bin', 'openssl.exe'],
-        ]) {
-          final candidate = p.joinAll([root, ...relative]);
-          if (File(candidate).existsSync()) return candidate;
-        }
-      }
-    }
-  }
-  return 'openssl';
-}
 
 class _Socket extends Fake implements Socket {
   bool destroyed = false;
@@ -43,10 +19,9 @@ class _Socket extends Fake implements Socket {
 Future<Directory> _tlsFixture({String host = 'api.themoviedb.org'}) async {
   final dir = await Directory.systemTemp.createTemp('debrify-tmdb-tls-');
   addTearDown(() => dir.delete(recursive: true));
-  final executable = await _opensslExecutable();
   Future<void> openssl(List<String> args) async {
     final result = await Process.run(
-      executable,
+      'openssl',
       args,
       workingDirectory: dir.path,
     );
@@ -184,7 +159,7 @@ void main() {
         request.response.close();
       }, onError: (_) {});
       final routes = TmdbConnections(
-        startConnect: (_, _) => TmdbConnections.startSocket(
+        startConnect: (_, __) => TmdbConnections.startSocket(
           InternetAddress.loopbackIPv4,
           server.port,
         ),
@@ -231,7 +206,7 @@ void main() {
       final cache = TmdbDnsCache();
       final first = TmdbConnections(
         dnsCache: cache,
-        startConnect: (_, _) async => success(),
+        startConnect: (_, __) async => success(),
       );
       await (await first.connect(uri, null, null)).socket;
       // TCP succeeded, but the request transport subsequently reported failure.
@@ -385,7 +360,7 @@ void main() {
       });
       final c = TmdbConnections(
         tlsBudget: const Duration(milliseconds: 150),
-        startConnect: (_, _) => TmdbConnections.startSocket(
+        startConnect: (_, __) => TmdbConnections.startSocket(
           InternetAddress.loopbackIPv4,
           server.port,
         ),
@@ -500,9 +475,8 @@ void main() {
           return answer();
         }),
         startConnect: (host, port) async {
-          if (host is String) {
+          if (host is String)
             throw const SocketException('system DNS unavailable');
-          }
           return success();
         },
       );
@@ -572,7 +546,7 @@ void main() {
         lookups++;
         return http.Response('bad', 503);
       }),
-      startConnect: (_, _) async => throw const SocketException('failed'),
+      startConnect: (_, __) async => throw const SocketException('failed'),
     );
     addTearDown(c.close);
     for (var i = 0; i < 2; i++) {
@@ -615,7 +589,7 @@ void main() {
       var connects = 0;
       final c = TmdbConnections(
         dnsClientFactory: () => MockClient((_) => dns.future),
-        startConnect: (_, _) async {
+        startConnect: (_, __) async {
           connects++;
           throw const SocketException('failed');
         },

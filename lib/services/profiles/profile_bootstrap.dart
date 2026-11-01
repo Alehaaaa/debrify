@@ -21,7 +21,6 @@ import 'profile_avatar_mutation.dart';
 import 'profile_registry.dart';
 import 'profile_runtime.dart';
 import 'profile_scope.dart';
-import 'profile_storage_migration.dart';
 
 /// Establishes exactly one storage mode before any profile-sensitive service
 /// is allowed to warm. The registry commit is the authority; preference flags
@@ -30,11 +29,11 @@ class ProfileBootstrap {
   ProfileBootstrap._();
 
   static const bool profilesEnabled = bool.fromEnvironment(
-    'NEXTUP_PROFILES',
+    'DEBRIFY_PROFILES',
     defaultValue: true,
   );
   static const bool migrationRolloutReady = bool.fromEnvironment(
-    'NEXTUP_PROFILES_MIGRATION_READY',
+    'DEBRIFY_PROFILES_MIGRATION_READY',
     defaultValue: true,
   );
 
@@ -196,10 +195,6 @@ class ProfileBootstrap {
     }
     _registry = opened;
     _installAuthorityCallback(opened);
-    // v1 profile generations and avatars were incorrectly stored under the
-    // user-visible Documents directory. Move them before any profile service
-    // can open a generation; this safely retries after an interrupted copy.
-    await ProfileStorageMigration.migrateDocumentsProfiles();
     await ProfileCleanupLedger.resume(opened);
     TvOsProfileRecoveryStore.checkpointCallback = opened.checkpointTvOsRecovery;
     if (tvOsRecovery != null) {
@@ -778,7 +773,10 @@ class ProfileBootstrap {
     'remote_last_device',
     'update_auto_check_enabled',
     'update_ignored_version',
+    'support_remote_config_cache_v1',
+    'dismissed_donation_campaign_ids_v1',
     'recording_max_concurrent',
+    'recording_output_v1',
     'recording_battery_nudge_dismissed_at',
     'iptv_ios_recording_notice_dismissed',
     'desktop_recording_schedules_v1',

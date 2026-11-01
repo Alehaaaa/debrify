@@ -24,7 +24,7 @@ class AutoLaunchOverlay extends StatefulWidget {
 
   const AutoLaunchOverlay({
     super.key,
-    this.launchTitle = 'Launching Nextup TV',
+    this.launchTitle = 'Launching Debrify TV',
     required this.channelName,
     this.channelNumber,
     this.onTimeout,
@@ -112,7 +112,7 @@ class _AutoLaunchOverlayState extends State<AutoLaunchOverlay>
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (bool didPop, _) {
+      onPopInvoked: (bool didPop) {
         if (!didPop) {
           widget.onTimeout?.call();
         }
@@ -163,9 +163,9 @@ class _AutoLaunchOverlayState extends State<AutoLaunchOverlay>
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF6366F1).withValues(
-                                    alpha: 0.3 * _pulseAnimation.value,
-                                  ),
+                                  color: const Color(
+                                    0xFF6366F1,
+                                  ).withValues(alpha: 0.3 * _pulseAnimation.value),
                                   blurRadius: 40 * _pulseAnimation.value,
                                   spreadRadius: 10 * _pulseAnimation.value,
                                 ),

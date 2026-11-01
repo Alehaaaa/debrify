@@ -1,3 +1,6 @@
+import 'package:debrify/services/storage/movie_progress_storage.dart';
+import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
 import '../../models/media_identity.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -10,8 +13,7 @@ import '../../models/tracking_source.dart';
 import '../episode_tracker_snapshot_revision.dart';
 import '../profiles/profile_async_authorization.dart';
 import '../profiles/profile_runtime.dart';
-import '../storage_service.dart';
-import '../tracker_scrobble_outbox.dart';
+import '../profiles/profile_session_memory.dart';
 import 'simkl_calendar_service.dart';
 import 'simkl_constants.dart';
 
@@ -92,6 +94,8 @@ class SimklService {
   List<dynamic>? _playbackCacheData;
   DateTime? _playbackCacheAt;
   Future<List<dynamic>?>? _playbackInFlight;
+  ProfileSessionOwner? _playbackCacheOwner;
+  ProfileSessionOwner? _playbackInFlightOwner;
   // The generation the in-flight fetch was started at — a reader that arrives
   // after a scrobble write invalidated the cache must NOT join a fetch started
   // before it (that fetch carries pre-write, stale sessions); it starts fresh.
@@ -110,6 +114,7 @@ class SimklService {
   void _invalidatePlaybackCache() {
     _playbackCacheData = null;
     _playbackCacheAt = null;
+    _playbackCacheOwner = null;
     _moviePlaybackCacheData = null;
     _moviePlaybackCacheAt = null;
     _playbackCacheGeneration++;
@@ -123,13 +128,21 @@ class SimklService {
     SimklCalendarService.instance.invalidate();
   }
 
-  Future<Map<String, dynamic>?> _cachedLibAllAll() async {
+  Future<Map<String, dynamic>?> _cachedLibAllAll({
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
     final at = _libCacheAt;
     if (at != null && DateTime.now().difference(at) < _libTtl) {
       return _libCacheData;
     }
     final generation = _libCacheGeneration;
-    final data = await fetchAllItemsOrNull('all', 'all');
+    final data = await fetchAllItemsOrNull(
+      'all',
+      'all',
+      canContinue: canContinue,
+    );
+    if (canContinue?.call() == false) return null;
     // Only cache authoritative results, and only if no write invalidated the
     // cache while this fetch was in flight — a transient failure or a
     // superseded fetch shouldn't poison/clobber the cache.
@@ -161,7 +174,7 @@ class SimklService {
   /// completion.
   Future<({Set<String> movies, Set<String> series})?>
   fetchCompletedTitleIds() async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     // Disconnected is a successful empty snapshot, not a transient failure.
     // This lets consumers clear badges belonging to the previous account while
     // still preserving their last snapshot when an authenticated request fails.
@@ -253,16 +266,28 @@ class SimklService {
   /// library fetch failed) so callers keep whatever they last showed instead
   /// of wrongly rendering "no status". A genuine "not in any list" is a
   /// non-null status with a null [SimklTitleStatus.currentStatus].
-  Future<SimklTitleStatus?> fetchTitleStatus(String imdbId, {String? contentType}) async {
-    if (!await isAuthenticated()) return null;
+  Future<SimklTitleStatus?> fetchTitleStatus(
+    String imdbId, {
+    String? contentType,
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false ||
+        !await isAuthenticated(canContinue: canContinue) ||
+        canContinue?.call() == false) {
+      return null;
+    }
     try {
-      final data = await _cachedLibAllAll();
-      if (data == null) return null;
+      final data = await _cachedLibAllAll(canContinue: canContinue);
+      if (data == null || canContinue?.call() == false) return null;
       for (final bucketKey in const ['movies', 'shows', 'anime']) {
         final items = (data[bucketKey] as List<dynamic>?) ?? const [];
         for (final raw in items) {
           if (raw is! Map<String, dynamic>) continue;
-          if (contentType != null && ((bucketKey == 'movies' || raw['anime_type'] == 'movie') != (contentType == 'movie'))) continue;
+          if (contentType != null &&
+              ((bucketKey == 'movies' || raw['anime_type'] == 'movie') !=
+                  (contentType == 'movie'))) {
+            continue;
+          }
           final content =
               (raw['show'] ?? raw['movie']) as Map<String, dynamic>?;
           final ids = content?['ids'] as Map<String, dynamic>?;
@@ -322,26 +347,29 @@ class SimklService {
 
   /// Check if the user is authenticated (has a stored access token).
   /// Simkl tokens don't expire, so unlike Trakt there's no refresh check.
-  Future<bool> isAuthenticated() async {
-    final token = await StorageService.getSimklAccessToken();
-    return token != null && token.isNotEmpty;
+  Future<bool> isAuthenticated({bool Function()? canContinue}) async {
+    if (canContinue?.call() == false) return false;
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    return token != null && token.isNotEmpty && canContinue?.call() != false;
   }
 
   /// Revoke local auth state. Simkl has no documented revoke endpoint for
   /// PIN-issued tokens, so this only clears local storage.
   Future<void> logout() async {
-    await StorageService.clearSimklAuth();
+    await SimklStorage.clearSimklAuth();
     // Drop cached library state so a later sign-in (possibly a different
     // account) never reads the previous user's watchlist/ratings — including
     // the derived calendar (mirrors TraktService clearing TraktCalendarService).
     _invalidateLibraryCache();
     SimklCalendarService.instance.invalidate();
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
   }
 
   /// Get the stored username, if known.
   Future<String?> getUsername() async {
-    return StorageService.getSimklUsername();
+    return SimklStorage.getSimklUsername();
   }
 
   // ============================================================================
@@ -409,12 +437,12 @@ class SimklService {
           if (accessToken == null || accessToken.isEmpty) return 'error';
           _pinAuthorizations.remove(userCode);
           Future<void> commit() async {
-            await StorageService.setSimklAccessToken(accessToken);
-            await StorageService.enableTrackingScrobbleTarget(
+            await SimklStorage.setSimklAccessToken(accessToken);
+            await TrackingSourceStorage.enableTrackingScrobbleTarget(
               TrackingSource.simkl,
             );
             await _fetchAndStoreUsername(accessToken);
-            StorageService.movieFinishedRevision.value++;
+            MovieProgressStorage.movieFinishedRevision.value++;
           }
 
           try {
@@ -469,7 +497,7 @@ class SimklService {
       final account = data['account'] as Map<String, dynamic>?;
       final name = (user?['name'] as String?) ?? (account?['name'] as String?);
       if (name != null && name.isNotEmpty) {
-        await StorageService.setSimklUsername(name);
+        await SimklStorage.setSimklUsername(name);
       }
     } catch (error) {
       debugPrint('Simkl: username lookup failed (${error.runtimeType})');
@@ -524,16 +552,23 @@ class SimklService {
   /// show yet" from "the bucket is genuinely empty".
   Future<Map<String, dynamic>?> fetchAllItemsOrNull(
     String type,
-    String status,
-  ) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return null;
+    String status, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return null;
+    }
     final uri = _apiUri('/sync/all-items/$type/$status', {'extended': 'full'});
     final data = await _getOrNull(
       uri,
       headers: _apiHeaders(accessToken: token),
       label: 'fetchAllItems $type/$status',
     );
+    if (canContinue?.call() == false) return null;
     return data is Map<String, dynamic> ? data : null;
   }
 
@@ -544,9 +579,16 @@ class SimklService {
   /// the show summary object are enough, and `full` would bloat the response
   /// with the whole watched-episode list. Returns the raw `shows` list (empty
   /// when the list is genuinely empty), or null on failure / when disconnected.
-  Future<List<dynamic>?> fetchUpNextShowsOrNull() async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return null;
+  Future<List<dynamic>?> fetchUpNextShowsOrNull({
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (canContinue?.call() == false || token == null || token.isEmpty) {
+      return null;
+    }
     final uri = _apiUri('/sync/all-items/shows/watching', {
       'next_watch_info': 'yes',
     });
@@ -555,7 +597,9 @@ class SimklService {
       headers: _apiHeaders(accessToken: token),
       label: 'upNext shows',
     );
-    if (data is! Map<String, dynamic>) return null;
+    if (canContinue?.call() == false || data is! Map<String, dynamic>) {
+      return null;
+    }
     final shows = data['shows'];
     return shows is List ? shows : const [];
   }
@@ -564,7 +608,7 @@ class SimklService {
   /// `GET /sync/ratings/{type}/{rating}`. Sends the explicit 1–10 comma list
   /// (documented to work) rather than an unconfirmed range shorthand.
   Future<Map<String, dynamic>?> fetchRatingsOrNull(String type) async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return null;
     final uri = _apiUri('/sync/ratings/$type/1,2,3,4,5,6,7,8,9,10', {
       'extended': 'full',
@@ -589,7 +633,7 @@ class SimklService {
     );
     return _getOrNull(
       uri,
-      headers: {'User-Agent': 'Nextup'},
+      headers: {'User-Agent': 'Debrify'},
       label: 'public fetch $url',
     );
   }
@@ -637,29 +681,42 @@ class SimklService {
   /// `completed`/`dropped`) via `POST /sync/add-to-list`. Removing the title
   /// altogether uses the whole-title form of `POST /sync/history/remove`; see
   /// [removeFromList].
-  Future<bool> addToList(String imdbId, String type, String status) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> addToList(
+    String imdbId,
+    String type,
+    String status, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final typeKey = _typeKey(type);
     final result = await _postOrNull(
       '/sync/add-to-list',
       {
         typeKey: [
-          {
-            'to': status,
-            'ids': MediaIdentity.apiIds(imdbId),
-          },
+          {'to': status, 'ids': MediaIdentity.apiIds(imdbId)},
         ],
       },
       token: token,
       label: 'addToList $typeKey→$status',
     );
-    if (!_wasMatched(result, typeKey)) return false;
+    if ((owner != null && owner != ProfileSessionMemory.captureOwner()) ||
+        !_wasMatched(result, typeKey)) {
+      return false;
+    }
     _invalidateLibraryCache();
     // Moving to or away from Completed changes the effective watched set.
     // We do not know the previous status here, so every successful move must
     // invalidate; unlike ratings, any list move can remove an existing tick.
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     if (type == 'series') {
       EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
     }
@@ -667,72 +724,110 @@ class SimklService {
   }
 
   /// Rate a title 1–10 via `POST /sync/ratings`.
-  Future<bool> rateItem(String imdbId, String type, int rating) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> rateItem(
+    String imdbId,
+    String type,
+    int rating, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final typeKey = _typeKey(type);
     final result = await _postOrNull(
       '/sync/ratings',
       {
         typeKey: [
-          {
-            'rating': rating,
-            'ids': MediaIdentity.apiIds(imdbId),
-          },
+          {'rating': rating, 'ids': MediaIdentity.apiIds(imdbId)},
         ],
       },
       token: token,
       label: 'rateItem $typeKey',
     );
-    if (!_wasMatched(result, typeKey)) return false;
+    if (!_wasMatched(result, typeKey) ||
+        (owner != null && owner != ProfileSessionMemory.captureOwner())) {
+      return false;
+    }
     _invalidateLibraryCache();
     return true;
   }
 
   /// Clear a title's rating via `POST /sync/ratings/remove`.
-  Future<bool> removeRating(String imdbId, String type) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> removeRating(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final typeKey = _typeKey(type);
     final result = await _postOrNull(
       '/sync/ratings/remove',
       {
         typeKey: [
-          {
-            'ids': MediaIdentity.apiIds(imdbId),
-          },
+          {'ids': MediaIdentity.apiIds(imdbId)},
         ],
       },
       token: token,
       label: 'removeRating $typeKey',
     );
-    if (!_wasMatched(result, typeKey)) return false;
+    if (!_wasMatched(result, typeKey) ||
+        (owner != null && owner != ProfileSessionMemory.captureOwner())) {
+      return false;
+    }
     _invalidateLibraryCache();
     return true;
   }
 
   /// Mark a whole title (movie, or every aired episode of a show) watched via
   /// `POST /sync/history`.
-  Future<bool> markWatched(String imdbId, String type, {DateTime? watchedAt}) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> markWatched(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final typeKey = _typeKey(type);
     final result = await _postOrNull(
       '/sync/history',
       {
         typeKey: [
-          {
-            'ids': MediaIdentity.apiIds(imdbId),
-            if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String(),
-          },
+          {'ids': MediaIdentity.apiIds(imdbId)},
         ],
       },
       token: token,
       label: 'markWatched $typeKey',
     );
-    if (!_wasMatched(result, typeKey)) return false;
+    if (!_wasMatched(result, typeKey) ||
+        (owner != null && owner != ProfileSessionMemory.captureOwner())) {
+      return false;
+    }
     _invalidateLibraryCache();
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     if (type == 'series') {
       EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
     }
@@ -743,25 +838,40 @@ class SimklService {
   /// `POST /sync/history/remove` with no season/episode nesting. Simkl's
   /// current API defines that shape as the canonical "Remove from list"
   /// operation: it clears the watchlist status and any title-level history.
-  Future<bool> removeFromList(String imdbId, String type) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> removeFromList(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final typeKey = _typeKey(type);
     final result = await _postOrNull(
       '/sync/history/remove',
       {
         typeKey: [
-          {
-            'ids': MediaIdentity.apiIds(imdbId),
-          },
+          {'ids': MediaIdentity.apiIds(imdbId)},
         ],
       },
       token: token,
       label: 'removeFromList $typeKey',
     );
-    if (!_wasMatched(result, typeKey)) return false;
+    // The POST is accepted: refresh this profile even if its view/deadline
+    // retired, but never publish cache revisions into another profile session.
+    if ((owner != null && owner != ProfileSessionMemory.captureOwner()) ||
+        !_wasMatched(result, typeKey)) {
+      return false;
+    }
     _invalidateLibraryCache();
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     if (type == 'series') {
       EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
     }
@@ -771,30 +881,44 @@ class SimklService {
   /// Clear sessions while the library still supplies aliases for sparse
   /// Simkl-only playback records. On cleanup failure, retain the library entry
   /// so a retry can still resolve the title rather than reporting a false success.
-  Future<bool> removeFromListAndPlayback(String id, String type) async {
-    if (!await deletePlaybackForImdb(id, contentType: type)) return false;
-    return removeFromList(id, type);
+  Future<bool> removeFromListAndPlayback(
+    String id,
+    String type, {
+    bool Function()? canContinue,
+  }) async {
+    if (!await deletePlaybackForImdb(
+      id,
+      contentType: type,
+      canContinue: canContinue,
+    )) {
+      return false;
+    }
+    if (canContinue?.call() == false) return false;
+    return removeFromList(id, type, canContinue: canContinue);
   }
 
   /// Existing watched-action name retained for callers that mean "make this
   /// whole title unwatched". At title granularity Simkl performs that operation
   /// by removing the item from the library, so it shares [removeFromList].
-  Future<bool> markUnwatched(String imdbId, String type) =>
-      removeFromList(imdbId, type);
+  Future<bool> markUnwatched(
+    String imdbId,
+    String type, {
+    bool Function()? canContinue,
+  }) => removeFromList(imdbId, type, canContinue: canContinue);
 
   /// Mark a single episode watched via `POST /sync/history` with the nested
   /// `seasons[].episodes[]` shape.
   Future<bool> markEpisodeWatched(
     String showImdbId,
     int season,
-    int episode, {DateTime? watchedAt}
+    int episode,
   ) async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final result = await _postOrNull(
       '/sync/history',
       {
-        'shows': [_episodeRef(showImdbId, season, episode, watchedAt: watchedAt)],
+        'shows': [_episodeRef(showImdbId, season, episode)],
       },
       token: token,
       label: 'markEpisodeWatched',
@@ -803,7 +927,7 @@ class SimklService {
     _invalidateLibraryCache();
     EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', showImdbId);
     // A final regular episode can move the show into the caught-up badge set.
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     return true;
   }
 
@@ -813,7 +937,7 @@ class SimklService {
     int season,
     int episode,
   ) async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final result = await _postOrNull(
       '/sync/history/remove',
@@ -826,31 +950,41 @@ class SimklService {
     if (!_wasMatched(result, 'shows')) return false;
     _invalidateLibraryCache();
     EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', showImdbId);
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     return true;
   }
 
   /// Reset watched episodes without removing the show from the library.
-  Future<bool> clearSeriesHistory(String imdbId) async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> clearSeriesHistory(
+    String imdbId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    final owner = ProfileSessionMemory.captureOwner();
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     final rows = await _postOrNull(
       '/sync/watched',
-      [{...MediaIdentity.apiIds(imdbId), 'type': 'show'}],
+      [
+        {...MediaIdentity.apiIds(imdbId), 'type': 'show'},
+      ],
       token: token,
       label: 'clearSeriesHistory read',
       query: {'extended': 'episodes'},
     );
-    if (rows is! List) return false;
+    if (rows is! List || canContinue?.call() == false) return false;
     final seasons = <Map<String, dynamic>>[];
     for (final row in rows) {
       if (row is! Map || row['seasons'] is! List) return false;
       for (final season in row['seasons'] as List) {
         if (season is! Map ||
             season['number'] is! num ||
-            season['episodes'] is! List) {
+            season['episodes'] is! List)
           return false;
-        }
         final episodes = <Map<String, dynamic>>[];
         for (final episode in season['episodes'] as List) {
           if (episode is! Map) return false;
@@ -858,9 +992,8 @@ class SimklService {
           if (episode['number'] is! num) return false;
           episodes.add({'number': episode['number']});
         }
-        if (episodes.isNotEmpty) {
+        if (episodes.isNotEmpty)
           seasons.add({'number': season['number'], 'episodes': episodes});
-        }
       }
     }
     if (seasons.isEmpty) return true;
@@ -868,32 +1001,32 @@ class SimklService {
       '/sync/history/remove',
       {
         'shows': [
-          {
-            'ids': MediaIdentity.apiIds(imdbId),
-            'seasons': seasons,
-          },
+          {'ids': MediaIdentity.apiIds(imdbId), 'seasons': seasons},
         ],
       },
       token: token,
       label: 'clearSeriesHistory',
     );
-    if (!_wasMatched(result, 'shows')) return false;
+    if (!_wasMatched(result, 'shows') ||
+        owner != ProfileSessionMemory.captureOwner()) {
+      return false;
+    }
     _invalidateLibraryCache();
     EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
-    StorageService.movieFinishedRevision.value++;
+    MovieProgressStorage.movieFinishedRevision.value++;
     return true;
   }
 
   /// Builds the `{ids, seasons: [{number, episodes: [{number}]}]}` show
   /// reference shared by every episode-scoped write above.
-  Map<String, dynamic> _episodeRef(String showImdbId, int season, int episode, {DateTime? watchedAt}) {
+  Map<String, dynamic> _episodeRef(String showImdbId, int season, int episode) {
     return {
       'ids': MediaIdentity.apiIds(showImdbId),
       'seasons': [
         {
           'number': season,
           'episodes': [
-            {'number': episode, if (watchedAt != null) 'watched_at': watchedAt.toUtc().toIso8601String()},
+            {'number': episode},
           ],
         },
       ],
@@ -909,14 +1042,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode, bool queueOnFailure = true,
+    int? episode,
   }) {
     return _scrobble(
       '/scrobble/start',
       imdbId,
       progress,
       season: season,
-      episode: episode, queueOnFailure: queueOnFailure,
+      episode: episode,
     );
   }
 
@@ -926,14 +1059,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode, bool queueOnFailure = true,
+    int? episode,
   }) {
     return _scrobble(
       '/scrobble/pause',
       imdbId,
       progress,
       season: season,
-      episode: episode, queueOnFailure: queueOnFailure,
+      episode: episode,
     );
   }
 
@@ -943,14 +1076,14 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode, bool queueOnFailure = true,
+    int? episode,
   }) {
     return _scrobble(
       '/scrobble/stop',
       imdbId,
       progress,
       season: season,
-      episode: episode, queueOnFailure: queueOnFailure,
+      episode: episode,
     );
   }
 
@@ -963,9 +1096,9 @@ class SimklService {
     String imdbId,
     double progress, {
     int? season,
-    int? episode, bool queueOnFailure = true,
+    int? episode,
   }) async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final s = (season != null && season <= 0) ? null : season;
     final e = (episode != null && episode <= 0) ? null : episode;
@@ -1008,7 +1141,7 @@ class SimklService {
       }
       if (path == '/scrobble/stop' && progress >= 80) {
         _invalidateLibraryCache();
-        StorageService.movieFinishedRevision.value++;
+        MovieProgressStorage.movieFinishedRevision.value++;
       }
     } else if (path == '/scrobble/stop' &&
         failureStatus == 409 &&
@@ -1032,9 +1165,6 @@ class SimklService {
           EpisodeTrackerSnapshotRevision.identity('simkl', imdbId),
         ),
       );
-    }
-    if (result == null && queueOnFailure) {
-      unawaited(TrackerScrobbleOutbox.instance.enqueue(tracker: 'simkl', action: path.split('/').last, imdbId: imdbId, progress: progress, contentType: s == null ? 'movie' : 'series', season: s, episode: e));
     }
     return result != null;
   }
@@ -1063,7 +1193,7 @@ class SimklService {
       // These writes belong to the account that 409'd — if the profile or
       // Simkl account changed during the wait, never replay them against a
       // different one.
-      final token = await StorageService.getSimklAccessToken();
+      final token = await SimklStorage.getSimklAccessToken();
       if (token == null || token.isEmpty || token != originalToken) return;
       // Same account, NEWER intent: any Simkl write for this title since the
       // 409 (mark unwatched, a replay's scrobble, another device syncing in)
@@ -1103,7 +1233,7 @@ class SimklService {
       _invalidatePlaybackCache();
       _invalidateLibraryCache();
       EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
-      StorageService.movieFinishedRevision.value++;
+      MovieProgressStorage.movieFinishedRevision.value++;
     } catch (error) {
       debugPrint('Simkl: stop-conflict recovery error (${error.runtimeType})');
     }
@@ -1116,44 +1246,71 @@ class SimklService {
   /// Raw paused-playback sessions for episodes, or null on failure. Cached for
   /// [_playbackTtl] and coalesced across concurrent callers, so a detail open's
   /// several readers share a single fetch.
-  Future<List<dynamic>?> _fetchEpisodePlaybackSessions() async {
+  Future<List<dynamic>?> _fetchEpisodePlaybackSessions({
+    bool Function()? canContinue,
+  }) async {
+    final owner = ProfileSessionMemory.captureOwner();
+    final scope = owner.scope == null ? null : ProfileRuntime.capture();
+    bool ownerCurrent() =>
+        owner == ProfileSessionMemory.captureOwner() &&
+        (scope == null || scope == ProfileRuntime.scope.value);
+    bool current() => ownerCurrent() && canContinue?.call() != false;
+    if (!current()) return null;
     final at = _playbackCacheAt;
-    if (at != null && DateTime.now().difference(at) < _playbackTtl) {
+    if (_playbackCacheOwner == owner &&
+        at != null &&
+        DateTime.now().difference(at) < _playbackTtl) {
       return _playbackCacheData;
     }
-    // Only join an in-flight fetch started at the current generation — a fetch
-    // that predates a scrobble-write invalidation would hand back stale data.
     final inFlight = _playbackInFlight;
     if (inFlight != null &&
+        _playbackInFlightOwner == owner &&
         _playbackInFlightGeneration == _playbackCacheGeneration) {
-      return inFlight;
+      final result = await inFlight;
+      return current() ? result : null;
     }
-    final future = _loadEpisodePlaybackSessions();
+    // The service owns a shared request; one retiring view must not cancel
+    // another consumer. Capture the invalidation generation before credentials.
+    final generation = _playbackCacheGeneration;
+    final future = _loadEpisodePlaybackSessions(
+      owner,
+      generation,
+      ownerCurrent,
+    );
     _playbackInFlight = future;
-    _playbackInFlightGeneration = _playbackCacheGeneration;
+    _playbackInFlightOwner = owner;
+    _playbackInFlightGeneration = generation;
     try {
-      return await future;
+      final result = await future;
+      return current() ? result : null;
     } finally {
-      // Don't clear a newer fetch that may have replaced this one mid-flight.
-      if (identical(_playbackInFlight, future)) _playbackInFlight = null;
+      if (identical(_playbackInFlight, future)) {
+        _playbackInFlight = null;
+        _playbackInFlightOwner = null;
+      }
     }
   }
 
-  Future<List<dynamic>?> _loadEpisodePlaybackSessions() async {
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return null;
-    final generation = _playbackCacheGeneration;
+  Future<List<dynamic>?> _loadEpisodePlaybackSessions(
+    ProfileSessionOwner owner,
+    int generation,
+    bool Function() ownerCurrent,
+  ) async {
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: ownerCurrent,
+    );
+    if (!ownerCurrent() || token == null || token.isEmpty) return null;
     final data = await _getOrNull(
       _apiUri('/sync/playback/episodes'),
       headers: _apiHeaders(accessToken: token),
       label: 'playback episodes',
     );
+    if (!ownerCurrent()) return null;
     final list = data is List ? data : null;
-    // Only cache an authoritative result that wasn't superseded by a scrobble
-    // write while this fetch was in flight.
     if (list != null && generation == _playbackCacheGeneration) {
       _playbackCacheData = list;
       _playbackCacheAt = DateTime.now();
+      _playbackCacheOwner = owner;
     }
     return list;
   }
@@ -1243,9 +1400,18 @@ class SimklService {
   /// e.g. Simkl's 409 duplicate refusal — leaves its pause checkpoints behind
   /// forever) can no longer outrank a fresher position from another source.
   Future<({int season, int episode, double? progress, DateTime? pausedAt})?>
-  fetchShowPlaybackSelection(String showImdbId) async {
-    if (MediaIdentity.isNative(showImdbId)) await _cachedLibAllAll();
-    final sessions = await _fetchEpisodePlaybackSessions();
+  fetchShowPlaybackSelection(
+    String showImdbId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    if (MediaIdentity.isNative(showImdbId)) {
+      await _cachedLibAllAll(canContinue: canContinue);
+    }
+    if (canContinue?.call() == false) return null;
+    final sessions = await _fetchEpisodePlaybackSessions(
+      canContinue: canContinue,
+    );
     if (sessions == null) return null;
     ({int season, int episode, double? progress})? best;
     DateTime? bestAt;
@@ -1279,10 +1445,15 @@ class SimklService {
   /// FALLBACK used when a show has no paused playback session — so a series
   /// watched up to E3 on another device resumes at E4, not the default S01E01.
   Future<({int season, int episode})?> fetchNextToWatch(
-    String showImdbId,
-  ) async {
-    if (MediaIdentity.isNative(showImdbId)) await _cachedLibAllAll();
-    final shows = await fetchUpNextShowsOrNull();
+    String showImdbId, {
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return null;
+    if (MediaIdentity.isNative(showImdbId)) {
+      await _cachedLibAllAll(canContinue: canContinue);
+    }
+    if (canContinue?.call() == false) return null;
+    final shows = await fetchUpNextShowsOrNull(canContinue: canContinue);
     if (shows == null) return null;
     for (final raw in shows) {
       if (raw is! Map) continue;
@@ -1336,7 +1507,7 @@ class SimklService {
   }
 
   Future<List<dynamic>?> _loadMoviePlaybackSessions() async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return null;
     final generation = _playbackCacheGeneration;
     final data = await _getOrNull(
@@ -1395,21 +1566,37 @@ class SimklService {
   /// this too. Invalidates the playback cache so the row refetches without the
   /// removed sessions. Returns true when every matching session was deleted (or
   /// there was nothing to delete). Never throws.
-  Future<bool> deletePlaybackForImdb(String imdbId, {String? contentType}) async {
-    if (MediaIdentity.isNative(imdbId) && await _cachedLibAllAll() == null) return false;
-    final token = await StorageService.getSimklAccessToken();
-    if (token == null || token.isEmpty) return false;
+  Future<bool> deletePlaybackForImdb(
+    String imdbId, {
+    String? contentType,
+    bool Function()? canContinue,
+  }) async {
+    if (canContinue?.call() == false) return false;
+    if (MediaIdentity.isNative(imdbId) && await _cachedLibAllAll() == null) {
+      return false;
+    }
+    if (canContinue?.call() == false) return false;
+    final token = await SimklStorage.getSimklAccessToken(
+      canContinue: canContinue,
+    );
+    if (token == null || token.isEmpty || canContinue?.call() == false) {
+      return false;
+    }
     // Independent GETs — fetch concurrently. A null list means the fetch failed.
     final lists = await Future.wait([
       _fetchEpisodePlaybackSessions(),
       _fetchMoviePlaybackSessions(),
     ]);
+    if (canContinue?.call() == false) return false;
     final episodes = lists[0];
     final movies = lists[1];
     final ids = <int>{};
     for (final raw in [...?episodes, ...?movies]) {
       if (raw is! Map) continue;
-      if (contentType != null && (raw['movie'] != null) != (contentType == 'movie')) continue;
+      if (contentType != null &&
+          (raw['movie'] != null) != (contentType == 'movie')) {
+        continue;
+      }
       final content = raw['show'] ?? raw['movie'];
       final cids = content is Map ? content['ids'] : null;
       if (!_matches(cids, imdbId, movie: raw['movie'] != null)) continue;
@@ -1421,19 +1608,36 @@ class SimklService {
     // session, so don't report success (the caller would show a false toast).
     if (ids.isEmpty) return episodes != null && movies != null;
     var allOk = true;
-    for (final id in ids) {
-      final ok = await _deleteOk(
-        '/sync/playback/$id',
-        token: token,
-        label: 'deletePlayback $id',
-      );
-      if (!ok) allOk = false;
+    final owner = canContinue == null
+        ? null
+        : ProfileSessionMemory.captureOwner();
+    var attempted = false;
+    try {
+      for (final id in ids) {
+        if (canContinue?.call() == false) return false;
+        attempted = true;
+        final ok = await _deleteOk(
+          '/sync/playback/$id',
+          token: token,
+          label: 'deletePlayback $id',
+        );
+        if (!ok) allOk = false;
+      }
+      if (canContinue?.call() == false) return false;
+      _invalidatePlaybackCache();
+      attempted = false;
+      if (allOk) {
+        EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
+      }
+      return allOk;
+    } finally {
+      // A closed view must not leave a surviving same-profile view with stale
+      // paused sessions. A switched profile owns a different cache generation.
+      if (attempted &&
+          (owner == null || owner == ProfileSessionMemory.captureOwner())) {
+        _invalidatePlaybackCache();
+      }
     }
-    _invalidatePlaybackCache();
-    if (allOk) {
-      EpisodeTrackerSnapshotRevision.invalidateTitle('simkl', imdbId);
-    }
-    return allOk;
   }
 
   /// Clear the paused session for ONE specific episode of a show (matched by
@@ -1453,7 +1657,7 @@ class SimklService {
     Duration? olderThan,
   }) async {
     if (MediaIdentity.isNative(imdbId)) await _cachedLibAllAll();
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return false;
     final episodes = await _fetchEpisodePlaybackSessions();
     final ids = <int>{};
@@ -1527,9 +1731,6 @@ class SimklService {
     return await fetchWatchedShowEpisodesOrNull(showImdbId) ?? {};
   }
 
-  Future<Map<String, dynamic>?> fetchWatchedEpisodeHistory(String showId) =>
-      _fetchWatchedShowEpisodeItem(showId);
-
   Future<Set<String>?> fetchWatchedShowEpisodesOrNull(String showImdbId) async {
     final item = await _fetchWatchedShowEpisodeItem(showImdbId);
     if (item == null) return null;
@@ -1579,7 +1780,7 @@ class SimklService {
   Future<Map<String, dynamic>?> _fetchWatchedShowEpisodeItem(
     String showImdbId,
   ) async {
-    final token = await StorageService.getSimklAccessToken();
+    final token = await SimklStorage.getSimklAccessToken();
     if (token == null || token.isEmpty) return null;
     final result = await _postOrNull(
       '/sync/watched',

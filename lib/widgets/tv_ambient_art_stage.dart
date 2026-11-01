@@ -42,7 +42,7 @@ class TvAmbientArtStage extends StatelessWidget {
           valueListenable: MainPageBridge.tvAmbientArt,
           builder: (context, art, _) => ValueListenableBuilder<Color?>(
             valueListenable: MainPageBridge.tvHeroTint,
-            builder: (context, tint, _) {
+            builder: (context, tint, __) {
               final t = tint ?? bg;
               return AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -67,8 +67,8 @@ class TvAmbientArtStage extends StatelessWidget {
                         memCacheWidth: 96,
                         fadeInDuration: Duration.zero,
                         fadeOutDuration: Duration.zero,
-                        placeholder: (_, _) => ColoredBox(color: bg),
-                        errorWidget: (_, _, _) => ColoredBox(color: bg),
+                        placeholder: (_, __) => ColoredBox(color: bg),
+                        errorWidget: (_, __, ___) => ColoredBox(color: bg),
                       ),
                     // Tint wash: the film's colour laid diagonally over its
                     // own art, calm toward the lower right.

@@ -1,3 +1,15 @@
+import 'package:debrify/services/storage/alldebrid_storage.dart';
+import 'package:debrify/services/storage/mdblist_storage.dart';
+import 'package:debrify/services/storage/pikpak_storage.dart';
+import 'package:debrify/services/storage/premiumize_storage.dart';
+import 'package:debrify/services/storage/real_debrid_storage.dart';
+import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage/subtitle_settings_storage.dart';
+import 'package:debrify/services/storage/torbox_storage.dart';
+import 'package:debrify/services/storage/torrent_provider_storage.dart';
+import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage/trakt_storage.dart';
+import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'local_validation_diagnostics.dart';
 import 'dart:convert';
 import 'dart:math';
@@ -18,7 +30,6 @@ import 'mdblist/mdblist_continue_watching_service.dart';
 import 'mdblist/mdblist_service.dart';
 import 'mdblist/mdblist_sync_coordinator.dart';
 import 'pikpak_api_service.dart';
-import 'storage_service.dart';
 import 'stream_badges_service.dart';
 import 'stremio_service.dart';
 
@@ -72,24 +83,24 @@ class BackupRestoreService {
   static Future<Map<String, dynamic>> buildBackup({
     bool includeCredentials = true,
   }) async {
-    final realDebridKey = await StorageService.getApiKey();
-    final torboxKey = await StorageService.getTorboxApiKey();
-    final premiumizeKey = await StorageService.getPremiumizeApiKey();
-    final allDebridKey = await StorageService.getAllDebridApiKey();
-    final pikpakEmail = await StorageService.getPikPakEmail();
-    final pikpakPassword = await StorageService.getPikPakPassword();
-    final traktAccess = await StorageService.getTraktAccessToken();
-    final traktRefresh = await StorageService.getTraktRefreshToken();
-    final traktExpiry = await StorageService.getTraktTokenExpiry();
-    final traktUsername = await StorageService.getTraktUsername();
-    final simklAccess = await StorageService.getSimklAccessToken();
-    final simklUsername = await StorageService.getSimklUsername();
-    final mdblistApiKey = await StorageService.getMdblistApiKey();
-    final mdblistUsername = await StorageService.getMdblistUsername();
+    final realDebridKey = await RealDebridStorage.getApiKey();
+    final torboxKey = await TorboxStorage.getTorboxApiKey();
+    final premiumizeKey = await PremiumizeStorage.getPremiumizeApiKey();
+    final allDebridKey = await AllDebridStorage.getAllDebridApiKey();
+    final pikpakEmail = await PikpakStorage.getPikPakEmail();
+    final pikpakPassword = await PikpakStorage.getPikPakPassword();
+    final traktAccess = await TraktStorage.getTraktAccessToken();
+    final traktRefresh = await TraktStorage.getTraktRefreshToken();
+    final traktExpiry = await TraktStorage.getTraktTokenExpiry();
+    final traktUsername = await TraktStorage.getTraktUsername();
+    final simklAccess = await SimklStorage.getSimklAccessToken();
+    final simklUsername = await SimklStorage.getSimklUsername();
+    final mdblistApiKey = await MdblistStorage.getMdblistApiKey();
+    final mdblistUsername = await MdblistStorage.getMdblistUsername();
     final mdblistSyncCheckpoint =
-        await StorageService.getMdblistSyncCheckpoint();
+        await MdblistStorage.getMdblistSyncCheckpoint();
     final trackingPreferences =
-        await StorageService.buildTrackingPreferencesPayload();
+        await TrackingSourceStorage.buildTrackingPreferencesPayload();
     final scrobbleTargets = (trackingPreferences['scrobble_targets'] as List)
         .map((value) => value.toString())
         .toSet();
@@ -119,7 +130,7 @@ class BackupRestoreService {
 
     List<Map<String, dynamic>> webDavServers = const [];
     try {
-      final servers = await StorageService.getWebDavServers();
+      final servers = await WebdavServerStorage.getWebDavServers();
       webDavServers = servers.map((s) {
         final json = s.toTransferJson();
         if (!includeCredentials) json['password'] = '';
@@ -135,7 +146,7 @@ class BackupRestoreService {
       // API key is rejected by the restorer, so keeping blanked ones would
       // just advertise a category that always fails to import.
       try {
-        final configs = await StorageService.getIndexerManagerConfigs();
+        final configs = await TorrentProviderStorage.getIndexerManagerConfigs();
         indexerManagers = configs.map((c) => c.toTransferJson()).toList();
       } catch (_) {
         throw StateError('Could not read indexer managers for backup');
@@ -192,7 +203,7 @@ class BackupRestoreService {
       'createdAt': DateTime.now().toUtc().toIso8601String(),
       'trackingPreferences': trackingPreferences,
       'subtitleSourcePriority':
-          await StorageService.getSubtitleSourcePriority(),
+          await SubtitleSettingsStorage.getSubtitleSourcePriority(),
       if (includeCredentials) ...{
         if (realDebridKey != null && realDebridKey.isNotEmpty)
           'realDebridApiKey': realDebridKey,
@@ -215,7 +226,7 @@ class BackupRestoreService {
           'trakt': <String, dynamic>{
             'access_token': traktAccess,
             'refresh_token': traktRefresh,
-            'expiry_ms': ?traktExpiry,
+            if (traktExpiry != null) 'expiry_ms': traktExpiry,
             if (traktUsername != null && traktUsername.isNotEmpty)
               'username': traktUsername,
           },
@@ -234,7 +245,8 @@ class BackupRestoreService {
             // restores. Derive it from the new master; never read the retired
             // preference again after one-time master seeding.
             'sync_catalog_items': scrobbleTargets.contains('mdblist'),
-            'sync_checkpoint': ?mdblistSyncCheckpoint,
+            if (mdblistSyncCheckpoint != null)
+              'sync_checkpoint': mdblistSyncCheckpoint,
           },
       },
       if (engineIds.isNotEmpty) 'searchEngineIds': engineIds,
@@ -498,8 +510,8 @@ class BackupRestoreService {
       final key = map['realDebridApiKey'] as String?;
       if (key != null && key.isNotEmpty) {
         try {
-          await StorageService.saveApiKey(key);
-          await StorageService.setRealDebridIntegrationEnabled(true);
+          await RealDebridStorage.saveApiKey(key);
+          await RealDebridStorage.setRealDebridIntegrationEnabled(true);
           report.realDebrid = true;
         } catch (_) {
           report.errors.add('Real-Debrid: restore failed');
@@ -511,8 +523,8 @@ class BackupRestoreService {
       final key = map['torboxApiKey'] as String?;
       if (key != null && key.isNotEmpty) {
         try {
-          await StorageService.saveTorboxApiKey(key);
-          await StorageService.setTorboxIntegrationEnabled(true);
+          await TorboxStorage.saveTorboxApiKey(key);
+          await TorboxStorage.setTorboxIntegrationEnabled(true);
           report.torbox = true;
         } catch (_) {
           report.errors.add('Torbox: restore failed');
@@ -524,8 +536,8 @@ class BackupRestoreService {
       final key = map['premiumizeApiKey'] as String?;
       if (key != null && key.isNotEmpty) {
         try {
-          await StorageService.savePremiumizeApiKey(key);
-          await StorageService.setPremiumizeIntegrationEnabled(true);
+          await PremiumizeStorage.savePremiumizeApiKey(key);
+          await PremiumizeStorage.setPremiumizeIntegrationEnabled(true);
           report.premiumize = true;
         } catch (_) {
           report.errors.add('Premiumize: restore failed');
@@ -537,8 +549,8 @@ class BackupRestoreService {
       final key = map['allDebridApiKey'] as String?;
       if (key != null && key.isNotEmpty) {
         try {
-          await StorageService.saveAllDebridApiKey(key);
-          await StorageService.setAllDebridIntegrationEnabled(true);
+          await AllDebridStorage.saveAllDebridApiKey(key);
+          await AllDebridStorage.setAllDebridIntegrationEnabled(true);
           report.allDebrid = true;
         } catch (_) {
           report.errors.add('AllDebrid: restore failed');
@@ -553,11 +565,11 @@ class BackupRestoreService {
         final password = pp['password'] as String?;
         if (email != null && email.isNotEmpty) {
           try {
-            await StorageService.setPikPakEmail(email);
+            await PikpakStorage.setPikPakEmail(email);
             if (password != null && password.isNotEmpty) {
-              await StorageService.setPikPakPassword(password);
+              await PikpakStorage.setPikPakPassword(password);
             }
-            await StorageService.setPikPakEnabled(true);
+            await PikpakStorage.setPikPakEnabled(true);
             // PikPak needs an active session, not just stored credentials —
             // run a real login so isAuthenticated() returns true after
             // restore. If it fails (e.g. offline), the credentials remain
@@ -598,18 +610,18 @@ class BackupRestoreService {
             refresh != null &&
             refresh.isNotEmpty) {
           try {
-            await StorageService.setTraktSession(
+            await TraktStorage.setTraktSession(
               accessToken: access,
               refreshToken: refresh,
               expiryMs: (t['expiry_ms'] as num?)?.toInt(),
             );
             final username = t['username'] as String?;
             if (username != null && username.isNotEmpty) {
-              await StorageService.setTraktUsername(username);
+              await TraktStorage.setTraktUsername(username);
             }
             // Match interactive connect: a freshly imported Trakt session
             // starts with catalog scrobbling on.
-            await StorageService.setTraktSyncCatalogItems(true);
+            await TraktStorage.setTraktSyncCatalogItems(true);
             report.trakt = true;
           } catch (_) {
             report.errors.add('Trakt: restore failed');
@@ -624,14 +636,14 @@ class BackupRestoreService {
         final access = s['access_token'] as String?;
         if (access != null && access.isNotEmpty) {
           try {
-            await StorageService.setSimklAccessToken(access);
+            await SimklStorage.setSimklAccessToken(access);
             final username = s['username'] as String?;
             if (username != null && username.isNotEmpty) {
-              await StorageService.setSimklUsername(username);
+              await SimklStorage.setSimklUsername(username);
             }
             // Match interactive connect: a freshly imported Simkl session
             // starts with catalog scrobbling on.
-            await StorageService.setSimklSyncCatalogItems(true);
+            await SimklStorage.setSimklSyncCatalogItems(true);
             report.simkl = true;
           } catch (_) {
             report.errors.add('Simkl: restore failed');
@@ -646,14 +658,14 @@ class BackupRestoreService {
         final apiKey = m['api_key'] as String?;
         if (apiKey != null && apiKey.isNotEmpty) {
           try {
-            await StorageService.saveMdblistApiKey(apiKey);
+            await MdblistStorage.saveMdblistApiKey(apiKey);
             final username = m['username'] as String?;
-            await StorageService.setMdblistUsername(username);
-            await StorageService.setMdblistSyncCatalogItems(
+            await MdblistStorage.setMdblistUsername(username);
+            await MdblistStorage.setMdblistSyncCatalogItems(
               m['sync_catalog_items'] as bool? ?? true,
             );
             final checkpoint = m['sync_checkpoint'];
-            await StorageService.setMdblistSyncCheckpoint(
+            await MdblistStorage.setMdblistSyncCheckpoint(
               checkpoint is Map ? Map<String, dynamic>.from(checkpoint) : null,
             );
             // The key was written directly (not via connect()), so the MDBList
@@ -782,7 +794,7 @@ class BackupRestoreService {
     final subtitlePriority = map['subtitleSourcePriority'];
     if (selection.addons && subtitlePriority is List) {
       try {
-        await StorageService.setSubtitleSourcePriority(
+        await SubtitleSettingsStorage.setSubtitleSourcePriority(
           subtitlePriority.whereType<String>().toList(),
         );
       } catch (_) {
@@ -793,7 +805,7 @@ class BackupRestoreService {
     final trackingPreferences = map['trackingPreferences'];
     if (selection.trackingPreferences && trackingPreferences is Map) {
       try {
-        await StorageService.applyTrackingPreferencesPayload(
+        await TrackingSourceStorage.applyTrackingPreferencesPayload(
           trackingPreferences,
         );
       } catch (_) {
@@ -806,7 +818,7 @@ class BackupRestoreService {
       // seeded on this install's first policy read, so re-adopt the
       // just-restored legacy values (absent-key rule: Trakt/Simkl default ON,
       // MDBList follows its restored switch).
-      await StorageService.reseedTrackingScrobbleTargetsFromLegacy();
+      await TrackingSourceStorage.reseedTrackingScrobbleTargetsFromLegacy();
     }
 
     LocalValidationDiagnostics.event('legacy_restore_finished', {
@@ -823,7 +835,7 @@ class BackupRestoreService {
     RestoreReport report,
   ) async {
     try {
-      final existing = await StorageService.getWebDavServers();
+      final existing = await WebdavServerStorage.getWebDavServers();
       final existingUrls = <String>{
         for (final s in existing) _normalizeUrl(s.baseUrl),
       };
@@ -855,7 +867,7 @@ class BackupRestoreService {
         }
       }
       if (report.webDavServersImported > 0) {
-        await StorageService.saveWebDavServers(merged);
+        await WebdavServerStorage.saveWebDavServers(merged);
         // setWebDavEnabled is handled inside saveWebDavServers.
       }
     } catch (_) {
@@ -871,7 +883,7 @@ class BackupRestoreService {
     RestoreReport report,
   ) async {
     try {
-      final existing = await StorageService.getIndexerManagerConfigs();
+      final existing = await TorrentProviderStorage.getIndexerManagerConfigs();
       String fingerprint(IndexerManagerConfig c) =>
           '${c.type.value}|${_normalizeUrl(c.baseUrl)}';
       final existingKeys = <String>{for (final c in existing) fingerprint(c)};
@@ -903,7 +915,7 @@ class BackupRestoreService {
         }
       }
       if (report.indexerManagersImported > 0) {
-        await StorageService.setIndexerManagerConfigs(merged);
+        await TorrentProviderStorage.setIndexerManagerConfigs(merged);
       }
     } catch (_) {
       report.errors.add('Indexer managers: restore failed');

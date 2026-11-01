@@ -7,10 +7,6 @@ import 'package:debrify/services/main_page_bridge.dart';
 import 'package:debrify/widgets/see_all/discover_shelf_scope.dart';
 import 'package:debrify/widgets/see_all/see_all_poster_grid.dart';
 import 'package:debrify/widgets/see_all/stremio_dropdown.dart';
-import 'package:debrify/theme/app_theme.dart';
-import 'package:debrify/theme/app_theme_scope.dart';
-import 'package:debrify/theme/glass_chrome.dart';
-import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,55 +44,6 @@ class BrowseService extends MetadataExploreService {
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  testWidgets(
-    'standalone Discover filter popup follows appearance on reopening',
-    (tester) async {
-      final service = BrowseService();
-      Future<void> render(AppTheme app) async {
-        await tester.pumpWidget(
-          MaterialApp(
-            builder: (context, child) =>
-                AppThemeScope(theme: app, child: child!),
-            home: MetadataBrowsePage(
-              title: 'Discover',
-              kind: 'discover',
-              preferences: MetadataPreferences(),
-              onOpen: (_) {},
-              service: service,
-            ),
-          ),
-        );
-        await tester.pumpAndSettle();
-      }
-
-      final glass = PremiumLooks.glass.build();
-      await render(glass);
-      DropdownButton<String> type() => tester.widget<DropdownButton<String>>(
-        find.byType(DropdownButton<String>).first,
-      );
-      expect(type().dropdownColor, GlassChrome.fill(glass, raised: true));
-      final chip = tester.widget<FilterChip>(find.byType(FilterChip));
-      expect(chip.backgroundColor, GlassChrome.fill(glass));
-      expect(chip.side?.color, GlassChrome.edge(glass));
-      await tester.tap(find.byType(DropdownButton<String>).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('TV shows').last);
-      await tester.pumpAndSettle();
-      expect(service.requests.last.type, 'tv');
-      await tester.tap(find.byType(DropdownButton<String>).first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Movies').last);
-      await tester.pumpAndSettle();
-      expect(service.requests.last.type, 'movie');
-      await render(AppThemes.legacy);
-      expect(type().dropdownColor, isNull);
-      expect(
-        tester.widget<FilterChip>(find.byType(FilterChip)).backgroundColor,
-        isNull,
-      );
-      expect(tester.takeException(), isNull);
-    },
-  );
   Future<void> open(
     WidgetTester tester,
     BrowseService service, {
@@ -192,7 +139,6 @@ void main() {
     expect(service.requests.last.filters, {
       'with_runtime.lte': '120',
       'with_original_language': 'hi',
-      'sort_by': 'popularity',
     });
     expect(service.pages, [1, 1, 1, 1]);
     final scroll = tester
@@ -305,7 +251,7 @@ void main() {
         );
         source.requestFocus();
         await tester.pumpAndSettle();
-        for (final label in ['Type', 'Sort', 'Runtime', 'Language']) {
+        for (final label in ['Type', 'Runtime', 'Language']) {
           await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
           await tester.pumpAndSettle();
           expect(

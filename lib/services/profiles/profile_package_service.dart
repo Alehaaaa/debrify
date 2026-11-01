@@ -9,10 +9,7 @@ import '../../models/profiles/profile_policy.dart';
 import 'connection_resource_service.dart';
 import 'profile_authorization.dart';
 import 'profile_database_snapshot.dart';
-import '../storage_service.dart';
-import 'profile_app_assets_codec.dart';
 import 'profile_portable_files.dart';
-import 'subtitle_appearance_preferences.dart';
 import 'profile_preference_portability.dart';
 import 'profile_appearance_preferences.dart';
 import 'profile_registry.dart';
@@ -145,7 +142,7 @@ class ProfilePackageService {
       throw ArgumentError('File-backed export requires a full profile export');
     }
     if (fileSinks != null && compactDatabaseSnapshots) {
-      throw ArgumentError('File-backed export never compacts Nextup TV');
+      throw ArgumentError('File-backed export never compacts Debrify TV');
     }
     final profile = await context.validate(registry);
     if (profile.id != scope.profileId) {
@@ -194,9 +191,6 @@ class ProfilePackageService {
     final portableAvatar = sanitized
         ? null
         : await ProfilePortableFiles.exportAvatar(scope, profile.avatarKey);
-    final appAssets = sanitized
-        ? const <String, Object?>{}
-        : await _exportAppAssets(scope);
 
     final exportedResources = <Map<String, dynamic>>[];
     var borrowedResourcesOmitted = 0;
@@ -268,9 +262,8 @@ class ProfilePackageService {
           if (!sanitized) 'lockOnResume': profile.lockOnResume,
           if (!sanitized)
             'inactivityTimeoutMinutes': profile.inactivityTimeoutMinutes,
-          'pinRecord': ?pinRecord,
-          'avatarFile': ?portableAvatar,
-          if (appAssets.isNotEmpty) ProfileAppAssetsCodec.field: appAssets,
+          if (pinRecord != null) 'pinRecord': pinRecord,
+          if (portableAvatar != null) 'avatarFile': portableAvatar,
           'preferencesSection': 'profile-0-preferences',
           if (databaseSnapshots.isNotEmpty)
             'databasesSection': 'profile-0-databases',
@@ -331,7 +324,7 @@ class ProfilePackageService {
     void Function(ProfileGraphPackageExport)? onIdentities,
   }) async {
     if (fileSinks != null && compactDatabaseSnapshots) {
-      throw ArgumentError('File-backed export never compacts Nextup TV');
+      throw ArgumentError('File-backed export never compacts Debrify TV');
     }
     final exported = await _exportAllProfiles(
       context: context,
@@ -415,17 +408,12 @@ class ProfilePackageService {
       );
       profileRecords.add(<String, dynamic>{
         'backupId': backupId,
-        // Lets a restore onto this same device recognise the profile and
-        // overwrite it instead of adding a twin. WebDAV Sync graphs carry
-        // their own circle identity (and a device-independent digest), so
-        // they never include a local ID.
-        if (profileIdProjection.isEmpty) 'sourceProfileId': profile.id,
         'name': profile.name,
         'avatarKey': profile.avatarKey,
         'role': profile.role.name,
         'policy': profile.policy.encode(),
         'wasPinProtected': profile.hasPin || profile.pinResetRequired,
-        'pinRecord': ?pinRecord,
+        if (pinRecord != null) 'pinRecord': pinRecord,
         'setupComplete': profile.setupComplete,
         'createdAtMs': profile.createdAt.millisecondsSinceEpoch,
         'disabled': !profile.isEnabled,
@@ -504,10 +492,6 @@ class ProfilePackageService {
       );
       if (portableAvatar != null) {
         profileRecords.last['avatarFile'] = portableAvatar;
-      }
-      final appAssets = await _exportAppAssets(scope);
-      if (appAssets.isNotEmpty) {
-        profileRecords.last[ProfileAppAssetsCodec.field] = appAssets;
       }
     }
 
@@ -733,39 +717,13 @@ class ProfilePackageService {
     };
   }
 
-  /// The single reviewed raw-store open for package export.
-  static Future<SharedPreferences> _rawPreferences() =>
-      SharedPreferences.getInstance();
-
-  /// Device assets for the profile record. The profile's own selections are
-  /// read here, through the same reviewed access as its preferences.
-  static Future<Map<String, Object?>> _exportAppAssets(
-    ProfileScope scope,
-  ) async {
-    final SharedPreferences raw;
-    try {
-      raw = await _rawPreferences();
-    } catch (_) {
-      // Pure Dart codec tests run without Flutter's services binding.
-      return const <String, Object?>{};
-    }
-    return ProfilePortableFiles.exportAppAssets(
-      selectedLaunchAnimationId: raw.getString(
-        scope.preferenceKey(StorageService.importedLaunchAnimationKey),
-      ),
-      selectedSubtitleFontId: raw.getString(
-        scope.preferenceKey(SubtitleAppearancePreferences.selectedFontKey),
-      ),
-    );
-  }
-
   static Future<Map<String, Object?>> _exportPreferences(
     ProfileScope scope, {
     required bool sanitized,
     required bool includeCredentialEngineSettings,
     bool excludeAppearance = false,
   }) async {
-    final raw = await _rawPreferences();
+    final raw = await SharedPreferences.getInstance();
     final preferences = <String, Object?>{};
     final physicalKeys =
         raw

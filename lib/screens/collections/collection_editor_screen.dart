@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/home_collection.dart';
 import '../../models/stremio_addon.dart';
-import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../settings/widgets/settings_widgets.dart';
 
 /// Edits a detached draft. The caller saves only after the user presses Save,
@@ -164,59 +162,56 @@ class _FolderEditorState extends State<_FolderEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => Theme(
-    data: settingsPageTheme(context),
-    child: Scaffold(
-      appBar: AppBar(
-        title: const Text('Edit folder'),
-        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
-      ),
-      body: Form(
-        key: _form,
-        child: _EditorBody(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _text(_draft, 'title', 'Folder title', required: true),
-            _text(_draft, 'coverImageUrl', 'Cover image URL', url: true),
-            _text(_draft, 'coverEmoji', 'Cover emoji'),
-            _choice(_draft, 'tileShape', 'Tile shape', const {
-              'LANDSCAPE': 'Landscape',
-              'PORTRAIT': 'Portrait',
-              'SQUARE': 'Square',
-            }, fallback: 'LANDSCAPE'),
-            _toggle(_draft, 'hideTitle', 'Hide title on cover', false),
-            _text(_draft, 'heroBackdropUrl', 'Folder backdrop URL', url: true),
-            _text(
-              _draft,
-              'heroVideoUrl',
-              'Folder background video URL',
-              url: true,
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: const Text('Edit folder'),
+      actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+    ),
+    body: Form(
+      key: _form,
+      child: _EditorBody(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _text(_draft, 'title', 'Folder title', required: true),
+          _text(_draft, 'coverImageUrl', 'Cover image URL', url: true),
+          _text(_draft, 'coverEmoji', 'Cover emoji'),
+          _choice(_draft, 'tileShape', 'Tile shape', const {
+            'LANDSCAPE': 'Landscape',
+            'PORTRAIT': 'Portrait',
+            'SQUARE': 'Square',
+          }, fallback: 'LANDSCAPE'),
+          _toggle(_draft, 'hideTitle', 'Hide title on cover', false),
+          _text(_draft, 'heroBackdropUrl', 'Folder backdrop URL', url: true),
+          _text(
+            _draft,
+            'heroVideoUrl',
+            'Folder background video URL',
+            url: true,
+          ),
+          _text(_draft, 'titleLogoUrl', 'Title logo URL', url: true),
+          _text(_draft, 'focusGifUrl', 'Focus GIF URL', url: true),
+          _toggle(_draft, 'focusGifEnabled', 'Play focus GIF', true),
+          _text(_draft, 'focusVideoUrl', 'Focus video URL', url: true),
+          _toggle(_draft, 'focusVideoEnabled', 'Play focus video', true),
+          const SizedBox(height: 20),
+          const Text(
+            'Sources',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          for (var i = 0; i < _sources.length; i++)
+            _orderedTile(
+              title: '${_sources[i].label} · ${_sources[i].provider}',
+              index: i,
+              values: _sources,
+              onEdit: () => _editSource(i),
+              onChanged: () => setState(() {}),
             ),
-            _text(_draft, 'titleLogoUrl', 'Title logo URL', url: true),
-            _text(_draft, 'focusGifUrl', 'Focus GIF URL', url: true),
-            _toggle(_draft, 'focusGifEnabled', 'Play focus GIF', true),
-            _text(_draft, 'focusVideoUrl', 'Focus video URL', url: true),
-            _toggle(_draft, 'focusVideoEnabled', 'Play focus video', true),
-            const SizedBox(height: 20),
-            const Text(
-              'Sources',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            for (var i = 0; i < _sources.length; i++)
-              _orderedTile(
-                title: '${_sources[i].label} · ${_sources[i].provider}',
-                index: i,
-                values: _sources,
-                onEdit: () => _editSource(i),
-                onChanged: () => setState(() {}),
-              ),
-            OutlinedButton.icon(
-              onPressed: () => _editSource(),
-              icon: const Icon(Icons.add),
-              label: const Text('Add source'),
-            ),
-          ],
-        ),
+          OutlinedButton.icon(
+            onPressed: () => _editSource(),
+            icon: const Icon(Icons.add),
+            label: const Text('Add source'),
+          ),
+        ],
       ),
     ),
   );
@@ -258,8 +253,7 @@ class _SourceEditorState extends State<_SourceEditor> {
     'withCast': 'Cast person IDs (movies)',
     'withCrew': 'Crew person IDs (movies)',
     'withPeople': 'Cast or crew person IDs (movies)',
-    'monetization':
-        'Availability: flatrate, free, ads, rent, buy (join with |)',
+    'monetization': 'Availability: flatrate, free, ads, rent, buy (join with |)',
     'withGenres': 'Include genre IDs',
     'withoutGenres': 'Exclude genre IDs',
     'releaseDateGte': 'Released from (YYYY-MM-DD)',
@@ -294,195 +288,187 @@ class _SourceEditorState extends State<_SourceEditor> {
       if (!const ['addon', 'tmdb', 'trakt'].contains(_provider))
         _provider: _provider,
     };
-    return Theme(
-      data: settingsPageTheme(context),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Edit source'),
-          actions: [TextButton(onPressed: _save, child: const Text('Save'))],
-        ),
-        body: Form(
-          key: _form,
-          child: _EditorBody(
-            key: ValueKey(_generation),
-            padding: const EdgeInsets.all(20),
-            children: [
-              DropdownButtonFormField<String>(
-                initialValue: _provider,
-                decoration: const InputDecoration(labelText: 'Source'),
-                items: [
-                  for (final e in providerChoices.entries)
-                    DropdownMenuItem(value: e.key, child: Text(e.value)),
-                ],
-                onChanged: (value) {
-                  if (value == null || value == _provider) return;
-                  setState(() {
-                    _draft = {
-                      'provider': value,
-                      'title': _draft['title'],
-                      'tmdbSourceType': 'DISCOVER',
-                      'mediaType': 'MOVIE',
-                    };
-                    _generation++;
-                  });
-                },
-              ),
-              _text(_draft, 'title', 'List title'),
-              if (_provider == 'addon') ...[
-                if (widget.addons.isNotEmpty)
-                  DropdownButtonFormField<String>(
-                    initialValue: addon?.manifestId ?? addon?.id,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Installed addon',
-                    ),
-                    items: [
-                      for (final id
-                          in widget.addons
-                              .map((a) => a.manifestId ?? a.id)
-                              .toSet())
-                        DropdownMenuItem(
-                          value: id,
-                          child: Text(
-                            widget.addons
-                                .firstWhere((a) => (a.manifestId ?? a.id) == id)
-                                .name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Edit source'),
+        actions: [TextButton(onPressed: _save, child: const Text('Save'))],
+      ),
+      body: Form(
+        key: _form,
+        child: _EditorBody(
+          key: ValueKey(_generation),
+          padding: const EdgeInsets.all(20),
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _provider,
+              decoration: const InputDecoration(labelText: 'Source'),
+              items: [
+                for (final e in providerChoices.entries)
+                  DropdownMenuItem(value: e.key, child: Text(e.value)),
+              ],
+              onChanged: (value) {
+                if (value == null || value == _provider) return;
+                setState(() {
+                  _draft = {
+                    'provider': value,
+                    'title': _draft['title'],
+                    'tmdbSourceType': 'DISCOVER',
+                    'mediaType': 'MOVIE',
+                  };
+                  _generation++;
+                });
+              },
+            ),
+            _text(_draft, 'title', 'List title'),
+            if (_provider == 'addon') ...[
+              if (widget.addons.isNotEmpty)
+                DropdownButtonFormField<String>(
+                  initialValue: addon?.manifestId ?? addon?.id,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Installed addon',
+                  ),
+                  items: [
+                    for (final id
+                        in widget.addons
+                            .map((a) => a.manifestId ?? a.id)
+                            .toSet())
+                      DropdownMenuItem(
+                        value: id,
+                        child: Text(
+                          widget.addons
+                              .firstWhere((a) => (a.manifestId ?? a.id) == id)
+                              .name,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                    ],
-                    onChanged: (value) {
-                      _form.currentState!.save();
-                      setState(() {
-                        _draft['addonId'] = value;
-                        _generation++;
-                      });
-                    },
-                  ),
-                _text(_draft, 'addonId', 'Addon ID', required: true),
-                if (addon != null && addon.catalogs.any((c) => c.isBrowsable))
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Choose configured catalog',
-                    ),
-                    items: [
-                      for (final c in addon.catalogs.where(
-                        (c) => c.isBrowsable,
-                      ))
-                        DropdownMenuItem(
-                          value: '${c.type}\u0000${c.id}',
-                          child: Text(
-                            '${c.name} · ${c.type}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      _form.currentState!.save();
-                      final parts = value.split('\u0000');
-                      setState(() {
-                        _draft['type'] = parts[0];
-                        _draft['catalogId'] = parts[1];
-                        _generation++;
-                      });
-                    },
-                  ),
-                _text(_draft, 'catalogId', 'Catalog ID', required: true),
-                _text(_draft, 'type', 'Catalog type', required: true),
-                _text(_draft, 'genre', 'Genre (optional)'),
-              ] else if (_provider == 'tmdb' || _provider == 'trakt') ...[
-                _choice(_draft, 'mediaType', 'Media type', const {
-                  'MOVIE': 'Movies',
-                  'TV': 'Series',
-                }, fallback: 'MOVIE'),
-                if (_provider == 'tmdb') ...[
-                  _choice(
-                    _draft,
-                    'tmdbSourceType',
-                    'TMDB source',
-                    const {
-                      'DISCOVER': 'Discover with filters',
-                      'LIST': 'List',
-                      'COLLECTION': 'Movie franchise',
-                      'COMPANY': 'Production company',
-                      'NETWORK': 'TV network',
-                      'PERSON': 'Actor credits',
-                      'DIRECTOR': 'Director credits',
-                    },
-                    fallback: 'DISCOVER',
-                    onChanged: () => setState(() {}),
-                  ),
-                  _text(
-                    _draft,
-                    'tmdbId',
-                    'TMDB ID',
-                    integer: true,
-                    required: _draft['tmdbSourceType'] != 'DISCOVER',
-                  ),
-                  _choice(_draft, 'sortBy', 'Sort by', const {
-                    'original': 'Original order',
-                    'popularity.desc': 'Popularity',
-                    'vote_average.desc': 'Rating',
-                    'vote_count.desc': 'Vote count',
-                    'primary_release_date.desc': 'Newest movies',
-                    'first_air_date.desc': 'Newest series',
-                  }, fallback: 'popularity.desc'),
-                  if (const [
-                    'DISCOVER',
-                    'COMPANY',
-                    'NETWORK',
-                  ].contains(_draft['tmdbSourceType'])) ...[
-                    const SizedBox(height: 16),
-                    const Text('Filters (optional)'),
-                    const Text(
-                      'Separate IDs with commas for AND, or | for OR where supported by TMDB.',
-                    ),
-                    for (final e in _filters.entries)
-                      _text(
-                        filters,
-                        e.key,
-                        e.value,
-                        integer:
-                            e.key == 'year' ||
-                            e.key == 'voteCountGte' ||
-                            e.key.startsWith('runtime'),
-                        decimal: e.key.startsWith('voteAverage'),
                       ),
                   ],
-                ] else ...[
-                  _text(
-                    _draft,
-                    'traktListId',
-                    'Trakt list ID',
-                    required: true,
-                    integer: true,
-                  ),
-                  _choice(_draft, 'sortBy', 'Sort by', const {
-                    'rank': 'List order',
-                    'added': 'Date added',
-                    'title': 'Title',
-                    'released': 'Release date',
-                    'runtime': 'Runtime',
-                    'popularity': 'Popularity',
-                    'percentage': 'Rating',
-                    'votes': 'Vote count',
-                  }, fallback: 'rank'),
-                  _choice(_draft, 'sortHow', 'Direction', const {
-                    'asc': 'Ascending',
-                    'desc': 'Descending',
-                  }, fallback: 'asc'),
-                ],
-              ] else
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'This provider is not supported. Its data will be preserved; choose a supported source to replace it.',
-                  ),
+                  onChanged: (value) {
+                    _form.currentState!.save();
+                    setState(() {
+                      _draft['addonId'] = value;
+                      _generation++;
+                    });
+                  },
                 ),
-            ],
-          ),
+              _text(_draft, 'addonId', 'Addon ID', required: true),
+              if (addon != null && addon.catalogs.any((c) => c.isBrowsable))
+                DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Choose configured catalog',
+                  ),
+                  items: [
+                    for (final c in addon.catalogs.where((c) => c.isBrowsable))
+                      DropdownMenuItem(
+                        value: '${c.type}\u0000${c.id}',
+                        child: Text(
+                          '${c.name} · ${c.type}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) return;
+                    _form.currentState!.save();
+                    final parts = value.split('\u0000');
+                    setState(() {
+                      _draft['type'] = parts[0];
+                      _draft['catalogId'] = parts[1];
+                      _generation++;
+                    });
+                  },
+                ),
+              _text(_draft, 'catalogId', 'Catalog ID', required: true),
+              _text(_draft, 'type', 'Catalog type', required: true),
+              _text(_draft, 'genre', 'Genre (optional)'),
+            ] else if (_provider == 'tmdb' || _provider == 'trakt') ...[
+              _choice(_draft, 'mediaType', 'Media type', const {
+                'MOVIE': 'Movies',
+                'TV': 'Series',
+              }, fallback: 'MOVIE'),
+              if (_provider == 'tmdb') ...[
+                _choice(
+                  _draft,
+                  'tmdbSourceType',
+                  'TMDB source',
+                  const {
+                    'DISCOVER': 'Discover with filters',
+                    'LIST': 'List',
+                    'COLLECTION': 'Movie franchise',
+                    'COMPANY': 'Production company',
+                    'NETWORK': 'TV network',
+                    'PERSON': 'Actor credits',
+                    'DIRECTOR': 'Director credits',
+                  },
+                  fallback: 'DISCOVER',
+                  onChanged: () => setState(() {}),
+                ),
+                _text(
+                  _draft,
+                  'tmdbId',
+                  'TMDB ID',
+                  integer: true,
+                  required: _draft['tmdbSourceType'] != 'DISCOVER',
+                ),
+                _choice(_draft, 'sortBy', 'Sort by', const {
+                  'original': 'Original order',
+                  'popularity.desc': 'Popularity',
+                  'vote_average.desc': 'Rating',
+                  'vote_count.desc': 'Vote count',
+                  'primary_release_date.desc': 'Newest movies',
+                  'first_air_date.desc': 'Newest series',
+                }, fallback: 'popularity.desc'),
+                if (const [
+                  'DISCOVER',
+                  'COMPANY',
+                  'NETWORK',
+                ].contains(_draft['tmdbSourceType'])) ...[
+                  const SizedBox(height: 16),
+                  const Text('Filters (optional)'),
+                  const Text(
+                    'Separate IDs with commas for AND, or | for OR where supported by TMDB.',
+                  ),
+                  for (final e in _filters.entries)
+                    _text(
+                      filters,
+                      e.key,
+                      e.value,
+                      integer: e.key == 'year' || e.key == 'voteCountGte' || e.key.startsWith('runtime'),
+                      decimal: e.key.startsWith('voteAverage'),
+                    ),
+                ],
+              ] else ...[
+                _text(
+                  _draft,
+                  'traktListId',
+                  'Trakt list ID',
+                  required: true,
+                  integer: true,
+                ),
+                _choice(_draft, 'sortBy', 'Sort by', const {
+                  'rank': 'List order',
+                  'added': 'Date added',
+                  'title': 'Title',
+                  'released': 'Release date',
+                  'runtime': 'Runtime',
+                  'popularity': 'Popularity',
+                  'percentage': 'Rating',
+                  'votes': 'Vote count',
+                }, fallback: 'rank'),
+                _choice(_draft, 'sortHow', 'Direction', const {
+                  'asc': 'Ascending',
+                  'desc': 'Descending',
+                }, fallback: 'asc'),
+              ],
+            ] else
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'This provider is not supported. Its data will be preserved; choose a supported source to replace it.',
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -616,19 +602,12 @@ Widget _toggle(
   String title,
   bool fallback,
 ) => StatefulBuilder(
-  builder: (context, update) {
-    final app = AppThemeScope.of(context);
-    return SwitchListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-      shape: GlassChrome.enabled(app)
-          ? GlassChrome.shape(app, radius: 12)
-          : null,
-      tileColor: GlassChrome.enabled(app) ? GlassChrome.fill(app) : null,
-      title: Text(title),
-      value: values[key] as bool? ?? fallback,
-      onChanged: (value) => update(() => values[key] = value),
-    );
-  },
+  builder: (context, update) => SwitchListTile(
+    contentPadding: EdgeInsets.zero,
+    title: Text(title),
+    value: values[key] as bool? ?? fallback,
+    onChanged: (value) => update(() => values[key] = value),
+  ),
 );
 
 Widget _orderedTile<T>({
@@ -640,66 +619,46 @@ Widget _orderedTile<T>({
 }) => Column(
   key: ValueKey(values[index]),
   children: [
-    Builder(
-      builder: (context) {
-        final app = AppThemeScope.of(context);
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          shape: GlassChrome.enabled(app)
-              ? GlassChrome.shape(app, radius: 12)
-              : null,
-          tileColor: GlassChrome.enabled(app) ? GlassChrome.fill(app) : null,
-          title: Text(title),
-          onTap: onEdit,
-          trailing: const Icon(Icons.edit_outlined),
-        );
-      },
+    ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      onTap: onEdit,
+      trailing: const Icon(Icons.edit_outlined),
     ),
-    Builder(
-      builder: (context) {
-        final app = AppThemeScope.of(context);
-        return Container(
-          margin: const EdgeInsets.only(top: 4, bottom: 8),
-          decoration: GlassChrome.enabled(app)
-              ? GlassChrome.decoration(app, radius: app.shape.br(12))
-              : null,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              IconButton(
-                tooltip: 'Move up',
-                onPressed: index == 0
-                    ? null
-                    : () {
-                        final item = values.removeAt(index);
-                        values.insert(index - 1, item);
-                        onChanged();
-                      },
-                icon: const Icon(Icons.arrow_upward),
-              ),
-              IconButton(
-                tooltip: 'Move down',
-                onPressed: index == values.length - 1
-                    ? null
-                    : () {
-                        final item = values.removeAt(index);
-                        values.insert(index + 1, item);
-                        onChanged();
-                      },
-                icon: const Icon(Icons.arrow_downward),
-              ),
-              IconButton(
-                tooltip: 'Remove',
-                onPressed: () {
-                  values.removeAt(index);
+    Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        IconButton(
+          tooltip: 'Move up',
+          onPressed: index == 0
+              ? null
+              : () {
+                  final item = values.removeAt(index);
+                  values.insert(index - 1, item);
                   onChanged();
                 },
-                icon: const Icon(Icons.delete_outline),
-              ),
-            ],
-          ),
-        );
-      },
+          icon: const Icon(Icons.arrow_upward),
+        ),
+        IconButton(
+          tooltip: 'Move down',
+          onPressed: index == values.length - 1
+              ? null
+              : () {
+                  final item = values.removeAt(index);
+                  values.insert(index + 1, item);
+                  onChanged();
+                },
+          icon: const Icon(Icons.arrow_downward),
+        ),
+        IconButton(
+          tooltip: 'Remove',
+          onPressed: () {
+            values.removeAt(index);
+            onChanged();
+          },
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
     ),
   ],
 );

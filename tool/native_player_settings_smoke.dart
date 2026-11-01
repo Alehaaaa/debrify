@@ -16,7 +16,10 @@ import 'package:debrify/services/profiles/profile_native_lock_bridge.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/debrify_tv_storage.dart';
+import 'package:debrify/services/storage/player_appearance_storage.dart';
+import 'package:debrify/services/storage/player_settings_storage.dart';
+import 'package:debrify/services/storage/subtitle_settings_storage.dart';
 import 'package:debrify/services/subtitle_font_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -120,10 +123,10 @@ Future<void> _run() async {
     return;
   }
   await _play('defaults-movie');
-  await StorageService.setTvPlayerControlsStyle('frost');
-  await StorageService.setDebrifyTvPlayerStyle('network');
-  await StorageService.setDefaultSubtitleLanguage('off');
-  await StorageService.setPlayerNightModeIndex(3);
+  await PlayerAppearanceStorage.setTvPlayerControlsStyle('frost');
+  await DebrifyTvStorage.setDebrifyTvPlayerStyle('network');
+  await SubtitleSettingsStorage.setDefaultSubtitleLanguage('off');
+  await PlayerSettingsStorage.setPlayerNightModeIndex(3);
   for (final kind in [
     'movie',
     'episode',
@@ -138,9 +141,9 @@ Future<void> _run() async {
   }
   await activate(second);
   await _play('profile-b-defaults');
-  await StorageService.setTvPlayerControlsStyle('classic');
-  await StorageService.setDefaultSubtitleLanguage('spa');
-  await StorageService.setPlayerNightModeIndex(1);
+  await PlayerAppearanceStorage.setTvPlayerControlsStyle('classic');
+  await SubtitleSettingsStorage.setDefaultSubtitleLanguage('spa');
+  await PlayerSettingsStorage.setPlayerNightModeIndex(1);
   await _play('profile-b-custom');
   await activate(first);
   await _play('profile-a-return');

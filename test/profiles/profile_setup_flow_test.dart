@@ -92,6 +92,22 @@ void main() {
     await pumpFrames(tester);
   }
 
+  // A tap that creates a profile drives a chain of real sqflite IO whose
+  // duration depends on machine load, so a fixed number of runAsync windows
+  // can end before the row exists. Pump bounded windows until it does.
+  Future<void> createByLabel(
+    WidgetTester tester,
+    String label,
+    String name,
+  ) async {
+    await nextByLabel(tester, label);
+    for (var i = 0; i < 200; i++) {
+      final profiles = await io(tester, registry.listProfiles);
+      if (profiles.any((p) => p.name == name)) return;
+      await pumpFrames(tester);
+    }
+  }
+
   Future<void> openFlow(
     WidgetTester tester, {
     required ValueChanged<bool> onClosed,
@@ -143,7 +159,7 @@ void main() {
       await nextByLabel(tester, 'Next');
     }
     await nextByLabel(tester, 'Review');
-    expect(find.text("Maya's corner of Nextup"), findsOneWidget);
+    expect(find.text("Maya's corner of Debrify"), findsOneWidget);
 
     await nextByLabel(tester, 'Cancel');
 
@@ -369,9 +385,9 @@ void main() {
     await nextByLabel(tester, 'Next'); // → sources
     await nextByLabel(tester, 'Next'); // → abilities
     await nextByLabel(tester, 'Review'); // → review
-    expect(find.text("Maya's corner of Nextup"), findsOneWidget);
+    expect(find.text("Maya's corner of Debrify"), findsOneWidget);
 
-    await nextByLabel(tester, 'Create Maya');
+    await createByLabel(tester, 'Create Maya', 'Maya');
 
     final profiles = await io(tester, registry.listProfiles);
     final maya = profiles.singleWhere((p) => p.name == 'Maya');
@@ -406,7 +422,7 @@ void main() {
     await pumpFrames(tester);
     await nextByLabel(tester, 'Next'); // abilities
     await nextByLabel(tester, 'Review');
-    await nextByLabel(tester, 'Create Sam');
+    await createByLabel(tester, 'Create Sam', 'Sam');
 
     final profiles = await io(tester, registry.listProfiles);
     final sam = profiles.singleWhere((p) => p.name == 'Sam');
@@ -445,11 +461,11 @@ void main() {
     await pumpFrames(tester);
 
     // Lands on review, speaking Can/Can't for the stored policy.
-    expect(find.text("Noor's corner of Nextup"), findsOneWidget);
+    expect(find.text("Noor's corner of Debrify"), findsOneWidget);
     expect(find.text('CAN'), findsOneWidget);
     expect(find.text("CAN'T"), findsOneWidget);
     // Debrify TV is a Can; Live TV a Can't (one chip each).
-    expect(find.text('Nextup TV'), findsOneWidget);
+    expect(find.text('Debrify TV'), findsOneWidget);
     expect(find.text('Live TV'), findsOneWidget);
 
     await nextByLabel(tester, 'Save changes');

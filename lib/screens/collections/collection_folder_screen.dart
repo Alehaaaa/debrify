@@ -1,11 +1,12 @@
+import 'package:debrify/services/storage/ambient_trailer_storage.dart';
+import 'package:debrify/services/storage/collection_appearance_storage.dart';
+import 'package:debrify/services/storage/home_appearance_storage.dart';
 import '../../widgets/home/snowy_mountain_background.dart';
 import '../../widgets/home/midnight_rain_background.dart';
 import '../../widgets/home/moonlit_ocean_background.dart';
-import '../../widgets/home/procedural_spotlight_background.dart';
 import 'package:flutter/foundation.dart';
 import '../../widgets/collections/collection_category_tabs.dart';
 import '../../widgets/see_all/see_all_header.dart';
-import '../../services/storage_service.dart';
 import '../../widgets/collections/tv_collection_titles.dart';
 import '../../widgets/home/spotlight_board.dart';
 import 'dart:async';
@@ -18,6 +19,7 @@ import '../../models/home_collection.dart';
 import '../../widgets/collections/collection_list_gallery.dart';
 import '../../widgets/collections/collection_browser_hero.dart';
 import '../../models/stremio_addon.dart';
+import '../../services/analytics_service.dart';
 import '../../services/collection_folder_loader.dart';
 import '../../services/collection_catalog_pager.dart';
 import '../../services/watched_filter.dart';
@@ -25,7 +27,6 @@ import '../../services/main_page_bridge.dart';
 import '../../services/home_collections_store.dart';
 import '../../services/stremio_service.dart';
 import '../../theme/app_theme_scope.dart';
-import '../../theme/glass_chrome.dart';
 import '../../services/collection_native_source_service.dart';
 import '../../widgets/see_all/discover_card_settings_scope.dart';
 import '../../widgets/see_all/see_all_filter_bar.dart';
@@ -33,6 +34,7 @@ import '../../widgets/see_all/see_all_filter_focus.dart';
 import '../../widgets/see_all/see_all_poster_grid.dart';
 import '../../widgets/see_all/stremio_dropdown.dart';
 import '../../widgets/skeleton_poster.dart';
+import 'package:debrify/models/ambient_trailer_surface.dart';
 
 /// Collection folders open as artwork galleries; each list opens a full grid.
 /// Existing tabbed and merged views retain their paging and filter semantics.
@@ -298,6 +300,7 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
   void initState() {
     super.initState();
     _native.identityChanges.addListener(_identitiesChanged);
+    AnalyticsService.screenView('collection_folder');
     _collection = widget.collection;
     MainPageBridge.addHomeSettingsListener(_onConfigurationChanged);
     _stremio.addAddonsChangedListener(_onConfigurationChanged);
@@ -314,15 +317,17 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
     final generation = ++_configurationToken;
     final session = HomeCollectionsStore.captureSession();
     try {
-      final collectionStyle = await StorageService.getTvCollectionListStyle();
-      final details = await StorageService.getSpotlightFocusDetails();
-      final animations = await StorageService.getHomeAnimationsEnabled();
-      final animationStyle = await StorageService.getHomeAnimationStyle();
-      final trailers = await StorageService.getHomeHeroTrailerEnabled();
-      final audio = await StorageService.getAmbientTrailerAudioEnabled(
+      final collectionStyle =
+          await CollectionAppearanceStorage.getTvCollectionListStyle();
+      final details = await HomeAppearanceStorage.getSpotlightFocusDetails();
+      final animations = await HomeAppearanceStorage.getHomeAnimationsEnabled();
+      final animationStyle =
+          await HomeAppearanceStorage.getHomeAnimationStyle();
+      final trailers = await AmbientTrailerStorage.getHomeHeroTrailerEnabled();
+      final audio = await AmbientTrailerStorage.getAmbientTrailerAudioEnabled(
         AmbientTrailerSurface.homeHero,
       );
-      final volume = await StorageService.getAmbientTrailerVolume(
+      final volume = await AmbientTrailerStorage.getAmbientTrailerVolume(
         AmbientTrailerSurface.homeHero,
       );
       final addons = await _stremio.getAddons();
@@ -484,8 +489,8 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
         (r) => r.source.key == (oldSource ?? widget.sourceKey),
       );
       final offersAll = _collection.showAllTab && rails.length > 1;
-      // Spotlight already shows every list as its own row; opening it on the
-      // merged "All" row would hide exactly that.
+      // Spotlight shows every list as its own row, so it opens on the rows
+      // rather than collapsing them into the merged All shelf.
       final defaultAll =
           !preserveSelection &&
           widget.sourceKey == null &&
@@ -1053,15 +1058,6 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                       ),
                     ),
                     PopupMenuButton<String>(
-                      color: GlassChrome.enabled(AppThemeScope.of(context))
-                          ? GlassChrome.fill(
-                              AppThemeScope.of(context),
-                              raised: true,
-                            )
-                          : null,
-                      shape: GlassChrome.enabled(AppThemeScope.of(context))
-                          ? GlassChrome.shape(AppThemeScope.of(context))
-                          : null,
                       tooltip: 'Sort titles',
                       icon: Icon(
                         Icons.sort,
@@ -1155,18 +1151,6 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
               'midnight_rain' => MidnightRainBackground(
                 lowPower: widget.isTelevision,
               ),
-              'northern_lights' => ProceduralSpotlightBackground(
-                atmosphere: SpotlightAtmosphere.northernLights,
-                lowPower: widget.isTelevision,
-              ),
-              'ember_dusk' => ProceduralSpotlightBackground(
-                atmosphere: SpotlightAtmosphere.emberDusk,
-                lowPower: widget.isTelevision,
-              ),
-              'meteor_night' => ProceduralSpotlightBackground(
-                atmosphere: SpotlightAtmosphere.meteorNight,
-                lowPower: widget.isTelevision,
-              ),
               _ => SnowyMountainBackground(lowPower: widget.isTelevision),
             },
           ),
@@ -1252,16 +1236,9 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
   bool get _hasHeaderIssue => _hasVisibleLoadError || _sourceIssues.isNotEmpty;
 
   Future<void> _showIssueDetails(String detail, {bool retry = false}) async {
-    // Dialog routes can sit above the page's appearance scope. Capture the
-    // source look before pushing so reopening keeps the same glass material.
-    final app = AppThemeScope.of(context);
     final shouldRetry = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: GlassChrome.enabled(app)
-            ? GlassChrome.fill(app, raised: true)
-            : null,
-        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         scrollable: true,
         title: const Text('Collection details'),
         content: Text(detail),
@@ -1706,7 +1683,7 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
       hero: const [],
       heroNode: _spotlightHeroNode,
       heroAddon: null,
-      onHeroOpen: (_, _) {},
+      onHeroOpen: (_, __) {},
       shelvesOnly: true,
       paintBackground: false,
       animationsEnabled: _animationsEnabled,
@@ -1869,14 +1846,7 @@ class _CollectionFolderScreenState extends State<CollectionFolderScreen> {
                     label: const Text('Retry'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: app.core.tx,
-                      backgroundColor: GlassChrome.enabled(app)
-                          ? GlassChrome.fill(app)
-                          : null,
-                      side: BorderSide(
-                        color: GlassChrome.enabled(app)
-                            ? GlassChrome.edge(app)
-                            : app.seeAll.accentBorder,
-                      ),
+                      side: BorderSide(color: app.seeAll.accentBorder),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 12,

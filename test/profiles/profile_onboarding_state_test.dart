@@ -11,7 +11,9 @@ import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_reset_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/storage/defaults_generation_storage.dart';
+import 'package:debrify/services/storage/provider_credential_storage.dart';
+import 'package:debrify/services/storage/torrent_search_storage.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -82,7 +84,7 @@ void main() {
   test(
     'registry completion is authoritative when compatibility key is absent',
     () async {
-      expect(await StorageService.isInitialSetupComplete(), isTrue);
+      expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
       final raw = await SharedPreferences.getInstance();
       expect(
         raw.containsKey('p.${admin.id}.g.1.initial_setup_complete_v1'),
@@ -97,7 +99,7 @@ void main() {
       final preferences = await ProfilePreferences.instance();
       await preferences.setBool('initial_setup_complete_v1', false);
 
-      expect(await StorageService.isInitialSetupComplete(), isFalse);
+      expect(await ProviderCredentialStorage.isInitialSetupComplete(), isFalse);
       expect((await registry.getProfile(admin.id))?.setupComplete, isFalse);
       final raw = await SharedPreferences.getInstance();
       expect(
@@ -110,22 +112,22 @@ void main() {
   test(
     'finishing onboarding updates the registry without recreating the old key',
     () async {
-      await StorageService.setInitialSetupComplete(false);
+      await ProviderCredentialStorage.setInitialSetupComplete(false);
       expect((await registry.getProfile(admin.id))?.setupComplete, isFalse);
 
-      await StorageService.setInitialSetupComplete(true);
+      await ProviderCredentialStorage.setInitialSetupComplete(true);
 
       expect((await registry.getProfile(admin.id))?.setupComplete, isTrue);
-      expect(await StorageService.isInitialSetupComplete(), isTrue);
+      expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
       final raw = await SharedPreferences.getInstance();
       expect(raw.get('p.${admin.id}.g.1.initial_setup_complete_v1'), isNull);
     },
   );
 
   test('copied source opt-outs survive first activation migrations', () async {
-    await StorageService.migrateDefaultsGeneration();
-    await StorageService.setShowAddonLogos(false);
-    await StorageService.setUseAddonTextFormatting(false);
+    await DefaultsGenerationStorage.migrateDefaultsGeneration();
+    await TorrentSearchStorage.setShowAddonLogos(false);
+    await TorrentSearchStorage.setUseAddonTextFormatting(false);
     final authorization = await ProfileAuthorizationContext.capture(registry);
     final staged = await ProfileCreationService(registry).createStaged(
       actor: authorization,
@@ -144,9 +146,9 @@ void main() {
     ProfileRuntime.publish(scope(member, 2));
     final prefs = await ProfilePreferences.instance();
     expect(prefs.getInt('defaults_generation'), isNull);
-    await StorageService.migrateDefaultsGeneration();
-    expect(await StorageService.getShowAddonLogos(), isFalse);
-    expect(await StorageService.getUseAddonTextFormatting(), isFalse);
+    await DefaultsGenerationStorage.migrateDefaultsGeneration();
+    expect(await TorrentSearchStorage.getShowAddonLogos(), isFalse);
+    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isFalse);
     expect(prefs.getInt('defaults_generation'), 5);
   });
 
@@ -168,7 +170,7 @@ void main() {
     await registry.setActiveProfile(member.id);
     ProfileRuntime.publish(scope(member, 2));
 
-    expect(await StorageService.isInitialSetupComplete(), isTrue);
+    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
     expect((await registry.getProfile(member.id))?.setupComplete, isTrue);
   });
 
@@ -243,7 +245,7 @@ void main() {
     final reset = (await registry.getProfile(admin.id))!;
     expect(reset.visibleDataGeneration, 2);
     expect(reset.setupComplete, isFalse);
-    expect(await StorageService.isInitialSetupComplete(), isFalse);
+    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isFalse);
     final raw = await SharedPreferences.getInstance();
     expect(raw.get('p.${admin.id}.g.2.initial_setup_complete_v1'), isNull);
   });

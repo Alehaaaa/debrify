@@ -1,3 +1,5 @@
+import 'package:debrify/services/storage/completion_migration_storage.dart';
+import 'package:debrify/services/storage/launch_ident_storage.dart';
 import '../local_validation_diagnostics.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -6,7 +8,6 @@ import 'local_backup/local_backup_archive.dart';
 import 'profile_package_service.dart';
 
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'dart:math';
 
 import '../../models/home_collection_inventory.dart';
@@ -18,7 +19,6 @@ import '../../models/profiles/profile_policy.dart';
 import '../../models/profiles/user_profile.dart';
 import '../../services/backup_restore_service.dart';
 import '../../services/iptv_transfer_payload.dart';
-import '../../services/storage_service.dart';
 import '../../utils/stremio_url.dart';
 import 'connection_resource_service.dart';
 import 'device_key_provider.dart';
@@ -31,7 +31,6 @@ import 'profile_data_generation.dart';
 import 'profile_database_snapshot.dart';
 import 'profile_lifecycle.dart';
 import 'profile_pin_service.dart';
-import 'profile_app_assets_codec.dart';
 import 'profile_portable_files.dart';
 import 'profile_preference_portability.dart';
 import 'home_row_preference_ids.dart';
@@ -67,18 +66,10 @@ class ProfileGraphRestoreReport {
   final int grantsImported;
   final int bindingsImported;
   final int pinResetsRequired;
-
-  /// Index-aligned with the package's profiles. A merged profile keeps its
-  /// existing local ID.
   final List<String> importedProfileIds;
   final Map<String, String> importedResourceIdsByBackupId;
 
-  /// Imported profiles that overwrote an existing profile of the same user
-  /// instead of being added next to it.
-  final int profilesMerged;
-
   const ProfileGraphRestoreReport({
-    this.profilesMerged = 0,
     required this.profilesImported,
     required this.resourcesImported,
     required this.grantsImported,
@@ -112,7 +103,6 @@ class ProfileRestoreCoordinator {
       Map<String, int>,
     )?
     beforePublish,
-    bool mergeMatchingProfiles = false,
   }) async {
     LocalValidationDiagnostics.event('profile_restore_started', {
       'profiles': package.profiles.length,
@@ -138,17 +128,7 @@ class ProfileRestoreCoordinator {
     final operationId = _newId('graph-restore');
     final profileIds = <String, String>{};
     final parsedProfiles = <_ImportedProfile>[];
-    // A backup of a profile that already exists here (same device, or the
-    // same user on another device) writes into that profile instead of
-    // adding a second one next to it.
-    final existingByIndex = mergeMatchingProfiles
-        ? matchExistingProfiles(
-            packageProfiles: package.profiles,
-            existingProfiles: await registry.listProfiles(),
-          )
-        : const <int, UserProfile>{};
-    for (var index = 0; index < package.profiles.length; index++) {
-      final record = package.profiles[index];
+    for (final record in package.profiles) {
       final backupId = record['backupId'];
       final name = record['name'];
       final roleName = record['role'];
@@ -174,30 +154,9 @@ class ProfileRestoreCoordinator {
       if (sectionId != null && (section is! Map || section['values'] is! Map)) {
         throw const FormatException('Imported profile settings are missing');
       }
-      final existing = existingByIndex[index];
-      final id = existing?.id ?? _newId('profile');
+      final id = _newId('profile');
       if (profileIds.putIfAbsent(backupId, () => id) != id) {
         throw const FormatException('Duplicate imported profile ID');
-      }
-      if (existing != null) {
-        // The local profile keeps its identity (name, role, policy, PIN,
-        // avatar); its settings, data and connections are overwritten.
-        parsedProfiles.add(
-          _ImportedProfile(
-            id: existing.id,
-            name: existing.name,
-            avatarKey: existing.avatarKey,
-            role: existing.role,
-            policy: existing.policy,
-            setupComplete: existing.setupComplete,
-            disabled: false,
-            wasPinProtected: false,
-            lockOnResume: existing.lockOnResume,
-            inactivityTimeoutMinutes: existing.inactivityTimeoutMinutes,
-            merged: true,
-          ),
-        );
-        continue;
       }
       parsedProfiles.add(
         _ImportedProfile(
@@ -219,18 +178,9 @@ class ProfileRestoreCoordinator {
       );
     }
 
-    final stagedProfiles = parsedProfiles
-        .where((profile) => !profile.merged)
-        .toList(growable: false);
-    final mergedProfileIds = parsedProfiles
-        .where((profile) => profile.merged)
-        .map((profile) => profile.id)
-        .toSet();
-    final mergedGenerations = <String, StagedProfileGeneration>{};
-    final generationManager = ProfileDataGenerationManager(registry);
     await registry.beginProfileGraphRestore(
       operationId: operationId,
-      stagedProfileIds: stagedProfiles.map((profile) => profile.id).toList(),
+      stagedProfileIds: parsedProfiles.map((profile) => profile.id).toList(),
     );
     var published = false;
     var publicationUncertain = false;
@@ -240,19 +190,6 @@ class ProfileRestoreCoordinator {
     final avatarMutationProfiles = <String>{};
     try {
       for (final profile in parsedProfiles) {
-        if (profile.merged) {
-          mergedGenerations[profile.id] = await _stageMergedProfile(
-            package: package,
-            sourceRecord: _sourceRecord(package, profileIds, profile.id),
-            profileId: profile.id,
-            operationId: '$operationId-merge-${mergedGenerations.length}',
-            generationManager: generationManager,
-            resourceIds: restoreResourceIds.bySourceId,
-            excludedPreferenceKeys: excludedPreferenceKeys,
-            databaseFileResolver: databaseFileResolver,
-          );
-          continue;
-        }
         await registry.createProfile(
           id: profile.id,
           name: profile.name,
@@ -280,7 +217,12 @@ class ProfileRestoreCoordinator {
           ),
           CapturedProfilePreferenceAccess.restore,
         );
-        final sourceRecord = _sourceRecord(package, profileIds, profile.id);
+        final sourceBackupId = profileIds.entries
+            .singleWhere((entry) => entry.value == profile.id)
+            .key;
+        final sourceRecord = package.profiles.singleWhere(
+          (record) => record['backupId'] == sourceBackupId,
+        );
         final sectionId = sourceRecord['preferencesSection'];
         final values = _normalizePreferenceValues(
           sectionId == null
@@ -300,18 +242,11 @@ class ProfileRestoreCoordinator {
         if (excludedPreferenceKeys.isNotEmpty) {
           SubtitleAppearancePreferences.markSyncedElevation(values);
         }
-        _applyAppAssetSelections(
-          values,
-          await ProfilePortableFiles.restoreAppAssets(
-            sourceRecord[ProfileAppAssetsCodec.field],
-          ),
-          excludedPreferenceKeys: excludedPreferenceKeys,
-        );
         _validatePreferenceOverlay(
           values,
           includeCredentialEngineSettings: true,
         );
-        StorageService.rearmGhostPurgeForImportedPlayback(values);
+        CompletionMigrationStorage.rearmGhostPurgeForImportedPlayback(values);
         for (final entry in values.entries) {
           if (!await _writePreference(preferences, entry.key, entry.value)) {
             throw StateError('Could not stage imported profile settings');
@@ -561,32 +496,27 @@ class ProfileRestoreCoordinator {
         authorization: authorization,
         importedIdentitiesByProfile: importedAddonIdentitiesByProfile,
       );
-      for (final profile in stagedProfiles) {
+      final generationManager = ProfileDataGenerationManager(registry);
+      for (final profile in parsedProfiles) {
         await generationManager.finalizeGraphProfile(
           operationId: operationId,
           profileId: profile.id,
         );
       }
-      for (final entry in mergedGenerations.entries) {
-        mergedGenerations[entry.key] = await generationManager.finalize(
-          entry.value,
-        );
-      }
       await registry.verifyProfileGraphRestore(operationId);
       await authorization.validate(registry);
-      for (final profile in stagedProfiles) {
+      for (final profile in parsedProfiles) {
         await generationManager.verifyGraphProfile(
           operationId: operationId,
           profileId: profile.id,
         );
       }
       await beforePublish?.call(profileIds, restoreResourceIds.byBackupId, {
-        for (final profile in parsedProfiles)
-          profile.id: mergedGenerations[profile.id]?.generation ?? 1,
+        for (final profile in parsedProfiles) profile.id: 1,
       });
       await authorization.validate(registry);
       await ProfileAvatarMutation.runExclusiveMany(
-        stagedProfiles.map((profile) => profile.id),
+        parsedProfiles.map((profile) => profile.id),
         () async {
           for (final stage in avatarStages) {
             await ProfileAvatarMutation.begin(
@@ -599,10 +529,9 @@ class ProfileRestoreCoordinator {
           try {
             await registry.publishProfileGraphRestore(
               operationId: operationId,
-              stagedProfileIds: stagedProfiles
+              stagedProfileIds: parsedProfiles
                   .map((profile) => profile.id)
                   .toList(),
-              mergedProfileIds: mergedProfileIds,
               resources: stagedResources,
               redundantDefaultAddonGrants: redundantDefaultAddonGrants,
             );
@@ -646,23 +575,6 @@ class ProfileRestoreCoordinator {
         // Publication is already authoritative. A retained `published` journal
         // is harmless and bootstrap removes it idempotently.
       }
-      // Connections are live; now make each merged profile's overwritten
-      // settings and data visible. A failure leaves that profile on its
-      // previous generation (bootstrap discards the staged one).
-      Object? mergeFailure;
-      for (final staged in mergedGenerations.values) {
-        try {
-          await _publishMergedGeneration(staged);
-        } catch (error) {
-          mergeFailure ??= error;
-        }
-      }
-      if (mergeFailure != null) {
-        throw StateError(
-          'Connections were restored, but some existing profiles could not '
-          'be updated: $mergeFailure',
-        );
-      }
       LocalValidationDiagnostics.event('graph_restore_finished', {
         'profiles': parsedProfiles.length,
         'resources': stagedResources.length,
@@ -670,7 +582,6 @@ class ProfileRestoreCoordinator {
         'bindings': bindingCount,
       });
       return ProfileGraphRestoreReport(
-        profilesMerged: mergedProfileIds.length,
         profilesImported: parsedProfiles.length,
         resourcesImported: stagedResources.length,
         grantsImported: grantCount,
@@ -694,9 +605,7 @@ class ProfileRestoreCoordinator {
           }
         }
         var cleanupComplete = true;
-        // Never touch merged profiles here: they are the user's existing
-        // profiles, and their staged generation is simply never published.
-        for (final profile in stagedProfiles) {
+        for (final profile in parsedProfiles) {
           try {
             // Keep the journal and staging row authoritative until physical
             // cleanup has completed. A crash at either boundary is therefore
@@ -793,17 +702,10 @@ class ProfileRestoreCoordinator {
       values,
       includeCredentialEngineSettings: package.mode != 'sanitizedSettings',
     );
-    // The imported launch selection travels with its package in app assets,
-    // never as a preference. Without one (every pre-asset backup included),
-    // even merge restores clear the old override instead of retaining it.
+    // Imported launch packages are device-local and never travel in backups.
+    // Even merge restores must clear the old override instead of retaining it.
     final restoredPreferenceCount = values.length;
-    values[StorageService.importedLaunchAnimationKey] = null;
-    _applyAppAssetSelections(
-      values,
-      await ProfilePortableFiles.restoreAppAssets(
-        profileRecord[ProfileAppAssetsCodec.field],
-      ),
-    );
+    values[LaunchIdentStorage.importedLaunchAnimationKey] = null;
     final importedSetupComplete = _optionalBool(profileRecord, 'setupComplete');
     final importedLockOnResume = _optionalBool(profileRecord, 'lockOnResume');
     final updateInactivityTimeout = profileRecord.containsKey(
@@ -813,7 +715,7 @@ class ProfileRestoreCoordinator {
     // Merge-mode restore keeps destination keys the package omits, so imported
     // playback must re-arm the purge or its ghosts are stranded behind an
     // already-satisfied generation marker.
-    StorageService.rearmGhostPurgeForImportedPlayback(values);
+    CompletionMigrationStorage.rearmGhostPurgeForImportedPlayback(values);
 
     final operationId = _newId('restore');
     final current = ProfileRuntime.capture();
@@ -1456,30 +1358,6 @@ class ProfileRestoreCoordinator {
     };
   }
 
-  /// Custom subtitle fonts and imported launch animations are never portable
-  /// preferences (older builds reject or drop them); their selections ride
-  /// with the restored assets and apply only once the asset is installed.
-  static void _applyAppAssetSelections(
-    Map<String, Object?> values,
-    ProfileAppAssetsRestore restored, {
-    Set<String> excludedPreferenceKeys = const <String>{},
-  }) {
-    final launch = restored.launchAnimationId;
-    if (launch != null &&
-        !excludedPreferenceKeys.contains(
-          StorageService.importedLaunchAnimationKey,
-        )) {
-      values[StorageService.importedLaunchAnimationKey] = launch;
-    }
-    final font = restored.subtitleFontId;
-    if (font != null &&
-        !excludedPreferenceKeys.contains(
-          SubtitleAppearancePreferences.selectedFontKey,
-        )) {
-      values[SubtitleAppearancePreferences.selectedFontKey] = font;
-    }
-  }
-
   static Map<String, Object?> _normalizePreferenceValues(
     Map source, {
     Map<String, String> resourceIds = const <String, String>{},
@@ -2025,226 +1903,6 @@ class ProfileRestoreCoordinator {
     );
   }
 
-  /// Pairs package profiles (by index) with the existing local profile that
-  /// is the same user. The exported `sourceProfileId` identifies a profile
-  /// restored onto the device it came from; otherwise the name decides
-  /// (trimmed, case-insensitive), preferring an identical creation time so a
-  /// profile that already travelled through backups pairs with its origin.
-  /// Each profile on either side is used at most once.
-  @visibleForTesting
-  static Map<int, UserProfile> matchExistingProfiles({
-    required List<Map<String, dynamic>> packageProfiles,
-    required List<UserProfile> existingProfiles,
-  }) {
-    String normalized(Object? name) =>
-        name is String ? name.trim().toLowerCase() : '';
-    final candidates = existingProfiles
-        .where(
-          (profile) =>
-              profile.isEnabled &&
-              profile.lifecycle == UserProfileLifecycle.active,
-        )
-        .toList(growable: false);
-    final matches = <int, UserProfile>{};
-    final used = <String>{};
-    void pass(bool Function(Map<String, dynamic>, UserProfile) same) {
-      for (var index = 0; index < packageProfiles.length; index++) {
-        if (matches.containsKey(index)) continue;
-        final record = packageProfiles[index];
-        for (final profile in candidates) {
-          if (used.contains(profile.id) || !same(record, profile)) continue;
-          matches[index] = profile;
-          used.add(profile.id);
-          break;
-        }
-      }
-    }
-
-    pass((record, profile) => record['sourceProfileId'] == profile.id);
-    pass(
-      (record, profile) =>
-          normalized(record['name']).isNotEmpty &&
-          normalized(record['name']) == normalized(profile.name) &&
-          record['createdAtMs'] == profile.createdAt.millisecondsSinceEpoch,
-    );
-    pass(
-      (record, profile) =>
-          normalized(record['name']).isNotEmpty &&
-          normalized(record['name']) == normalized(profile.name),
-    );
-    return matches;
-  }
-
-  static Map<String, dynamic> _sourceRecord(
-    PortableProfilePackage package,
-    Map<String, String> profileIds,
-    String localProfileId,
-  ) {
-    final sourceBackupId = profileIds.entries
-        .singleWhere((entry) => entry.value == localProfileId)
-        .key;
-    return package.profiles.singleWhere(
-      (record) => record['backupId'] == sourceBackupId,
-    );
-  }
-
-  /// Stages the imported settings, databases and files as a new data
-  /// generation of an existing profile. Portable settings the backup does not
-  /// carry are cleared so the result matches the backup; device-local values
-  /// (paths, custom players, fonts, ...) are kept.
-  Future<StagedProfileGeneration> _stageMergedProfile({
-    required PortableProfilePackage package,
-    required Map<String, dynamic> sourceRecord,
-    required String profileId,
-    required String operationId,
-    required ProfileDataGenerationManager generationManager,
-    required Map<String, String> resourceIds,
-    required Set<String> excludedPreferenceKeys,
-    required ProfileDatabaseFileResolver? databaseFileResolver,
-  }) async {
-    final sectionId = sourceRecord['preferencesSection'];
-    final overlay = _normalizePreferenceValues(
-      sectionId == null
-          ? const <String, Object?>{}
-          : await _preferencesWithCollections(
-              package.sections[sectionId] as Map,
-              fileResolver: databaseFileResolver,
-            ),
-      resourceIds: resourceIds,
-      includeCredentialEngineSettings: true,
-      rejectDisallowedKeys:
-          package.sourceVersion >= PortableProfilePackage.version,
-    );
-    overlay.removeWhere((key, _) => excludedPreferenceKeys.contains(key));
-    if (excludedPreferenceKeys.isNotEmpty) {
-      SubtitleAppearancePreferences.markSyncedElevation(overlay);
-    }
-    _validatePreferenceOverlay(overlay, includeCredentialEngineSettings: true);
-    StorageService.rearmGhostPurgeForImportedPlayback(overlay);
-    if (sectionId != null) {
-      final profile = await registry.getProfile(profileId);
-      if (profile == null) {
-        throw StateError('Merged profile is unavailable');
-      }
-      final current = ProfileScope(
-        profileId: profileId,
-        dataGeneration: profile.visibleDataGeneration,
-        sessionEpoch: 0,
-      );
-      final prefs = await ProfilePreferences.forCapturedScope(
-        current,
-        CapturedProfilePreferenceAccess.restore,
-      );
-      for (final logical in prefs.getKeys().toList(growable: false)) {
-        if (overlay.containsKey(logical) ||
-            excludedPreferenceKeys.contains(logical)) {
-          continue;
-        }
-        if (ProfilePreferencePortability.prepareValue(
-          logical,
-          prefs.get(logical),
-          includeCredentialEngineSettings: true,
-        ).include) {
-          overlay[logical] = null;
-        }
-      }
-    }
-    // The selection travels with its package in app assets; see [restore].
-    if (!excludedPreferenceKeys.contains(
-      StorageService.importedLaunchAnimationKey,
-    )) {
-      overlay[StorageService.importedLaunchAnimationKey] = null;
-    }
-    _applyAppAssetSelections(
-      overlay,
-      await ProfilePortableFiles.restoreAppAssets(
-        sourceRecord[ProfileAppAssetsCodec.field],
-      ),
-      excludedPreferenceKeys: excludedPreferenceKeys,
-    );
-    final staged = await generationManager.stage(
-      operationId: operationId,
-      profileId: profileId,
-      preferenceOverlay: overlay,
-    );
-    final scope = ProfileScope(
-      profileId: profileId,
-      dataGeneration: staged.generation,
-      sessionEpoch: 0,
-    );
-    final databasesRestored = await _restoreDatabaseSection(
-      package,
-      sourceRecord,
-      scope,
-      fileResolver: databaseFileResolver,
-    );
-    if (databasesRestored > 0) {
-      await ProfileDatabaseSnapshot.remapResourceReferences(scope, resourceIds);
-    }
-    await _restoreFilesSection(package, sourceRecord, scope);
-    return staged;
-  }
-
-  /// Makes a merged profile's staged generation visible, re-activating the
-  /// live session when it is the active profile (as [restore] does).
-  Future<void> _publishMergedGeneration(StagedProfileGeneration staged) async {
-    final current = ProfileRuntime.capture();
-    final restoringActive = current.profileId == staged.profileId;
-    ProfileScope? candidate;
-    var published = false;
-    if (restoringActive) {
-      for (final participant in lifecycleParticipants) {
-        await participant.prepareDeactivate(current);
-      }
-      candidate = ProfileScope(
-        profileId: staged.profileId,
-        dataGeneration: staged.generation,
-        sessionEpoch: ProfileRuntime.nextEpoch,
-      );
-    }
-    try {
-      await registry.publishDataGeneration(
-        profileId: staged.profileId,
-        baseGeneration: staged.baseGeneration,
-        stagedGeneration: staged.generation,
-        operationId: staged.operationId,
-        onAuthorityCommitted: () {
-          published = true;
-          if (restoringActive) ProfileRuntime.publish(candidate!);
-        },
-      );
-      published = true;
-      if (restoringActive) {
-        final activeCandidate = candidate!;
-        for (final participant in lifecycleParticipants) {
-          await participant.initializeCandidate(activeCandidate);
-        }
-        await NativeProfileProjection.publish(activeCandidate);
-        for (final participant in lifecycleParticipants) {
-          await participant.didActivate(activeCandidate);
-        }
-      }
-    } catch (_) {
-      if (restoringActive) {
-        final rollbackScope = published ? candidate! : current;
-        if (published) ProfileRuntime.publish(candidate!);
-        for (final participant in lifecycleParticipants.reversed) {
-          try {
-            await participant.rollback(rollbackScope);
-          } catch (_) {
-            // Preserve the original error.
-          }
-        }
-      }
-      rethrow;
-    }
-    try {
-      await registry.markRestoreCleaned(staged.operationId);
-    } catch (_) {
-      // A published journal is safe to replay at bootstrap.
-    }
-  }
-
   static String _newId(String prefix) {
     final random = Random.secure();
     final bytes = List<int>.generate(12, (_) => random.nextInt(256));
@@ -2265,9 +1923,6 @@ class _ImportedProfile {
   final int? inactivityTimeoutMinutes;
   final int? createdAtMs;
 
-  /// An existing local profile this import overwrites in place.
-  final bool merged;
-
   const _ImportedProfile({
     required this.id,
     required this.name,
@@ -2280,6 +1935,5 @@ class _ImportedProfile {
     required this.lockOnResume,
     required this.inactivityTimeoutMinutes,
     this.createdAtMs,
-    this.merged = false,
   });
 }

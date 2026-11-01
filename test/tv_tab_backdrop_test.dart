@@ -98,7 +98,7 @@ void main() {
         .widget<FadeTransition>(_tabWidgets(FadeTransition))
         .opacity
         .value;
-    expect(opacity, greaterThan(0.8));
+    expect(opacity, closeTo(0.5, 0.01));
     await tester.pump(const Duration(milliseconds: 75));
     expect(
       tester.widget<FadeTransition>(_tabWidgets(FadeTransition)).opacity.value,
@@ -267,7 +267,7 @@ void main() {
       );
       expect(
         tester.widget<AnimatedSwitcher>(find.byType(AnimatedSwitcher)).duration,
-        Duration(milliseconds: television ? 150 : 260),
+        Duration(milliseconds: television ? 150 : 350),
       );
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
