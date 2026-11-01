@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/main_page_bridge.dart';
+import '../services/reel_share_service.dart';
 import '../services/reels_feed.dart';
 import '../services/storage/watchlist_storage.dart';
 import '../services/youtube_service.dart';
@@ -123,15 +124,10 @@ class _ReelsScreenState extends State<ReelsScreen> {
   }
 
   Future<void> _share(ReelTitle reel) async {
-    final imdb = reel.item.effectiveImdbId;
-    final url = imdb == null
-        ? 'https://www.imdb.com/find/?q=${Uri.encodeQueryComponent(reel.item.name)}'
-        : 'https://www.imdb.com/title/$imdb/';
-    await Clipboard.setData(ClipboardData(text: '${reel.item.name}\n$url'));
-    if (!mounted) return;
-    ScaffoldMessenger.maybeOf(
-      context,
-    )?.showSnackBar(const SnackBar(content: Text('IMDb link copied')));
+    // Open the system share sheet (Android/iOS/macOS); unsupported platforms
+    // fall back to the service's glass copy/open sheet. A null origin lets the
+    // native handler centre the iPad/macOS popover.
+    await const ReelShareService().share(context, reel);
   }
 
   void _openDetails(ReelTitle reel) {
