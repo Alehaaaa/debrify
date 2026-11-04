@@ -1,11 +1,11 @@
 import 'dart:math' as math;
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../services/debrify_image_cache.dart';
 import '../../services/imdb_enrichment_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../episodes_panel.dart';
 import '../parents_guide_section.dart';
@@ -324,8 +324,8 @@ class _DetailConsoleState extends State<DetailConsole> {
           fit: BoxFit.cover,
           cacheManager: DebrifyImageCache.manager,
           memCacheWidth: 640,
-          placeholder: (_, __) => ColoredBox(color: _t.placeholder),
-          errorWidget: (_, __, ___) => ColoredBox(color: _t.placeholder),
+          placeholder: (_, _) => ColoredBox(color: _t.placeholder),
+          errorWidget: (_, _, _) => ColoredBox(color: _t.placeholder),
         ),
       ),
     );
@@ -482,7 +482,9 @@ class _DetailConsoleState extends State<DetailConsole> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: DetailSeasonControl(
-              onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+              onOptions: view.seasonOptions == null
+                  ? null
+                  : () => view.seasonOptions!(view.selectedSeasonNumber),
               seasonNumber: view.selectedSeasonNumber,
               episodeCount: episodes.length,
               canPrev: idx > 0,
@@ -768,7 +770,7 @@ class _DetailConsoleState extends State<DetailConsole> {
         children: [
           DetailSlab('Cast'),
           const SizedBox(height: 10),
-          for (final member in cast.take(6))
+          for (final member in cast)
             Padding(
               padding: const EdgeInsets.only(bottom: 9),
               child: _CastPortrait(member: member),
@@ -781,7 +783,7 @@ class _DetailConsoleState extends State<DetailConsole> {
   List<Widget> _guideSection(DetailModel m) {
     final guide = m.parentsGuide;
     if (guide == null || guide.isEmpty) return const [];
-    if (DetailPageStorage.parentsGuideStyleCached == 'compass') {
+    if (StorageService.parentsGuideStyleCached == 'compass') {
       return [
         ParentsGuideSection(
           guide: guide,
@@ -883,8 +885,8 @@ class _CastPortrait extends StatelessWidget {
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 110,
-                    placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, __, ___) =>
+                    placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                    errorWidget: (_, _, _) =>
                         ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),
@@ -1005,8 +1007,8 @@ class _ConsolePosterState extends State<_ConsolePoster> {
                   fit: BoxFit.cover,
                   cacheManager: DebrifyImageCache.manager,
                   memCacheWidth: 300,
-                  placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                  errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+                  placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                  errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
                 )
               : ColoredBox(color: t.placeholder),
         ),

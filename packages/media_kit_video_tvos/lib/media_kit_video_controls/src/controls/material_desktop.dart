@@ -1,8 +1,8 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 // ignore_for_file: non_constant_identifier_names
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -384,7 +384,7 @@ class _MaterialDesktopVideoControlsState
 
   DateTime last = DateTime.now();
 
-  final List<StreamSubscription> subscriptions = [];
+  final List<StreamSubscription<dynamic>> subscriptions = [];
 
   double get subtitleVerticalShiftOffset =>
       (_theme(context).padding?.bottom ?? 0.0) +
@@ -908,7 +908,7 @@ class MaterialDesktopSeekBarState extends State<MaterialDesktopSeekBar> {
   late Duration duration = controller(context).player.state.duration;
   late Duration buffer = controller(context).player.state.buffer;
 
-  final List<StreamSubscription> subscriptions = [];
+  final List<StreamSubscription<dynamic>> subscriptions = [];
 
   @override
   void setState(VoidCallback fn) {
@@ -1550,7 +1550,7 @@ class MaterialDesktopPositionIndicatorState
   late Duration position = controller(context).player.state.position;
   late Duration duration = controller(context).player.state.duration;
 
-  final List<StreamSubscription> subscriptions = [];
+  final List<StreamSubscription<dynamic>> subscriptions = [];
 
   @override
   void setState(VoidCallback fn) {

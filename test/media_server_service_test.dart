@@ -2,22 +2,19 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:debrify/features/sources/application/source_candidate_ranking.dart';
-import 'package:debrify/features/sources/data/source_movie_fetcher.dart';
-import 'package:debrify/features/sources/data/source_series_fetcher.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/automatic_play_selection.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/provider_accepted_actions.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/source_player_args.dart';
 import 'package:debrify/models/media_server.dart';
 import 'package:debrify/models/media_server_library.dart';
+import 'package:debrify/services/media_server_library_playback.dart';
 import 'package:debrify/models/profiles/connection_resource.dart';
 import 'package:debrify/models/profiles/profile_policy.dart';
-import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/models/torrent.dart';
 import 'package:debrify/models/torrent_filter_state.dart';
+import 'package:debrify/models/quick_play_rules.dart';
+import 'package:debrify/utils/filter_ladder.dart';
+import 'package:debrify/utils/torrent_filter_matcher.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/direct_source_authorization.dart';
 import 'package:debrify/services/media_server_client.dart';
-import 'package:debrify/services/media_server_library_playback.dart';
 import 'package:debrify/services/media_server_service.dart';
 import 'package:debrify/services/media_server_watch_sync.dart';
 import 'package:debrify/services/native_playback_progress_session.dart';
@@ -30,26 +27,15 @@ import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/series_source_service.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/quick_play_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
-import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:debrify/services/torrent_service.dart';
+import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_hot_merge.dart';
-import 'package:debrify/utils/filter_ladder.dart';
-import 'package:debrify/utils/torrent_filter_matcher.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-
-import 'support/lib_source.dart';
-
-const _vp = 'lib/features/video_player/presentation/legacy_video_player';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -198,13 +184,14 @@ void main() {
                 'Type': 'Episode',
                 'ParentIndexNumber': 1,
                 'IndexNumber': episodeNumber,
-                if (episodeEnd != null) 'IndexNumberEnd': episodeEnd,
+                'IndexNumberEnd': ?episodeEnd,
               },
             ],
           };
         } else if (request.url.path.endsWith('/PlaybackInfo')) {
-          if (request.url.path.contains('/broken/'))
+          if (request.url.path.contains('/broken/')) {
             return http.Response('', 500);
+          }
           data = {
             'MediaSources': [
               for (final height in [1080, 2160])
@@ -368,7 +355,7 @@ void main() {
       expect(requestCount, before);
       expect(watchReports, isEmpty);
       expect(
-        await VideoProgressStorage.getVideoPlaybackStateByImdbId('tt123'),
+        await StorageService.getVideoPlaybackStateByImdbId('tt123'),
         isNull,
       );
     },
@@ -385,7 +372,7 @@ void main() {
           final source = (await search(movie: movie)).first;
           // Older local resume must not be erased by the server's Played flag.
           if (movie) {
-            await VideoProgressStorage.saveVideoPlaybackState(
+            await StorageService.saveVideoPlaybackState(
               videoTitle: source.displayTitle,
               videoUrl: source.directUrl!,
               imdbId: 'tt123',
@@ -401,18 +388,16 @@ void main() {
           );
           await controller.close();
           final state = movie
-              ? await VideoProgressStorage.getVideoPlaybackStateByImdbId(
-                  'tt123',
-                )
-              : await SeriesProgressStorage.getSeriesPlaybackState(
+              ? await StorageService.getVideoPlaybackStateByImdbId('tt123')
+              : await StorageService.getSeriesPlaybackState(
                   seriesTitle: 'Stable catalog title',
                   imdbId: 'tt123',
                   season: 1,
                   episode: 1,
                 );
           final finished = movie
-              ? await MovieProgressStorage.isMovieFinished('tt123')
-              : await EpisodeProgressStorage.isEpisodeFinished(
+              ? await StorageService.isMovieFinished('tt123')
+              : await StorageService.isEpisodeFinished(
                   seriesTitle: 'Stable catalog title',
                   imdbId: 'tt123',
                   season: 1,
@@ -662,14 +647,14 @@ void main() {
     () async {
       await connect();
       await MediaServerWatchSync.setEnabled(true);
-      await MovieProgressStorage.markMovieAsFinished('tt123');
+      await StorageService.markMovieAsFinished('tt123');
       final source = (await search()).first;
       final controller = MediaServerWatchController();
       await controller.prepare(source);
       await controller.close();
-      expect(await MovieProgressStorage.isMovieFinished('tt123'), true);
+      expect(await StorageService.isMovieFinished('tt123'), true);
       expect(
-        await VideoProgressStorage.getVideoPlaybackStateByImdbId('tt123'),
+        await StorageService.getVideoPlaybackStateByImdbId('tt123'),
         isNull,
       );
     },
@@ -679,7 +664,7 @@ void main() {
     await connect();
     await MediaServerWatchSync.setEnabled(true);
     final source = (await search()).first;
-    await VideoProgressStorage.saveVideoPlaybackState(
+    await StorageService.saveVideoPlaybackState(
       videoTitle: source.displayTitle,
       videoUrl: source.directUrl!,
       imdbId: 'tt123',
@@ -692,9 +677,7 @@ void main() {
     final controller = MediaServerWatchController();
     await controller.prepare(source);
     await controller.close();
-    final state = await VideoProgressStorage.getVideoPlaybackStateByImdbId(
-      'tt123',
-    );
+    final state = await StorageService.getVideoPlaybackStateByImdbId('tt123');
     expect(state?['positionMs'], 30000);
     expect(state?['speed'], 1.5);
     expect(state?['aspect'], 'cover');
@@ -711,8 +694,8 @@ void main() {
         final controller = MediaServerWatchController();
         await controller.prepare(source, contentTitle: 'Stable catalog title');
         final state = movie
-            ? await VideoProgressStorage.getVideoPlaybackStateByImdbId('tt123')
-            : await SeriesProgressStorage.getSeriesPlaybackState(
+            ? await StorageService.getVideoPlaybackStateByImdbId('tt123')
+            : await StorageService.getSeriesPlaybackState(
                 seriesTitle: 'Stable catalog title',
                 imdbId: 'tt123',
                 season: 1,
@@ -775,7 +758,7 @@ void main() {
       await connect();
       await MediaServerWatchSync.setEnabled(true);
       final source = (await search()).first;
-      await VideoProgressStorage.saveVideoPlaybackState(
+      await StorageService.saveVideoPlaybackState(
         videoTitle: source.displayTitle,
         videoUrl: source.directUrl!,
         imdbId: 'tt123',
@@ -788,9 +771,7 @@ void main() {
       final controller = MediaServerWatchController();
       await controller.prepare(source);
       await controller.close();
-      final state = await VideoProgressStorage.getVideoPlaybackStateByImdbId(
-        'tt123',
-      );
+      final state = await StorageService.getVideoPlaybackStateByImdbId('tt123');
       expect(state?['positionMs'], 70000);
       expect(state?['speed'], 1.5);
       expect(state?['aspect'], 'cover');
@@ -808,7 +789,7 @@ void main() {
       final controller = MediaServerWatchController();
       await controller.prepare(source);
       await controller.close();
-      expect(await MovieProgressStorage.isMovieFinished('tt123'), true);
+      expect(await StorageService.isMovieFinished('tt123'), true);
       expect(watchReports, isEmpty);
     },
   );
@@ -834,7 +815,7 @@ void main() {
       await controller.close();
       expect(watchReports, isEmpty);
       expect(
-        await VideoProgressStorage.getVideoPlaybackStateByImdbId('tt123'),
+        await StorageService.getVideoPlaybackStateByImdbId('tt123'),
         isNull,
       );
     },
@@ -897,7 +878,7 @@ void main() {
         );
         expect(source.directUrl, isNot(contains('token-secret')));
         expect(source.httpHeaders!['X-Emby-Token'], 'token-secret');
-        final args = SourcePlayerArgs.playerArgsForTesting(
+        final args = TorrentPlaybackService.playerArgsForTesting(
           null,
           httpHeaders: source.httpHeaders,
         );
@@ -984,12 +965,12 @@ void main() {
     () async {
       final resource = await connect();
       final key = 'mediaserver:${resource.id}';
-      final movie = SourceMovieFetcher.movieFetcherFor(
+      final movie = TorrentPlaybackService.movieFetcherFor(
         meta: const PlaybackMeta(imdbId: 'tt123', contentType: 'movie'),
       )!;
       expect((await movie.listAddons!()).map((ref) => ref.id), contains(key));
       expect(await movie.fetchAddonEpisodes!(key, 0, 0), hasLength(2));
-      final series = SourceSeriesFetcher.seriesFetcherFor(
+      final series = TorrentPlaybackService.seriesFetcherFor(
         meta: const PlaybackMeta(
           imdbId: 'tt123',
           contentType: 'series',
@@ -1047,7 +1028,7 @@ void main() {
       final before = requestCount;
       // Missing custom metadata must not fall back to the canonical episode.
       for (final videoId in ['RO_1', null]) {
-        final series = SourceSeriesFetcher.seriesFetcherFor(
+        final series = TorrentPlaybackService.seriesFetcherFor(
           meta: PlaybackMeta(
             imdbId: 'tt123',
             contentType: 'series',
@@ -1076,18 +1057,12 @@ void main() {
         await connect();
         return (await search()).first;
       }))!;
-      expect(
-        ProviderAcceptedActions.supportsDirectStreamDownload(source),
-        isFalse,
-      );
+      expect(TorrentDownloads.supportsDirectStreamDownload(source), isFalse);
       final ordinary = Torrent.fromJson({
         ...source.toJson(),
         'source': 'stremio:example',
       });
-      expect(
-        ProviderAcceptedActions.supportsDirectStreamDownload(ordinary),
-        isTrue,
-      );
+      expect(TorrentDownloads.supportsDirectStreamDownload(ordinary), isTrue);
       late BuildContext pageContext;
       await tester.pumpWidget(
         MaterialApp(
@@ -1102,7 +1077,7 @@ void main() {
         ),
       );
       final requestsBefore = requestCount;
-      await ProviderAcceptedActions.downloadDirectStream(pageContext, source);
+      await TorrentDownloads.downloadDirectStream(pageContext, source);
       await tester.pump();
       expect(
         find.text('Jellyfin and Emby downloads are not supported yet.'),
@@ -1129,7 +1104,7 @@ void main() {
         expect(sources.every((s) => s.name.contains(sample.$4)), isTrue);
         expect(TorrentFilterMatcher.apply(sources, filter), sources);
         expect(
-          SourceCandidateRanking.orderCandidatesForRules(
+          TorrentPlaybackService.orderCandidatesForRules(
             sources,
             rules: QuickPlayRules.debrifyDefault(
               isMovie: true,
@@ -1167,7 +1142,7 @@ void main() {
           reason: '$metadata',
         );
         expect(
-          SourceCandidateRanking.orderCandidatesForRules(
+          TorrentPlaybackService.orderCandidatesForRules(
             sources,
             rules: QuickPlayRules.debrifyDefault(
               isMovie: true,
@@ -1199,7 +1174,7 @@ void main() {
       (tester) async {
         await tester.runAsync(() async {
           await connect();
-          await QuickPlayStorage.setQuickPlayRules(
+          await StorageService.setQuickPlayRules(
             QuickPlayRules.debrifyDefault(
               isMovie: true,
             ).copyWith(sourceMode: mode),
@@ -1223,7 +1198,7 @@ void main() {
         failureStatus = status;
         final before = requestCount;
         await tester.runAsync(
-          () => AutomaticPlaySelection.playFromSelection(
+          () => TorrentPlaybackService.playFromSelection(
             pageContext,
             imdbId: 'tt123',
             isMovie: true,
@@ -1269,12 +1244,9 @@ void main() {
         engineStates: const {},
       );
       expect(enabled['torrents'], hasLength(2));
-      final tvCode = libJoined(
-        libSourceSet(
-          files: ['lib/screens/stremio_tv/stremio_tv_screen.dart'],
-          directories: ['lib/features/stremio_tv'],
-        ),
-      );
+      final tvCode = File(
+        'lib/screens/stremio_tv/stremio_tv_screen.dart',
+      ).readAsStringSync();
       final calls = RegExp(
         r'searchByImdbWithStremio\([\s\S]*?\);',
       ).allMatches(tvCode).toList();
@@ -1293,7 +1265,7 @@ void main() {
     () async {
       await connect();
       List<Torrent> strict(List<Torrent> sources, AudioLanguage language) =>
-          SourceCandidateRanking.orderCandidatesForRules(
+          TorrentPlaybackService.orderCandidatesForRules(
             sources,
             rules: QuickPlayRules.debrifyDefault(
               isMovie: true,
@@ -1466,12 +1438,12 @@ void main() {
   test(
     'Flutter startup passes source identity through the final player-open barrier',
     () {
-      // The whole live openMedia declaration, not a slice ending at a member
-      // that lives in the decoder probe.
-      final open = libMember(
-        '$_vp/vp_media_open.dart',
-        'openMedia',
-        owner: 'VpMediaOpen',
+      final code = File(
+        'lib/screens/video_player_screen.dart',
+      ).readAsStringSync().replaceAll('\r\n', '\n');
+      final open = code.substring(
+        code.indexOf('Future<void> _openMedia('),
+        code.indexOf('void _releasePlayerDiagnostic('),
       );
       expect(
         open,
@@ -1483,27 +1455,20 @@ void main() {
         open.indexOf('runIfAuthorized'),
         greaterThan(open.indexOf('await remedy.onNewMedia')),
       );
-      final probe = libMember(
-        '$_vp/vp_startup_candidates.dart',
-        'tryOpenStartupVod',
-        owner: 'VpStartupCandidates',
+      final probe = code.substring(
+        code.indexOf('Future<bool> _tryOpenStartupVod('),
+        code.indexOf('Future<bool> _openInitialVodWithFailover('),
       );
       expect(probe, contains('source: source,'));
+      expect(probe, contains('beforeOpen: () {\n          armed = true;'));
+      final failover = code.substring(
+        code.indexOf('Future<bool> _openInitialVodWithFailover('),
+        code.indexOf('Future<void> _commitValidatedStremioSource('),
+      );
       expect(
-        probe,
-        contains(RegExp(r'beforeOpen:\s*\(\)\s*\{\s*armed\s*=\s*true;')),
+        failover.substring(failover.indexOf(': await _tryOpenStartupVod(')),
+        contains('source: source,'),
       );
-      final failover = libMember(
-        '$_vp/vp_startup_failover.dart',
-        'openInitialVodWithFailover',
-        owner: 'VpStartupFailover',
-      );
-      // P16 moved the ladder into VpStartupFailover; the probe is reached
-      // through its facade Host.
-      final candidate = failover.indexOf(': await _host.tryOpenStartupVod(');
-      expect(candidate, isNonNegative);
-      final sourceArgument = failover.indexOf('source: source,', candidate);
-      expect(sourceArgument, greaterThan(candidate));
     },
   );
 
@@ -1531,7 +1496,7 @@ void main() {
           reason: '${sample.$1}',
         );
         expect(
-          SourceCandidateRanking.orderCandidatesForRules(
+          TorrentPlaybackService.orderCandidatesForRules(
             sources,
             rules: QuickPlayRules.debrifyDefault(
               isMovie: true,

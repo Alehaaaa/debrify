@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:debrify/services/storage/external_player_storage.dart';
 import '../utils/platform_util.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +11,7 @@ export '../models/external_player.dart';
 export '../models/ios_external_player.dart';
 export '../models/linux_external_player.dart';
 export '../models/windows_external_player.dart';
+import 'storage_service.dart';
 
 /// Result of launching an external player
 class ExternalPlayerLaunchResult {
@@ -26,17 +26,11 @@ class ExternalPlayerLaunchResult {
   });
 
   factory ExternalPlayerLaunchResult.succeeded(ExternalPlayer player) {
-    return ExternalPlayerLaunchResult(
-      success: true,
-      usedPlayer: player,
-    );
+    return ExternalPlayerLaunchResult(success: true, usedPlayer: player);
   }
 
   factory ExternalPlayerLaunchResult.failed(String message) {
-    return ExternalPlayerLaunchResult(
-      success: false,
-      errorMessage: message,
-    );
+    return ExternalPlayerLaunchResult(success: false, errorMessage: message);
   }
 }
 
@@ -45,10 +39,7 @@ class CustomCommandValidation {
   final bool isValid;
   final String? errorMessage;
 
-  const CustomCommandValidation({
-    required this.isValid,
-    this.errorMessage,
-  });
+  const CustomCommandValidation({required this.isValid, this.errorMessage});
 
   factory CustomCommandValidation.valid() {
     return const CustomCommandValidation(isValid: true);
@@ -79,13 +70,15 @@ class ExternalPlayerService {
 
     if (!trimmed.contains(urlPlaceholder)) {
       return CustomCommandValidation.invalid(
-          'Command must contain $urlPlaceholder placeholder');
+        'Command must contain $urlPlaceholder placeholder',
+      );
     }
 
     // Check for obviously invalid commands
     if (trimmed.startsWith(urlPlaceholder)) {
       return CustomCommandValidation.invalid(
-          'Command must start with an executable');
+        'Command must start with an executable',
+      );
     }
 
     return CustomCommandValidation.valid();
@@ -134,8 +127,7 @@ class ExternalPlayerService {
         return await _checkCliToolExists('mpv');
 
       case ExternalPlayer.quickTime:
-        return await _checkAppExists('QuickTime Player.app',
-            systemApp: true);
+        return await _checkAppExists('QuickTime Player.app', systemApp: true);
 
       case ExternalPlayer.infuse:
         return await _checkAppExists('Infuse.app');
@@ -143,8 +135,10 @@ class ExternalPlayerService {
   }
 
   /// Check if an .app bundle exists
-  static Future<bool> _checkAppExists(String appName,
-      {bool systemApp = false}) async {
+  static Future<bool> _checkAppExists(
+    String appName, {
+    bool systemApp = false,
+  }) async {
     final pathsToCheck = [
       '/Applications/$appName',
       '${Platform.environment['HOME']}/Applications/$appName',
@@ -177,22 +171,15 @@ class ExternalPlayerService {
   static Future<ExternalPlayerLaunchResult> launchWithPreferredPlayer(
     String url, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!Platform.isMacOS) {
       // Fallback to url_launcher for non-macOS platforms
-      return await _launchWithUrlLauncher(url, canContinue: canContinue);
+      return await _launchWithUrlLauncher(url);
     }
 
     // Get user's preferred player
     final preferredPlayerKey =
-        await ExternalPlayerStorage.getPreferredExternalPlayer();
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+        await StorageService.getPreferredExternalPlayer();
     final preferredPlayer = ExternalPlayerExtension.fromStorageKey(
       preferredPlayerKey,
     );
@@ -201,27 +188,14 @@ class ExternalPlayerService {
     // installations outside the standard Applications directories. Never send
     // its video URL to the default browser when Infuse cannot be opened.
     if (preferredPlayer == ExternalPlayer.infuse) {
-      return await launchWithPlayer(
-        url,
-        preferredPlayer,
-        title: title,
-        canContinue: canContinue,
-      );
+      return await launchWithPlayer(url, preferredPlayer, title: title);
     }
 
     // Try preferred player first
     if (preferredPlayer != ExternalPlayer.systemDefault) {
       final installed = await isPlayerInstalled(preferredPlayer);
-      if (canContinue?.call() == false) {
-        return ExternalPlayerLaunchResult.failed('Playback launch retired');
-      }
       if (installed) {
-        return await launchWithPlayer(
-          url,
-          preferredPlayer,
-          title: title,
-          canContinue: canContinue,
-        );
+        return await launchWithPlayer(url, preferredPlayer, title: title);
       }
       // If preferred player is not installed, fall through to system default
     }
@@ -231,7 +205,6 @@ class ExternalPlayerService {
       url,
       ExternalPlayer.systemDefault,
       title: title,
-      canContinue: canContinue,
     );
   }
 
@@ -240,47 +213,36 @@ class ExternalPlayerService {
     String url,
     ExternalPlayer player, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!Platform.isMacOS) {
-      return await _launchWithUrlLauncher(url, canContinue: canContinue);
+      return await _launchWithUrlLauncher(url);
     }
 
     if (player == ExternalPlayer.infuse) {
-      return await _launchMacOSInfuse(url, canContinue: canContinue);
+      return await _launchMacOSInfuse(url);
     }
 
     try {
       switch (player) {
         case ExternalPlayer.systemDefault:
-          return await _launchSystemDefault(url, canContinue: canContinue);
+          return await _launchSystemDefault(url);
 
         case ExternalPlayer.customApp:
-          return await _launchCustomApp(url, canContinue: canContinue);
+          return await _launchCustomApp(url);
 
         case ExternalPlayer.customCommand:
-          return await _launchCustomCommand(
-            url,
-            title: title,
-            canContinue: canContinue,
-          );
+          return await _launchCustomCommand(url, title: title);
 
         case ExternalPlayer.mpv:
-          return await _launchMpv(url, title: title, canContinue: canContinue);
+          return await _launchMpv(url, title: title);
 
         default:
-          return await _launchMacOSApp(url, player, canContinue: canContinue);
+          return await _launchMacOSApp(url, player);
       }
     } catch (e) {
       // Fallback to url_launcher
       try {
-        final result = await _launchWithUrlLauncher(
-          url,
-          canContinue: canContinue,
-        );
+        final result = await _launchWithUrlLauncher(url);
         if (result.success) {
           return ExternalPlayerLaunchResult.succeeded(
             ExternalPlayer.systemDefault,
@@ -296,19 +258,12 @@ class ExternalPlayerService {
   }
 
   static Future<ExternalPlayerLaunchResult> _launchMacOSInfuse(
-    String url, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+    String url,
+  ) async {
     const failureMessage =
         'Could not open Infuse. Check that Infuse is installed and try again.';
     try {
-      final uri = Uri.parse(iOSExternalPlayer.infuse.buildLaunchUrl(url));
-      if (canContinue?.call() == false) {
-        return ExternalPlayerLaunchResult.failed('Playback launch retired');
-      }
+      final uri = Uri.parse(IosExternalPlayer.infuse.buildLaunchUrl(url));
       final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (opened) {
         return ExternalPlayerLaunchResult.succeeded(ExternalPlayer.infuse);
@@ -322,16 +277,9 @@ class ExternalPlayerService {
 
   /// Launch with system default (open url)
   static Future<ExternalPlayerLaunchResult> _launchSystemDefault(
-    String url, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+    String url,
+  ) async {
     try {
-      if (canContinue?.call() == false) {
-        return ExternalPlayerLaunchResult.failed('Playback launch retired');
-      }
       final result = await Process.run('open', [url]);
       if (result.exitCode == 0) {
         return ExternalPlayerLaunchResult.succeeded(
@@ -351,12 +299,8 @@ class ExternalPlayerService {
   /// Launch with a macOS .app bundle
   static Future<ExternalPlayerLaunchResult> _launchMacOSApp(
     String url,
-    ExternalPlayer player, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+    ExternalPlayer player,
+  ) async {
     final appName = player.macOSAppName;
     if (appName == null) {
       return ExternalPlayerLaunchResult.failed(
@@ -365,15 +309,12 @@ class ExternalPlayerService {
     }
 
     try {
-      if (canContinue?.call() == false) {
-        return ExternalPlayerLaunchResult.failed('Playback launch retired');
-      }
       final result = await Process.run('open', ['-a', appName, url]);
       if (result.exitCode == 0) {
         return ExternalPlayerLaunchResult.succeeded(player);
       }
       // If app not found, try system default
-      return await _launchSystemDefault(url, canContinue: canContinue);
+      return await _launchSystemDefault(url);
     } catch (e) {
       return ExternalPlayerLaunchResult.failed(
         'Failed to open with ${player.displayName}: $e',
@@ -385,11 +326,7 @@ class ExternalPlayerService {
   static Future<ExternalPlayerLaunchResult> _launchMpv(
     String url, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     try {
       final args = <String>[url];
       if (title != null && title.isNotEmpty) {
@@ -397,29 +334,17 @@ class ExternalPlayerService {
       }
 
       // Run mpv detached so it doesn't block
-      if (canContinue?.call() == false) {
-        return ExternalPlayerLaunchResult.failed('Playback launch retired');
-      }
       await Process.start('mpv', args, mode: ProcessStartMode.detached);
       return ExternalPlayerLaunchResult.succeeded(ExternalPlayer.mpv);
     } catch (e) {
       // mpv not found, fall back to system default
-      return await _launchSystemDefault(url, canContinue: canContinue);
+      return await _launchSystemDefault(url);
     }
   }
 
   /// Launch with custom app path
-  static Future<ExternalPlayerLaunchResult> _launchCustomApp(
-    String url, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
-    final customPath = await ExternalPlayerStorage.getCustomExternalPlayerPath();
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+  static Future<ExternalPlayerLaunchResult> _launchCustomApp(String url) async {
+    final customPath = await StorageService.getCustomExternalPlayerPath();
     if (customPath == null || customPath.isEmpty) {
       return ExternalPlayerLaunchResult.failed(
         'Custom app path not configured',
@@ -429,9 +354,6 @@ class ExternalPlayerService {
     try {
       // Check if it's an .app bundle or executable
       if (customPath.endsWith('.app')) {
-        if (canContinue?.call() == false) {
-          return ExternalPlayerLaunchResult.failed('Playback launch retired');
-        }
         final result = await Process.run('open', ['-a', customPath, url]);
         if (result.exitCode == 0) {
           return ExternalPlayerLaunchResult.succeeded(ExternalPlayer.customApp);
@@ -441,9 +363,6 @@ class ExternalPlayerService {
         );
       } else {
         // Assume it's an executable
-        if (canContinue?.call() == false) {
-          return ExternalPlayerLaunchResult.failed('Playback launch retired');
-        }
         await Process.start(customPath, [url], mode: ProcessStartMode.detached);
         return ExternalPlayerLaunchResult.succeeded(ExternalPlayer.customApp);
       }
@@ -456,16 +375,9 @@ class ExternalPlayerService {
   static Future<ExternalPlayerLaunchResult> _launchCustomCommand(
     String url, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     final commandTemplate =
-        await ExternalPlayerStorage.getCustomExternalPlayerCommand();
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+        await StorageService.getCustomExternalPlayerCommand();
 
     // Validate command
     final validation = validateCustomCommand(commandTemplate);
@@ -493,9 +405,6 @@ class ExternalPlayerService {
       // Use Process.run for commands like 'open' that spawn and exit
       // Use Process.start for direct executables that need to stay running
       if (executable == 'open') {
-        if (canContinue?.call() == false) {
-          return ExternalPlayerLaunchResult.failed('Playback launch retired');
-        }
         final result = await Process.run(executable, args);
         if (result.exitCode == 0) {
           return ExternalPlayerLaunchResult.succeeded(
@@ -507,9 +416,6 @@ class ExternalPlayerService {
         );
       } else {
         // For direct executables (vlc, mpv, etc.), run detached
-        if (canContinue?.call() == false) {
-          return ExternalPlayerLaunchResult.failed('Playback launch retired');
-        }
         await Process.start(executable, args, mode: ProcessStartMode.detached);
         return ExternalPlayerLaunchResult.succeeded(
           ExternalPlayer.customCommand,
@@ -558,18 +464,11 @@ class ExternalPlayerService {
 
   /// Fallback to url_launcher
   static Future<ExternalPlayerLaunchResult> _launchWithUrlLauncher(
-    String url, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return ExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+    String url,
+  ) async {
     try {
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
-        if (canContinue?.call() == false) {
-          return ExternalPlayerLaunchResult.failed('Playback launch retired');
-        }
         await launchUrl(uri, mode: LaunchMode.externalNonBrowserApplication);
         return ExternalPlayerLaunchResult.succeeded(
           ExternalPlayer.systemDefault,
@@ -589,7 +488,7 @@ class ExternalPlayerService {
 
   /// Check if an iOS player is likely installed by checking if we can open its URL scheme
   /// iOS AND Apple TV: same enum, same schemes, same storage — tvOS just
-  /// has a smaller catalog ([iOSExternalPlayerExtension.availableOnTvos])
+  /// has a smaller catalog ([IosExternalPlayerExtension.availableOnTvos])
   /// and a different transport (url_launcher has no tvOS implementation in
   /// this fork, so a tiny Runner channel does UIApplication.open there).
   static bool get _isAppleSchemePlatform =>
@@ -604,10 +503,10 @@ class ExternalPlayerService {
     return launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  static Future<bool> isIOSPlayerInstalled(iOSExternalPlayer player) async {
+  static Future<bool> isIOSPlayerInstalled(IosExternalPlayer player) async {
     if (!_isAppleSchemePlatform) return false;
     if (PlatformUtil.isTvOS && !player.availableOnTvos) return false;
-    if (player == iOSExternalPlayer.customScheme) return true;
+    if (player == IosExternalPlayer.customScheme) return true;
 
     try {
       final schemeUrl = Uri.parse(player.urlScheme);
@@ -619,13 +518,14 @@ class ExternalPlayerService {
   }
 
   /// Detect which iOS players are installed
-  static Future<Map<iOSExternalPlayer, bool>> detectInstalledIOSPlayers() async {
+  static Future<Map<IosExternalPlayer, bool>>
+  detectInstalledIOSPlayers() async {
     if (!_isAppleSchemePlatform) return {};
 
-    final results = <iOSExternalPlayer, bool>{};
+    final results = <IosExternalPlayer, bool>{};
 
-    for (final player in iOSExternalPlayer.values) {
-      if (player == iOSExternalPlayer.customScheme) {
+    for (final player in IosExternalPlayer.values) {
+      if (player == IosExternalPlayer.customScheme) {
         results[player] = true; // Custom is always "available"
         continue;
       }
@@ -636,51 +536,35 @@ class ExternalPlayerService {
   }
 
   /// Launch video with preferred iOS player
-  static Future<iOSExternalPlayerLaunchResult> launchWithPreferredIOSPlayer(
+  static Future<IosExternalPlayerLaunchResult> launchWithPreferredIOSPlayer(
     String url, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return iOSExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!_isAppleSchemePlatform) {
-      return iOSExternalPlayerLaunchResult.failed('Not running on iOS/tvOS');
+      return IosExternalPlayerLaunchResult.failed('Not running on iOS/tvOS');
     }
 
     // Get user's preferred iOS player
     final preferredPlayerKey =
-        await ExternalPlayerStorage.getPreferredIOSExternalPlayer();
-    if (canContinue?.call() == false) {
-      return iOSExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
-    final preferredPlayer = iOSExternalPlayerExtension.fromStorageKey(
+        await StorageService.getPreferredIOSExternalPlayer();
+    final preferredPlayer = IosExternalPlayerExtension.fromStorageKey(
       preferredPlayerKey,
     );
 
-    return await launchWithIOSPlayer(
-      url,
-      preferredPlayer,
-      title: title,
-      canContinue: canContinue,
-    );
+    return await launchWithIOSPlayer(url, preferredPlayer, title: title);
   }
 
   /// Launch video with a specific iOS player
-  static Future<iOSExternalPlayerLaunchResult> launchWithIOSPlayer(
+  static Future<IosExternalPlayerLaunchResult> launchWithIOSPlayer(
     String url,
-    iOSExternalPlayer player, {
+    IosExternalPlayer player, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return iOSExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!_isAppleSchemePlatform) {
-      return iOSExternalPlayerLaunchResult.failed('Not running on iOS/tvOS');
+      return IosExternalPlayerLaunchResult.failed('Not running on iOS/tvOS');
     }
     if (PlatformUtil.isTvOS && !player.availableOnTvos) {
-      return iOSExternalPlayerLaunchResult.failed(
+      return IosExternalPlayerLaunchResult.failed(
         '${player.displayName} has no Apple TV app',
       );
     }
@@ -688,24 +572,19 @@ class ExternalPlayerService {
     try {
       String playerUrl;
 
-      if (player == iOSExternalPlayer.customScheme) {
+      if (player == IosExternalPlayer.customScheme) {
         // Use custom URL scheme template
         final customTemplate =
-            await ExternalPlayerStorage.getIOSCustomSchemeTemplate();
-        if (canContinue?.call() == false) {
-          return iOSExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
+            await StorageService.getIOSCustomSchemeTemplate();
         if (customTemplate == null || customTemplate.isEmpty) {
-          return iOSExternalPlayerLaunchResult.failed(
+          return IosExternalPlayerLaunchResult.failed(
             'Custom URL scheme not configured',
           );
         }
 
         final validation = validateCustomScheme(customTemplate);
         if (!validation.isValid) {
-          return iOSExternalPlayerLaunchResult.failed(
+          return IosExternalPlayerLaunchResult.failed(
             validation.errorMessage ?? 'Invalid custom URL scheme',
           );
         }
@@ -722,33 +601,23 @@ class ExternalPlayerService {
       // For custom schemes, skip canLaunchUrl check (it would fail since
       // custom schemes aren't in LSApplicationQueriesSchemes)
       // Just try to launch and let iOS handle if app isn't installed
-      if (player == iOSExternalPlayer.customScheme) {
-        if (canContinue?.call() == false) {
-          return iOSExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
+      if (player == IosExternalPlayer.customScheme) {
         await _appleOpen(uri);
-        return iOSExternalPlayerLaunchResult.succeeded(player);
+        return IosExternalPlayerLaunchResult.succeeded(player);
       }
 
       if (await _appleCanOpen(uri)) {
-        if (canContinue?.call() == false) {
-          return iOSExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
         await _appleOpen(uri);
-        return iOSExternalPlayerLaunchResult.succeeded(player);
+        return IosExternalPlayerLaunchResult.succeeded(player);
       } else {
         // Player not installed
-        return iOSExternalPlayerLaunchResult.failed(
+        return IosExternalPlayerLaunchResult.failed(
           '${player.displayName} is not installed. Please install it from the App Store.',
         );
       }
     } catch (e) {
       debugPrint('iOS External Player: Launch failed: $e');
-      return iOSExternalPlayerLaunchResult.failed(
+      return IosExternalPlayerLaunchResult.failed(
         'Failed to open ${player.displayName}: $e',
       );
     }
@@ -781,29 +650,23 @@ class _TvosUrl {
 }
 
 /// Result of launching an iOS external player
-class iOSExternalPlayerLaunchResult {
+class IosExternalPlayerLaunchResult {
   final bool success;
-  final iOSExternalPlayer? usedPlayer;
+  final IosExternalPlayer? usedPlayer;
   final String? errorMessage;
 
-  const iOSExternalPlayerLaunchResult({
+  const IosExternalPlayerLaunchResult({
     required this.success,
     this.usedPlayer,
     this.errorMessage,
   });
 
-  factory iOSExternalPlayerLaunchResult.succeeded(iOSExternalPlayer player) {
-    return iOSExternalPlayerLaunchResult(
-      success: true,
-      usedPlayer: player,
-    );
+  factory IosExternalPlayerLaunchResult.succeeded(IosExternalPlayer player) {
+    return IosExternalPlayerLaunchResult(success: true, usedPlayer: player);
   }
 
-  factory iOSExternalPlayerLaunchResult.failed(String message) {
-    return iOSExternalPlayerLaunchResult(
-      success: false,
-      errorMessage: message,
-    );
+  factory IosExternalPlayerLaunchResult.failed(String message) {
+    return IosExternalPlayerLaunchResult(success: false, errorMessage: message);
   }
 }
 
@@ -823,11 +686,10 @@ class LinuxExternalPlayerLaunchResult {
     this.errorMessage,
   });
 
-  factory LinuxExternalPlayerLaunchResult.succeeded(LinuxExternalPlayer player) {
-    return LinuxExternalPlayerLaunchResult(
-      success: true,
-      usedPlayer: player,
-    );
+  factory LinuxExternalPlayerLaunchResult.succeeded(
+    LinuxExternalPlayer player,
+  ) {
+    return LinuxExternalPlayerLaunchResult(success: true, usedPlayer: player);
   }
 
   factory LinuxExternalPlayerLaunchResult.failed(String message) {
@@ -857,7 +719,8 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
   }
 
   /// Detect which Linux players are installed
-  static Future<Map<LinuxExternalPlayer, bool>> detectInstalledLinuxPlayers() async {
+  static Future<Map<LinuxExternalPlayer, bool>>
+  detectInstalledLinuxPlayers() async {
     if (!Platform.isLinux) return {};
 
     final results = <LinuxExternalPlayer, bool>{};
@@ -878,21 +741,14 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
   static Future<LinuxExternalPlayerLaunchResult> launchWithPreferredLinuxPlayer(
     String url, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return LinuxExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!Platform.isLinux) {
       return LinuxExternalPlayerLaunchResult.failed('Not running on Linux');
     }
 
     // Get user's preferred Linux player
     final preferredPlayerKey =
-        await ExternalPlayerStorage.getPreferredLinuxExternalPlayer();
-    if (canContinue?.call() == false) {
-      return LinuxExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
+        await StorageService.getPreferredLinuxExternalPlayer();
     final preferredPlayer = LinuxExternalPlayerExtension.fromStorageKey(
       preferredPlayerKey,
     );
@@ -901,28 +757,17 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
     if (preferredPlayer != LinuxExternalPlayer.systemDefault &&
         preferredPlayer != LinuxExternalPlayer.customCommand) {
       final installed = await isLinuxPlayerInstalled(preferredPlayer);
-      if (canContinue?.call() == false) {
-        return LinuxExternalPlayerLaunchResult.failed(
-          'Playback launch retired',
-        );
-      }
       if (!installed) {
         // Fall back to system default
         return await launchWithLinuxPlayer(
           url,
           LinuxExternalPlayer.systemDefault,
           title: title,
-          canContinue: canContinue,
         );
       }
     }
 
-    return await launchWithLinuxPlayer(
-      url,
-      preferredPlayer,
-      title: title,
-      canContinue: canContinue,
-    );
+    return await launchWithLinuxPlayer(url, preferredPlayer, title: title);
   }
 
   /// Launch video with a specific Linux player
@@ -930,11 +775,7 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
     String url,
     LinuxExternalPlayer player, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return LinuxExternalPlayerLaunchResult.failed('Playback launch retired');
-    }
     if (!Platform.isLinux) {
       return LinuxExternalPlayerLaunchResult.failed('Not running on Linux');
     }
@@ -944,12 +785,7 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
 
       if (player == LinuxExternalPlayer.customCommand) {
         // Use custom command template
-        final customTemplate = await ExternalPlayerStorage.getLinuxCustomCommand();
-        if (canContinue?.call() == false) {
-          return LinuxExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
+        final customTemplate = await StorageService.getLinuxCustomCommand();
         if (customTemplate == null || customTemplate.isEmpty) {
           return LinuxExternalPlayerLaunchResult.failed(
             'Custom command not configured',
@@ -983,11 +819,6 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
       // For xdg-open, use Process.run as it spawns and exits quickly
       // For media players, use Process.start detached so they run independently
       if (executable == 'xdg-open') {
-        if (canContinue?.call() == false) {
-          return LinuxExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
         final result = await Process.run(executable, args);
         if (result.exitCode == 0) {
           return LinuxExternalPlayerLaunchResult.succeeded(player);
@@ -997,11 +828,6 @@ extension LinuxExternalPlayerServiceExtension on ExternalPlayerService {
         );
       } else {
         // Run player detached so it doesn't block
-        if (canContinue?.call() == false) {
-          return LinuxExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
         await Process.start(executable, args, mode: ProcessStartMode.detached);
         return LinuxExternalPlayerLaunchResult.succeeded(player);
       }
@@ -1049,7 +875,9 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
   /// Check if a Windows player is installed
   /// Uses `where` command (Windows equivalent of `which`)
   /// Also checks common installation paths for players not typically in PATH
-  static Future<bool> isWindowsPlayerInstalled(WindowsExternalPlayer player) async {
+  static Future<bool> isWindowsPlayerInstalled(
+    WindowsExternalPlayer player,
+  ) async {
     if (!Platform.isWindows) return false;
     if (player == WindowsExternalPlayer.customCommand) return true;
     if (player == WindowsExternalPlayer.systemDefault) return true;
@@ -1057,8 +885,7 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
     // First, try `where` command (checks PATH)
     try {
       final result = await Process.run('where', [player.executable]);
-      if (result.exitCode == 0 &&
-          (result.stdout as String).trim().isNotEmpty) {
+      if (result.exitCode == 0 && (result.stdout as String).trim().isNotEmpty) {
         return true;
       }
     } catch (e) {
@@ -1089,7 +916,9 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
 
   /// Find the resolved path for a Windows player
   /// Returns the full path if found in common locations, or executable name if in PATH
-  static Future<String?> _resolveWindowsPlayerPath(WindowsExternalPlayer player) async {
+  static Future<String?> _resolveWindowsPlayerPath(
+    WindowsExternalPlayer player,
+  ) async {
     if (!Platform.isWindows) return null;
 
     // First, try `where` command (checks PATH)
@@ -1127,7 +956,8 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
   }
 
   /// Detect which Windows players are installed
-  static Future<Map<WindowsExternalPlayer, bool>> detectInstalledWindowsPlayers() async {
+  static Future<Map<WindowsExternalPlayer, bool>>
+  detectInstalledWindowsPlayers() async {
     if (!Platform.isWindows) return {};
 
     final results = <WindowsExternalPlayer, bool>{};
@@ -1146,28 +976,14 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
 
   /// Launch video with preferred Windows player
   static Future<WindowsExternalPlayerLaunchResult>
-  launchWithPreferredWindowsPlayer(
-    String url, {
-    String? title,
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) {
-      return WindowsExternalPlayerLaunchResult.failed(
-        'Playback launch retired',
-      );
-    }
+  launchWithPreferredWindowsPlayer(String url, {String? title}) async {
     if (!Platform.isWindows) {
       return WindowsExternalPlayerLaunchResult.failed('Not running on Windows');
     }
 
     // Get user's preferred Windows player
     final preferredPlayerKey =
-        await ExternalPlayerStorage.getPreferredWindowsExternalPlayer();
-    if (canContinue?.call() == false) {
-      return WindowsExternalPlayerLaunchResult.failed(
-        'Playback launch retired',
-      );
-    }
+        await StorageService.getPreferredWindowsExternalPlayer();
     final preferredPlayer = WindowsExternalPlayerExtension.fromStorageKey(
       preferredPlayerKey,
     );
@@ -1176,28 +992,17 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
     if (preferredPlayer != WindowsExternalPlayer.systemDefault &&
         preferredPlayer != WindowsExternalPlayer.customCommand) {
       final installed = await isWindowsPlayerInstalled(preferredPlayer);
-      if (canContinue?.call() == false) {
-        return WindowsExternalPlayerLaunchResult.failed(
-          'Playback launch retired',
-        );
-      }
       if (!installed) {
         // Fall back to system default
         return await launchWithWindowsPlayer(
           url,
           WindowsExternalPlayer.systemDefault,
           title: title,
-          canContinue: canContinue,
         );
       }
     }
 
-    return await launchWithWindowsPlayer(
-      url,
-      preferredPlayer,
-      title: title,
-      canContinue: canContinue,
-    );
+    return await launchWithWindowsPlayer(url, preferredPlayer, title: title);
   }
 
   /// Launch video with a specific Windows player
@@ -1205,13 +1010,7 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
     String url,
     WindowsExternalPlayer player, {
     String? title,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) {
-      return WindowsExternalPlayerLaunchResult.failed(
-        'Playback launch retired',
-      );
-    }
     if (!Platform.isWindows) {
       return WindowsExternalPlayerLaunchResult.failed('Not running on Windows');
     }
@@ -1222,12 +1021,7 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
 
       if (player == WindowsExternalPlayer.customCommand) {
         // Use custom command template
-        final customTemplate = await ExternalPlayerStorage.getWindowsCustomCommand();
-        if (canContinue?.call() == false) {
-          return WindowsExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
+        final customTemplate = await StorageService.getWindowsCustomCommand();
         if (customTemplate == null || customTemplate.isEmpty) {
           return WindowsExternalPlayerLaunchResult.failed(
             'Custom command not configured',
@@ -1251,11 +1045,6 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
         // For non-system-default players, try to resolve full path
         if (player != WindowsExternalPlayer.systemDefault) {
           resolvedPath = await _resolveWindowsPlayerPath(player);
-          if (canContinue?.call() == false) {
-            return WindowsExternalPlayerLaunchResult.failed(
-              'Playback launch retired',
-            );
-          }
         }
         command = player.buildCommand(
           url,
@@ -1274,11 +1063,6 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
       // For explorer.exe (system default), use Process.run as it spawns and exits quickly
       // For media players, use Process.start detached so they run independently
       if (executable == 'explorer.exe') {
-        if (canContinue?.call() == false) {
-          return WindowsExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
         final result = await Process.run(executable, args);
         if (result.exitCode == 0 || result.exitCode == 1) {
           // explorer.exe may return 1 even on success for URL launching
@@ -1289,11 +1073,6 @@ extension WindowsExternalPlayerServiceExtension on ExternalPlayerService {
         );
       } else {
         // Run player detached so it doesn't block
-        if (canContinue?.call() == false) {
-          return WindowsExternalPlayerLaunchResult.failed(
-            'Playback launch retired',
-          );
-        }
         await Process.start(executable, args, mode: ProcessStartMode.detached);
         return WindowsExternalPlayerLaunchResult.succeeded(player);
       }

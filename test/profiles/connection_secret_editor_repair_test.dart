@@ -15,8 +15,7 @@ import 'package:debrify/services/profiles/profile_bootstrap.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage/iptv_favorites_storage.dart';
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -169,8 +168,8 @@ void main() {
             if (type == ConnectionResourceType.iptvM3u) {
               await IptvCatalogDb.open();
               // Open the media database outside the widget fake clock.
-              await IptvFavoritesStorage.getIptvLists();
-              await IptvPlaylistStorage.setIptvDefaultPlaylist(target.id);
+              await StorageService.getIptvLists();
+              await StorageService.setIptvDefaultPlaylist(target.id);
             }
           });
           final isIptv = type == ConnectionResourceType.iptvM3u;

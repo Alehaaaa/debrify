@@ -1,14 +1,3 @@
-import 'package:debrify/services/storage/completion_migration_storage.dart';
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
-import 'package:debrify/services/storage/defaults_generation_storage.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
-import 'package:debrify/services/storage/launch_ident_storage.dart';
-import 'package:debrify/services/storage/mdblist_storage.dart';
-import 'package:debrify/services/storage/player_settings_storage.dart';
-import 'package:debrify/services/storage/sidebar_storage.dart';
-import 'package:debrify/services/storage/tv_display_storage.dart';
-import 'package:debrify/services/storage/ui_feedback_storage.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../screens/video_player/services/subtitle_settings_service.dart';
@@ -32,7 +21,7 @@ import '../pikpak_api_service.dart';
 import '../premiumize_account_service.dart';
 import '../remote_control/remote_command_router.dart';
 import '../simkl/simkl_service.dart';
-import 'profile_local_writes.dart';
+import '../storage_service.dart';
 import '../stream_badges_service.dart';
 import '../stremio_service.dart';
 import '../subtitle_font_service.dart';
@@ -52,7 +41,6 @@ import 'native_profile_projection.dart';
 import 'profile_runtime.dart';
 import 'profile_scope.dart';
 import 'profile_session_memory.dart';
-import 'package:debrify/services/storage/storage_profile_caches.dart';
 
 /// Resets process-wide mirrors that otherwise retain profile A, then warms the
 /// target under its captured scope after authoritative publication.
@@ -62,7 +50,6 @@ class ProfileAppLifecycleParticipant implements ProfileLifecycleParticipant {
     ProfileSessionMemory.clearAll();
     EngineProfileLifecycle.prepareDeactivate();
     MainPageBridge.clearProfileSessionState();
-    await ProfileLocalWrites.drain();
     await TvosTopShelfService.instance.clear();
     RemoteCommandRouter().clearProfileSessionState();
     await DownloadService.instance.prepareProfileSwitch();
@@ -131,13 +118,13 @@ class ProfileAppLifecycleParticipant implements ProfileLifecycleParticipant {
 
   Future<void> _warm(ProfileScope scope) {
     return ProfileRuntime.withCapturedScope(scope, () async {
-      _warmed('StorageService', scope, resetStorageProfileCaches);
+      _warmed('StorageService', scope, StorageService.resetProfileCaches);
       _warmed('Stremio', scope, StremioService.instance.invalidateCache);
       _warmed('Trakt', scope, TraktService.instance.resetProfileScope);
       _warmed('Simkl', scope, SimklService.instance.resetProfileScope);
       _warmed('PikPak', scope, PikPakApiService.instance.resetProfileScope);
       _warmed('MDBList', scope, MdblistService.instance.resetProfileScope);
-      await MdblistStorage.retireMdblistSavedCloneMarkers();
+      await StorageService.retireMdblistSavedCloneMarkers();
       _warmed('IPTV', scope, IptvService.instance.clearCache);
       _warmed('Xtream', scope, XtreamCodesService.instance.clearCache);
       _warmed('DiscoverPrefs', scope, DiscoverPrefs.resetProfileScope);
@@ -165,7 +152,7 @@ class ProfileAppLifecycleParticipant implements ProfileLifecycleParticipant {
         EngineRegistry.instance.loadedScopeKey,
       );
 
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       // Also run here, not just at cold start: the startup pass in main.dart
       // executes BEFORE the profile gate resolves, so it only ever reaches
       // whichever profile happened to be active then. The generation marker is
@@ -173,25 +160,25 @@ class ProfileAppLifecycleParticipant implements ProfileLifecycleParticipant {
       // forever. Best-effort — a profile switch must not fail over cleanup of
       // playback state written by builds as old as 0.7.0.
       try {
-        await CompletionMigrationStorage.purgeUnwatchedResumeGhosts();
+        await StorageService.purgeUnwatchedResumeGhosts();
       } catch (e) {
         debugPrint('ProfileAppLifecycle: resume-ghost purge failed — $e');
       }
       await Future.wait(<Future<Object?>>[
-        PlayerSettingsStorage.getPlayerStartPortrait(),
-        TvDisplayStorage.getTvKeyboardEnabled(),
-        HomeAppearanceStorage.getTvHomeStyle(),
-        SidebarStorage.getTvSidebarStyle(),
-        SidebarStorage.getDesktopSidebarStyle(),
-        DebrifyTvStorage.getDebrifyTvStyle(),
-        UiFeedbackStorage.getUiSounds(),
-        UiFeedbackStorage.getUiHaptics(),
-        LaunchIdentStorage.getLaunchAnimation(),
-        LaunchIdentStorage.getLaunchIdentPalette(),
-        DetailPageStorage.getDetailPageStyle(),
-        DetailPageStorage.getDetailPageSectionVisibility(),
-        DetailPageStorage.getDetailTheme(),
-        DetailPageStorage.getParentsGuideStyle(),
+        StorageService.getPlayerStartPortrait(),
+        StorageService.getTvKeyboardEnabled(),
+        StorageService.getTvHomeStyle(),
+        StorageService.getTvSidebarStyle(),
+        StorageService.getDesktopSidebarStyle(),
+        StorageService.getDebrifyTvStyle(),
+        StorageService.getUiSounds(),
+        StorageService.getUiHaptics(),
+        StorageService.getLaunchAnimation(),
+        StorageService.getLaunchIdentPalette(),
+        StorageService.getDetailPageStyle(),
+        StorageService.getDetailPageSectionVisibility(),
+        StorageService.getDetailTheme(),
+        StorageService.getParentsGuideStyle(),
       ]);
       await TextBrightnessController.warm();
       await PlayLoaderStyleController.warm();

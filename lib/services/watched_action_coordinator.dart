@@ -1,26 +1,22 @@
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'profiles/profile_local_writes.dart';
-import 'profiles/profile_runtime.dart';
-import 'profiles/profile_session_memory.dart';
 import '../models/media_identity.dart';
 import 'episode_tracker_snapshot_revision.dart';
 import '../models/custom_series_identity.dart';
 import 'local_series_completion_service.dart';
+import 'mdblist/mdblist_continue_watching_service.dart';
 import 'mdblist/mdblist_models.dart';
 import 'mdblist/mdblist_service.dart';
 import 'simkl/simkl_service.dart';
+import 'storage_service.dart';
 import 'tracking_source_policy.dart';
 import 'trakt/trakt_service.dart';
+import 'tracker_identity_service.dart';
 import 'watched_status_service.dart';
 
 class WatchedActionResult {
-  const WatchedActionResult(this.failedTargets, {this.cancelled = false});
-
-  final bool cancelled;
+  const WatchedActionResult(this.failedTargets);
 
   final List<String> failedTargets;
-  bool get success => !cancelled && failedTargets.isEmpty;
+  bool get success => failedTargets.isEmpty;
 }
 
 /// Single fan-out point for every user-initiated watched/unwatched action.
@@ -40,165 +36,87 @@ class WatchedActionCoordinator {
     TrackingSourcePolicy policy,
     Set<TrackingSource> forceTargets,
     TrackingSource source,
-  ) => policy.scrobbleTargets.contains(source) || forceTargets.contains(source);
+  ) => policy.scrobbles(source) || forceTargets.contains(source);
 
   static Future<WatchedActionResult> setTitleWatched({
     required String imdbId,
     required String contentType,
     required bool watched,
     Set<TrackingSource> forceTargets = const <TrackingSource>{},
-    bool Function()? canContinue,
-  }) {
-    final owner = ProfileSessionMemory.captureOwner();
-    bool current() =>
-        owner == ProfileSessionMemory.captureOwner() &&
-        (canContinue?.call() ?? true) &&
-        (owner.scope == null || ProfileRuntime.capture() == owner.scope);
-    if (!current()) {
-      return Future.value(const WatchedActionResult([], cancelled: true));
-    }
-    Future<WatchedActionResult> run() => _setTitleWatched(
-      imdbId: imdbId,
-      contentType: contentType,
-      watched: watched,
-      forceTargets: forceTargets,
-      current: current,
-    );
-    final scope = owner.scope;
-    return scope == null ? run() : ProfileRuntime.withCapturedScope(scope, run);
-  }
-
-  static Future<WatchedActionResult> _setTitleWatched({
-    required String imdbId,
-    required String contentType,
-    required bool watched,
-    required Set<TrackingSource> forceTargets,
-    required bool Function() current,
   }) async {
     final id = MediaIdentity.progressId(imdbId.trim(), contentType);
     if (id.isEmpty) return const WatchedActionResult(['this device']);
     final series = contentType == 'series' || contentType == 'show';
-    // Once accepted, complete local flags/history/recovery writes in the
-    // originating scope. The profile lifecycle drains this whole sequence.
-    await ProfileLocalWrites.run(() async {
-      if (series) {
-        await MovieProgressStorage.setSeriesExplicitlyWatched(
-          id,
-          watched: watched,
-        );
-        if (!watched) {
-          await LocalSeriesCompletionService.instance.clearCompletedHistory(id);
-        }
-      } else if (watched) {
-        await MovieProgressStorage.markMovieAsFinished(id);
+    if (series) {
+      await StorageService.setSeriesExplicitlyWatched(id, watched: watched);
+      if (!watched) {
+        await LocalSeriesCompletionService.instance.clearCompletedHistory(id);
       } else {
-        await MovieProgressStorage.unmarkMovieAsFinished(id);
+        // A watched series has nothing left to resume: drop it from Continue
+        // Watching and clear its in-progress bookmarks (finished-episode
+        // history stays, so the episode ticks survive).
+        await StorageService.removeContinueWatchingItem(id);
+        await StorageService.clearPlaybackStateByImdbId(
+          id,
+          preserveFinishedEpisodes: true,
+        );
       }
-    });
-    final failures = <String>[];
-    WatchedActionResult retired() =>
-        WatchedActionResult(failures, cancelled: true);
-    if (!current()) return retired();
+    } else if (watched) {
+      await StorageService.markMovieAsFinished(id);
+    } else {
+      await StorageService.unmarkMovieAsFinished(id);
+    }
+
     if (CustomSeriesIdentity.isCustom(id)) return const WatchedActionResult([]);
-    late TrackingSourcePolicy policy;
-    try {
-      policy = (await TrackingSourcePolicy.load(
-        canContinue: current,
-      )).forContent(id);
-    } catch (_) {
-      if (!current()) return retired();
-      rethrow;
-    }
-    if (!current()) return retired();
-    if (_writes(policy, forceTargets, TrackingSource.trakt)) {
-      final service = TraktService.instance;
-      final connected = await service.isAuthenticated(canContinue: current);
-      if (!current()) return retired();
-      if (connected) {
-        final ok = watched
-            ? await service.addToHistory(id, contentType, canContinue: current)
-            : await service.removeFromHistory(
-                id,
-                contentType,
-                canContinue: current,
-              );
-        if (!ok) failures.add('Trakt');
+    final policy = (await TrackingSourcePolicy.load()).forContent(id);
+    final failures = <String>[];
+    if (_writes(policy, forceTargets, TrackingSource.trakt) &&
+        await TraktService.instance.isAuthenticated()) {
+      var ok = watched
+          ? await TraktService.instance.addToHistory(id, contentType)
+          : await TraktService.instance.removeFromHistory(id, contentType);
+      if (watched && ok) {
+        // A history entry leaves Trakt's paused session behind, which keeps
+        // the title on Continue Watching — delete it too.
+        ok = await TraktService.instance.removePlaybackForContent(
+          id,
+          contentType,
+        );
       }
+      if (!ok) failures.add('Trakt');
     }
-    if (!current()) return retired();
-    if (_writes(policy, forceTargets, TrackingSource.simkl)) {
-      final service = SimklService.instance;
-      final connected = await service.isAuthenticated(canContinue: current);
-      if (!current()) return retired();
-      if (connected) {
-        var ok = watched
-            ? await service.markWatched(id, contentType, canContinue: current)
-            : await service.markUnwatched(
-                id,
-                contentType,
-                canContinue: current,
-              );
-        if (!current()) return retired();
-        if (watched && ok) {
-          // Completed titles may still be rewatching: clear the paused session
-          // after marking history and include cleanup failure in the result.
-          ok = await service.deletePlaybackForImdb(
-            id,
-            contentType: contentType,
-            canContinue: current,
-          );
-        }
-        if (!ok) failures.add('Simkl');
+    if (_writes(policy, forceTargets, TrackingSource.simkl) &&
+        await SimklService.instance.isAuthenticated()) {
+      var ok = watched
+          ? await SimklService.instance.markWatched(id, contentType)
+          : await SimklService.instance.markUnwatched(id, contentType);
+      if (watched && ok) {
+        // Completed titles are NOT hidden by status (a paused session on them
+        // is an active rewatch), so clearing the paused session is what takes
+        // the title OFF Simkl's Continue Watching — fold the result in, and
+        // keep this write behind the same Scrobble gate as the mark itself.
+        ok = await SimklService.instance.deletePlaybackForImdb(
+          id,
+          contentType: contentType,
+        );
       }
+      if (!ok) failures.add('Simkl');
     }
-    if (!current()) return retired();
     if ((MediaIdentity.isImdb(id) || MediaIdentity.isNative(id)) &&
-        _writes(policy, forceTargets, TrackingSource.mdblist)) {
-      final service = MdblistService.instance;
-      final connected = await service.isAuthenticated(canContinue: current);
-      if (!current()) return retired();
-      if (connected) {
-        final ids = MdblistMediaIds.forContent(id);
-        final type = series ? 'show' : 'movie';
-        final ok = watched
-            ? await service.markWatched(ids, type, canContinue: current)
-            : await service.markUnwatched(ids, type, canContinue: current);
-        if (!ok) failures.add('MDBList');
+        _writes(policy, forceTargets, TrackingSource.mdblist) &&
+        await MdblistService.instance.isAuthenticated()) {
+      final ids = MdblistMediaIds.forContent(id);
+      final type = series ? 'show' : 'movie';
+      var ok = watched
+          ? await MdblistService.instance.markWatched(ids, type)
+          : await MdblistService.instance.markUnwatched(ids, type);
+      if (watched && ok) {
+        ok = await _clearMdblistPlayback(id, series: series);
       }
+      if (!ok) failures.add('MDBList');
     }
-    if (!current()) return retired();
     WatchedStatusService.instance.ensureStarted();
     return WatchedActionResult(failures);
-  }
-
-  /// The providers a watched-write for this series id would actually touch,
-  /// in fan-out order: this device first, then every authenticated tracker
-  /// the Scrobble selection targets. Mirrors the auth/policy checks
-  /// [setEpisodeWatched] makes, so "mark earlier" writes exactly where a
-  /// single-episode mark would.
-  static Future<List<TrackingSource>> episodeWriteProviders(
-    String imdbId,
-  ) async {
-    if (CustomSeriesIdentity.isCustom(imdbId)) {
-      return const [TrackingSource.local];
-    }
-    final providers = <TrackingSource>[TrackingSource.local];
-    final policy = (await TrackingSourcePolicy.load()).forContent(imdbId);
-    if (_writes(policy, const <TrackingSource>{}, TrackingSource.trakt) &&
-        await TraktService.instance.isAuthenticated()) {
-      providers.add(TrackingSource.trakt);
-    }
-    if (_writes(policy, const <TrackingSource>{}, TrackingSource.simkl) &&
-        await SimklService.instance.isAuthenticated()) {
-      providers.add(TrackingSource.simkl);
-    }
-    if ((MediaIdentity.isImdb(imdbId) || MediaIdentity.isNative(imdbId)) &&
-        _writes(policy, const <TrackingSource>{}, TrackingSource.mdblist) &&
-        await MdblistService.instance.isAuthenticated() &&
-        !MdblistMediaIds.forContent(imdbId).isEmpty) {
-      providers.add(TrackingSource.mdblist);
-    }
-    return providers;
   }
 
   static Future<WatchedActionResult> setEpisodeWatched({
@@ -210,14 +128,14 @@ class WatchedActionCoordinator {
     Set<TrackingSource> forceTargets = const <TrackingSource>{},
   }) async {
     if (watched) {
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: seriesTitle,
         season: season,
         episode: episode,
         imdbId: imdbId,
       );
     } else {
-      await EpisodeCompletionStorage.unmarkEpisodeAsFinished(
+      await StorageService.unmarkEpisodeAsFinished(
         seriesTitle: seriesTitle,
         season: season,
         episode: episode,
@@ -245,6 +163,14 @@ class WatchedActionCoordinator {
               season,
               episode,
             );
+      if (watched && ok) {
+        await TraktService.instance.removePlaybackForContent(
+          imdbId,
+          'series',
+          season: season,
+          episode: episode,
+        );
+      }
       if (!ok) failures.add('Trakt');
     }
     if (_writes(policy, forceTargets, TrackingSource.simkl) &&
@@ -286,8 +212,69 @@ class WatchedActionCoordinator {
               season: season,
               episode: episode,
             );
+      if (watched && ok) {
+        await _clearMdblistPlayback(
+          imdbId,
+          series: true,
+          season: season,
+          episode: episode,
+        );
+      }
       if (!ok) failures.add('MDBList');
     }
     return WatchedActionResult(failures);
+  }
+
+  /// Clear MDBList's paused sessions for a title (every episode of a show, or
+  /// just [season]x[episode]) so a watched mark also drops it from MDBList's
+  /// Continue Watching. True when nothing matching is left. Never throws.
+  static Future<bool> _clearMdblistPlayback(
+    String id, {
+    required bool series,
+    int? season,
+    int? episode,
+  }) async {
+    try {
+      final wanted = await TrackerIdentityService.instance.resolve(
+        id,
+        series ? 'series' : 'movie',
+      );
+      if (wanted == null || wanted.isEmpty) return false;
+      final sessions = await MdblistService.instance.fetchPlaybackSessions();
+      if (!sessions.isSuccess) return false;
+      var ok = true;
+      var cleared = false;
+      for (final session in sessions.data!) {
+        if (session.isEpisode != series) continue;
+        if (!TrackerIdentityService.matches(wanted, session.ids.toJson())) {
+          continue;
+        }
+        if (season != null &&
+            episode != null &&
+            (session.season != season || session.episode != episode)) {
+          continue;
+        }
+        final target = session.isEpisode
+            ? (session.season == null || session.episode == null
+                  ? null
+                  : MdblistScrobbleTarget.episode(
+                      session.ids,
+                      season: session.season!,
+                      episode: session.episode!,
+                    ))
+            : MdblistScrobbleTarget.movie(session.ids);
+        if (target == null) continue;
+        final result = await MdblistService.instance.scrobbleClear(target);
+        if (result.isSuccess) {
+          cleared = true;
+        } else {
+          ok = false;
+        }
+      }
+      if (cleared) MdblistContinueWatchingService.instance.invalidate();
+      return ok;
+    } catch (_) {
+      return false;
+    }
   }
 }

@@ -1,19 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:debrify/services/storage/home_appearance_storage.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/home_collection.dart';
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/collection_gif_settings.dart';
 import '../../services/home_collections_store.dart';
 import '../../services/main_page_bridge.dart';
+import '../../services/storage_service.dart';
 import '../../services/stremio_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../widgets/text_prompt_dialog.dart';
 import '../collections/collection_editor_screen.dart';
 import 'widgets/settings_widgets.dart';
@@ -53,7 +54,6 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('collections_settings');
     MainPageBridge.addHomeSettingsListener(_onHomeSettingsChanged);
     unawaited(_load());
   }
@@ -81,7 +81,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       final collections = inventory.collections;
       final layout = await _store.getFolderLayout();
       final gifMode = await CollectionGifSettings.read();
-      final hideNamesOnHome = await HomeAppearanceStorage.getHomeHideCollectionNames();
+      final hideNamesOnHome = await StorageService.getHomeHideCollectionNames();
       List<StremioAddon> addons = const [];
       try {
         addons = await StremioService.instance.getAddons();
@@ -137,6 +137,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   }
 
   Future<void> _exportCollection(HomeCollection collection) async {
+    final app = AppThemeScope.of(context);
     final session = HomeCollectionsStore.captureSession();
     final text = const JsonEncoder.withIndent(
       '  ',
@@ -146,6 +147,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           title: const Text('Export collection'),
           content: Text(
             'Share "${collection.title}" as a Nuvio-compatible JSON file.',
@@ -173,7 +178,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     if (action == 'copy') {
       await Clipboard.setData(ClipboardData(text: text));
     } else {
-      final path = await FilePicker.platform.saveFile(
+      final path = await FilePicker.saveFile(
         dialogTitle: 'Export collection',
         fileName:
             'collection-${collection.id.replaceAll(RegExp(r"[^a-zA-Z0-9_-]"), "_")}.json',
@@ -195,7 +200,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
 
   Future<void> _importFromFile() => _guarded(() async {
     final session = HomeCollectionsStore.captureSession();
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePick.pickFiles(
       type: FileType.any,
       allowMultiple: false,
       withData: false,
@@ -210,7 +215,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     if (file.bytes != null) {
       bytes = file.bytes!;
     } else if (file.path != null) {
-      bytes = await file.xFile.readAsBytes();
+      bytes = await file.readAsBytes();
     } else {
       throw const FormatException('Could not read the selected file.');
     }
@@ -296,7 +301,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   });
 
   Future<void> _setHideNamesOnHome(bool value) => _guarded(() async {
-    await HomeAppearanceStorage.setHomeHideCollectionNames(value);
+    await StorageService.setHomeHideCollectionNames(value);
     if (!mounted) return;
     setState(() => _hideNamesOnHome = value);
     MainPageBridge.notifyHomeSettingsChanged();
@@ -305,6 +310,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   // ── Per-collection actions ─────────────────────────────────────────────
 
   Future<void> _openCollectionActions(HomeCollection c) async {
+    final app = AppThemeScope.of(context);
     final session = HomeCollectionsStore.captureSession();
     final unresolved = _issuesFor(c);
     final action = await showDialog<String>(
@@ -312,6 +318,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(c.title),
           content: Column(
@@ -429,8 +439,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   Set<String> _issuesFor(HomeCollection c) => {
     for (final folder in c.folders)
       for (final source in folder.sources)
-        if (HomeCollectionsStore.sourceIssue(source, _addons) case final issue?)
-          issue,
+        ?HomeCollectionsStore.sourceIssue(source, _addons),
   };
 
   String _describe(HomeCollection c) {
@@ -481,11 +490,16 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
     required String body,
     required String action,
   }) async {
+    final app = AppThemeScope.of(context);
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(title),
           content: Text(body),
@@ -507,6 +521,7 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
   }
 
   Future<void> _showImportResult(HomeCollectionImportResult r) {
+    final app = AppThemeScope.of(context);
     final lines = <String>[
       if (r.added.isNotEmpty)
         'Added: ${r.added.map((c) => c.title).join(', ')}',
@@ -524,6 +539,10 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
       builder: (context) => Theme(
         data: settingsPageTheme(context),
         child: AlertDialog(
+          backgroundColor: GlassChrome.enabled(app)
+              ? GlassChrome.fill(app, raised: true)
+              : null,
+          shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
           scrollable: true,
           title: Text(
             'Imported ${r.collectionCount} collection'
@@ -694,8 +713,14 @@ class _CollectionsSettingsPageState extends State<CollectionsSettingsPage> {
                           key: ValueKey(_gifMode),
                           value: _gifMode.name,
                           options: const [
-                            SettingsSelectOption('visible', 'Animate visible GIFs'),
-                            SettingsSelectOption('focused', 'On focus or hover'),
+                            SettingsSelectOption(
+                              'visible',
+                              'Animate visible GIFs',
+                            ),
+                            SettingsSelectOption(
+                              'focused',
+                              'On focus or hover',
+                            ),
                             SettingsSelectOption('off', 'Off'),
                           ],
                           onChanged: (value) => _guarded(() async {

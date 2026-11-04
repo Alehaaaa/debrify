@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'package:xml/xml.dart';
 
 import '../models/webdav_item.dart';
@@ -9,6 +8,7 @@ import '../models/profiles/connection_resource.dart';
 import '../models/profiles/profile_policy.dart';
 import '../utils/file_utils.dart';
 import 'profiles/profile_collection_resource_facade.dart';
+import 'storage_service.dart';
 import 'webdav_protocol_client.dart';
 
 class WebDavService {
@@ -17,7 +17,7 @@ class WebDavService {
   static Future<WebDavConfig?> getConfig({
     ProfileFeature feature = ProfileFeature.cloud,
   }) async {
-    return WebdavServerStorage.getSelectedWebDavServer(
+    return StorageService.getSelectedWebDavServer(
       forSettings: false,
       feature: feature,
     );
@@ -26,7 +26,7 @@ class WebDavService {
   static Future<List<WebDavConfig>> getConfigs({
     ProfileFeature feature = ProfileFeature.cloud,
   }) {
-    return WebdavServerStorage.getWebDavServers(
+    return StorageService.getWebDavServers(
       forSettings: false,
       feature: feature,
     );

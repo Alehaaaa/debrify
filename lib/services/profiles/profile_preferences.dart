@@ -64,7 +64,6 @@ class ProfilePreferences implements SharedPreferences {
       'remote_webdav_sync_library_records_v1';
   static final Lock _atomicStringListMutationLock = Lock();
   static final Object _exclusiveMutationZoneKey = Object();
-  static final Object _ordinaryMutationZoneKey = Object();
   static int _mutationRevision = 0;
   static int _activeMutations = 0;
   static Completer<void>? _activeMutationsDrained;
@@ -131,33 +130,17 @@ class ProfilePreferences implements SharedPreferences {
     Future<T> Function(void Function() markMutated) operation,
   ) async {
     _assertMutationOutsideExclusive();
-    final enclosing = Zone.current[_ordinaryMutationZoneKey];
-    // Nested inside a still-registered ordinary mutation (for example a
-    // preference setter inside [synchronizeExternalMutation]): the outer
-    // registration already holds exclusive acquirers off, and waiting on a
-    // barrier raised after it would deadlock, because that barrier waits for
-    // the outer writer to drain. The nested write still registers itself, so
-    // one that outlives the outer writer (started unawaited) keeps the barrier
-    // off until it finishes. Work that merely inherited a closed frame (timers,
-    // later callbacks) waits on the barrier like any writer.
-    if (enclosing is! _OrdinaryMutationFrame || !enclosing.open) {
-      while (true) {
-        final released = _exclusiveMutationReleased;
-        if (released == null) break;
-        await released.future;
-      }
+    while (true) {
+      final released = _exclusiveMutationReleased;
+      if (released == null) break;
+      await released.future;
     }
     _activeMutations++;
     _activeMutationsDrained ??= Completer<void>();
     var mutated = false;
-    final frame = _OrdinaryMutationFrame();
     try {
-      return await runZoned(
-        () => operation(() => mutated = true),
-        zoneValues: <Object, Object>{_ordinaryMutationZoneKey: frame},
-      );
+      return await operation(() => mutated = true);
     } finally {
-      frame.open = false;
       if (mutated) _mutationRevision++;
       _activeMutations--;
       if (_activeMutations == 0) {
@@ -222,9 +205,6 @@ class ProfilePreferences implements SharedPreferences {
     'tv_ui_scale_percent',
     'tv_low_res_render',
     'recording_engine_enabled',
-    // Native recorder → SMB share; the password stays SecretVault-sealed.
-    'recording_smb_target_v1',
-    'recording_smb_password_v1',
     'iptv_player_guide_style',
     'tv_player_controls_style',
     'debrify_tv_player_style',
@@ -382,14 +362,12 @@ class ProfilePreferences implements SharedPreferences {
   }
 
   @override
-  Future<bool> setBool(String key, bool value, {bool Function()? canCommit}) =>
-      _write(
-        () => _delegate.setBool(_physical(key), value),
-        logicalKey: key,
-        budgetKey: _physical(key),
-        budgetValue: value,
-        canCommit: canCommit,
-      );
+  Future<bool> setBool(String key, bool value) => _write(
+    () => _delegate.setBool(_physical(key), value),
+    logicalKey: key,
+    budgetKey: _physical(key),
+    budgetValue: value,
+  );
 
   @override
   Future<bool> setInt(String key, int value) => _write(
@@ -408,16 +386,11 @@ class ProfilePreferences implements SharedPreferences {
   );
 
   @override
-  Future<bool> setString(
-    String key,
-    String value, {
-    bool Function()? canCommit,
-  }) => _write(
+  Future<bool> setString(String key, String value) => _write(
     () => _delegate.setString(_physical(key), value),
     logicalKey: key,
     budgetKey: _physical(key),
     budgetValue: value,
-    canCommit: canCommit,
   );
 
   @override
@@ -482,12 +455,10 @@ class ProfilePreferences implements SharedPreferences {
   /// The lock covers the physical profile key, so callers can safely update an
   /// inactive captured profile without racing an active-session mutation.
   /// Returning null from [update] leaves the stored value unchanged.
-  /// [canCommit] is checked after the storage barrier, immediately before writing.
   Future<bool> mutateStringListAtomically(
     String key,
-    List<String>? Function(List<String>? current) update, {
-    bool Function()? canCommit,
-  }) {
+    List<String>? Function(List<String>? current) update,
+  ) {
     // Check before taking the list-specific lock. Otherwise a guarded WebDAV
     // callback could wait on a writer that is itself waiting for the WebDAV
     // barrier, recreating the lock inversion this guard is meant to prevent.
@@ -503,7 +474,6 @@ class ProfilePreferences implements SharedPreferences {
       final frozen = List<String>.unmodifiable(next);
       return _write(
         () => _delegate.setStringList(physical, frozen),
-        canCommit: canCommit,
         logicalKey: key,
         budgetKey: physical,
         budgetValue: frozen,
@@ -751,9 +721,7 @@ class ProfilePreferences implements SharedPreferences {
   }
 
   static void _validateSyncEntry(String key, Object value) {
-    if (key.isEmpty ||
-        (key.length > 256 && !CustomSeriesIdentity.isPortableSourceKey(key)) ||
-        key.contains('\u0000')) {
+    if (key.isEmpty || (key.length > 256 && !CustomSeriesIdentity.isPortableSourceKey(key)) || key.contains('\u0000')) {
       throw ArgumentError.value(key, 'key', 'Invalid sync preference key');
     }
     if (value is double && !value.isFinite) {
@@ -784,14 +752,11 @@ class ProfilePreferences implements SharedPreferences {
     String? budgetKey,
     Object? budgetValue,
     Object? Function()? prepareValue,
-    bool Function()? canCommit,
   }) async {
-    if (!(canCommit?.call() ?? true)) return false;
     _assertWritable();
     var unchanged = false;
     Object? mutationValue = budgetValue;
     final success = await _runOrdinaryMutation((markMutated) async {
-      if (!(canCommit?.call() ?? true)) return false;
       _assertWritable();
       final proposedValue = prepareValue != null ? prepareValue() : budgetValue;
       mutationValue = proposedValue;
@@ -924,10 +889,7 @@ class DevicePreferences {
     'update_auto_check_enabled',
     'update_include_alpha_enabled',
     'update_ignored_version',
-    'support_remote_config_cache_v1',
-    'dismissed_donation_campaign_ids_v1',
     'recording_max_concurrent',
-    'recording_output_v1',
     'recording_battery_nudge_dismissed_at',
     'iptv_ios_recording_notice_dismissed',
     'pending_download_queue_v1',
@@ -939,6 +901,7 @@ class DevicePreferences {
     'profile_gate_style_v1',
     'profile_gate_always_ask_v1',
     'webdav_sync_state_v1',
+    'webdav_saved_syncs_v1',
     'webdav_sync_local_device_name_v1',
     'webdav_sync_device_removed_v1',
     'webdav_sync_backup_restore_v1',
@@ -952,6 +915,12 @@ class DevicePreferences {
     if (!allowedKeys.contains(key)) {
       throw ArgumentError.value(key, 'key', 'Unregistered device preference');
     }
+  }
+
+  /// Untyped read for registered keys whose stored type varies.
+  Object? get(String key) {
+    _assertAllowed(key);
+    return _delegate.get(key);
   }
 
   String? getString(String key) {
@@ -1007,9 +976,4 @@ class DevicePreferences {
     _assertAllowed(key);
     return _delegate.remove(key);
   }
-}
-
-/// Marks an ordinary preference mutation's zone while it is registered.
-class _OrdinaryMutationFrame {
-  bool open = true;
 }

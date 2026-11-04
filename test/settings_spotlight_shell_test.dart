@@ -8,8 +8,6 @@ import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/settings_golden.dart';
-
 const _categories = [
   SettingsCategoryDefinition(
     icon: Icons.link_rounded,
@@ -353,7 +351,7 @@ void main() {
     await _pumpShell(tester, const Size(390, 844));
     await expectLater(
       find.byType(SettingsSpotlightShell),
-      matchesGoldenFile(settingsGoldenPath('settings_spotlight_phone.png')),
+      matchesGoldenFile('goldens/settings_spotlight_phone.png'),
     );
   });
 
@@ -363,9 +361,7 @@ void main() {
     await tester.pumpAndSettle();
     await expectLater(
       find.byType(SettingsSpotlightShell),
-      matchesGoldenFile(
-        settingsGoldenPath('settings_spotlight_phone_appearance.png'),
-      ),
+      matchesGoldenFile('goldens/settings_spotlight_phone_appearance.png'),
     );
   });
 
@@ -375,7 +371,7 @@ void main() {
     await tester.pumpAndSettle();
     await expectLater(
       find.byType(SettingsSpotlightShell),
-      matchesGoldenFile(settingsGoldenPath('settings_spotlight_tablet.png')),
+      matchesGoldenFile('goldens/settings_spotlight_tablet.png'),
     );
   });
 
@@ -385,7 +381,7 @@ void main() {
     await tester.pumpAndSettle();
     await expectLater(
       find.byType(SettingsSpotlightShell),
-      matchesGoldenFile(settingsGoldenPath('settings_spotlight_desktop.png')),
+      matchesGoldenFile('goldens/settings_spotlight_desktop.png'),
     );
   });
 }

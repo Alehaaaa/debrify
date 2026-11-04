@@ -1,11 +1,80 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 
 import '../../models/advanced_search_selection.dart';
-import '../../models/trakt_continue_watching_item.dart';
+import '../../models/stremio_addon.dart';
+import '../storage_service.dart';
 import 'trakt_item_transformer.dart';
 import 'trakt_service.dart';
 
-export '../../models/trakt_continue_watching_item.dart';
+class TraktContinueWatchingItem {
+  final StremioMeta meta;
+  final String traktContentType;
+  final double? progress;
+  final int? season;
+  final int? episode;
+  final int? runtime;
+  final List<int> playbackIds;
+
+  /// When Trakt last recorded playback for this item (epoch ms), parsed from the
+  /// playback endpoint's `paused_at`. Authoritative Up Next rows map
+  /// `last_watched_at` into the same field. Used to order a merged movies+shows
+  /// list by "last watched".
+  final int? pausedAtMs;
+
+  const TraktContinueWatchingItem({
+    required this.meta,
+    required this.traktContentType,
+    this.progress,
+    this.season,
+    this.episode,
+    this.runtime,
+    this.playbackIds = const [],
+    this.pausedAtMs,
+  });
+
+  String get id => meta.effectiveImdbId ?? meta.id;
+  String get title => meta.name;
+  String? get year => meta.year;
+  String? get posterUrl => meta.poster;
+  bool get isSeries => meta.type == 'series';
+
+  Map<String, dynamic> toCacheJson() => {
+    'meta': meta.toJson(),
+    'content_type': traktContentType,
+    if (progress != null) 'progress': progress,
+    if (season != null) 'season': season,
+    if (episode != null) 'episode': episode,
+    if (runtime != null) 'runtime': runtime,
+    if (playbackIds.isNotEmpty) 'playback_ids': playbackIds,
+    if (pausedAtMs != null) 'paused_at_ms': pausedAtMs,
+  };
+
+  static TraktContinueWatchingItem? fromCacheJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final metaRaw = raw['meta'];
+    if (metaRaw is! Map<String, dynamic>) return null;
+    final type = raw['content_type'] as String?;
+    if (type != 'movies' && type != 'episodes') return null;
+    final meta = StremioMeta.fromJson(metaRaw);
+    if (meta.id.isEmpty) return null;
+    final playbackRaw = raw['playback_ids'];
+    final playbackIds = playbackRaw is List<dynamic>
+        ? playbackRaw.whereType<int>().toList(growable: false)
+        : const <int>[];
+    return TraktContinueWatchingItem(
+      meta: meta,
+      traktContentType: type!,
+      progress: (raw['progress'] as num?)?.toDouble(),
+      season: raw['season'] as int?,
+      episode: raw['episode'] as int?,
+      runtime: raw['runtime'] as int?,
+      playbackIds: playbackIds,
+      pausedAtMs: raw['paused_at_ms'] as int?,
+    );
+  }
+}
 
 class TraktContinueWatchingService {
   TraktContinueWatchingService._({TraktService? traktService})
@@ -18,6 +87,51 @@ class TraktContinueWatchingService {
   static const showsContentType = 'episodes';
 
   final TraktService _traktService;
+
+  /// Read the last complete snapshot without touching the network. A malformed
+  /// or old cache is discarded rather than delaying Home with an exception.
+  Future<
+    ({
+      List<TraktContinueWatchingItem> movies,
+      List<TraktContinueWatchingItem> shows,
+    })?
+  >
+  readCachedItems() async {
+    try {
+      final raw = await StorageService.getTraktContinueWatchingCache();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      List<TraktContinueWatchingItem> readList(String key) {
+        final values = decoded[key];
+        if (values is! List<dynamic>) return const [];
+        return values
+            .map(TraktContinueWatchingItem.fromCacheJson)
+            .whereType<TraktContinueWatchingItem>()
+            .toList(growable: false);
+      }
+
+      return (
+        movies: readList(moviesContentType),
+        shows: readList(showsContentType),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedItems(
+    List<TraktContinueWatchingItem> movies,
+    List<TraktContinueWatchingItem> shows,
+  ) => StorageService.setTraktContinueWatchingCache(
+    jsonEncode({
+      moviesContentType: movies.map((item) => item.toCacheJson()).toList(),
+      showsContentType: shows.map((item) => item.toCacheJson()).toList(),
+    }),
+  );
+
+  Future<void> clearCachedItems() =>
+      StorageService.clearTraktContinueWatchingCache();
 
   Future<List<TraktContinueWatchingItem>> fetchMovies() {
     return fetchItems(moviesContentType);
@@ -36,36 +150,25 @@ class TraktContinueWatchingService {
   }
 
   Future<List<TraktContinueWatchingItem>> fetchItems(
-    String traktContentType, {
-    bool Function()? canContinue,
-  }) async =>
-      await fetchItemsOrNull(traktContentType, canContinue: canContinue) ??
+    String traktContentType,
+  ) async =>
+      await fetchItemsOrNull(traktContentType) ??
       const <TraktContinueWatchingItem>[];
 
   /// Failure-aware fetch used by UI snapshots. A successful empty response is
   /// `[]`; null means the network/authenticated endpoint could not be read.
   Future<List<TraktContinueWatchingItem>?> fetchItemsOrNull(
-    String traktContentType, {
-    bool Function()? canContinue,
-  }) async {
+    String traktContentType,
+  ) async {
     try {
-      if (canContinue?.call() == false) return null;
-      final isAuth = await _traktService.isAuthenticated(
-        canContinue: canContinue,
-      );
-      if (canContinue?.call() == false) return null;
+      final isAuth = await _traktService.isAuthenticated();
       if (!isAuth) return [];
 
       final rawItems = traktContentType == showsContentType
-          ? await _traktService.fetchContinueWatchingEpisodeItemsOrNull(
-              canContinue: canContinue,
-            )
-          : await _traktService.fetchPlaybackItemsOrNull(
-              traktContentType,
-              canContinue: canContinue,
-            );
+          ? await _traktService.fetchContinueWatchingEpisodeItemsOrNull()
+          : await _traktService.fetchPlaybackItemsOrNull(traktContentType);
 
-      if (canContinue?.call() == false || rawItems == null) return null;
+      if (rawItems == null) return null;
 
       if (rawItems.isEmpty) return [];
 
@@ -81,11 +184,9 @@ class TraktContinueWatchingService {
   Future<AdvancedSearchSelection?> resolveSelection({
     required String traktContentType,
     required String? itemId,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) return null;
-    final items = await fetchItems(traktContentType, canContinue: canContinue);
-    if (canContinue?.call() == false || items.isEmpty) return null;
+    final items = await fetchItems(traktContentType);
+    if (items.isEmpty) return null;
 
     final selected = itemId == null || itemId.isEmpty
         ? items.first
@@ -95,14 +196,12 @@ class TraktContinueWatchingService {
           );
     if (selected == null) return null;
 
-    return selectionForItem(selected, canContinue: canContinue);
+    return selectionForItem(selected);
   }
 
   Future<AdvancedSearchSelection?> selectionForItem(
-    TraktContinueWatchingItem item, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue?.call() == false) return null;
+    TraktContinueWatchingItem item,
+  ) async {
     int? season = item.season;
     int? episode = item.episode;
     double? traktProgress = _visibleProgress(item.progress);
@@ -110,20 +209,15 @@ class TraktContinueWatchingService {
     if (item.isSeries) {
       final showId = item.id;
       if (season == null || episode == null || season <= 0 || episode <= 0) {
-        final next = await _traktService.fetchNextEpisode(
-          showId,
-          canContinue: canContinue,
-        );
-        if (canContinue?.call() == false || next == null) return null;
+        final next = await _traktService.fetchNextEpisode(showId);
+        if (next == null) return null;
         season = next.season;
         episode = next.episode;
       }
 
       final episodeProgress = await _traktService.fetchEpisodePlaybackProgress(
         showId,
-        canContinue: canContinue,
       );
-      if (canContinue?.call() == false) return null;
       final progress = episodeProgress['$season-$episode'];
       traktProgress = _visibleProgress(progress) ?? traktProgress;
     }
@@ -145,24 +239,15 @@ class TraktContinueWatchingService {
   /// Remove [item] from Trakt Continue Watching: delete every playback entry,
   /// then remove the title from watch history so shows don't reappear via the
   /// authoritative Up Next feed. Returns true if anything was removed.
-  Future<bool> removeItem(
-    TraktContinueWatchingItem item, {
-    bool Function()? canContinue,
-  }) async {
+  Future<bool> removeItem(TraktContinueWatchingItem item) async {
     var anySuccess = false;
     for (final pbId in item.playbackIds) {
-      if (canContinue?.call() == false) return false;
-      final ok = await _traktService.removePlaybackItem(
-        pbId,
-        canContinue: canContinue,
-      );
+      final ok = await _traktService.removePlaybackItem(pbId);
       if (ok) anySuccess = true;
     }
-    if (canContinue?.call() == false) return false;
     final historyRemoved = await _traktService.removeFromHistory(
       item.id,
       item.meta.type,
-      canContinue: canContinue,
     );
     return anySuccess || historyRemoved;
   }

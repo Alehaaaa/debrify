@@ -48,7 +48,7 @@ void main() {
       );
 
   Directory engineDirectory(ProfileScope scope) => Directory(
-    p.join(scope.storageDirectory(documents, 'documents').path, 'engines'),
+    p.join(scope.storageDirectory(support, 'documents').path, 'engines'),
   );
 
   Future<Map<String, String>> readEngineFiles(ProfileScope scope) async {

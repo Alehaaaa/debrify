@@ -1,11 +1,3 @@
-import 'package:debrify/models/home_preferences.dart';
-import 'package:debrify/services/storage/ambient_trailer_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
-import 'package:debrify/services/storage/home_hero_storage.dart';
-import 'package:debrify/services/storage/home_page_storage.dart';
-import 'package:debrify/services/storage/home_rows_storage.dart';
-import 'package:debrify/services/storage/iptv_favorites_storage.dart';
-import 'package:debrify/services/storage/trakt_storage.dart';
 import 'package:flutter/material.dart';
 import '../../utils/spotlight_interaction_policy.dart';
 import '../../models/stremio_addon.dart';
@@ -15,16 +7,15 @@ import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_list_source.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/simkl/simkl_service.dart';
+import '../../services/storage_service.dart';
 import '../../services/stremio_service.dart';
 import '../../services/trakt/trakt_list_source.dart';
 import '../../services/trakt/trakt_service.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'home_sections_filter_page.dart';
 import 'spotlight_hero_source_page.dart';
 import 'tv_home_style_page.dart';
 import 'widgets/settings_widgets.dart';
-import 'package:debrify/models/ambient_trailer_surface.dart';
 
 class HomePageSettingsPage extends StatefulWidget {
   const HomePageSettingsPage({super.key});
@@ -85,7 +76,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       ),
     );
     if (!mounted) return;
-    final heroSource = await HomeHeroStorage.getHomeHeroSource();
+    final heroSource = await StorageService.getHomeHeroSource();
     if (!mounted) return;
     setState(() => _heroSource = heroSource);
   }
@@ -97,7 +88,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       context,
     ).push(MaterialPageRoute<void>(builder: (_) => const TvHomeStylePage()));
     if (!mounted) return;
-    final style = await HomeAppearanceStorage.getTvHomeStyle();
+    final style = await StorageService.getTvHomeStyle();
     if (!mounted) return;
     setState(() => _tvHomeStyle = style);
   }
@@ -127,22 +118,22 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
   /// rather than the detail page silently inheriting the hero's preference,
   /// which is what a platform-keyed lookup would have done.
   Future<void> _setAmbientAudio(bool value) async {
-    await AmbientTrailerStorage.setAmbientTrailerAudioEnabled(
+    await StorageService.setAmbientTrailerAudioEnabled(
       AmbientTrailerSurface.detail,
       value,
     );
-    await AmbientTrailerStorage.setAmbientTrailerAudioEnabled(
+    await StorageService.setAmbientTrailerAudioEnabled(
       AmbientTrailerSurface.homeHero,
       value,
     );
   }
 
   Future<void> _setAmbientVolume(int value) async {
-    await AmbientTrailerStorage.setAmbientTrailerVolume(
+    await StorageService.setAmbientTrailerVolume(
       AmbientTrailerSurface.detail,
       value,
     );
-    await AmbientTrailerStorage.setAmbientTrailerVolume(
+    await StorageService.setAmbientTrailerVolume(
       AmbientTrailerSurface.homeHero,
       value,
     );
@@ -166,7 +157,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       value: value,
       onChanged: (v) async {
         try {
-          await HomePageStorage.setHomeCwMergedRows(provider, v);
+          await StorageService.setHomeCwMergedRows(provider, v);
           if (!mounted) return;
           setState(() => apply(v));
           MainPageBridge.notifyHomeSettingsChanged();
@@ -184,7 +175,6 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('home_page_settings');
     _loadSettings();
   }
 
@@ -199,15 +189,15 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
 
     try {
       final addons = await StremioService.instance.getCatalogAddons();
-      final sourceType = await HomePageStorage.getHomeDefaultSourceType();
-      final hideProviderCards = await HomePageStorage.getHomeHideProviderCards();
+      final sourceType = await StorageService.getHomeDefaultSourceType();
+      final hideProviderCards = await StorageService.getHomeHideProviderCards();
       final continueWatchingEnabled =
-          await HomePageStorage.getHomeContinueWatchingEnabled();
-      final holdToQuickPlay = await HomePageStorage.getHomeCwHoldToQuickPlay();
-      final cwMergeLocal = await HomePageStorage.getHomeCwMergedRows('local');
-      final cwMergeTrakt = await HomePageStorage.getHomeCwMergedRows('trakt');
-      final cwMergeSimkl = await HomePageStorage.getHomeCwMergedRows('simkl');
-      final cwMergeMdblist = await HomePageStorage.getHomeCwMergedRows(
+          await StorageService.getHomeContinueWatchingEnabled();
+      final holdToQuickPlay = await StorageService.getHomeCwHoldToQuickPlay();
+      final cwMergeLocal = await StorageService.getHomeCwMergedRows('local');
+      final cwMergeTrakt = await StorageService.getHomeCwMergedRows('trakt');
+      final cwMergeSimkl = await StorageService.getHomeCwMergedRows('simkl');
+      final cwMergeMdblist = await StorageService.getHomeCwMergedRows(
         'mdblist',
       );
       // Connectivity gates the tracker merge toggles. A tracker probe failing
@@ -224,7 +214,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
         }
       }
 
-      final traktConnected = await probe(TraktStorage.hasTraktCredential);
+      final traktConnected = await probe(StorageService.hasTraktCredential);
       final simklConnected = await probe(
         () => SimklService.instance.isAuthenticated(),
       );
@@ -232,17 +222,17 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
           kMdblistEnabled &&
           await probe(() => MdblistService.instance.isAuthenticated());
       final trailerAutoplayEnabled =
-          await AmbientTrailerStorage.getDetailTrailerAutoplayEnabled();
+          await StorageService.getDetailTrailerAutoplayEnabled();
       final heroTrailerEnabled =
-          await AmbientTrailerStorage.getHomeHeroTrailerEnabled();
+          await StorageService.getHomeHeroTrailerEnabled();
       // One pair of controls governs every ambient surface this platform has,
       // so the two stored values must not be allowed to diverge — a TV that had
       // sound off for its hero would otherwise show "off" while the newly
       // enabled detail trailer played at its own default of on. Read the shown
       // surface, then write it through to the other.
       final ambientTrailerAudioEnabled =
-          await AmbientTrailerStorage.getAmbientTrailerAudioEnabled(_ambientSurface);
-      final ambientTrailerVolume = await AmbientTrailerStorage.getAmbientTrailerVolume(
+          await StorageService.getAmbientTrailerAudioEnabled(_ambientSurface);
+      final ambientTrailerVolume = await StorageService.getAmbientTrailerVolume(
         _ambientSurface,
       );
       if (PlatformUtil.isTelevision) {
@@ -250,18 +240,20 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
         await _setAmbientVolume(ambientTrailerVolume);
       }
       final tvTrailerUnderlayEnabled =
-          await AmbientTrailerStorage.getTvTrailerUnderlayEnabled();
-      final tvHomeStyle = await HomeAppearanceStorage.getTvHomeStyle();
+          await StorageService.getTvTrailerUnderlayEnabled();
+      final tvHomeStyle = await StorageService.getTvHomeStyle();
       final spotlightCardOrientation =
-          await HomePageStorage.getHomeCardOrientation();
+          await StorageService.getHomeCardOrientation();
       final hideCardTitlesAndRatings =
-          await HomeAppearanceStorage.getHomeHideCardTitlesAndRatings();
+          await StorageService.getHomeHideCardTitlesAndRatings();
       final hideCatalogAddonNames =
-          await HomeAppearanceStorage.getHomeHideCatalogAddonNames();
-      final heroSource = await HomeHeroStorage.getHomeHeroSource();
-      final spotlightFocusDetails = await HomeAppearanceStorage.getSpotlightFocusDetails();
-      final homeAnimationsEnabled = await HomeAppearanceStorage.getHomeAnimationsEnabled();
-      final homeAnimationStyle = await HomeAppearanceStorage.getHomeAnimationStyle();
+          await StorageService.getHomeHideCatalogAddonNames();
+      final heroSource = await StorageService.getHomeHeroSource();
+      final spotlightFocusDetails =
+          await StorageService.getSpotlightFocusDetails();
+      final homeAnimationsEnabled =
+          await StorageService.getHomeAnimationsEnabled();
+      final homeAnimationStyle = await StorageService.getHomeAnimationStyle();
 
       // Only the two views that the current Home screen can render are valid.
       // Migrate the former All, Addon, Trakt, and other retired choices to
@@ -274,7 +266,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       // Only when there was an actual stale value — not for a fresh install
       // (null), which already defaults to Catalog without needing a write.
       if (sourceType != null && normalizedSourceType != sourceType) {
-        await HomePageStorage.setHomeDefaultSourceType(normalizedSourceType);
+        await StorageService.setHomeDefaultSourceType(normalizedSourceType);
       }
 
       if (!mounted) return;
@@ -332,7 +324,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
 
   Future<void> _selectSourceType(String type) async {
     try {
-      await HomePageStorage.setHomeDefaultSourceType(type);
+      await StorageService.setHomeDefaultSourceType(type);
       setState(() {
         _selectedSourceType = type;
       });
@@ -348,7 +340,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
 
   Future<void> _toggleHideProviderCards(bool value) async {
     try {
-      await HomePageStorage.setHomeHideProviderCards(value);
+      await StorageService.setHomeHideProviderCards(value);
       if (!mounted) return;
       setState(() {
         _hideProviderCards = value;
@@ -368,7 +360,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
         ? HomeCardOrientation.landscape
         : HomeCardOrientation.portrait;
     try {
-      await HomePageStorage.setHomeCardOrientation(orientation);
+      await StorageService.setHomeCardOrientation(orientation);
       if (!mounted) return;
       setState(() => _homeCardOrientation = orientation);
       MainPageBridge.notifyHomeSettingsChanged();
@@ -382,7 +374,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
 
   Future<void> _setHideCardTitlesAndRatings(bool value) async {
     try {
-      await HomeAppearanceStorage.setHomeHideCardTitlesAndRatings(value);
+      await StorageService.setHomeHideCardTitlesAndRatings(value);
       if (!mounted) return;
       setState(() => _hideCardTitlesAndRatings = value);
       MainPageBridge.notifyHomeSettingsChanged();
@@ -396,8 +388,10 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
 
   Future<void> _setHomeAnimation({bool? enabled, String? style}) async {
     try {
-      if (style != null) await HomeAppearanceStorage.setHomeAnimationStyle(style);
-      if (enabled != null) await HomeAppearanceStorage.setHomeAnimationsEnabled(enabled);
+      if (style != null) await StorageService.setHomeAnimationStyle(style);
+      if (enabled != null) {
+        await StorageService.setHomeAnimationsEnabled(enabled);
+      }
       if (!mounted) return;
       setState(() {
         if (enabled != null) _homeAnimationsEnabled = enabled;
@@ -406,29 +400,29 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
       MainPageBridge.notifyHomeSettingsChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save setting: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save setting: $e')));
     }
   }
 
   Future<void> _setSpotlightFocusDetails(bool value) async {
     try {
-      await HomeAppearanceStorage.setSpotlightFocusDetails(value);
+      await StorageService.setSpotlightFocusDetails(value);
       if (!mounted) return;
       setState(() => _spotlightFocusDetails = value);
       MainPageBridge.notifyHomeSettingsChanged();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save setting: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to save setting: $e')));
     }
   }
 
   Future<void> _setHideCatalogAddonNames(bool value) async {
     try {
-      await HomeAppearanceStorage.setHomeHideCatalogAddonNames(value);
+      await StorageService.setHomeHideCatalogAddonNames(value);
       if (!mounted) return;
       setState(() => _hideCatalogAddonNames = value);
       MainPageBridge.notifyHomeSettingsChanged();
@@ -459,14 +453,14 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
         for (final a in _addons)
           (addon: a, catalogs: a.catalogs.where((c) => c.isBrowsable).toList()),
       ].where((e) => e.catalogs.isNotEmpty).toList();
-      final disabled = await HomeRowsStorage.getHomeDisabledSections();
-      final extras = await HomeRowsStorage.getHomeExtraRows();
-      final rowOrder = await HomeRowsStorage.getHomeRowOrder();
+      final disabled = await StorageService.getHomeDisabledSections();
+      final extras = await StorageService.getHomeExtraRows();
+      final rowOrder = await StorageService.getHomeRowOrder();
       final collections = await HomeCollectionsStore.instance
           .getEnabledCollections();
       var iptvLists = const <IptvListMeta>[];
       try {
-        iptvLists = await IptvFavoritesStorage.getIptvLists();
+        iptvLists = await StorageService.getIptvLists();
       } catch (_) {
         // Enabled iptvlist: entries surface as unavailable leaves.
       }
@@ -617,7 +611,8 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       SettingsToggleTile(
                         icon: Icons.ac_unit_rounded,
                         title: 'Enable animations',
-                        subtitle: 'Animate Home and Spotlight collection backgrounds. '
+                        subtitle:
+                            'Animate Home and Spotlight collection backgrounds. '
                             'Keep this off on low-end TVs or devices with limited memory, '
                             'as animations may slow down Home.',
                         subtitleMaxLines: 6,
@@ -647,9 +642,23 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                                 value: 'moonlit_ocean',
                                 child: Text('Moonlit ocean'),
                               ),
+                              DropdownMenuItem(
+                                value: 'northern_lights',
+                                child: Text('Northern lights'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'ember_dusk',
+                                child: Text('Ember dusk'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'meteor_night',
+                                child: Text('Meteor night'),
+                              ),
                             ],
                             onChanged: (value) {
-                              if (value != null) _setHomeAnimation(style: value);
+                              if (value != null) {
+                                _setHomeAnimation(style: value);
+                              }
                             },
                           ),
                         ),
@@ -660,15 +669,17 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                 SettingsSection(
                   title: 'Home Cards',
                   children: [
-                    if (_spotlightLayoutActive && spotlightUsesRichCards(
-                      viewport: MediaQuery.sizeOf(context),
-                      platform: Theme.of(context).platform,
-                      dpad: PlatformUtil.isTelevision,
-                    ))
+                    if (_spotlightLayoutActive &&
+                        spotlightUsesRichCards(
+                          viewport: MediaQuery.sizeOf(context),
+                          platform: Theme.of(context).platform,
+                          dpad: PlatformUtil.isTelevision,
+                        ))
                       SettingsToggleTile(
                         icon: Icons.description_outlined,
                         title: 'Expand Focused Card',
-                        subtitle: 'Widen the active card and show its description while scrolling, hovering, or using the remote',
+                        subtitle:
+                            'Widen the active card and show its description while scrolling, hovering, or using the remote',
                         value: _spotlightFocusDetails,
                         onChanged: _setSpotlightFocusDetails,
                       ),
@@ -708,7 +719,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       padding: const EdgeInsets.all(16),
                       child: DropdownButtonFormField<String>(
                         isExpanded: true,
-                        value: _selectedSourceType,
+                        initialValue: _selectedSourceType,
                         decoration: InputDecoration(
                           labelText: 'Default view',
                           prefixIcon: Icon(
@@ -762,7 +773,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       value: _continueWatchingEnabled,
                       onChanged: (value) async {
                         try {
-                          await HomePageStorage.setHomeContinueWatchingEnabled(
+                          await StorageService.setHomeContinueWatchingEnabled(
                             value,
                           );
                           if (!mounted) return;
@@ -783,13 +794,14 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       icon: Icons.touch_app_rounded,
                       title: 'Hold to Quick Play',
                       subtitle:
-                          'Play immediately when holding a Continue Watching '
-                          'card instead of showing the action menu',
+                          'Play immediately when holding a title card on Home '
+                          'or Discover instead of showing the action menu. '
+                          'Right-click still opens the menu.',
                       subtitleMaxLines: 2,
                       value: _holdToQuickPlay,
                       onChanged: (value) async {
                         try {
-                          await HomePageStorage.setHomeCwHoldToQuickPlay(value);
+                          await StorageService.setHomeCwHoldToQuickPlay(value);
                           if (!mounted) return;
                           setState(() => _holdToQuickPlay = value);
                         } catch (e) {
@@ -878,7 +890,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       value: _heroTrailerEnabled,
                       onChanged: (value) async {
                         try {
-                          await AmbientTrailerStorage.setHomeHeroTrailerEnabled(value);
+                          await StorageService.setHomeHeroTrailerEnabled(value);
                           if (!mounted) return;
                           setState(() => _heroTrailerEnabled = value);
                           // Off-TV Home survives under this pushed route —
@@ -907,7 +919,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                       value: _trailerAutoplayEnabled,
                       onChanged: (value) async {
                         try {
-                          await AmbientTrailerStorage.setDetailTrailerAutoplayEnabled(
+                          await StorageService.setDetailTrailerAutoplayEnabled(
                             value,
                           );
                           if (!mounted) return;
@@ -956,7 +968,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                           child: DropdownButtonFormField<int>(
                             isExpanded: true,
-                            value: _ambientTrailerVolume,
+                            initialValue: _ambientTrailerVolume,
                             decoration: const InputDecoration(
                               labelText: 'Trailer volume',
                               prefixIcon: Icon(Icons.tune_rounded),
@@ -1005,7 +1017,7 @@ class _HomePageSettingsPageState extends State<HomePageSettingsPage> {
                         value: _tvTrailerUnderlayEnabled,
                         onChanged: (value) async {
                           try {
-                            await AmbientTrailerStorage.setTvTrailerUnderlayEnabled(
+                            await StorageService.setTvTrailerUnderlayEnabled(
                               value,
                             );
                             if (!mounted) return;

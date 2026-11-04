@@ -112,7 +112,7 @@ void main() {
   testWidgets('untouched, it reports no change', (tester) async {
     final result = await openPicker(
       tester,
-      onSetMembership: (_, __) async => fail('nothing was toggled'),
+      onSetMembership: (_, _) async => fail('nothing was toggled'),
     );
 
     await tester.tap(find.text('Done'));

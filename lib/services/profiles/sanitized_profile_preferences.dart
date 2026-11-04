@@ -75,6 +75,8 @@ abstract final class SanitizedProfilePreferences {
         return _boundedInt(value, 0, 5);
       case 'app_theme':
         return value is String && _appThemes.contains(value);
+      case 'app_structure':
+        return value is String && _appThemes.contains(value);
       case 'detail_theme':
         return value is String && _detailThemes.contains(value);
       case 'content_display_match_mode':
@@ -93,7 +95,10 @@ abstract final class SanitizedProfilePreferences {
       case 'home_animation_style':
         return value == 'snowy_mountain' ||
             value == 'midnight_rain' ||
-            value == 'moonlit_ocean';
+            value == 'moonlit_ocean' ||
+            value == 'northern_lights' ||
+            value == 'ember_dusk' ||
+            value == 'meteor_night';
       case 'home_card_orientation':
         return value is String &&
             const <String>{'portrait', 'landscape'}.contains(value);
@@ -134,6 +139,8 @@ abstract final class SanitizedProfilePreferences {
         return value is String && _playerDockStyles.contains(value);
       case 'player_dock_palette':
         return value is String && _playerDockPalettes.contains(value);
+      case 'player_dock_custom_swatch':
+        return value is String && value.length <= 64;
       case 'player_dock_size':
         return value is String &&
             const <String>{'auto', 'small', 'medium', 'large'}.contains(value);
@@ -281,6 +288,7 @@ abstract final class SanitizedProfilePreferences {
     'compact',
     'tiers',
     'cinema',
+    'glass',
     'two_tier',
   };
 
@@ -289,6 +297,8 @@ abstract final class SanitizedProfilePreferences {
     'crimson',
     'aurum',
     'ice',
+    'app',
+    'custom',
   };
 
   static const Set<String> _launchAnimations = <String>{
@@ -313,6 +323,7 @@ abstract final class SanitizedProfilePreferences {
     'imprint',
     'frost',
     'trace',
+    'fold',
   };
 
   static const Set<String> _iptvPlayerGuideStyles = <String>{

@@ -539,7 +539,7 @@ void main() {
         isA<FormatException>().having(
           (error) => error.message,
           'message',
-          'Invalid Debrify TV backup omission',
+          'Invalid Nextup TV backup omission',
         ),
       ),
     );

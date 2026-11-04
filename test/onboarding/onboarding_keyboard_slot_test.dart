@@ -1,4 +1,4 @@
-import 'package:debrify/services/storage/tv_display_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/platform_util.dart';
 import 'package:debrify/widgets/onboarding/tv_keyboard_slot.dart';
 import 'package:debrify/widgets/tv_keyboard.dart';
@@ -12,7 +12,7 @@ void main() {
 
   setUp(() {
     PlatformUtil.debugSetAndroidTvCached(true);
-    TvDisplayStorage.tvKeyboardEnabledCached = true;
+    StorageService.tvKeyboardEnabledCached = true;
   });
 
   tearDown(() => PlatformUtil.debugSetAndroidTvCached(null));
@@ -33,7 +33,7 @@ void main() {
                 TvTextField(key: fieldKey, controller: text),
                 ValueListenableBuilder<TvKeyboardController?>(
                   valueListenable: session.panel,
-                  builder: (_, controller, __) => controller == null
+                  builder: (_, controller, _) => controller == null
                       ? const SizedBox.shrink()
                       : TvKeyboardPanel(controller: controller),
                 ),
@@ -94,7 +94,7 @@ void main() {
     'terminal recovery can force the TV keyboard after probe failure',
     (tester) async {
       PlatformUtil.debugSetAndroidTvCached(false);
-      TvDisplayStorage.tvKeyboardEnabledCached = false;
+      StorageService.tvKeyboardEnabledCached = false;
       final text = TextEditingController();
       final fieldKey = GlobalKey<TvTextFieldState>();
       await tester.pumpWidget(
@@ -139,7 +139,7 @@ void main() {
                     if (showField) TvTextField(controller: text),
                     ValueListenableBuilder<TvKeyboardController?>(
                       valueListenable: session.panel,
-                      builder: (_, controller, __) => controller == null
+                      builder: (_, controller, _) => controller == null
                           ? const SizedBox.shrink()
                           : TvKeyboardPanel(controller: controller),
                     ),

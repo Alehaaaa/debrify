@@ -55,6 +55,24 @@ void main() {
     expect(homeBoardRefreshes, 1);
   });
 
+  test('committed playback data refreshes consumers without another stop', () {
+    var returns = 0;
+    var stops = 0;
+    void onReturn() => returns++;
+    void onStop() => stops++;
+    MainPageBridge.addPlaybackReturnListener(onReturn);
+    MainPageBridge.addContentPlaybackStopListener(onStop);
+    addTearDown(() {
+      MainPageBridge.removePlaybackReturnListener(onReturn);
+      MainPageBridge.removeContentPlaybackStopListener(onStop);
+    });
+
+    MainPageBridge.notifyPlaybackDataChanged();
+
+    expect(returns, 1);
+    expect(stops, 0);
+  });
+
   test('a failed playlist consumer does not skip the others', () async {
     var successfulRefreshes = 0;
     Future<void> failing() async => throw StateError('stale widget');

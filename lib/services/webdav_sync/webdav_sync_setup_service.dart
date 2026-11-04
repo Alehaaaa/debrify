@@ -667,7 +667,7 @@ final class WebDavSyncSetupService {
         if (opened.document.circleId != binding.circleId) {
           throw const WebDavSyncRootChangedException();
         }
-        return store.markRootVerified(
+        return await store.markRootVerified(
           bindingId: binding.id,
           root: opened.document,
           markerBytes: result.bytes,

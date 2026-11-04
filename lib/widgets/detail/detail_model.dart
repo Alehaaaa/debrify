@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../models/downloaded_title_state.dart';
 import '../../models/stremio_addon.dart';
 import '../../models/metadata_preferences.dart';
 import '../../services/metadata_details_service.dart';
 import '../../services/imdb_enrichment_service.dart';
 import '../../services/imdb_parents_guide_service.dart';
+import '../../services/downloads/title_download_summary.dart';
 import '../../services/series_source_service.dart';
 import 'detail_style.dart';
 
@@ -104,6 +106,11 @@ class DetailModel {
   /// default keeps independently constructed models immediately usable.
   final bool openingDataReady;
 
+  /// The title's details (synopsis, year, runtime, genres) are still being
+  /// fetched. Layouts show shimmering placeholders for what is missing
+  /// instead of empty space or stale addon text.
+  final bool detailsLoading;
+
   /// Resume state still resolving: the primary button shows a spinner instead
   /// of [primaryLabel] so it never flashes a wrong status ("Start Watching" →
   /// "Resume · S1E7").
@@ -128,6 +135,16 @@ class DetailModel {
   final bool trailerBusy;
   final bool trailerPlaying;
 
+  /// The ambient trailer is loaded and on screen — playing OR paused on a
+  /// frame — so it can be promoted in place. Wider than [trailerPlaying]: a
+  /// trailer the user paused and closed still sits there and must still
+  /// answer a tap.
+  final bool trailerPromotable;
+
+  /// The trailer has been promoted to fill the screen. Layouts move their
+  /// identity/content out of its way (the screen also fades the page).
+  final bool trailerForeground;
+
   // ── Tracker pills ────────────────────────────────────────────────────────
   final bool hasTrakt;
   final bool traktTracked;
@@ -150,9 +167,22 @@ class DetailModel {
   /// Null keeps the button tap-only (for direct-source pages with no picker).
   final VoidCallback? onPrimaryLongPress;
 
-  // Movie: the full browse/search source list. Series: the season-pack
-  // search (Showcase mounts it; other layouts still gate on isMovie).
+  // The Download button. Not downloaded yet: the full source list (movie)
+  // or the season-pack search (series), where a source can be downloaded.
+  // Downloaded or downloading: opens this title's download page.
   final VoidCallback? onBrowse;
+
+  /// Holding the Download button: pick the source to download by hand,
+  /// whatever the button's automatic/ask setting says.
+  final VoidCallback? onBrowseLongPress;
+
+  /// Drives the Download button's label and icon.
+  /// Where this title's downloads stand (drives the Download button).
+  final TitleDownloadSummary download;
+
+  DownloadedTitleState get downloadState => download.state;
+  double? get downloadProgress => download.progress;
+  String get downloadLabel => download.buttonLabel;
   final VoidCallback onTrailer;
   final VoidCallback? onSelectSource;
   final VoidCallback? onAppMenu;
@@ -186,6 +216,10 @@ class DetailModel {
   final VoidCallback? onManageSources;
   final void Function(StremioMeta)? onRecommendationTap;
 
+  /// Hold / right-click on a More Like This title: its card menu (the same
+  /// one Home's tiles open). Null leaves the rail tap-only.
+  final void Function(StremioMeta)? onRecommendationOptions;
+
   /// Filmstrip pushes the focused episode's still here; the shell paints it as
   /// an ambient layer. Null clears it.
   final void Function(String?) onAmbientStill;
@@ -216,6 +250,7 @@ class DetailModel {
     required this.parentsGuide,
     required this.recommendations,
     this.openingDataReady = true,
+    this.detailsLoading = false,
     required this.primaryLabel,
     this.primaryBusy = false,
     required this.sourceCount,
@@ -223,6 +258,8 @@ class DetailModel {
     required this.hasTrailer,
     required this.trailerBusy,
     required this.trailerPlaying,
+    this.trailerPromotable = false,
+    this.trailerForeground = false,
     required this.hasTrakt,
     required this.traktTracked,
     required this.traktLabel,
@@ -239,6 +276,8 @@ class DetailModel {
     required this.onPrimary,
     this.onPrimaryLongPress,
     required this.onBrowse,
+    this.onBrowseLongPress,
+    this.download = TitleDownloadSummary.none,
     required this.onTrailer,
     required this.onSelectSource,
     required this.onAppMenu,
@@ -253,6 +292,7 @@ class DetailModel {
     this.onTrackersTertiary,
     this.onManageSources,
     required this.onRecommendationTap,
+    this.onRecommendationOptions,
     required this.onAmbientStill,
     this.onDepth,
     required this.focus,
@@ -269,7 +309,8 @@ class DetailModel {
   );
   String? get logo => item.logo;
   String? get poster => item.poster;
-  String? get backdrop => MetadataDetailsService.backdrop(item, metadataPreferences);
+  String? get backdrop =>
+      MetadataDetailsService.backdrop(item, metadataPreferences);
 
   List<String> get genres => MetadataDetailsService.informationGenres(
     item,

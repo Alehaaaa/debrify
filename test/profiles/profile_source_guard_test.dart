@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:debrify/services/profiles/privacy_log.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../support/lib_source.dart';
-
 void main() {
   test(
     'direct SharedPreferences opens stay inside reviewed adapters/stores',
@@ -16,12 +14,8 @@ void main() {
         'lib/services/profiles/profile_package_service.dart': 1,
         'lib/services/profiles/profile_data_generation.dart': 5,
         'lib/services/profiles/native_profile_projection.dart': 3,
-        // Device key state, including the Linux passphrase vault's wrapped
-        // key (create, unlock, recover): device-wide, never profile data.
+        // Device vault state (Linux wrapped key): device-wide by design.
         'lib/services/profiles/device_key_provider.dart': 7,
-        // The device's own "a sync save is still pending" receipt
-        // (debrify_device_webdav_save_pending_v1), not a profile setting.
-        'lib/services/webdav_sync/webdav_sync_save_feedback.dart': 1,
         // Adoption must enumerate and atomically project whole scoped stores;
         // the exact count keeps any additional raw access review-visible.
         'lib/services/webdav_sync/webdav_sync_adoption_operations.dart': 2,
@@ -35,6 +29,8 @@ void main() {
         'lib/services/remote_control/remote_pairing_store.dart': 7,
         'lib/services/android_download_history.dart': 1,
         'lib/services/desktop_schedule_service.dart': 2,
+        // Device-level "a sync save is pending" flag; not profile data.
+        'lib/services/webdav_sync/webdav_sync_save_feedback.dart': 1,
       };
       final violations = <String>[];
       for (final entity in Directory('lib').listSync(recursive: true)) {
@@ -70,9 +66,6 @@ void main() {
       'lib/services/profiles/profile_bootstrap.dart',
       'lib/services/profiles/profile_migration_service.dart',
       'lib/services/profiles/profile_database_snapshot.dart',
-      // Storage Usage sizes files by name to label them; it never opens a
-      // database, so it cannot bypass the scoped paths.
-      'lib/features/storage_usage/data/storage_scanner.dart',
     };
     final violations = <String>[];
     for (final entity in Directory('lib').listSync(recursive: true)) {
@@ -122,24 +115,19 @@ void main() {
   });
 
   test('profile editor keeps feature controls hidden behind one switch', () {
-    // The profile editor: its screen plus every feature file.
-    final source = libJoined(
-      libSourceSet(
-        files: ['lib/screens/profiles/edit_profile_screen.dart'],
-        directories: ['lib/features/edit_profile'],
-      ),
-    );
+    final source = File(
+      'lib/screens/profiles/edit_profile_screen.dart',
+    ).readAsStringSync();
     // The switch moved onto the widget (public, @visibleForTesting) when the
-    // save rule was extracted into EditProfileScreen.policyFor; the forms read
-    // it through their dependencies.
+    // save rule was extracted into EditProfileScreen.policyFor.
     expect(
       source,
       contains('static const bool showFeaturePolicyControls = false;'),
     );
     expect(
-      RegExp(
-        r'if \((?:EditProfileScreen|_deps)\.showFeaturePolicyControls\) \.\.\.\[',
-      ).allMatches(source).length,
+      'if (EditProfileScreen.showFeaturePolicyControls) ...['
+          .allMatches(source)
+          .length,
       1,
       reason: 'The existing feature controls must stay present but hidden.',
     );
@@ -153,10 +141,9 @@ void main() {
       reason: 'policyFor must fall back to role defaults on create.',
     );
     expect(
-      source.replaceAll(RegExp(r'\s+'), ' '),
+      source,
       contains(
-        'profile?.policy.enabled ?? '
-        'ProfilePolicy.defaultsFor(_owners.form.role).enabled',
+        "profile?.policy.enabled ?? ProfilePolicy.defaultsFor(_role).enabled",
       ),
       reason: 'Initialization must seed from the stored policy, not a preset.',
     );
@@ -167,64 +154,27 @@ void main() {
     );
   });
 
-  test('search result preservation is owned by the mounted profile session', () {
-    // The screen is a facade; its composition lives in lib/screens/search_screen.
-    final source = [
-      File('lib/screens/search_screen.dart'),
-      ...Directory(
-        'lib/screens/search_screen',
-      ).listSync().whereType<File>().where((f) => f.path.endsWith('.dart')),
-    ].map((f) => f.readAsStringSync()).join('\n');
-    final session = File(
-      'lib/screens/search_screen/search_screen_session_composition.dart',
-    ).readAsStringSync();
-    final repository = File(
-      'lib/features/search/data/memory_keyword_snapshot_repository.dart',
-    ).readAsStringSync();
-    expect(
-      repository,
-      contains('static final ProfileSessionMemory<KeywordSnapshot> _preserved'),
-    );
-    expect(
-      session,
-      matches(
-        r'c\.searchLifecycle\.profileSessionOwner\s*=\s*ProfileSessionMemory\.captureOwner\(\)',
-      ),
-    );
-    final keywordReturn = File(
-      'lib/features/search/presentation/keyword_return.dart',
-    ).readAsStringSync();
-    final searchComposition = File(
-      'lib/screens/search_screen/search_presentation_composition.dart',
-    ).readAsStringSync();
-    expect(
-      File(
-        'lib/screens/search_screen/search_screen_search_composition.dart',
-      ).readAsStringSync(),
-      contains('session: () => c.searchLifecycle'),
-    );
-    expect(
-      searchComposition,
-      contains('repository: () => deps.session().keywordSnapshots'),
-    );
-    expect(keywordReturn, contains('_deps.repository().take('));
-    expect(keywordReturn, contains('_deps.repository().store('));
-    expect(repository, contains('_preserved.take('));
-    expect(repository, contains('_preserved.store(owner, snapshot)'));
-    expect(
-      repository,
-      contains('owner == ProfileSessionMemory.captureOwner()'),
-    );
-    expect(repository, contains('if (_current) _preserved.store'));
-    expect(
-      source,
-      allOf(
-        isNot(contains('static KeywordSnapshot?')),
+  test(
+    'search result preservation is owned by the mounted profile session',
+    () {
+      final source = File('lib/screens/search_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('ProfileSessionMemory<_KwPreservedState> _kwPreserved'),
+      );
+      expect(
+        source,
+        contains('_profileSessionOwner = ProfileSessionMemory.captureOwner()'),
+      );
+      expect(source, contains('_kwPreserved.take('));
+      expect(source, contains('_kwPreserved.store('));
+      expect(
+        source,
         isNot(contains('static _KwPreservedState? _kwPreserved')),
-      ),
-      reason: 'Raw screen statics can carry content across profile switches.',
-    );
-  });
+        reason: 'Raw screen statics can carry content across profile switches.',
+      );
+    },
+  );
 
   test(
     'Android protects recents before pause and notifications stay generic',
@@ -349,19 +299,6 @@ void main() {
           .listSync(recursive: true)
           .whereType<File>()
           .where((file) => file.path.endsWith('.dart')),
-      ...Directory('lib/features/playback_settings')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart')),
-      ...Directory('lib/features/iptv_settings')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart')),
-      // settings_widgets: preserve the settings log-redaction scan after moves.
-      ...Directory('lib/features/settings_widgets')
-          .listSync(recursive: true)
-          .whereType<File>()
-          .where((file) => file.path.endsWith('.dart')),
       ...Directory('lib/screens/settings')
           .listSync(recursive: true)
           .whereType<File>()
@@ -415,27 +352,16 @@ void main() {
       'android/app/src/main/kotlin/com/debrify/app/diagnostics/'
       'DiagnosticFileLog.kt',
     ).readAsStringSync();
-    String window(String source, String start, String end) {
-      final from = source.indexOf(start);
-      final to = from < 0 ? -1 : source.indexOf(end, from);
-      expect(from, greaterThanOrEqualTo(0), reason: 'marker gone: $start');
-      expect(to, greaterThan(from), reason: 'marker gone: $end');
-      return source.substring(from, to);
-    }
-
-    final nativeClear = window(
-      nativeLog,
-      'fun clearForDeviceReset',
-      'fun recordPreviousProcessExit',
+    final nativeClear = nativeLog.substring(
+      nativeLog.indexOf('fun clearForDeviceReset'),
+      nativeLog.indexOf('fun recordPreviousProcessExit'),
     );
     expect(nativeClear, contains('accepting = false'));
     expect(nativeClear, contains('directory.deleteRecursively()'));
     expect(nativeClear, contains('.clear()'));
-    // `append` is followed by `pruneExpired`; `trimSegment` no longer exists.
-    final nativeAppend = window(
-      nativeLog,
-      'private fun append(',
-      'private fun pruneExpired(',
+    final nativeAppend = nativeLog.substring(
+      nativeLog.indexOf('private fun append('),
+      nativeLog.indexOf('private fun pruneExpired('),
     );
     expect(
       nativeAppend.indexOf('if (!accepting) return'),
@@ -451,11 +377,11 @@ void main() {
 
   test('diagnostic export is hidden on tvOS until Remote transfer owns it', () {
     final settings = File(
-      'lib/features/settings/presentation/legacy_settings/settings_diagnostics.dart',
+      'lib/screens/settings_screen.dart',
     ).readAsStringSync();
     final authorizationCheck = settings.substring(
-      settings.indexOf('Future<bool> activeProfileMayExportDiagnostics()'),
-      settings.indexOf('Future<void> exportDiagnosticLogs()'),
+      settings.indexOf('Future<bool> _activeProfileMayExportDiagnostics()'),
+      settings.indexOf('Future<void> _loadSummariesForCurrentProfile()'),
     );
     expect(
       authorizationCheck,

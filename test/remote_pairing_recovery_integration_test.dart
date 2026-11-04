@@ -107,7 +107,7 @@ void main() {
             await manager.sealCommand(session, {
               'action': RemoteAction.pair,
               'command': reply,
-              if (data != null) 'data': data,
+              'data': ?data,
             }),
             address.address,
             port: port,

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:debrify/services/storage/home_rows_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -9,6 +8,7 @@ import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/home_list_rows.dart';
 import 'package:debrify/services/mdblist/mdblist_list_source.dart';
 import 'package:debrify/services/simkl/simkl_list_source.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/trakt/trakt_list_source.dart';
 
 StremioMeta _meta(String id) =>
@@ -33,18 +33,18 @@ void main() {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
     test('round-trips rows and clears the key when empty', () async {
-      expect(await HomeRowsStorage.getHomeExtraRows(), isEmpty);
+      expect(await StorageService.getHomeExtraRows(), isEmpty);
 
-      await HomeRowsStorage.setHomeExtraRows(const [
+      await StorageService.setHomeExtraRows(const [
         (id: 'traktlist:watchlist', title: ''),
         (id: 'iptvlist:list_1', title: 'Sports'),
       ]);
-      final rows = await HomeRowsStorage.getHomeExtraRows();
+      final rows = await StorageService.getHomeExtraRows();
       expect(rows, hasLength(2));
       expect(rows[0].id, 'traktlist:watchlist');
       expect(rows[1], (id: 'iptvlist:list_1', title: 'Sports'));
 
-      await HomeRowsStorage.setHomeExtraRows(const []);
+      await StorageService.setHomeExtraRows(const []);
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('home_extra_rows_v1'), isNull);
     });
@@ -53,7 +53,7 @@ void main() {
       SharedPreferences.setMockInitialValues({
         'home_extra_rows_v1': 'not-json{',
       });
-      expect(await HomeRowsStorage.getHomeExtraRows(), isEmpty);
+      expect(await StorageService.getHomeExtraRows(), isEmpty);
 
       SharedPreferences.setMockInitialValues({
         'home_extra_rows_v1': jsonEncode([
@@ -65,7 +65,7 @@ void main() {
           {'id': 'traktlist:popular', 'title': 42},
         ]),
       });
-      final rows = await HomeRowsStorage.getHomeExtraRows();
+      final rows = await StorageService.getHomeExtraRows();
       expect(rows, hasLength(2));
       expect(rows[0], (id: 'simkllist:trending', title: 'Trending'));
       // Non-string title degrades to '' rather than dropping the row.

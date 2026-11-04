@@ -23,7 +23,6 @@ import 'profiles/profile_collection_resource_facade.dart';
 import 'profiles/profile_runtime.dart';
 import 'stremio_service.dart' show AddonSearchStatus;
 import 'series_source_service.dart';
-import 'source_search_preferences.dart';
 
 class MediaServerService {
   @visibleForTesting
@@ -486,9 +485,7 @@ class MediaServerService {
       'addonStatuses': statuses,
       'addonErrors': errors,
     };
-    // A disabled source search must not query any media server.
-    if (!(await SourceSearchPreferences.readOrDefault()).mediaServers ||
-        !ProfileCollectionResourceFacade.active ||
+    if (!ProfileCollectionResourceFacade.active ||
         (!isMovie && (season == null || episode == null))) {
       return result();
     }
@@ -723,6 +720,17 @@ class MediaServerLibrarySession implements MediaServerLibraryAccess {
       client.close();
     }
   }
+
+  Future<void> setHistoryWatched(String itemId, bool watched, {DateTime? at}) =>
+      _withClient(
+        (client) => client.setHistoryWatched(
+          _account,
+          itemId,
+          watched,
+          at: at,
+          authorize: authorize,
+        ),
+      );
 
   @override
   Future<MediaServerLibraryPage> browse({

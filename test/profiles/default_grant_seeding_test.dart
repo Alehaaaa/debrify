@@ -26,8 +26,6 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  late ProfileAuthorizationContext actor;
-
   setUp(() async {
     ProfileRuntime.debugReset();
     root = await Directory.systemTemp.createTemp('grant-seed-');
@@ -62,7 +60,7 @@ void main() {
     ProfileRuntime.initializeCommitted(
       ProfileScope(profileId: admin.id, dataGeneration: 1, sessionEpoch: 1),
     );
-    actor = await ProfileAuthorizationContext.capture(registry);
+    await ProfileAuthorizationContext.capture(registry);
     return (admin: admin.id, kid: kid.id);
   }
 
@@ -105,18 +103,21 @@ void main() {
     );
   }
 
-  test('a new shareable resource is granted to every existing profile', () async {
-    final ids = await household();
-    await insert(ids.admin, ConnectionResourceType.realDebrid);
+  test(
+    'a new shareable resource is granted to every existing profile',
+    () async {
+      final ids = await household();
+      await insert(ids.admin, ConnectionResourceType.realDebrid);
 
-    final grant = await registry.getGrant(ids.kid, 'r1');
-    expect(grant, isNotNull);
-    expect(grant!.allows(ResourcePermission.use), isTrue);
-    expect(grant.allows(ResourcePermission.download), isTrue);
-    expect(grant.allows(ResourcePermission.revealSecret), isFalse);
-    expect(grant.allows(ResourcePermission.manage), isFalse);
-    expect(grant.allows(ResourcePermission.share), isFalse);
-  });
+      final grant = await registry.getGrant(ids.kid, 'r1');
+      expect(grant, isNotNull);
+      expect(grant!.allows(ResourcePermission.use), isTrue);
+      expect(grant.allows(ResourcePermission.download), isTrue);
+      expect(grant.allows(ResourcePermission.revealSecret), isFalse);
+      expect(grant.allows(ResourcePermission.manage), isFalse);
+      expect(grant.allows(ResourcePermission.share), isFalse);
+    },
+  );
 
   test('revoking owned shares unblocks deleting a scaffold profile', () async {
     // The post-restore trap: a setup admin's auto-seeded resources are

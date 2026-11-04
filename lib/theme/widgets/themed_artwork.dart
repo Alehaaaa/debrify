@@ -93,12 +93,7 @@ class ThemedArtwork extends StatelessWidget {
     final app = AppThemeScope.of(context);
     final tv = PlatformUtil.isTelevision;
     final blend = _blend(app, tv);
-    final framed = _framed(
-      app,
-      builder(context, blend),
-      tv,
-      card: overlay != null,
-    );
+    final framed = _framed(app, builder(context, blend), tv, card: overlay != null);
     if (overlay == null) return framed;
     return Stack(
       fit: StackFit.passthrough,
@@ -185,7 +180,10 @@ class ThemedArtwork extends StatelessWidget {
             stops: [0.0, 0.74, 1.0],
           ).createShader(rect),
           blendMode: BlendMode.dstIn,
-          child: ClipRRect(borderRadius: app.shape.brImg(radius), child: art),
+          child: ClipRRect(
+            borderRadius: app.shape.brImg(radius),
+            child: art,
+          ),
         );
     }
   }

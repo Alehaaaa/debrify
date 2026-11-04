@@ -1,9 +1,8 @@
-import 'package:android_intent_plus/flag.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/source_player_args.dart';
-import 'package:debrify/models/torrent.dart';
+import 'package:debrify/services/video_player_launcher.dart';
 import 'package:debrify/services/local_playback_resume_resolver.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
-import 'package:debrify/services/video_player_launcher.dart';
+import 'package:debrify/models/torrent.dart';
+import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +11,7 @@ void main() {
     'media-server authentication forces internal playback for any default',
     () {
       for (final key in ['X-Emby-Token', 'x-emby-token']) {
-        final args = SourcePlayerArgs.playerArgsForTesting(
+        final args = TorrentPlaybackService.playerArgsForTesting(
           null,
           httpHeaders: {key: 'private-token'},
         );
@@ -26,7 +25,7 @@ void main() {
         );
       }
       expect(
-        SourcePlayerArgs.playerArgsForTesting(null).disableExternalPlayer,
+        TorrentPlaybackService.playerArgsForTesting(null).disableExternalPlayer,
         isFalse,
       );
     },
@@ -178,11 +177,11 @@ void main() {
         expect(catalog.resumePolicy, PlaybackResumePolicy.catalogCanonical);
         expect(generic.resumePolicy, PlaybackResumePolicy.sourceSpecific);
         expect(
-          SourcePlayerArgs.playerArgsForTesting(catalog).resumePolicy,
+          TorrentPlaybackService.playerArgsForTesting(catalog).resumePolicy,
           PlaybackResumePolicy.catalogCanonical,
         );
         expect(
-          SourcePlayerArgs.playerArgsForTesting(null).resumePolicy,
+          TorrentPlaybackService.playerArgsForTesting(null).resumePolicy,
           PlaybackResumePolicy.sourceSpecific,
         );
       },
@@ -315,7 +314,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('External player unavailable'), findsOneWidget);
 
-      await tester.tap(find.text('Use Debrify player'));
+      await tester.tap(find.text('Use Nextup player'));
       await tester.pumpAndSettle();
       expect(await result, isTrue);
     });

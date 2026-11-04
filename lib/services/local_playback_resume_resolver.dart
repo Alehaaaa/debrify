@@ -1,11 +1,12 @@
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
-import '../models/playback_resume_policy.dart';
+import 'storage_service.dart';
 import '../models/custom_series_identity.dart';
 
-export '../models/playback_resume_policy.dart';
+/// Determines which local bookmark owns resume for the current playback.
+///
+/// Generic files and debrid-library entries keep their source-specific record
+/// first. Catalog launches use their authoritative IMDb identity, so changing
+/// releases does not move playback back to an older source bookmark.
+enum PlaybackResumePolicy { sourceSpecific, catalogCanonical }
 
 /// Shared local-resume selection for MediaKit and the native ExoPlayer payload.
 ///
@@ -22,20 +23,20 @@ class LocalPlaybackResumeResolver {
   }) async {
     final wanted = imdbId?.trim() ?? '';
     if (wanted.startsWith('medialibrary:')) {
-      return VideoProgressStorage.getVideoPlaybackStateByImdbId(wanted);
+      return StorageService.getVideoPlaybackStateByImdbId(wanted);
     }
     if (CustomSeriesIdentity.isCustom(wanted)) {
-      return VideoProgressStorage.getVideoPlaybackStateByImdbId(wanted);
+      return StorageService.getVideoPlaybackStateByImdbId(wanted);
     }
 
     if (policy == PlaybackResumePolicy.catalogCanonical && wanted.isNotEmpty) {
       // Completion is canonical too. In particular, do not resurrect a legacy
       // exact-source row that predates IMDb being written into playback state.
-      if (await MovieProgressStorage.isMovieFinished(wanted)) return null;
+      if (await StorageService.isMovieFinished(wanted)) return null;
 
       final reads = await Future.wait<Map<String, dynamic>?>([
-        VideoProgressStorage.getVideoPlaybackStateByImdbId(wanted),
-        VideoProgressStorage.getVideoPlaybackState(videoTitle: resumeId),
+        StorageService.getVideoPlaybackStateByImdbId(wanted),
+        StorageService.getVideoPlaybackState(videoTitle: resumeId),
       ]);
       final canonical = reads[0];
       final exact = _catalogEligibleExact(reads[1], wanted);
@@ -48,12 +49,12 @@ class LocalPlaybackResumeResolver {
 
     // Existing generic behavior: the precise file/provider record owns resume;
     // IMDb is only a recovery path when that source has never been seen.
-    final exact = await VideoProgressStorage.getVideoPlaybackState(
+    final exact = await StorageService.getVideoPlaybackState(
       videoTitle: resumeId,
     );
     if (exact != null) return exact;
     if (wanted.isEmpty) return null;
-    return VideoProgressStorage.getVideoPlaybackStateByImdbId(wanted);
+    return StorageService.getVideoPlaybackStateByImdbId(wanted);
   }
 
   static Future<Map<String, dynamic>?> episode({
@@ -65,7 +66,7 @@ class LocalPlaybackResumeResolver {
   }) async {
     if (policy != PlaybackResumePolicy.catalogCanonical ||
         imdbId?.trim().isNotEmpty != true) {
-      return SeriesProgressStorage.getSeriesPlaybackState(
+      return StorageService.getSeriesPlaybackState(
         seriesTitle: seriesTitle,
         imdbId: imdbId,
         season: season,
@@ -74,11 +75,11 @@ class LocalPlaybackResumeResolver {
     }
 
     final reads = await Future.wait<dynamic>([
-      MergedEpisodeProgressStorage.getMergedEpisodeProgress(
+      StorageService.getMergedEpisodeProgress(
         seriesTitle: seriesTitle,
         imdbId: imdbId!.trim(),
       ),
-      SeriesProgressStorage.getSeriesPlaybackState(
+      StorageService.getSeriesPlaybackState(
         seriesTitle: seriesTitle,
         imdbId: imdbId,
         season: season,

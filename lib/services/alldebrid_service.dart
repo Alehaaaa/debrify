@@ -32,12 +32,6 @@ class AllDebridAddResult {
 }
 
 class AllDebridService {
-  static void _checkAcquisition(bool Function()? canContinue) {
-    if (canContinue?.call() == false) {
-      throw StateError('Source acquisition belongs to a retired action');
-    }
-  }
-
   static const String _baseUrl = 'https://api.alldebrid.com/v4';
   // magnet/status lives on the v4.1 endpoint (file/link info moved to
   // magnet/files in this version).
@@ -113,10 +107,8 @@ class AllDebridService {
   /// object: `{id, hash, name, size, ready}`. Throws on error.
   static Future<Map<String, dynamic>> uploadMagnet(
     String apiKey,
-    String magnetOrHash, {
-    bool Function()? canContinue,
-  }) async {
-    _checkAcquisition(canContinue);
+    String magnetOrHash,
+  ) async {
     try {
       final response = await http
           .post(
@@ -135,8 +127,8 @@ class AllDebridService {
       }
       // A per-magnet error (e.g. invalid magnet) is reported inside the entry.
       if (first['error'] is Map) {
-        final msg =
-            (first['error'] as Map)['message']?.toString() ?? 'Invalid magnet';
+        final msg = (first['error'] as Map)['message']?.toString() ??
+            'Invalid magnet';
         throw Exception(msg);
       }
       return first;
@@ -202,10 +194,8 @@ class AllDebridService {
   /// carries a *locked* [AllDebridFile.link] that must be unlocked before use.
   static Future<List<AllDebridFile>> getMagnetFiles(
     String apiKey,
-    String magnetId, {
-    bool Function()? canContinue,
-  }) async {
-    _checkAcquisition(canContinue);
+    String magnetId,
+  ) async {
     final response = await http
         .post(
           Uri.parse('$_baseUrl/magnet/files'),
@@ -266,12 +256,7 @@ class AllDebridService {
   /// only becomes available once AllDebrid finishes processing it. In that case
   /// we poll `/link/delayed` until it's ready, mirroring the official client's
   /// wait-for-delayed flow.
-  static Future<String> unlockLink(
-    String apiKey,
-    String link, {
-    bool Function()? canContinue,
-  }) async {
-    _checkAcquisition(canContinue);
+  static Future<String> unlockLink(String apiKey, String link) async {
     final response = await http
         .post(
           Uri.parse('$_baseUrl/link/unlock'),
@@ -285,7 +270,7 @@ class AllDebridService {
 
     final delayedId = data['delayed']?.toString() ?? '';
     if (delayedId.isNotEmpty && delayedId != '0') {
-      return _resolveDelayedLink(apiKey, delayedId, canContinue: canContinue);
+      return _resolveDelayedLink(apiKey, delayedId);
     }
 
     throw Exception('AllDebrid did not return a download link');
@@ -296,16 +281,12 @@ class AllDebridService {
   /// 1 = still processing, 2 = ready (link available), 3 = error.
   static Future<String> _resolveDelayedLink(
     String apiKey,
-    String delayedId, {
-    bool Function()? canContinue,
-  }) async {
-    _checkAcquisition(canContinue);
+    String delayedId,
+  ) async {
     const maxAttempts = 12;
     const pollInterval = Duration(seconds: 5);
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
-      _checkAcquisition(canContinue);
       await Future.delayed(pollInterval);
-      _checkAcquisition(canContinue);
       final response = await http
           .post(
             Uri.parse('$_baseUrl/link/delayed'),
@@ -413,15 +394,9 @@ class AllDebridService {
   /// background download.
   static Future<AllDebridAddResult> addMagnetAndResolveFiles(
     String apiKey,
-    String magnet, {
-    bool Function()? canContinue,
-  }) async {
-    _checkAcquisition(canContinue);
-    final uploaded = await uploadMagnet(
-      apiKey,
-      magnet,
-      canContinue: canContinue,
-    );
+    String magnet,
+  ) async {
+    final uploaded = await uploadMagnet(apiKey, magnet);
     final magnetId = uploaded['id']?.toString() ?? '';
     final name = uploaded['name']?.toString() ?? '';
     if (magnetId.isEmpty) {
@@ -432,11 +407,7 @@ class AllDebridService {
       throw AllDebridTorrentNotReadyException(magnetId, apiKey);
     }
 
-    final files = await getMagnetFiles(
-      apiKey,
-      magnetId,
-      canContinue: canContinue,
-    );
+    final files = await getMagnetFiles(apiKey, magnetId);
     if (files.isEmpty) {
       throw AllDebridTorrentNotReadyException(magnetId, apiKey);
     }

@@ -1,5 +1,5 @@
-import 'package:debrify/services/storage/collection_appearance_storage.dart';
 import 'package:flutter/material.dart';
+import '../../services/storage_service.dart';
 import 'widgets/settings_widgets.dart';
 import 'widgets/settings_load_error.dart';
 
@@ -56,8 +56,7 @@ class _TvCollectionListStylePageState extends State<TvCollectionListStylePage> {
   Future<void> _load() async {
     setState(() => _failed = false);
     try {
-      final value =
-          await CollectionAppearanceStorage.getTvCollectionListStyle();
+      final value = await StorageService.getTvCollectionListStyle();
       if (mounted) {
         setState(() => _style = value);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -73,7 +72,7 @@ class _TvCollectionListStylePageState extends State<TvCollectionListStylePage> {
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      await CollectionAppearanceStorage.setTvCollectionListStyle(value);
+      await StorageService.setTvCollectionListStyle(value);
       if (mounted) setState(() => _style = value);
     } catch (_) {
       if (mounted) {

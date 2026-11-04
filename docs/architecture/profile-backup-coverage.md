@@ -113,8 +113,8 @@ because restoring them would either claim authority the destination does not
 have or start/rebind device work:
 
 - every `DevicePreferences` value: profile bootstrap/projection state, active
-  selection, remote identity/pairings/receiver name, update and support-cache
-  state, donation/notice acknowledgements, recording concurrency/nudges,
+  selection, remote identity/pairings/receiver name, update
+  state, notice acknowledgements, recording concurrency/nudges,
   pending/paused download queues, legacy queue authority, custom-font registry,
   tvOS Top Shelf/profile-gate device choices, and native launch snapshots;
 - device encryption/key-wrap material, filesystem/SAF grants, download

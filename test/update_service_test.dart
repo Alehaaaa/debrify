@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/update_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:debrify/services/storage/device_storage.dart';
 
 Map<String, Object?> _release(
   String tag, {
@@ -136,29 +136,27 @@ void main() {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
     test('defaults off and persists an opt-in', () async {
-      expect(await DeviceStorage.getUpdateIncludeAlphaEnabled(), isFalse);
+      expect(await StorageService.getUpdateIncludeAlphaEnabled(), isFalse);
 
-      await DeviceStorage.setUpdateIncludeAlphaEnabled(true);
+      await StorageService.setUpdateIncludeAlphaEnabled(true);
 
-      expect(await DeviceStorage.getUpdateIncludeAlphaEnabled(), isTrue);
+      expect(await StorageService.getUpdateIncludeAlphaEnabled(), isTrue);
     });
   });
 
   test('settings update actions enforce the app-update permission', () {
-    final source = File(
-      'lib/features/settings/presentation/legacy_settings/settings_updates.dart',
-    ).readAsStringSync();
+    final source = File('lib/screens/settings_screen.dart').readAsStringSync();
     for (final method in <String>[
-      'checkForAppUpdates',
-      'toggleAutoUpdateChecks',
-      'toggleIncludeAlphaUpdates',
+      '_checkForAppUpdates',
+      '_toggleAutoUpdateChecks',
+      '_toggleIncludeAlphaUpdates',
     ]) {
       expect(
         source,
         matches(
           RegExp(
             'Future<void> $method\\([^)]*\\) async \\{\\s*'
-            'if \\(!await _deps\\.ensureProfileFeature\\('
+            'if \\(!await _ensureProfileFeature\\('
             'ProfileFeature\\.appUpdates\\)\\) return;',
           ),
         ),

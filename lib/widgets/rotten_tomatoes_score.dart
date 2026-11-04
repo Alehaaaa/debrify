@@ -104,22 +104,14 @@ class _TomatoPainter extends CustomPainter {
 
   static Path _build() {
     final body = Path()
-      ..addOval(
-        Rect.fromCenter(
-          center: const Offset(12, 14.4),
-          width: 22,
-          height: 17.2,
-        ),
-      );
+      ..addOval(Rect.fromCenter(center: const Offset(12, 14.4), width: 22, height: 17.2));
     final calyx = _star(12, 6.6, 7.6, 2.4);
     final gap = _star(12, 6.6, 9.0, 3.5);
     final stem = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(11.1, 1.0, 1.8, 6.4),
-          const Radius.circular(0.9),
-        ),
-      );
+      ..addRRect(RRect.fromRectAndRadius(
+        const Rect.fromLTWH(11.1, 1.0, 1.8, 6.4),
+        const Radius.circular(0.9),
+      ));
     final cut = Path.combine(PathOperation.difference, body, gap);
     return Path.combine(
       PathOperation.union,
@@ -133,12 +125,7 @@ class _TomatoPainter extends CustomPainter {
     final s = size.shortestSide / 24;
     canvas.save();
     canvas.scale(s);
-    canvas.drawPath(
-      _unit,
-      Paint()
-        ..color = color
-        ..isAntiAlias = true,
-    );
+    canvas.drawPath(_unit, Paint()..color = color..isAntiAlias = true);
     canvas.restore();
   }
 
@@ -204,12 +191,10 @@ class _MetacriticPainter extends CustomPainter {
       ..addOval(Rect.fromCircle(center: const Offset(12, 12), radius: 11));
     // A bold "m": three stems under a rounded cap, knocked out of the disc.
     final m = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          const Rect.fromLTWH(6.0, 7.6, 12.0, 4.2),
-          const Radius.circular(2.1),
-        ),
-      )
+      ..addRRect(RRect.fromRectAndRadius(
+        const Rect.fromLTWH(6.0, 7.6, 12.0, 4.2),
+        const Radius.circular(2.1),
+      ))
       ..addRect(const Rect.fromLTWH(6.0, 9.6, 2.4, 7.4))
       ..addRect(const Rect.fromLTWH(10.8, 9.6, 2.4, 7.4))
       ..addRect(const Rect.fromLTWH(15.6, 9.6, 2.4, 7.4));
@@ -220,12 +205,7 @@ class _MetacriticPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.shortestSide / 24);
-    canvas.drawPath(
-      _unit,
-      Paint()
-        ..color = color
-        ..isAntiAlias = true,
-    );
+    canvas.drawPath(_unit, Paint()..color = color..isAntiAlias = true);
     canvas.restore();
   }
 
@@ -273,11 +253,7 @@ List<Widget> omdbDetailReadouts(
   Widget pair(String value, Widget glyph, String key) => Row(
     key: ValueKey('omdb-$key'),
     mainAxisSize: MainAxisSize.min,
-    children: [
-      Text(value, style: style),
-      const SizedBox(width: 5),
-      glyph,
-    ],
+    children: [Text(value, style: style), const SizedBox(width: 5), glyph],
   );
   return [
     if (!hasImdb && r.imdb != null && imdbBadge != null) ...[

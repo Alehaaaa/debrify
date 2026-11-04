@@ -1,9 +1,9 @@
-import '../core/metadata/metadata_presentation_cache.dart';
 import '../services/tmdb_metadata_repository.dart';
 import '../services/diagnostic_log.dart';
 import '../models/hero_metadata_presentation.dart';
 import '../models/metadata_preferences.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/widgets.dart';
 
@@ -16,19 +16,46 @@ import '../services/profiles/profile_runtime.dart';
 /// are shared by the repository. Item/provider/profile changes invalidate any
 /// in-flight result before it can update a recycled tile.
 mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
-  static final _presentationCache = MetadataPresentationCache.shared;
+  static final _resolved =
+      <StremioMeta, ({MetadataPresentation value, DateTime expires})>{};
+  static Object? _cacheScope;
+  static int? _cacheRevision;
+  static String? _cachePolicy;
   Timer? _retry;
   int _attempt = 0;
   bool _resolvedOnce = false;
 
   StremioMeta? get originalMetadata;
   bool get prioritizeMetadata => false;
-  Future<MetadataPresentation> _present(StremioMeta item, MetadataPreferences prefs,
-      bool Function() relevant, {bool hero = false}) {
-    Future<MetadataPresentation> action() => metadataProvider.present(item,
-        preferences: prefs, isRelevant: relevant);
+  bool get allowMetadataNetwork => true;
+  Future<MetadataPresentation> _present(
+    StremioMeta item,
+    MetadataPreferences prefs,
+    bool Function() relevant, {
+    bool hero = false,
+  }) {
+    Future<MetadataPresentation> action() => metadataProvider.present(
+      item,
+      preferences: prefs,
+      isRelevant: relevant,
+    );
     return hero || prioritizeMetadata
         ? TmdbMetadataRepository.withHeroPriority(action) : action();
+  }
+  /// Rate-limited lookups recover once TMDB's cooldown lifts, so a card keeps
+  /// retrying past it rather than giving up inside it (which is what left
+  /// titles without their logo after a burst of browsing).
+  static const int _maxRetries = 4;
+  Duration _retryDelay(int attempt) {
+    final backoff = Duration(seconds: attempt * 2);
+    final cooldown = TmdbMetadataRepository.instance.cooldownRemaining;
+    if (cooldown == Duration.zero) return backoff;
+    // Spread the wake-ups so every waiting card doesn't hit TMDB at once.
+    final jitter = Duration(
+      milliseconds: 250 + (identityHashCode(this) % 1500),
+    );
+    final afterCooldown = cooldown + jitter;
+    return afterCooldown > backoff ? afterCooldown : backoff;
   }
   final _preloadDelays = <VoidCallback>{};
   void _cancelPreloadDelays() {
@@ -53,6 +80,7 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
 
   /// Cards must not paint an unrelated provider while their policy resolves.
   bool metadataArtworkPending(MetadataCategory category) =>
+      allowMetadataNetwork &&
       originalMetadata != null &&
       (originalMetadata!.type == 'movie' ||
           originalMetadata!.type == 'series') &&
@@ -159,6 +187,7 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     List<StremioMeta> items,
     Future<void> Function(StremioMeta, MetadataPreferences) warmArtwork,
   ) async {
+    if (!allowMetadataNetwork) return;
     _cancelPreloadDelays();
     final generation = ++_preloadGeneration;
     final scope = ProfileRuntime.scope.value;
@@ -178,22 +207,35 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
           final item = queue[index];
           final timer = Stopwatch()..start();
           try {
-            final cached = _presentationCache.peek(item);
+            final cached = _resolved[item];
             var result = cached != null && cached.expires.isAfter(DateTime.now())
                 ? cached.value
                 : await _present(item, prefs, relevant, hero: true);
-            for (var attempt = 1; result.retryable && attempt <= 2 && relevant(); attempt++) {
-              DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'hero_preload_retry',
-                  fields: {'slot': index, 'attempt': attempt});
-              await _preloadDelay(Duration(seconds: attempt * 2));
+            for (
+              var attempt = 1;
+              result.retryable && attempt <= _maxRetries && relevant();
+              attempt++
+            ) {
+              DiagnosticLog.instance.recordEvent(
+                source: 'metadata',
+                event: 'hero_preload_retry',
+                fields: {'slot': index, 'attempt': attempt},
+              );
+              await _preloadDelay(_retryDelay(attempt));
               if (!relevant()) return;
               result = await _present(item, prefs, relevant, hero: true);
             }
             if (!relevant()) return;
-            _presentationCache.store(item, result);
-            DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'hero_preload',
-              fields: {'slot': index, 'elapsed_ms': timer.elapsedMilliseconds,
-                'retryable': result.retryable});
+            _storePresentation(item, result);
+            DiagnosticLog.instance.recordEvent(
+              source: 'metadata',
+              event: 'hero_preload',
+              fields: {
+                'slot': index,
+                'elapsed_ms': timer.elapsedMilliseconds,
+                'retryable': result.retryable,
+              },
+            );
             await warmArtwork(result.item, prefs);
           } catch (_) {
             // A speculative request must not surface errors or block the reel.
@@ -206,13 +248,34 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
     }
   }
 
-  void _prepareCache(MetadataPreferences prefs) => _presentationCache.prepare(
-    scope: ProfileRuntime.scope.value,
-    revision: MetadataPreferencesService.revision.value,
-    preferences: prefs,
-  );
+  void _prepareCache(MetadataPreferences prefs) {
+    final scope = ProfileRuntime.scope.value;
+    final revision = MetadataPreferencesService.revision.value;
+    final policy = jsonEncode(prefs.toJson());
+    if (_cacheScope != scope || _cacheRevision != revision || _cachePolicy != policy) {
+      _resolved.clear();
+      _cacheScope = scope;
+      _cacheRevision = revision;
+      _cachePolicy = policy;
+    }
+  }
+
+  void _storePresentation(
+    StremioMeta original,
+    MetadataPresentation presentation,
+  ) {
+    if (presentation.retryable || presentation.unavailable.isNotEmpty) return;
+    _resolved[original] = (
+      value: presentation,
+      expires: DateTime.now().add(const Duration(minutes: 60)),
+    );
+    while (_resolved.length > 1024) {
+      _resolved.remove(_resolved.keys.first);
+    }
+  }
 
   Future<void> _resolveMetadata() async {
+    if (!allowMetadataNetwork) return;
     final timing = Stopwatch()..start();
     final generation = ++_metadataGeneration;
     final original = originalMetadata;
@@ -223,13 +286,16 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
       if (!mounted || generation != _metadataGeneration) return;
       setState(() => _presentationPreferences = prefs);
       _prepareCache(prefs);
-      final cached = _presentationCache.take(original);
+      final cached = _resolved.remove(original);
       final presentation =
           (cached != null && cached.expires.isAfter(DateTime.now())
               ? cached.value
               : null) ??
-          await _present(original, prefs,
-            () => mounted && generation == _metadataGeneration);
+          await _present(
+            original,
+            prefs,
+            () => mounted && generation == _metadataGeneration,
+          );
       if (!mounted ||
           generation != _metadataGeneration ||
           !identical(originalMetadata, original)) {
@@ -238,12 +304,15 @@ mixin MetadataPresentationMixin<T extends StatefulWidget> on State<T> {
       DiagnosticLog.instance.recordEvent(source: 'metadata', event: 'presentation_ready',
         fields: {'elapsed_ms': timing.elapsedMilliseconds, 'retryable': presentation.retryable,
           'cache_hit': cached != null && cached.expires.isAfter(DateTime.now()),
-          'attempt': _attempt, 'missing': presentation.unavailable.length});
-      _presentationCache.store(original, presentation);
+          'attempt': _attempt,
+          'missing': presentation.unavailable.length,
+        },
+      );
+      _storePresentation(original, presentation);
       _resolvedOnce = true;
-      if (presentation.retryable && _attempt < 2) {
+      if (presentation.retryable && _attempt < _maxRetries) {
         _retry?.cancel();
-        _retry = Timer(Duration(seconds: ++_attempt * 2), () {
+        _retry = Timer(_retryDelay(++_attempt), () {
           if (mounted && generation == _metadataGeneration) {
             unawaited(_resolveMetadata());
           }

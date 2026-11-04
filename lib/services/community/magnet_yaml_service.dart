@@ -35,9 +35,6 @@ class MagnetYamlService {
     // 2. Compress with GZIP
     final gzipEncoder = GZipEncoder();
     final compressedBytes = gzipEncoder.encode(yamlBytes);
-    if (compressedBytes == null) {
-      throw MagnetYamlException('Failed to compress YAML content');
-    }
 
     // 3. Base64 encode
     final base64Data = base64Url.encode(compressedBytes);
@@ -123,6 +120,8 @@ class MagnetYamlService {
         channelName: channelName,
         version: version,
       );
+    } on ArchiveException catch (e) {
+      throw MagnetYamlException('Failed to decompress data: $e');
     } on FormatException catch (e) {
       throw MagnetYamlException('Invalid debrify link format: ${e.message}');
     } catch (e) {
@@ -151,7 +150,6 @@ class MagnetYamlService {
       final yamlBytes = utf8.encode(yamlContent);
       final gzipEncoder = GZipEncoder();
       final compressedBytes = gzipEncoder.encode(yamlBytes);
-      if (compressedBytes == null) return 0;
 
       final base64Data = base64Url.encode(compressedBytes);
 
@@ -170,7 +168,6 @@ class MagnetYamlService {
       final yamlBytes = utf8.encode(yamlContent);
       final gzipEncoder = GZipEncoder();
       final compressedBytes = gzipEncoder.encode(yamlBytes);
-      if (compressedBytes == null) return 1.0;
 
       return yamlBytes.length / compressedBytes.length;
     } catch (e) {
@@ -220,7 +217,7 @@ class MagnetYamlDecodeResult {
   @override
   String toString() {
     return 'MagnetYamlDecodeResult(channel: $channelName, version: $version, '
-           'contentLength: ${yamlContent.length})';
+        'contentLength: ${yamlContent.length})';
   }
 }
 

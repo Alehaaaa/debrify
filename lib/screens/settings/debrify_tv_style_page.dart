@@ -1,8 +1,6 @@
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -65,7 +63,6 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('debrify_tv_style_settings');
     _load();
   }
 
@@ -76,7 +73,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await DebrifyTvStorage.getDebrifyTvStyle();
+    final style = await StorageService.getDebrifyTvStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -100,7 +97,7 @@ class _DebrifyTvStylePageState extends State<DebrifyTvStylePage> {
     // Tell an in-flight Look apply that a human just chose this key, so it
     // does not stamp over the choice. See theme/app_looks.dart.
     LookApplier.noteExternalWrite('debrify_tv_style');
-    await DebrifyTvStorage.setDebrifyTvStyle(value);
+    await StorageService.setDebrifyTvStyle(value);
   }
 
   @override

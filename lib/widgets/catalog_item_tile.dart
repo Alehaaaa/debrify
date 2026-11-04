@@ -1,35 +1,46 @@
 import '../models/metadata_preferences.dart';
 import 'metadata_presentation_mixin.dart';
-import 'dart:async';
 
+import 'card_action_menu.dart';
+import 'hold_feedback.dart';
 import 'recoverable_network_image.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../models/stremio_addon.dart';
+import '../services/debrify_image_cache.dart';
 import '../services/stremio_service.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/widgets/parallax_focus.dart';
 import '../theme/widgets/themed_artwork.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
 import 'home/card_focus_rise.dart';
 import 'home/home_theme.dart';
 import 'movie_watched_badge.dart';
+import 'rotten_tomatoes_score.dart';
 
 /// Poster-first grid tile for catalog and search results.
 ///
-/// Tap (or D-pad SELECT) calls [onOpen]. A long-press calls [onLongPress]
-/// (used to Quick Play straight from the grid). Description, year, genres
+/// Tap (or D-pad SELECT) calls [onOpen]. A long-press (or a held SELECT on
+/// TV) calls [onLongPress] — a library's card menu, or Quick Play where there
+/// is none — and a right-click calls [onSecondaryTap]. Description, year, genres
 /// and per-item actions live on the detail screen — the grid stays clean.
 class CatalogItemTile extends StatefulWidget {
   final StremioMeta item;
+  final bool localOnly;
   final bool isTelevision;
   final FocusNode? focusNode;
   final bool hasBoundSource;
   final VoidCallback onOpen;
 
-  /// Optional long-press action (Quick Play). When null, long-press is a no-op.
+  /// Optional long-press action (the card menu, or Quick Play). When null,
+  /// long-press is a no-op.
   final VoidCallback? onLongPress;
+
+  /// Optional right-click action — the card menu on pointer devices.
+  final VoidCallback? onSecondaryTap;
 
   /// Fires when this tile *gains* DPAD/hover focus — the hook the Discover
   /// two-pane detail rail uses to know which item to preview. Not called on
@@ -39,6 +50,17 @@ class CatalogItemTile extends StatefulWidget {
   /// Optional watch progress (0..1). When > 0 a slim bar is pinned to the
   /// bottom of the poster — used by the Trakt "continue watching" grid.
   final double? progress;
+
+  /// Optional download progress (0..1) for a title still arriving on the
+  /// device: the poster starts dimmed and a clockwise sweep from 12 o'clock
+  /// reveals it, with the percentage on top. [downloadStatus] (Paused,
+  /// Queued, Failed) replaces the percentage's caption when set.
+  ///
+  /// A NEGATIVE value means the download is still preparing (searching for
+  /// or adding a source — no bytes, so no percentage): a wedge of the art
+  /// circles under the scrim and [downloadStatus] names the step.
+  final double? downloadProgress;
+  final String? downloadStatus;
 
   /// When true (default) the title + year fade in over the poster on focus.
   /// Set false when the caller renders a persistent title below the poster
@@ -69,21 +91,32 @@ class CatalogItemTile extends StatefulWidget {
   /// tile's existing gold-rim grammar, untouched.
   final bool boardChrome;
 
+  /// The Home Spotlight card's look, for Discover grids: Home's tighter
+  /// corners, its thin white progress bar, its caption gradient (title +
+  /// year · rating at rest, when [showInlineTitle]) and, with a pointer, its
+  /// parallax tilt and glare on hover. TV keeps its focus rise.
+  final bool homeChrome;
+
   const CatalogItemTile({
     super.key,
     required this.item,
+    this.localOnly = false,
     required this.isTelevision,
     required this.focusNode,
     required this.hasBoundSource,
     required this.onOpen,
     this.onLongPress,
+    this.onSecondaryTap,
     this.onFocused,
     this.progress,
+    this.downloadProgress,
+    this.downloadStatus,
     this.showInlineTitle = true,
     this.showTypeBadge = true,
     this.showRatingBadge = true,
     this.compactBadgeLayout = false,
     this.boardChrome = false,
+    this.homeChrome = false,
   });
 
   @override
@@ -91,21 +124,30 @@ class CatalogItemTile extends StatefulWidget {
 }
 
 class _CatalogItemTileState extends State<CatalogItemTile>
-    with MetadataPresentationMixin<CatalogItemTile> {
+    with
+        MetadataPresentationMixin<CatalogItemTile>,
+        RottenTomatoesScoreMixin<CatalogItemTile> {
   @override
   StremioMeta get originalMetadata => widget.item;
+  @override
+  bool get allowMetadataNetwork => !widget.localOnly;
   bool _focused = false;
   bool _hovered = false;
-  Timer? _longPressTimer;
-  bool _longPressTriggered = false;
-  bool _keyDownReceived = false;
+  /// OK opens; a held OK opens [CatalogItemTile.onLongPress] when set.
+  late final CardHold _hold = CardHold(
+    onTap: () => widget.onOpen(),
+    onHold: () => widget.onLongPress?.call(),
+    canHold: () => widget.onLongPress != null,
+  );
 
   bool get _active => _focused || _hovered;
 
   Widget _watchedBadge({bool compact = false}) => ValueListenableBuilder<int>(
     valueListenable: StremioService.instance.catalogProgressRevision,
     builder: (context, _, child) => FutureBuilder<String?>(
-      future: StremioService.instance.restoredCatalogProgressIdentity(widget.item),
+      future: StremioService.instance.restoredCatalogProgressIdentity(
+        widget.item,
+      ),
       builder: (context, snapshot) {
       // Use original provenance, not metadata-provider enrichment.
       final id = snapshot.data;
@@ -122,7 +164,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
 
   @override
   void dispose() {
-    _longPressTimer?.cancel();
+    _hold.reset();
     super.dispose();
   }
 
@@ -132,10 +174,19 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     final item = presentedMetadata!;
     final poster = metadataArtworkPending(MetadataCategory.posters) ? null : item.poster;
     final rating = item.imdbRating;
+    // Follows the ★ chip's setting: one "ratings" switch covers both.
+    final tomatoes = widget.showRatingBadge && !widget.localOnly
+        ? rottenTomatoesFor(item.effectiveImdbId ?? item.id)
+        : null;
     final typeLabel = item.type == 'series' ? 'SERIES' : 'MOVIE';
     final isMovie = item.type.toLowerCase() == 'movie';
     final supportsWatched = isMovie || item.type.toLowerCase() == 'series';
     final board = widget.boardChrome;
+    final home = widget.homeChrome;
+    // Home's card radius per form factor (see SpotlightBoard's metrics).
+    final homeRadius = widget.isTelevision
+        ? 7.0
+        : (PlatformUtil.isPhone ? 10.0 : 8.0);
     // TVs are low-powered: keep the focus highlight but make it instant
     // (no per-frame tweening of large posters/shadows). Board chrome animates
     // instead — [CardFocusRise] is shaped to be cheap enough for it.
@@ -157,6 +208,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       if (poster != null && poster.isNotEmpty)
         RecoverableNetworkImage(
           imageUrl: poster,
+          // A downloaded title's saved poster lives with the shared image
+          // cache, which can serve it offline.
+          cacheManager: DebrifyImageCache.manager,
           fit: BoxFit.cover,
           color: blend?.$1,
           colorBlendMode: blend?.$2,
@@ -181,8 +235,8 @@ class _CatalogItemTileState extends State<CatalogItemTile>
               : (widget.isTelevision
                     ? Duration.zero
                     : const Duration(milliseconds: 100)),
-          placeholder: (_, __) => _placeholder(item.name),
-          errorWidget: (_, __, ___) => _placeholder(item.name),
+          placeholder: (_, _) => _placeholder(item.name),
+          errorWidget: (_, _, _) => _placeholder(item.name),
         )
       else
         _placeholder(item.name),
@@ -191,10 +245,22 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     // Everything painted ON the poster: the focus wash, the badges, the
     // inline title and the progress bar. Never framed, never graded.
     List<Widget> chrome() => <Widget>[
+      // Download sweep: under the badges, over the art.
+      if (widget.downloadProgress != null)
+        Positioned.fill(
+          child: IgnorePointer(
+            child: widget.downloadProgress! < 0
+                ? _PendingDownloadSweep(status: widget.downloadStatus)
+                : _DownloadSweep(
+                    value: widget.downloadProgress!.clamp(0.0, 1.0),
+                    status: widget.downloadStatus,
+                  ),
+          ),
+        ),
       // Bottom gradient — only when focused — for the inline title. Board
       // chrome skips it: board cards carry no focus wash, and on a stage the
       // focused title is named at full size below the shelf anyway.
-      if (_active && !board)
+      if (_active && !board && !home)
         Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
@@ -229,6 +295,11 @@ class _CatalogItemTileState extends State<CatalogItemTile>
                   padding: const EdgeInsets.only(top: 4),
                   child: _RatingChip(value: rating),
                 ),
+              if (tomatoes != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: RottenTomatoesChip(score: tomatoes),
+                ),
               if (supportsWatched)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -246,8 +317,23 @@ class _CatalogItemTileState extends State<CatalogItemTile>
             left: widget.showTypeBadge ? 68 : 9,
             child: _watchedBadge(),
           ),
-        if (rating != null && widget.showRatingBadge)
-          Positioned(top: 10, right: 10, child: _RatingChip(value: rating)),
+        // Stacked down the right edge: the top row already carries the
+        // type and watched badges, and narrow tiles can't fit two more.
+        if ((rating != null && widget.showRatingBadge) || tomatoes != null)
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (rating != null && widget.showRatingBadge)
+                  _RatingChip(value: rating),
+                if (rating != null && widget.showRatingBadge && tomatoes != null)
+                  const SizedBox(height: 4),
+                if (tomatoes != null) RottenTomatoesChip(score: tomatoes),
+              ],
+            ),
+          ),
       ],
 
       if (widget.hasBoundSource)
@@ -265,7 +351,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       // Focused title overlay — appears inside the poster on focus so the
       // chrome below the tile stays calm. Suppressed when the caller shows a
       // persistent title below the poster.
-      if (_active && widget.showInlineTitle)
+      if (home && widget.showInlineTitle)
+        Positioned.fill(child: _HomeCaption(item: item, tomatoes: tomatoes))
+      else if (_active && widget.showInlineTitle)
         Positioned(
           left: 12,
           right: 12,
@@ -311,7 +399,10 @@ class _CatalogItemTileState extends State<CatalogItemTile>
           right: 0,
           bottom: 0,
           child: IgnorePointer(
-            child: _ProgressBar(value: widget.progress!.clamp(0.0, 1.0)),
+            child: _ProgressBar(
+              value: widget.progress!.clamp(0.0, 1.0),
+              home: home,
+            ),
           ),
         ),
     ];
@@ -319,7 +410,26 @@ class _CatalogItemTileState extends State<CatalogItemTile>
     // Board chrome re-hosts those very same layers in the board's rise; the
     // classic scale/shadow/clip below simply isn't built.
     final Widget card;
-    if (board) {
+    if (home && !widget.isTelevision) {
+      // Home's pointer cursor: the parallax tilt + travelling glare, on
+      // hover and keyboard focus alike, clipped to Home's tighter corners.
+      card = ParallaxFocus(
+        forceEnabled: true,
+        focused: _active,
+        radius: BorderRadius.circular(homeRadius),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(homeRadius),
+          child: ThemedArtwork(
+            role: ArtRole.poster,
+            radius: homeRadius,
+            inList: true,
+            builder: (context, blend) =>
+                Stack(fit: StackFit.expand, children: artwork(blend)),
+            overlay: Stack(fit: StackFit.expand, children: chrome()),
+          ),
+        ),
+      );
+    } else if (board) {
       card = CardFocusRise(
         active: _active,
         isTelevision: widget.isTelevision,
@@ -350,7 +460,9 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         child: AnimatedContainer(
           duration: fx,
           decoration: BoxDecoration(
-            borderRadius: app.shape.br(14),
+            // The artwork radius, like [ThemedArtwork]'s clip below, so the
+            // shadow and focus border share the poster's own corners.
+            borderRadius: app.shape.brImg(14),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: _active ? 0.7 : 0.35),
@@ -398,7 +510,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
                   IgnorePointer(
                     child: Container(
                       decoration: BoxDecoration(
-                        borderRadius: app.shape.br(14),
+                        borderRadius: app.shape.brImg(14),
                         border: Border.all(color: app.home.focus, width: 2.5),
                       ),
                     ),
@@ -414,11 +526,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       focusNode: widget.focusNode,
       onFocusChange: (f) {
         setState(() => _focused = f);
-        if (!f) {
-          _longPressTimer?.cancel();
-          _longPressTriggered = false;
-          _keyDownReceived = false;
-        }
+        if (!f) _hold.reset();
         if (f) {
           widget.onFocused?.call();
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -450,31 +558,7 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         }
       },
       onKeyEvent: (node, event) {
-        if (isActivateKey(event.logicalKey) ||
-            event.logicalKey == LogicalKeyboardKey.space) {
-          if (event is KeyDownEvent) {
-            _keyDownReceived = true;
-            _longPressTriggered = false;
-            _longPressTimer?.cancel();
-            if (widget.onLongPress != null) {
-              _longPressTimer = Timer(const Duration(milliseconds: 800), () {
-                _longPressTriggered = true;
-                HapticFeedback.mediumImpact();
-                widget.onLongPress!();
-              });
-            }
-            return KeyEventResult.handled;
-          } else if (event is KeyUpEvent) {
-            _longPressTimer?.cancel();
-            if (!_keyDownReceived) return KeyEventResult.handled;
-            if (!_longPressTriggered) {
-              widget.onOpen();
-            }
-            _longPressTriggered = false;
-            _keyDownReceived = false;
-            return KeyEventResult.handled;
-          }
-        }
+        if (isActivateOrSpaceKey(event.logicalKey)) return _hold.handle(event);
         return KeyEventResult.ignored;
       },
       child: MouseRegion(
@@ -482,18 +566,16 @@ class _CatalogItemTileState extends State<CatalogItemTile>
         onExit: (_) => setState(() => _hovered = false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: widget.onOpen,
-          onLongPress: widget.onLongPress == null
-              ? null
-              : () {
-                  HapticFeedback.mediumImpact();
-                  widget.onLongPress!();
-                },
+          onTap: withTapFeedback(widget.onOpen),
+          onLongPress: withHoldHaptic(widget.onLongPress),
+          onSecondaryTap: CardMenuGesture.secondaryClick(widget.onSecondaryTap),
           behavior: HitTestBehavior.opaque,
           // Isolate the tile's repaint: focus flips its shadow/ring/overlay,
           // and without a boundary each DPAD move repaints the whole grid
           // viewport layer instead of just the two affected tiles.
-          child: RepaintBoundary(child: card),
+          child: RepaintBoundary(
+            child: HoldFeedback(controller: _hold.ring, child: card),
+          ),
         ),
       ),
     );
@@ -520,6 +602,15 @@ class _CatalogItemTileState extends State<CatalogItemTile>
       ),
     );
   }
+}
+
+/// Number of grid columns for a given width. Fewer columns = bigger posters
+/// = a more premium feel. TV tops out at 5.
+int catalogGridColumnsFor(double width, {bool isTelevision = false}) {
+  if (isTelevision || width >= 1500) return 5;
+  if (width >= 1100) return 4;
+  if (width >= 700) return 3;
+  return 2;
 }
 
 class _GlassChip extends StatelessWidget {
@@ -553,25 +644,260 @@ class _GlassChip extends StatelessWidget {
   }
 }
 
-/// Slim "continue watching" progress bar (Netflix-style red fill).
+/// Slim "continue watching" progress bar: Netflix-style red, or Home's
+/// thin white line on a dark track when [home].
 class _ProgressBar extends StatelessWidget {
   final double value;
-  const _ProgressBar({required this.value});
+  final bool home;
+  const _ProgressBar({required this.value, this.home = false});
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 4,
+      height: home ? 2 : 4,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(color: Colors.black.withValues(alpha: 0.55)),
+          ColoredBox(color: Colors.black.withValues(alpha: home ? 0.45 : 0.55)),
           FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: value,
-            child: const ColoredBox(color: Color(0xFFE50914)),
+            child: ColoredBox(
+              color: home ? Colors.white : const Color(0xFFE50914),
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A download's progress over its poster: a hard-edged clockwise sweep from
+/// 12 o'clock uncovers the art from under a dark scrim, and the percentage
+/// sits in the middle. At 100% the poster is fully clear.
+class _DownloadSweep extends StatelessWidget {
+  final double value;
+  final String? status;
+  const _DownloadSweep({required this.value, this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    const shadows = [Shadow(color: Colors.black54, blurRadius: 8)];
+    return CustomPaint(
+      painter: _DownloadSweepPainter(value),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${(value * 100).floor()}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                shadows: shadows,
+              ),
+            ),
+            if (status != null)
+              Text(
+                status!,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  shadows: shadows,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A download still preparing its source: the same dark scrim as
+/// [_DownloadSweep] with one wedge of the art circling under it — the sweep
+/// "looking" before it can count — and the step named where the percentage
+/// will appear.
+class _PendingDownloadSweep extends StatefulWidget {
+  final String? status;
+  const _PendingDownloadSweep({this.status});
+
+  @override
+  State<_PendingDownloadSweep> createState() => _PendingDownloadSweepState();
+}
+
+class _PendingDownloadSweepState extends State<_PendingDownloadSweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spin = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _spin.stop();
+    } else if (!_spin.isAnimating) {
+      _spin.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _spin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const shadows = [Shadow(color: Colors.black54, blurRadius: 8)];
+    return CustomPaint(
+      painter: _PendingSweepPainter(_spin),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            widget.status ?? 'Preparing',
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              height: 1.15,
+              shadows: shadows,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingSweepPainter extends CustomPainter {
+  final Animation<double> turn;
+  _PendingSweepPainter(this.turn) : super(repaint: turn);
+
+  /// The revealed wedge, as a share of the full turn.
+  static const double _wedge = 0.14;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.longestSide;
+    const top = -math.pi / 2;
+    final start = top + 2 * math.pi * turn.value;
+    const open = 2 * math.pi * _wedge;
+    canvas.clipRect(Offset.zero & size);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      start + open,
+      2 * math.pi - open,
+      true,
+      Paint()..color = Colors.black.withValues(alpha: 0.62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_PendingSweepPainter old) => old.turn != turn;
+}
+
+class _DownloadSweepPainter extends CustomPainter {
+  final double value;
+  const _DownloadSweepPainter(this.value);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (value >= 1) return;
+    // The scrim is the wedge the sweep hasn't reached yet. Its radius only
+    // has to clear the corners; the clip keeps it on the poster.
+    final center = size.center(Offset.zero);
+    final radius = size.longestSide;
+    const top = -math.pi / 2;
+    final swept = 2 * math.pi * value;
+    canvas.clipRect(Offset.zero & size);
+    canvas.drawArc(
+      Rect.fromCircle(center: center, radius: radius),
+      top + swept,
+      2 * math.pi - swept,
+      true,
+      Paint()..color = Colors.black.withValues(alpha: 0.62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DownloadSweepPainter old) => old.value != value;
+}
+
+/// Home's card caption: a bottom gradient bed under a centred title and a
+/// year · rating line — the same type and colours as the Spotlight cards.
+class _HomeCaption extends StatelessWidget {
+  final StremioMeta item;
+  final int? tomatoes;
+  const _HomeCaption({required this.item, this.tomatoes});
+
+  @override
+  Widget build(BuildContext context) {
+    final rating = item.imdbRating;
+    final meta = [
+      if ((item.year ?? '').isNotEmpty) item.year!,
+      if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1)}',
+    ].join(' · ');
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+              colors: [Color(0xDB000000), Color(0x00000000)],
+            ),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(7, 26, 7, 7),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.name,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.96),
+                    ),
+                  ),
+                  if (meta.isNotEmpty || tomatoes != null)
+                    Text.rich(
+                      ratingsMetaSpan(
+                        meta,
+                        tomatoes,
+                        fontSize: 13 * 0.85,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13 * 0.85,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withValues(alpha: 0.72),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

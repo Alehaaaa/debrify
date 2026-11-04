@@ -1,391 +1,1636 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../models/stremio_addon.dart';
+import '../services/debrify_image_cache.dart';
 import '../services/main_page_bridge.dart';
-import '../services/reel_share_service.dart';
+import '../services/local_series_completion_service.dart';
+import '../services/offline_title_store.dart';
+import '../services/profiles/profile_runtime.dart';
 import '../services/reels_feed.dart';
-import '../services/storage/watchlist_storage.dart';
-import '../services/youtube_service.dart';
+import '../services/reel_share_service.dart';
 import '../theme/app_theme_scope.dart';
 import '../theme/glass_chrome.dart';
-import '../widgets/hero_trailer_backdrop.dart';
+import '../services/storage_service.dart';
+import '../services/watchlist_sync_service.dart';
+import '../widgets/detail/showcase_parts.dart'
+    show DetailGlyphBox, DetailRatingBox;
+import '../services/omdb/omdb_ratings_service.dart';
 import '../widgets/rotten_tomatoes_score.dart';
+import '../services/simkl/simkl_service.dart';
+import '../services/trakt/trakt_service.dart';
+import '../services/youtube_service.dart';
+import '../utils/platform_util.dart';
+import '../utils/tv_keys.dart';
+import '../widgets/hero_trailer_backdrop.dart';
+import '../widgets/trailer_engine.dart';
+import '../widgets/watchlist_added_bubble.dart';
 
-/// Full-screen vertical feed of official scene clips.
+enum _ClipState { idle, resolving, ready, failed }
+
+/// A reel in the feed: the title, its clip, and that clip's stream once
+/// it has been resolved (only ever for the reel on screen and the next one).
+class _Reel {
+  _Reel(this.title);
+
+  final ReelTitle title;
+  YoutubeResolvedStreams? streams;
+  _ClipState state = _ClipState.idle;
+  int revision = 0;
+  Duration position = Duration.zero;
+  DateTime? leftAt;
+
+  /// A player has rendered [streams]' first frame. An open relay connection
+  /// keeps streaming past the tunnel's expiry, so a prepared clip is kept.
+  bool framed = false;
+
+  /// A clip that already displayed video gets one automatic reconnect after a
+  /// transient direct-stream failure. Keep the budget across fresh frames so a
+  /// broken source cannot loop through players and network requests forever.
+  int reconnectAttempts = 0;
+
+  /// A failed relay belonging to a look-ahead player should retry through
+  /// direct extraction only if the user actually opens that Reel. Otherwise
+  /// it competes for the current video's limited resolution slots.
+  bool relayRetryOnActivation = false;
+
+  StremioMeta get item => title.item;
+}
+
+class _ReelsSession {
+  const _ReelsSession({
+    required this.scope,
+    required this.feed,
+    required this.reels,
+    required this.index,
+  });
+
+  final Object? scope;
+  final ReelsFeed feed;
+  final List<_Reel> reels;
+  final int index;
+}
+
+/// Reels: a vertical feed of official scene clips, one title per screen.
 ///
-/// Discovery remains in [ReelsFeed]; playback uses the refactored shared
-/// YouTube resolver and trailer surface instead of restoring the fork's former
-/// duplicate storage/player stack.
+/// Swipe up for the next title, down for the previous; pulling down on the
+/// first one swaps it for a fresh title. Each reel plays its clip full-bleed
+/// with the title's logo, the clip's name, genres and an expandable
+/// description at the bottom-left, and on the right a mute toggle and an Add
+/// to My Watchlist button. Tapping the title opens its full page (and Back
+/// returns here).
+///
+/// Built to scroll fast on few requests: titles arrive with everything a
+/// reel shows already known (see [ReelsFeed] — one TMDB request per title),
+/// so a reel paints its backdrop the moment it's on screen. The clip's stream
+/// is resolved for the reel on screen and a bounded look-ahead window.
+/// The visible reel and one adjacent clip stay prepared where the native
+/// player supports it; only the visible reel is audible.
 class ReelsScreen extends StatefulWidget {
-  const ReelsScreen({super.key});
+  final bool isTelevision;
+
+  /// Whether this tab is the shell's currently visible destination.  Reels is
+  /// kept alive by the touch tab pager while its neighbour is shown, so this
+  /// must be explicit rather than relying on dispose to stop its audio/video.
+  final bool isActive;
+
+  /// The shell overlays its navigation capsule in the lower-right corner.
+  final bool floatingNav;
+
+  /// Test seams. Production uses the TMDB clip feed and the app's YouTube
+  /// stream resolver.
+  @visibleForTesting
+  final ReelsFeed? feed;
+  @visibleForTesting
+  final Future<YoutubeResolvedStreams?> Function(String clipKey)? resolver;
+
+  /// Test seam: what plays behind a reel. Production uses
+  /// [HeroTrailerBackdrop].
+  @visibleForTesting
+  final Widget Function(ReelPlayback playback)? playerBuilder;
+  @visibleForTesting
+  final bool persistSessionForTesting;
+
+  const ReelsScreen({
+    super.key,
+    this.isTelevision = false,
+    this.isActive = true,
+    this.floatingNav = false,
+    this.feed,
+    this.resolver,
+    this.playerBuilder,
+    this.persistSessionForTesting = false,
+  });
 
   @override
   State<ReelsScreen> createState() => _ReelsScreenState();
 }
 
+/// What one reel's player is asked to do. [streams] is null until the clip
+/// has been resolved.
+class ReelPlayback {
+  const ReelPlayback({
+    required this.item,
+    required this.streams,
+    required this.active,
+    required this.volume,
+    this.paused = false,
+    this.prewarm = false,
+    this.previewing = false,
+    this.initialPosition,
+    this.onPosition,
+    this.onFirstFrameReady,
+    this.firstFrameReady = false,
+    this.failed = false,
+    this.onPlaybackFailed,
+  });
+
+  final StremioMeta item;
+  final YoutubeResolvedStreams? streams;
+  final bool active;
+  final bool failed;
+  final VoidCallback? onPlaybackFailed;
+
+  /// The next clip is opening toward its first frame beneath a swipe.
+  final bool prewarm;
+
+  /// The paired clip is on screen beside the active one during a swipe: it
+  /// plays, muted, so the handoff never waits on a cold or frozen player.
+  final bool previewing;
+  final double volume;
+
+  /// Tapped to pause: hold the frame, keep the player.
+  final bool paused;
+  final Duration? initialPosition;
+  final ValueChanged<Duration>? onPosition;
+  final VoidCallback? onFirstFrameReady;
+  final bool firstFrameReady;
+}
+
 class _ReelsScreenState extends State<ReelsScreen> {
-  static const int _batchSize = 6;
+  /// Sound on or off, for the whole feed — kept for the app session so the
+  /// choice survives leaving the tab.
+  static bool _muted = false;
+  static _ReelsSession? _session;
 
-  final PageController _controller = PageController();
-  final ReelsFeed _feed = ReelsFeed();
-  final List<ReelTitle> _items = <ReelTitle>[];
-  final Map<String, YoutubeResolvedStreams?> _streams =
-      <String, YoutubeResolvedStreams?>{};
-  final Set<String> _resolving = <String>{};
-  final Map<String, bool> _saved = <String, bool>{};
+  /// Confirmed titles kept queued past the one on screen, so a fling never
+  /// runs into the end of the feed. Each costs one TMDB request.
+  static const int _ahead = 6;
 
-  bool _loading = false;
-  String? _error;
-  int _currentIndex = 0;
+  /// Reels past the one on screen whose clip is resolved ahead, so swiping
+  /// through several in a row lands on clips that start straight away. Each
+  /// costs one YouTube lookup.
+  static const int _streamsAhead = 3;
+
+  /// Keep a useful backwards history without retaining every title, artwork
+  /// and playback position in a feed that can run for hours.
+  static const int _historyBehind = 32;
+  static const int _historyTrimAt = 48;
+
+  /// How far the first reel must be pulled down to refresh it.
+  static const double _refreshPull = 90;
+
+  late final ReelsFeed _feed;
+  // The feed owns its index. Restoring an unrelated PageStorage offset would
+  // put the visible page and the selected player out of sync on tab re-entry.
+  late final PageController _pages;
+  final FocusNode _focus = FocusNode(debugLabel: 'reels');
+  final Object? _scope = ProfileRuntime.scope.value;
+  late final List<_Reel> _reels;
+  final Set<String> _postersPrepared = {};
+  final Map<String, bool> _inWatchlist = {};
+  WatchlistAddedBubbleHandle? _watchlistBubble;
+
+  int _index = 0;
+  bool _pageWorkPending = false;
+  int? _swipePreviewIndex;
+  bool _sharing = false;
+  bool _filling = false;
+  Future<List<ReelTitle>>? _nextTitle;
+  bool _exhausted = false;
+  bool _refreshing = false;
+  double _pull = 0;
+  bool _refreshArmed = false;
+  int? _dragPage;
+  bool _movingByKey = false;
+  late final _ReelPagePhysics _physics = _ReelPagePhysics(
+    anchorPage: () => _dragPage ?? _index,
+    parent: const BouncingScrollPhysics(),
+  );
+
+  /// The reel on screen is paused (a tap on the video). A new reel always
+  /// starts playing.
+  bool _paused = false;
+
+  bool get _current => mounted && ProfileRuntime.scope.value == _scope;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_loadMore());
+    final saved =
+        (widget.feed == null || widget.persistSessionForTesting) &&
+            _session?.scope == _scope
+        ? _session
+        : null;
+    _feed = saved?.feed ?? widget.feed ?? ReelsFeed();
+    _reels = saved?.reels ?? [];
+    if (saved != null) {
+      // A resolver callback belongs to the disposed screen. It cannot publish
+      // its result into this new State even when the underlying service future
+      // is still useful. Restart the UI ownership while reusing that future.
+      for (final reel in _reels) {
+        if (reel.state == _ClipState.resolving) {
+          reel.revision++;
+          reel.state = _ClipState.idle;
+        }
+      }
+    }
+    _index = saved?.index ?? 0;
+    _pages = PageController(initialPage: _index, keepPage: false);
+    // Returning from the detail page restores the frame without resuming audio
+    // or motion behind the user.
+    _paused = saved != null;
+    if (!_feed.available) {
+      _exhausted = true;
+      return;
+    }
+    if (saved != null) {
+      // A restored feed can already have all six look-ahead titles. _fill then
+      // has no work and won't call _prepare on its own.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_current) _prepare();
+      });
+    }
+    unawaited(_fill());
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _watchlistBubble?.dismiss();
+    if (widget.feed == null || widget.persistSessionForTesting) {
+      _session = _ReelsSession(
+        scope: _scope,
+        feed: _feed,
+        reels: _reels,
+        index: _index,
+      );
+    }
+    _pages.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMore() async {
-    if (_loading || !_feed.available) return;
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  // ── feed ───────────────────────────────────────────────────────────────
+
+  /// Keep [_ahead] titles queued past the one on screen.
+  Future<void> _fill() async {
+    if (_filling || _exhausted) return;
+    _filling = true;
+    var rejectedReplays = 0;
+    var sparseWindows = 0;
     try {
-      final next = await _feed.take(_batchSize, allowRepeat: _items.isNotEmpty);
-      if (!mounted) return;
-      setState(() => _items.addAll(next));
-      if (_items.isNotEmpty) {
-        unawaited(_resolveAt(_currentIndex));
-        unawaited(_resolveAt(_currentIndex + 1));
-        unawaited(_loadSaved(_currentIndex));
+      while (_current && !_exhausted) {
+        final need = _index + 1 + _ahead - _reels.length;
+        if (need <= 0) break;
+        // Publish each confirmed title immediately. Waiting for the whole
+        // look-ahead batch lets one slow lookup hold back already-ready reels.
+        final request = _nextTitle ?? _requestTitle();
+        _nextTitle = null;
+        final titles = await request;
+        if (!_current) return;
+        // Start the following TMDB lookup while local/remote watch status for
+        // this candidate is being checked. At most one lookup is pipelined;
+        // an empty feed cannot fan out unlimited network work.
+        if (titles.isNotEmpty && need > 1) _nextTitle = _requestTitle();
+        final unseen = await Future.wait([
+          for (final title in titles)
+            _shouldExclude(
+              title.item,
+            ).then((excluded) => excluded ? null : title),
+        ]);
+        if (!_current) return;
+        final playable = [for (final title in unseen) ?title];
+        if (playable.isNotEmpty) sparseWindows = 0;
+        if (titles.isEmpty && !_feed.lastRequestFailed && !_feed.exhausted) {
+          // A scan window can be sparse without exhausting TMDB. Avoid
+          // immediately launching another 64-detail scan in a tight loop.
+          sparseWindows++;
+        }
+        // If every known title has been watched/saved, a replaying feed can
+        // otherwise cycle through the same rejected candidates indefinitely.
+        if (playable.isNotEmpty) rejectedReplays = 0;
+        if (playable.isEmpty && titles.isNotEmpty && _feed.exhausted) {
+          rejectedReplays++;
+        }
+        setState(() {
+          _reels.addAll(playable.map(_Reel.new));
+          if (titles.isEmpty || rejectedReplays >= 24 || sparseWindows >= 6) {
+            _exhausted = _feed.lastRequestFailed || _feed.exhausted;
+            if (rejectedReplays >= 24 || sparseWindows >= 6) {
+              // Retry is explicit after six empty catalog windows. This is a
+              // temporary discovery pause, not a permanent feed exhaustion.
+              _exhausted = true;
+            }
+          }
+        });
+        for (final title in playable) {
+          unawaited(_loadWatchlist(title.item));
+        }
+        _prepare();
+        if (titles.isEmpty && !_exhausted) {
+          final backoffMs =
+              250 * (1 << (sparseWindows - 1).clamp(0, 4).toInt());
+          await Future<void>.delayed(Duration(milliseconds: backoffMs));
+        }
       }
-    } catch (error) {
-      if (mounted) setState(() => _error = error.toString());
     } finally {
-      if (mounted) setState(() => _loading = false);
+      _filling = false;
     }
   }
 
-  Future<void> _resolveAt(int index) async {
-    if (index < 0 || index >= _items.length) return;
-    final id = _items[index].clipKey;
-    if (_streams.containsKey(id) || !_resolving.add(id)) return;
-    try {
-      final streams = await YoutubeService.resolveStreams(
-        id,
+  Future<List<ReelTitle>> _requestTitle() =>
+      // The feed itself only repeats after real catalog exhaustion. An
+      // unavailable scan window or a network failure never causes a replay.
+      _feed.take(1, allowRepeat: true).catchError((Object _) => <ReelTitle>[]);
+
+  void _retryFeed() {
+    if (!_current || _filling) return;
+    setState(() => _exhausted = false);
+    unawaited(_fill());
+  }
+
+  /// Independent requests: a slow lookup for a reel already swiped past
+  /// must never hold up the current reel or the rest of the look-ahead window.
+  void _prepare() {
+    // Resolve the visible reel first, then the forward feed, and finally the
+    // immediately preceding clip. That last request improves quick reversals
+    // after a failed/expired old stream without competing for the next slot
+    // ahead of the current player.
+    final candidates = <int>[
+      for (var i = _index; i <= _index + _streamsAhead; i++) i,
+      if (_index > 0) _index - 1,
+    ];
+    for (final i in candidates) {
+      if (i < _reels.length) {
+        final item = _reels[i].item;
+        final still = item.background ?? item.poster;
+        if (still != null && still.isNotEmpty && _postersPrepared.add(still)) {
+          unawaited(
+            precacheImage(
+              ResizeImage.resizeIfNeeded(
+                1920,
+                null,
+                CachedNetworkImageProvider(
+                  still,
+                  cacheManager: DebrifyImageCache.manager,
+                ),
+              ),
+              context,
+              // A transient offline/cache failure must be retried on the next
+              // visit; otherwise this URL stays marked warm for the session.
+              onError: (_, _) => _postersPrepared.remove(still),
+            ),
+          );
+        }
+      }
+      unawaited(_resolve(i));
+    }
+  }
+
+  Future<void> _resolve(int index) async {
+    if (index < 0 || index >= _reels.length) return;
+    final reel = _reels[index];
+    if (reel.relayRetryOnActivation && index != _index) return;
+    if (reel.state == _ClipState.resolving &&
+        index == _index &&
+        widget.resolver == null) {
+      YoutubeService.promotePreviewStreams(
+        reel.title.clipKey,
         maxHeightOverride: 1080,
+        preferMuxed: PlatformUtil.isIosMobile,
       );
-      if (!mounted) return;
-      setState(() => _streams[id] = streams);
-    } catch (_) {
-      if (mounted) setState(() => _streams[id] = null);
-    } finally {
-      _resolving.remove(id);
+      return;
     }
+    if (reel.state != _ClipState.idle) return;
+    reel.state = _ClipState.resolving;
+    final revision = reel.revision;
+    YoutubeResolvedStreams? streams;
+    try {
+      streams =
+          await (widget.resolver?.call(reel.title.clipKey) ??
+                  YoutubeService.resolvePreviewStreams(
+                    reel.title.clipKey,
+                    // Full-bleed on a phone: a portrait crop of a 16:9 frame wants
+                    // more lines than a card preview.
+                    maxHeightOverride: 1080,
+                    preferMuxed: PlatformUtil.isIosMobile,
+                    preferVp9: false,
+                    foreground: index == _index,
+                  ))
+              .timeout(const Duration(seconds: 30));
+    } on TimeoutException {
+      // A timed-out request may still be waiting for a resolution slot. Drop
+      // it so an obsolete prefetch cannot delay the visible player's retry.
+      if (widget.resolver == null &&
+          _current &&
+          _reels.contains(reel) &&
+          reel.revision == revision) {
+        YoutubeService.invalidateStreams(reel.title.clipKey);
+      }
+      streams = null;
+    } catch (_) {
+      streams = null;
+    }
+    if (!_current || !_reels.contains(reel) || reel.revision != revision) {
+      return;
+    }
+    setState(() {
+      if (streams != null && streams.hasPlayable) {
+        reel.streams = streams;
+        reel.framed = false;
+        reel.state = _ClipState.ready;
+      } else {
+        reel.state = _ClipState.failed;
+        _feed.excludeClip(reel.title.clipKey);
+      }
+    });
+    _discardFailedAhead();
   }
 
-  void _onPageChanged(int index) {
-    setState(() => _currentIndex = index);
-    unawaited(_resolveAt(index));
-    unawaited(_resolveAt(index + 1));
-    unawaited(_loadSaved(index));
-    if (index >= _items.length - 3) unawaited(_loadMore());
+  /// Loading can change a clip, never the page. In particular, failed clips
+  /// stay in place for retry. Future failures are discarded without navigation.
+  void _retry(_Reel reel) {
+    if (!_current || reel.state != _ClipState.failed) return;
+    final index = _reels.indexOf(reel);
+    if (index < 0) return;
+    YoutubeService.invalidateStreams(reel.title.clipKey);
+    _feed.allowClip(reel.title.clipKey);
+    setState(() {
+      reel.revision++;
+      reel.streams = null;
+      reel.framed = false;
+      reel.state = _ClipState.idle;
+      reel.reconnectAttempts = 0;
+      if (index == _index) _paused = false;
+    });
+    unawaited(_resolve(index));
   }
 
-  String _savedKey(ReelTitle reel) => '${reel.item.type}:${reel.item.id}';
-
-  Future<void> _loadSaved(int index) async {
-    if (index < 0 || index >= _items.length) return;
-    final reel = _items[index];
-    final key = _savedKey(reel);
-    if (_saved.containsKey(key)) return;
-    final saved = await WatchlistStorage.isInMyWatchlist(reel.item);
-    if (mounted) setState(() => _saved[key] = saved);
-  }
-
-  Future<void> _toggleSaved(ReelTitle reel) async {
-    final key = _savedKey(reel);
-    final next = !(_saved[key] ?? false);
-    setState(() => _saved[key] = next);
+  /// Pull-down on the first reel: swap it for a fresh title.
+  Future<void> _refreshFirst() async {
+    if (_refreshing || !_feed.available) return;
+    setState(() => _refreshing = true);
     HapticFeedback.mediumImpact();
     try {
-      await WatchlistStorage.setMyWatchlistItem(reel.item, next);
-    } catch (_) {
-      if (mounted) setState(() => _saved[key] = !next);
+      final titles = await _feed.take(1, allowRepeat: false);
+      if (!_current || titles.isEmpty) return;
+      if (_reels.isNotEmpty) {
+        final old = _reels.first;
+        if (old.state == _ClipState.resolving &&
+            widget.resolver == null &&
+            !_reels
+                .skip(1)
+                .any((other) => other.title.clipKey == old.title.clipKey)) {
+          // Pull-to-refresh replaces this Reel. Its pending extraction can no
+          // longer supply a visible page, even if it finishes successfully.
+          YoutubeService.invalidateStreams(old.title.clipKey);
+        }
+      }
+      setState(() {
+        final reel = _Reel(titles.first);
+        if (_reels.isEmpty) {
+          _reels.add(reel);
+        } else {
+          _reels[0] = reel;
+        }
+      });
+      unawaited(_loadWatchlist(titles.first.item));
+      if (_index == 0) _prepare();
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
-  Future<void> _share(ReelTitle reel) async {
-    // Open the system share sheet (Android/iOS/macOS); unsupported platforms
-    // fall back to the service's glass copy/open sheet. A null origin lets the
-    // native handler centre the iPad/macOS popover.
-    await const ReelShareService().share(context, reel);
+  void _onPage(int index) {
+    if (index == _index) return;
+    final previous = _reels[_index];
+    if (previous.state == _ClipState.resolving && widget.resolver == null) {
+      YoutubeService.deprioritizePreviewStreams(
+        previous.title.clipKey,
+        maxHeightOverride: 1080,
+        preferMuxed: PlatformUtil.isIosMobile,
+      );
+    }
+    previous.leftAt = DateTime.now();
+    final next = _reels[index];
+    final leftAt = next.leftAt;
+    if (leftAt != null &&
+        DateTime.now().difference(leftAt) > const Duration(seconds: 5)) {
+      next.position = Duration.zero;
+    }
+    next.leftAt = null;
+    // An unopened relay tunnel past its expiry can no longer be opened. The
+    // paired (prewarmed/previewing) player already holds its connection, so
+    // keep that one rather than restarting the clip mid-swipe.
+    final preview = _swipePreviewIndex;
+    final drag = _dragPage;
+    final prepared =
+        index ==
+        (preview != null && preview != _index
+            ? preview
+            : (drag != null && drag != _index ? drag : _index + 1));
+    if (next.state == _ClipState.ready &&
+        next.streams?.needsRefresh == true &&
+        !(prepared && next.framed)) {
+      YoutubeService.invalidateStreams(next.title.clipKey);
+      next.revision++;
+      next.streams = null;
+      next.framed = false;
+      next.state = _ClipState.idle;
+    }
+    setState(() {
+      _index = index;
+      _paused = false;
+      next.relayRetryOnActivation = false;
+    });
+    // Ownership changes at the midpoint: the prepared incoming player starts
+    // while the swipe is still moving, rather than after the spring settles.
+    _pageWorkPending = true;
+    unawaited(_resolve(index));
   }
 
-  void _openDetails(ReelTitle reel) {
-    final item = reel.item;
-    final imdbId = item.imdbId;
-    if (imdbId == null || imdbId.isEmpty) return;
-    MainPageBridge.requestCatalogDetailOpen(<String, dynamic>{
-      'imdbId': imdbId,
-      'type': item.type == 'series' ? 'series' : 'movie',
-      'title': item.name,
-      'year': int.tryParse(item.year ?? ''),
-      'poster': item.poster,
-      'originTab': MainTab.reels,
+  void _settlePage() {
+    if (!_current) return;
+    final pageChanged = _pageWorkPending;
+    _pageWorkPending = false;
+    setState(() {
+      _swipePreviewIndex = null;
+    });
+    if (!pageChanged) return;
+    HapticFeedback.selectionClick();
+    _retireObsoleteResolutions();
+    // Stream resolution and image decoding can be expensive on low-end
+    // devices. Start them after, never during, the page animation.
+    unawaited(_fill());
+    _prepare();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _trimHistory());
+  }
+
+  /// A fast run of swipes can leave several unstarted YouTube extractions
+  /// behind the viewport. They must not occupy scarce connection slots after
+  /// the visible clip changes, while the adjacent reverse target stays warm.
+  void _retireObsoleteResolutions() {
+    final first = (_index - 1).clamp(0, _reels.length);
+    final end = (_index + _streamsAhead + 1).clamp(0, _reels.length);
+    final usefulKeys = _reels
+        .getRange(first, end)
+        .map((reel) => reel.title.clipKey)
+        .toSet();
+    for (final reel in _reels) {
+      if (reel.state != _ClipState.resolving ||
+          usefulKeys.contains(reel.title.clipKey)) {
+        continue;
+      }
+      reel.revision++;
+      reel.state = _ClipState.idle;
+      if (widget.resolver == null) {
+        YoutubeService.invalidateStreams(reel.title.clipKey);
+      }
+    }
+  }
+
+  void _trimHistory() {
+    if (!_current ||
+        _index < _historyTrimAt ||
+        _dragPage != null ||
+        !_pages.hasClients ||
+        _pages.position.isScrollingNotifier.value) {
+      return;
+    }
+    final removed = _index - _historyBehind;
+    final viewport = _pages.position.viewportDimension;
+    if (viewport <= 0) return;
+    // Rebased-away pages may still own queued YouTube extractions. Revoke only
+    // clips that no retained page needs; otherwise a long session gradually
+    // spends resolution slots on videos the user can no longer revisit.
+    if (widget.resolver == null) {
+      final retainedKeys = _reels
+          .skip(removed)
+          .map((reel) => reel.title.clipKey)
+          .toSet();
+      final obsoleteKeys = _reels
+          .take(removed)
+          .where((reel) => reel.state == _ClipState.resolving)
+          .map((reel) => reel.title.clipKey)
+          .toSet()
+          .difference(retainedKeys);
+      for (final key in obsoleteKeys) {
+        YoutubeService.invalidateStreams(key);
+      }
+    }
+    // The PageView keeps each page's ObjectKey across this rebase. Correcting
+    // pixels in the same frame preserves the visible player's element and
+    // avoids an animated jump (and unwanted pause/restart) on a long session.
+    setState(() {
+      _reels.removeRange(0, removed);
+      _index -= removed;
+      _postersPrepared.removeWhere(
+        (url) => !_reels.any(
+          (reel) => (reel.item.background ?? reel.item.poster) == url,
+        ),
+      );
+      _inWatchlist.removeWhere(
+        (key, _) => !_reels.any((reel) => _watchKey(reel.item) == key),
+      );
+      _pages.position.correctPixels(_index * viewport);
     });
   }
+
+  void _playbackFailed(_Reel reel, int revision) {
+    final page = _reels.indexOf(reel);
+    if (!_current ||
+        reel.revision != revision ||
+        reel.state != _ClipState.ready ||
+        page < 0 ||
+        // A disposed player from a page already left behind cannot retire
+        // that page's clip or poison discovery for a later revisit.
+        page < _index) {
+      return;
+    }
+    // A relay tunnel can die without the clip being unavailable: it expired
+    // before a loop restart or reconnect, or the instance dropped it. Retry
+    // once through direct extraction, resuming at the last position.
+    if (reel.streams?.isRelay == true) {
+      YoutubeService.markRelayFailed(reel.title.clipKey);
+      setState(() {
+        reel.revision++;
+        reel.streams = null;
+        reel.framed = false;
+        reel.state = _ClipState.idle;
+        reel.relayRetryOnActivation = page != _index;
+      });
+      if (page == _index) unawaited(_resolve(page));
+      return;
+    }
+    if (page == _index && reel.framed && reel.reconnectAttempts == 0) {
+      // A decoder that was actually playing can hit a transient network/URL
+      // expiry during a long session. Resolve once with a fresh URL at the
+      // saved position; revision ownership protects the new player from an
+      // obsolete failure or first-frame callback from the old one.
+      YoutubeService.invalidateStreams(reel.title.clipKey);
+      setState(() {
+        reel.reconnectAttempts++;
+        reel.revision++;
+        reel.streams = null;
+        reel.framed = false;
+        reel.state = _ClipState.idle;
+      });
+      unawaited(_resolve(page));
+      return;
+    }
+    setState(() {
+      reel.state = _ClipState.failed;
+      reel.streams = null;
+      _feed.excludeClip(reel.title.clipKey);
+    });
+    _discardFailedAhead();
+  }
+
+  /// Remove only failed future pages. Never rebase the visible item or a
+  /// live gesture; postponed removals run after scrolling settles.
+  void _discardFailedAhead() {
+    if (!_current ||
+        _dragPage != null ||
+        (_pages.hasClients && _pages.position.isScrollingNotifier.value)) {
+      return;
+    }
+    final failed = _reels
+        .skip(_index + 1)
+        .where((reel) => reel.state == _ClipState.failed)
+        .toList();
+    if (failed.isEmpty) return;
+    setState(() => _reels.removeWhere(failed.contains));
+    unawaited(_fill());
+    _prepare();
+  }
+
+  void _togglePause() {
+    if (_reels.isEmpty || _reels[_index].state != _ClipState.ready) return;
+    HapticFeedback.selectionClick();
+    setState(() => _paused = !_paused);
+  }
+
+  /// DPAD / keyboard: up/down move through the feed, Space pauses the clip,
+  /// and OK opens the title.
+  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _go(_index + 1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp) {
+      if (_index > 0) {
+        _go(_index - 1);
+      } else {
+        unawaited(_refreshFirst());
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.space) {
+      _togglePause();
+      return KeyEventResult.handled;
+    }
+    if (isActivateKey(key)) {
+      if (_index < _reels.length) _open(_reels[_index].item);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _go(int index) {
+    if (_movingByKey ||
+        index < 0 ||
+        index >= _reels.length ||
+        !_pages.hasClients) {
+      return;
+    }
+    _movingByKey = true;
+    unawaited(
+      _pages
+          .animateToPage(
+            index,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            _movingByKey = false;
+            _settlePage();
+          }),
+    );
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    if (n.depth != 0) return false;
+    if (n is ScrollStartNotification && n.dragDetails != null) {
+      _dragPage = (n.metrics.pixels / n.metrics.viewportDimension)
+          .round()
+          .clamp(0, _reels.length - 1);
+      _refreshArmed = false;
+    }
+    if (n is ScrollEndNotification) {
+      _dragPage = null;
+      _settlePage();
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _discardFailedAhead(),
+      );
+      if (_refreshArmed && _index == 0) unawaited(_refreshFirst());
+      _refreshArmed = false;
+      if (_pull != 0) setState(() => _pull = 0);
+      return false;
+    }
+    // A backward drag primes the previous clip as soon as it appears. Forward
+    // swipes already have the next page mounted and preparing at rest.
+    final dragPage = _dragPage;
+    if (dragPage != null && n.metrics.viewportDimension > 0) {
+      final progress =
+          n.metrics.pixels / n.metrics.viewportDimension - dragPage;
+      final candidate = progress.abs() < .02
+          ? null
+          : (dragPage + progress.sign.toInt()).clamp(0, _reels.length - 1);
+      if (candidate != _swipePreviewIndex) {
+        setState(() => _swipePreviewIndex = candidate);
+        if (candidate != null) unawaited(_resolve(candidate));
+      }
+    }
+    if (_dragPage != 0) return false;
+    // Pulled past the top of the first reel (the bounce shows it as negative
+    // offset): follow the finger, and refresh once it lets go far enough.
+    if (n is ScrollUpdateNotification) {
+      final pull = (-n.metrics.pixels).clamp(0.0, double.infinity);
+      if (pull != _pull) setState(() => _pull = pull);
+      if (n.dragDetails != null && _pull >= _refreshPull) _refreshArmed = true;
+    } else if (n is OverscrollNotification &&
+        n.overscroll < 0 &&
+        n.dragDetails != null) {
+      // Clamping physics report the pull as overscroll instead.
+      setState(() => _pull = (_pull - n.overscroll).clamp(0.0, 200.0));
+      if (_pull >= _refreshPull) _refreshArmed = true;
+    }
+    return false;
+  }
+
+  // ── actions ────────────────────────────────────────────────────────────
+
+  String _watchKey(StremioMeta item) => '${item.type}:${item.id}';
+
+  Future<StremioMeta> _watchlistItem(StremioMeta item) async =>
+      item.sourceAddon != null
+      ? item
+      : StorageService.withMyWatchlistSource(
+          item,
+          await OfflineTitleStore.cinemetaAddon(),
+        );
+
+  Future<void> _loadWatchlist(StremioMeta item) async {
+    try {
+      final saved = await StorageService.isInMyWatchlist(
+        await _watchlistItem(item),
+      );
+      if (_current) setState(() => _inWatchlist[_watchKey(item)] = saved);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleWatchlist(StremioMeta item, {Offset? origin}) async {
+    final key = _watchKey(item);
+    final next = !(_inWatchlist[key] ?? false);
+    setState(() => _inWatchlist[key] = next);
+    HapticFeedback.mediumImpact();
+    // The confirmation must start from the user's press, not from an async
+    // storage completion. A failed write dismisses this optimistic feedback.
+    final bubble = next
+        ? showWatchlistAddedBubble(context, origin: origin)
+        : null;
+    if (next) _watchlistBubble = bubble;
+    try {
+      await WatchlistSyncService.setMyWatchlistItem(
+        await _watchlistItem(item),
+        next,
+      );
+      if (!mounted) return;
+      if (next) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Removed from My Watchlist')),
+        );
+    } catch (_) {
+      bubble?.dismiss();
+      if (identical(_watchlistBubble, bubble)) _watchlistBubble = null;
+      if (!mounted) return;
+      setState(() => _inWatchlist[key] = !next);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Couldn\'t update My Watchlist')),
+      );
+    }
+  }
+
+  /// A double tap is intentionally one-way: it is a quick "save this" action,
+  /// so it must never remove something the user had already saved.
+  void _addToWatchlist(StremioMeta item, Offset origin) {
+    if (_inWatchlist[_watchKey(item)] ?? false) return;
+    unawaited(_toggleWatchlist(item, origin: origin));
+  }
+
+  /// Keep saved and completed titles out of discovery without hiding a title
+  /// that is merely in progress. Tracker calls return null when unavailable,
+  /// deliberately leaving the candidate eligible rather than treating a
+  /// temporary outage as an empty library.
+  Future<bool> _shouldExclude(StremioMeta item) async {
+    final imdb = item.effectiveImdbId;
+    if (imdb == null) return false;
+    try {
+      final series = item.type == 'series';
+      final local = await Future.wait<Object?>([
+        StorageService.isInMyWatchlist(item),
+        series
+            ? Future.wait([
+                StorageService.getExplicitlyWatchedSeriesIds(),
+                LocalSeriesCompletionService.instance.caughtUpIds(),
+              ])
+            : StorageService.isMovieFinished(imdb),
+      ]);
+      final localWatchlist = local[0] as bool;
+      final localFinished = series
+          ? (local[1] as List<Object?>).cast<Set<String>>().any(
+              (ids) => ids.contains(imdb.toLowerCase()),
+            )
+          : local[1] as bool;
+      // Never wait on remote tracking when the local library already excludes
+      // the title. A slow/offline tracker must not hold the entire feed queue.
+      if (localWatchlist || localFinished) return true;
+      final remote = await Future.wait<Object?>([
+        TraktService.instance.fetchTitleStatus(imdb, item.type),
+        SimklService.instance.fetchTitleStatus(imdb, contentType: item.type),
+      ]).timeout(const Duration(seconds: 2));
+      final trakt = remote[0] as TraktTitleStatus?;
+      final simkl = remote[1] as SimklTitleStatus?;
+      return trakt?.inWatchlist == true ||
+          trakt?.titleWatched == true ||
+          simkl?.currentStatus == 'plantowatch' ||
+          simkl?.currentStatus == 'completed';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _share(_Reel reel, Rect origin) async {
+    if (_sharing) return;
+    HapticFeedback.selectionClick();
+    setState(() => _sharing = true);
+    try {
+      await const ReelShareService().share(context, reel.title, origin: origin);
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  void _toggleMute() {
+    HapticFeedback.selectionClick();
+    setState(() => _muted = !_muted);
+  }
+
+  /// The title's full page, opened by the Home board (which owns the detail
+  /// page and its Play / Sources machinery); closing it comes back here.
+  void _open(StremioMeta item) {
+    final imdb = item.effectiveImdbId;
+    if (imdb == null) return;
+    // Preserve the current frame and the queue while Home owns the detail
+    // route. The recreated Reels page restores this session paused.
+    setState(() => _paused = true);
+    _session = _ReelsSession(
+      scope: _scope,
+      feed: _feed,
+      reels: _reels,
+      index: _index,
+    );
+    MainPageBridge.pendingCatalogDetailOpen = {
+      'imdbId': imdb,
+      'type': item.type,
+      'title': item.name,
+      'year': int.tryParse(item.year?.split(RegExp(r'\D')).first ?? ''),
+      'poster': item.poster,
+      'originTab': MainTab.reels,
+    };
+    MainPageBridge.switchTab?.call(MainTab.home);
+  }
+
+  // ── build ──────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    if (!_feed.available) {
-      return const _ReelsMessage(
-        icon: Icons.movie_filter_outlined,
-        title: 'Reels needs TMDB metadata',
-        body: 'Add the TMDB build token to discover official scene clips.',
+    final Widget body;
+    if (_reels.isEmpty) {
+      body = Center(
+        child: _exhausted
+            ? _EmptyReels(
+                needsTmdb: !_feed.available,
+                connectionFailed: _feed.lastRequestFailed,
+                onRetry: _feed.available ? _retryFeed : null,
+              )
+            : const CircularProgressIndicator(color: Colors.white),
+      );
+    } else {
+      // The next Reel is opened and parked on its first frame while this one
+      // plays. During a drag the other visible page — the incoming one, or,
+      // past the midpoint, the outgoing one — is the paired player instead,
+      // and it plays muted so both halves of the screen stay live. Only the
+      // page that owns the majority of the screen ([_index]) is audible.
+      final preview = _swipePreviewIndex;
+      final dragPage = _dragPage;
+      final companion = preview != null && preview != _index
+          ? preview
+          : (dragPage != null && dragPage != _index ? dragPage : null);
+      final prewarmIndex = companion ?? _index + 1;
+      final canPreview = !kIsWeb && !PlatformUtil.isTvOS;
+      body = NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: PageView.builder(
+          controller: _pages,
+          findChildIndexCallback: (key) {
+            if (key is! ObjectKey || key.value is! _Reel) return null;
+            final index = _reels.indexOf(key.value as _Reel);
+            return index < 0 ? null : index;
+          },
+          // Lay out the adjacent page before a gesture. KeepAlive alone cannot
+          // prepare an item that the sliver has never built.
+          allowImplicitScrolling: true,
+          scrollDirection: Axis.vertical,
+          // The bounce is what lets the first reel be pulled down.
+          // Use our single-gesture snapper, rather than adding PageView's own
+          // ballistic physics on top of it.
+          pageSnapping: false,
+          physics: _physics,
+          onPageChanged: _onPage,
+          itemCount: _reels.length,
+          itemBuilder: (context, i) {
+            final reel = _reels[i];
+            final revision = reel.revision;
+            return _ReelPage(
+              key: ObjectKey(reel),
+              reel: reel,
+              active: i == _index,
+              playbackActive: widget.isActive && i == _index,
+              // Preparation begins while the current Reel is playing and
+              // continues for the page visible beneath a swipe.
+              prewarm: widget.isActive && !_sharing && i == prewarmIndex,
+              previewing:
+                  canPreview && widget.isActive && !_sharing && i == companion,
+              onPlaybackFailed: () => _playbackFailed(reel, revision),
+              onRetry: () => _retry(reel),
+              floatingNav: widget.floatingNav,
+              paused: !widget.isActive || _sharing || (i == _index && _paused),
+              showPauseOverlay: i == _index && _paused,
+              onTogglePause: _togglePause,
+              muted: _muted,
+              inWatchlist: _inWatchlist[_watchKey(reel.item)] ?? false,
+              onMute: _toggleMute,
+              onWatchlist: (origin) =>
+                  _toggleWatchlist(reel.item, origin: origin),
+              onAddToWatchlist: (origin) => _addToWatchlist(reel.item, origin),
+              onOpen: () => _open(reel.item),
+              onShare: (origin) => _share(reel, origin),
+              onPosition: (position) {
+                if (_current &&
+                    reel.revision == revision &&
+                    _reels.contains(reel)) {
+                  reel.position = position;
+                }
+              },
+              playerBuilder: widget.playerBuilder,
+            );
+          },
+        ),
       );
     }
-    if (_items.isEmpty) {
-      if (_error != null) {
-        return _ReelsMessage(
-          icon: Icons.cloud_off_rounded,
-          title: 'Could not load Reels',
-          body: _error!,
-          action: _loadMore,
-        );
-      }
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return ColoredBox(
-      color: Colors.black,
-      child: PageView.builder(
-        controller: _controller,
-        scrollDirection: Axis.vertical,
-        itemCount: _items.length,
-        onPageChanged: _onPageChanged,
-        itemBuilder: (context, index) {
-          final reel = _items[index];
-          return _ReelPage(
-            reel: reel,
-            streams: _streams[reel.clipKey],
-            active: index == _currentIndex,
-            resolving: _resolving.contains(reel.clipKey),
-            onDetails: () => _openDetails(reel),
-            saved: _saved[_savedKey(reel)] ?? false,
-            onSaved: () => _toggleSaved(reel),
-            onShare: () => _share(reel),
-          );
-        },
+    final pull = (_pull / _refreshPull).clamp(0.0, 1.0);
+    return Focus(
+      focusNode: _focus,
+      autofocus: true,
+      onKeyEvent: _onKey,
+      child: ColoredBox(
+        color: Colors.black,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            body,
+            if (_reels.isNotEmpty && _index == _reels.length - 1 && !_exhausted)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 16,
+                left: 24,
+                right: 24,
+                child: IgnorePointer(
+                  child: Center(
+                    child: _GlassCircle(
+                      size: 40,
+                      child: const Padding(
+                        padding: EdgeInsets.all(11),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (_reels.isNotEmpty && _index == _reels.length - 1 && _exhausted)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 16,
+                left: 24,
+                right: 24,
+                child: FilledButton.icon(
+                  onPressed: _retryFeed,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(
+                    _feed.lastRequestFailed
+                        ? 'Retry loading more clips'
+                        : 'Find more clips',
+                  ),
+                ),
+              ),
+            // Pull-to-refresh on the first reel.
+            if (_refreshing || pull > 0)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 16,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: _GlassCircle(
+                    size: 40,
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.2,
+                        color: Colors.white,
+                        value: _refreshing ? null : pull,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ReelPage extends StatefulWidget {
-  const _ReelPage({
-    required this.reel,
-    required this.streams,
-    required this.active,
-    required this.resolving,
-    required this.onDetails,
-    required this.saved,
-    required this.onSaved,
-    required this.onShare,
-  });
+/// Anchor every drag to the page where it began, including its momentum.
+/// A long drag or a fast fling can reach the adjacent page, never cross a
+/// second one. A new gesture immediately establishes a new anchor.
+class _ReelPagePhysics extends PageScrollPhysics {
+  const _ReelPagePhysics({required this.anchorPage, super.parent});
 
-  final ReelTitle reel;
-  final YoutubeResolvedStreams? streams;
+  final int Function() anchorPage;
+
+  // A firm, near-critical snap makes the end of a Reel swipe feel decisive
+  // without the prolonged soft ease of the default page spring.
+  static const _snapSpring = SpringDescription(
+    mass: 0.55,
+    stiffness: 520,
+    damping: 30,
+  );
+
+  @override
+  _ReelPagePhysics applyTo(ScrollPhysics? ancestor) =>
+      _ReelPagePhysics(anchorPage: anchorPage, parent: buildParent(ancestor));
+
+  @override
+  double carriedMomentum(double existingVelocity) => 0;
+
+  @override
+  double applyBoundaryConditions(ScrollMetrics position, double value) {
+    final height = position.viewportDimension;
+    final lower = (anchorPage() - 1) * height;
+    final upper = (anchorPage() + 1) * height;
+    if (value < lower && value < position.pixels) {
+      return value - (position.pixels < lower ? position.pixels : lower);
+    }
+    if (value > upper && value > position.pixels) {
+      return value - (position.pixels > upper ? position.pixels : upper);
+    }
+    return super.applyBoundaryConditions(position, value);
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if (position.outOfRange || position.viewportDimension <= 0) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+    final tolerance = toleranceFor(position);
+    var page = position.pixels / position.viewportDimension;
+    if (velocity < -tolerance.velocity) page -= 0.5;
+    if (velocity > tolerance.velocity) page += 0.5;
+    final target =
+        (page.round().clamp(anchorPage() - 1, anchorPage() + 1) *
+                position.viewportDimension)
+            .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target == position.pixels) return null;
+    return ScrollSpringSimulation(
+      _snapSpring,
+      position.pixels,
+      target,
+      velocity.clamp(-2500.0, 2500.0),
+      tolerance: tolerance,
+    );
+  }
+}
+
+/// One reel: the clip, the scrim, the identity bottom-left and the action
+/// rail on the right.
+class _ReelPage extends StatefulWidget {
+  final _Reel reel;
   final bool active;
-  final bool resolving;
-  final VoidCallback onDetails;
-  final bool saved;
-  final VoidCallback onSaved;
-  final VoidCallback onShare;
+  final bool playbackActive;
+  final bool prewarm;
+  final bool previewing;
+  final bool floatingNav;
+  final VoidCallback onPlaybackFailed;
+  final VoidCallback onRetry;
+  final bool paused;
+  final bool showPauseOverlay;
+  final VoidCallback onTogglePause;
+  final bool muted;
+  final bool inWatchlist;
+  final VoidCallback onMute;
+  final ValueChanged<Offset?> onWatchlist;
+  final ValueChanged<Offset> onAddToWatchlist;
+  final VoidCallback onOpen;
+  final ValueChanged<Rect> onShare;
+  final ValueChanged<Duration> onPosition;
+  final Widget Function(ReelPlayback playback)? playerBuilder;
+
+  const _ReelPage({
+    super.key,
+    required this.reel,
+    required this.active,
+    required this.playbackActive,
+    required this.prewarm,
+    this.previewing = false,
+    required this.floatingNav,
+    required this.onPlaybackFailed,
+    required this.onRetry,
+    required this.paused,
+    required this.showPauseOverlay,
+    required this.onTogglePause,
+    required this.muted,
+    required this.inWatchlist,
+    required this.onMute,
+    required this.onWatchlist,
+    required this.onAddToWatchlist,
+    required this.onOpen,
+    required this.onShare,
+    required this.onPosition,
+    required this.playerBuilder,
+  });
 
   @override
   State<_ReelPage> createState() => _ReelPageState();
 }
 
-class _ReelPageState extends State<_ReelPage> {
-  bool _muted = false;
+class _ReelPageState extends State<_ReelPage>
+    with AutomaticKeepAliveClientMixin {
+  static const _doubleTapWindow = Duration(milliseconds: 260);
+  // A normal page swipe can start with less than 40px of travel. Treat even a
+  // short scroll as a scroll, so it never pauses the outgoing video on lift.
+  static const double _tapSlopSquared = 144;
+  Timer? _pauseTapTimer;
+  Offset? _firstTapPosition;
+  Offset? _tapDownPosition;
+  bool _tapDragged = false;
+  Offset? _watchlistOrigin;
+  final GlobalKey _watchlistActionKey = GlobalKey();
+  final GlobalKey _shareActionKey = GlobalKey();
+  @override
+  bool get wantKeepAlive => widget.prewarm;
+
+  @override
+  void didUpdateWidget(covariant _ReelPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.prewarm != oldWidget.prewarm) updateKeepAlive();
+    if (!widget.active) {
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pauseTapTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onVideoPointerDown(PointerDownEvent event) {
+    _tapDragged = false;
+    _tapDownPosition = event.position;
+  }
+
+  void _onVideoPointerMove(PointerMoveEvent event) {
+    final down = _tapDownPosition;
+    if (down != null &&
+        (event.position - down).distanceSquared > _tapSlopSquared) {
+      _tapDragged = true;
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+    }
+  }
+
+  void _onVideoPointerUp(PointerUpEvent event) {
+    if (_tapDragged || !widget.active) {
+      _pauseTapTimer?.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      _tapDownPosition = null;
+      return;
+    }
+    _tapDownPosition = null;
+    final first = _firstTapPosition;
+    if (_pauseTapTimer != null &&
+        first != null &&
+        (event.position - first).distanceSquared <= _tapSlopSquared) {
+      _pauseTapTimer!.cancel();
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      widget.onAddToWatchlist(event.position);
+      return;
+    }
+    _pauseTapTimer?.cancel();
+    _firstTapPosition = event.position;
+    _pauseTapTimer = Timer(_doubleTapWindow, () {
+      _pauseTapTimer = null;
+      _firstTapPosition = null;
+      if (mounted && widget.active) widget.onTogglePause();
+    });
+  }
+
+  Offset _watchlistButtonCenter() {
+    final box =
+        _watchlistActionKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null) return Offset.zero;
+    return box.localToGlobal(box.size.center(Offset.zero));
+  }
+
+  void _toggleWatchlistFromAction() {
+    final origin = _watchlistOrigin ?? _watchlistButtonCenter();
+    _watchlistOrigin = null;
+    widget.onWatchlist(origin);
+  }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final reel = widget.reel;
+    final revision = reel.revision;
     final item = reel.item;
-    final theme = AppThemeScope.of(context);
+    final insets = MediaQuery.paddingOf(context);
+    final playback = ReelPlayback(
+      item: item,
+      streams: reel.state == _ClipState.ready ? reel.streams : null,
+      active: widget.playbackActive,
+      volume: widget.muted || !widget.playbackActive ? 0 : 100,
+      paused: widget.paused,
+      prewarm: widget.prewarm && reel.state != _ClipState.failed,
+      previewing:
+          widget.previewing &&
+          widget.prewarm &&
+          reel.state != _ClipState.failed,
+      initialPosition: reel.position > Duration.zero ? reel.position : null,
+      onPosition: widget.onPosition,
+      firstFrameReady: reel.framed,
+      onFirstFrameReady: () {
+        if (!mounted ||
+            reel.revision != revision ||
+            reel.state != _ClipState.ready ||
+            reel.framed) {
+          return;
+        }
+        reel.framed = true;
+        setState(() {});
+      },
+      failed: reel.state == _ClipState.failed,
+      onPlaybackFailed: widget.onPlaybackFailed,
+    );
     final genres = (item.genres ?? const <String>[]).take(4).join(' • ');
+    final rating = item.imdbRating;
+    final omdbId = item.effectiveImdbId;
+    final hasOmdb =
+        OmdbRatingsService.instance.enabled &&
+        OmdbRatingsService.isImdbId(omdbId);
+    final description = item.description?.trim();
+    final clipName = reel.title.clipName;
     return Stack(
       fit: StackFit.expand,
-      children: <Widget>[
-        HeroTrailerBackdrop(
-          imageUrl: item.background ?? item.poster,
-          videoUrl: widget.active ? widget.streams?.playUrl : null,
-          audioUrl: widget.active ? widget.streams?.audioUrl : null,
-          enabled: widget.active && widget.streams?.hasPlayable == true,
-          sharpStill: true,
-          imageBlurSigma: 0,
-          videoBlurSigma: 0,
-          startDelay: Duration.zero,
-          ambientVolume: _muted ? 0 : 100,
-          repeat: true,
+      children: [
+        // The video itself: a tap pauses or resumes it. The title, text and
+        // buttons above keep their own taps.
+        Listener(
+          onPointerDown: _onVideoPointerDown,
+          onPointerMove: _onVideoPointerMove,
+          onPointerUp: _onVideoPointerUp,
+          onPointerCancel: (_) {
+            _tapDragged = true;
+            _pauseTapTimer?.cancel();
+            _pauseTapTimer = null;
+            _firstTapPosition = null;
+          },
+          behavior: HitTestBehavior.opaque,
+          child:
+              widget.playerBuilder?.call(playback) ??
+              ReelVideoSurface(
+                playback: playback,
+                onPlaybackFailed: widget.onPlaybackFailed,
+              ),
         ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: <Color>[
-                Color(0x12000000),
-                Color(0x33000000),
-                Color(0xF0000000),
-              ],
-              stops: <double>[0, 0.5, 1],
+        if (playback.failed && widget.active)
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: GlassChrome.enabled(AppThemeScope.of(context))
+                  ? GlassChrome.decoration(
+                      AppThemeScope.of(context),
+                      radius: BorderRadius.circular(18),
+                      raised: true,
+                    )
+                  : BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.68),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Clip unavailable',
+                    style: TextStyle(
+                      color: GlassChrome.enabled(AppThemeScope.of(context))
+                          ? AppThemeScope.of(context).core.tx
+                          : Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    onPressed: widget.onRetry,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Retry clip'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (widget.paused && widget.showPauseOverlay)
+          const IgnorePointer(
+            child: Center(
+              child: _GlassCircle(
+                size: 72,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 44,
+                ),
+              ),
+            ),
+          ),
+        // Bottom scrim: the identity reads on any frame.
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: [0.45, 0.75, 1],
+                colors: [
+                  Colors.transparent,
+                  Color(0x99000000),
+                  Color(0xE6000000),
+                ],
+              ),
             ),
           ),
         ),
-        SafeArea(
-          child: Stack(
-            children: <Widget>[
-              Positioned(
-                left: 20,
-                top: 16,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 13,
-                    vertical: 7,
-                  ),
-                  decoration: GlassChrome.decoration(
-                    theme,
-                    radius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    'REELS',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 2.2,
-                    ),
-                  ),
-                ),
+        // Identity: logo, genres, description.
+        Positioned(
+          left: 16,
+          // Clear of the action rail and the floating nav button.
+          right: 88,
+          bottom: insets.bottom + 24,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: widget.onOpen,
+                behavior: HitTestBehavior.opaque,
+                child: _ReelTitle(item: item),
               ),
-              Positioned(
-                left: 20,
-                right: 92,
-                bottom: 28,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    if (widget.resolving)
-                      const Padding(
-                        padding: EdgeInsets.only(bottom: 12),
-                        child: SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+              // Which moment this is.
+              if (clipName.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.movie_creation_outlined,
+                      size: 14,
+                      color: Color(0xCCFFFFFF),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        clipName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xCCFFFFFF),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 6),
+                          ],
                         ),
                       ),
-                    GestureDetector(
-                      onTap: widget.onDetails,
-                      child: item.logo?.isNotEmpty == true
-                          ? Image.network(
-                              item.logo!,
-                              height: 66,
-                              width: 280,
-                              fit: BoxFit.contain,
-                              alignment: Alignment.bottomLeft,
-                              errorBuilder: (_, _, _) =>
-                                  _ReelTitle(name: item.name),
-                            )
-                          : _ReelTitle(name: item.name),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      <String>[
-                        if (genres.isNotEmpty) genres,
-                        reel.clipName,
-                      ].join('  •  '),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                    OmdbRatingsBuilder(
-                      imdbId: item.effectiveImdbId,
-                      builder: (context, ratings) => Wrap(
-                        spacing: 8,
-                        children: omdbDetailReadouts(
-                          ratings,
+                  ],
+                ),
+              ],
+              if (genres.isNotEmpty || rating != null || hasOmdb) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (genres.isNotEmpty)
+                      Flexible(
+                        fit: FlexFit.loose,
+                        child: Text(
+                          genres,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700,
+                            shadows: [
+                              Shadow(color: Colors.black54, blurRadius: 6),
+                            ],
                           ),
-                          glyphColor: Colors.white,
-                          glyphSize: 14,
-                          gap: 8,
-                          hasImdb: item.imdbRating != null,
-                          imdbBadge: (value) =>
-                              Text('IMDb ${value.toStringAsFixed(1)}'),
                         ),
                       ),
-                    ),
-                    if (item.description?.trim().isNotEmpty ==
-                        true) ...<Widget>[
-                      const SizedBox(height: 10),
-                      _ReelSynopsis(text: item.description!.trim()),
-                    ],
+                    if (genres.isNotEmpty && rating != null)
+                      const SizedBox(width: 8),
+                    // The detail badge's native type is 7.5px. Scale every
+                    // part of it together to a quieter 11px readout beside
+                    // this 13px genre line without changing the detail UI.
+                    if (rating != null)
+                      DetailRatingBox(value: rating, scale: 11 / 7.5),
+                    // Rotten Tomatoes + Metacritic (OMDb) as twin boxes, and
+                    // OMDb's IMDb when the reel has none of its own.
+                    if (hasOmdb)
+                      OmdbRatingsBuilder(
+                        imdbId: omdbId,
+                        builder: (context, r) {
+                          if (r == null) return const SizedBox.shrink();
+                          final boxes = <Widget>[
+                            if (rating == null && r.imdb != null)
+                              DetailRatingBox(value: r.imdb!, scale: 11 / 7.5),
+                            if (r.score != null)
+                              DetailGlyphBox(
+                                glyph: (size, color) =>
+                                    TomatoGlyph(size: size, color: color),
+                                label: '${r.score}%',
+                                scale: 11 / 7.5,
+                              ),
+                            if (r.metacritic != null)
+                              DetailGlyphBox(
+                                glyph: (size, color) =>
+                                    MetacriticGlyph(size: size, color: color),
+                                label: '${r.metacritic}',
+                                scale: 11 / 7.5,
+                              ),
+                          ];
+                          final leading = genres.isNotEmpty || rating != null;
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (var i = 0; i < boxes.length; i++) ...[
+                                if (i > 0 || leading) const SizedBox(width: 6),
+                                boxes[i],
+                              ],
+                            ],
+                          );
+                        },
+                      ),
                   ],
                 ),
+              ],
+              if (description != null && description.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                _ReelSynopsis(text: description),
+              ],
+            ],
+          ),
+        ),
+        // Action rail, above the floating nav button.
+        Positioned(
+          right: 14,
+          bottom: insets.bottom + (widget.floatingNav ? 104 : 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ReelAction(
+                icon: widget.muted
+                    ? Icons.volume_off_rounded
+                    : Icons.volume_up_rounded,
+                tooltip: widget.muted ? 'Unmute' : 'Mute',
+                label: widget.muted ? 'Unmute' : 'Sound',
+                onTap: widget.onMute,
               ),
-              Positioned(
-                right: 14,
-                bottom: 28,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ReelAction(
-                      icon: _muted
-                          ? Icons.volume_off_rounded
-                          : Icons.volume_up_rounded,
-                      label: _muted ? 'Unmute' : 'Sound',
-                      onTap: () => setState(() => _muted = !_muted),
-                    ),
-                    const SizedBox(height: 16),
-                    _ReelAction(
-                      icon: widget.saved
-                          ? Icons.check_rounded
-                          : Icons.add_rounded,
-                      label: widget.saved ? 'Saved' : 'Save',
-                      selected: widget.saved,
-                      onTap: widget.onSaved,
-                    ),
-                    const SizedBox(height: 16),
-                    _ReelAction(
-                      icon: Icons.ios_share_rounded,
-                      label: 'Share',
-                      onTap: widget.onShare,
-                    ),
-                    const SizedBox(height: 16),
-                    _ReelAction(
-                      icon: Icons.info_outline_rounded,
-                      label: 'Details',
-                      onTap: widget.onDetails,
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 16),
+              _ReelAction(
+                key: _watchlistActionKey,
+                icon: widget.inWatchlist
+                    ? Icons.check_rounded
+                    : Icons.add_rounded,
+                tooltip: widget.inWatchlist
+                    ? 'Remove from My Watchlist'
+                    : 'Add to My Watchlist',
+                selected: widget.inWatchlist,
+                label: widget.inWatchlist ? 'Saved' : 'Save',
+                onTap: _toggleWatchlistFromAction,
+                onTapDown: (origin) {
+                  _watchlistOrigin = origin;
+                },
+              ),
+              const SizedBox(height: 16),
+              _ReelAction(
+                key: _shareActionKey,
+                icon: Icons.ios_share_rounded,
+                tooltip: 'Share title on IMDb',
+                label: 'Share',
+                onTap: () {
+                  final box =
+                      _shareActionKey.currentContext?.findRenderObject()
+                          as RenderBox?;
+                  if (box != null) {
+                    widget.onShare(box.localToGlobal(Offset.zero) & box.size);
+                  }
+                },
               ),
             ],
           ),
@@ -395,134 +1640,392 @@ class _ReelPageState extends State<_ReelPage> {
   }
 }
 
-class _ReelTitle extends StatelessWidget {
-  const _ReelTitle({required this.name});
-  final String name;
+/// A stable poster layer with video painted above it only after first frame.
+/// Resolving a URL never replaces or re-decodes the poster widget.
+class ReelVideoSurface extends StatelessWidget {
+  final ReelPlayback playback;
+  final VoidCallback onPlaybackFailed;
+  final Widget? poster;
+  final Future<TrailerEngine> Function()? engineFactory;
+
+  const ReelVideoSurface({
+    super.key,
+    required this.playback,
+    required this.onPlaybackFailed,
+    this.poster,
+    this.engineFactory,
+  });
+
   @override
-  Widget build(BuildContext context) => Text(
-    name,
-    maxLines: 2,
-    overflow: TextOverflow.ellipsis,
-    style: const TextStyle(
-      color: Colors.white,
-      fontSize: 31,
-      height: 1.02,
-      letterSpacing: -0.8,
-      fontWeight: FontWeight.w900,
-      shadows: [Shadow(color: Colors.black87, blurRadius: 18)],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final item = playback.item;
+    final still = item.background ?? item.poster;
+    final streams = playback.streams;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // This element stays mounted through resolution, playback and errors.
+        poster ??
+            (still == null
+                ? const SizedBox.shrink()
+                : CachedNetworkImage(
+                    key: ValueKey(still),
+                    imageUrl: still,
+                    memCacheWidth: 1920,
+                    fit: BoxFit.cover,
+                    cacheManager: DebrifyImageCache.manager,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
+                    useOldImageOnUrlChange: true,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  )),
+        IgnorePointer(
+          child: HeroTrailerBackdrop(
+            imageUrl: null,
+            videoUrl: streams?.playUrl,
+            audioUrl: streams?.audioUrl,
+            // iOS's AVPlayer platform view consumes one muxed URL.  Falling
+            // back to media_kit here made the entire Flutter scene recompose
+            // for each frame, which is especially noticeable while paging.
+            muxedVideoUrl: streams?.muxedPlaybackFallback,
+            enabled:
+                (playback.active || playback.prewarm) &&
+                streams != null &&
+                !playback.failed,
+            highResolutionVideo: true,
+            suspended:
+                !(playback.active || playback.previewing) || playback.paused,
+            // iOS may have the next frame ready before the swipe settles.
+            // Keep that paused frame visible rather than falling back to its
+            // poster, then let it start directly once it becomes active.
+            freezeFrame:
+                playback.paused || (playback.prewarm && !playback.previewing),
+            // Current + next are a decoder pair: AVPlayer, Exo and media_kit
+            // (off tvOS, via a shared output lease) all prime the next clip
+            // in parallel while the visible one plays. tvOS keeps the single
+            // serialized output and starts once the outgoing reel yields it.
+            prewarm: playback.prewarm,
+            pairedOutput: true,
+            initialPosition: playback.initialPosition,
+            onPlaybackPosition: playback.onPosition,
+            onFirstFrameReady: playback.onFirstFrameReady,
+            decorative: false,
+            fadeDuration: Duration.zero,
+            engineFactory: engineFactory,
+            onPlaybackFailed: onPlaybackFailed,
+            ambientVolume: playback.active && !playback.paused
+                ? playback.volume
+                : 0,
+            imageBlurSigma: 0,
+            videoBlurSigma: 0,
+            startDelay: Duration.zero,
+            firstFrameTimeout: const Duration(seconds: 15),
+            playbackStallTimeout: const Duration(seconds: 20),
+            repeat: true,
+            skipIntro: false,
+          ),
+        ),
+        // A resolved URL is not a decoded frame. Retain the poster and show
+        // buffering feedback until the actual first frame has reached Flutter.
+        if (playback.active && !playback.firstFrameReady && !playback.failed)
+          const Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.4,
+                color: Color(0xCCFFFFFF),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
+/// Expands inline so the Reel remains one continuous surface; opening a sheet
+/// here would interrupt the feed's light, swipe-first interaction.
 class _ReelSynopsis extends StatefulWidget {
   const _ReelSynopsis({required this.text});
+
   final String text;
+
   @override
   State<_ReelSynopsis> createState() => _ReelSynopsisState();
 }
 
 class _ReelSynopsisState extends State<_ReelSynopsis> {
-  bool open = false;
+  bool _expanded = false;
+
+  static const _style = TextStyle(
+    color: Color(0xE6FFFFFF),
+    fontSize: 14,
+    height: 1.4,
+    shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+  );
+
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: () => setState(() => open = !open),
-    child: Text(
-      widget.text,
-      maxLines: open ? 8 : 3,
-      overflow: TextOverflow.ellipsis,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 14.5,
-        height: 1.38,
-        shadows: [Shadow(color: Colors.black87, blurRadius: 8)],
-      ),
-    ),
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final hasMore = TextPainter(
+        text: TextSpan(text: widget.text, style: _style),
+        maxLines: 3,
+        textDirection: Directionality.of(context),
+      )..layout(maxWidth: constraints.maxWidth);
+      final canExpand = hasMore.didExceedMaxLines;
+      hasMore.dispose();
+      final expanded = _expanded && canExpand;
+
+      final content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.text,
+            maxLines: expanded ? null : 3,
+            overflow: expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: _style,
+          ),
+          if (canExpand)
+            Text(
+              expanded ? 'LESS' : 'MORE',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+        ],
+      );
+      if (!canExpand) return content;
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _expanded = !_expanded),
+        child: Semantics(
+          button: true,
+          label: expanded ? 'Collapse description' : 'Show full description',
+          child: content,
+        ),
+      );
+    },
   );
 }
 
-class _ReelAction extends StatelessWidget {
-  const _ReelAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.selected = false,
-  });
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool selected;
+/// The title as its logo; the name in type only when no logo is available.
+/// A logo's slot is fixed before its request completes, avoiding a flash of
+/// text followed by a layout shift when the artwork arrives.
+class _ReelTitle extends StatelessWidget {
+  final StremioMeta item;
+
+  const _ReelTitle({required this.item});
+
   @override
   Widget build(BuildContext context) {
-    final theme = AppThemeScope.of(context);
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            customBorder: const CircleBorder(),
-            child: Ink(
-              width: 50,
-              height: 50,
-              decoration: GlassChrome.decoration(
-                theme,
-                radius: BorderRadius.circular(25),
-                active: selected,
-                raised: true,
-              ),
-              child: Icon(icon, color: Colors.white, size: 25),
-            ),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            shadows: [Shadow(color: Colors.black, blurRadius: 6)],
-          ),
-        ),
-      ],
+    final text = Text(
+      item.name,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 26,
+        fontWeight: FontWeight.w800,
+        height: 1.1,
+        letterSpacing: -0.4,
+        shadows: [Shadow(color: Colors.black54, blurRadius: 8)],
+      ),
+    );
+    final logo = item.logo;
+    if (logo == null || logo.isEmpty) return text;
+    final logoSlot = SizedBox(
+      width: 230,
+      height: 84,
+      child: Align(alignment: Alignment.bottomLeft, child: text),
+    );
+    return SizedBox(
+      width: 230,
+      height: 84,
+      child: CachedNetworkImage(
+        imageUrl: logo,
+        fit: BoxFit.contain,
+        alignment: Alignment.bottomLeft,
+        cacheManager: DebrifyImageCache.manager,
+        memCacheWidth: 690,
+        fadeInDuration: const Duration(milliseconds: 150),
+        // Keep the reserved logo space blank while it loads. Rendering the
+        // title here makes it vanish and reflow once the image arrives.
+        placeholder: (_, _) => const SizedBox.expand(),
+        errorWidget: (_, _, _) => logoSlot,
+      ),
     );
   }
 }
 
-class _ReelsMessage extends StatelessWidget {
-  const _ReelsMessage({
+/// A frosted round action button on the right rail.
+class _ReelAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final String label;
+  final VoidCallback onTap;
+  final ValueChanged<Offset>? onTapDown;
+  final bool selected;
+
+  const _ReelAction({
+    super.key,
     required this.icon,
-    required this.title,
-    required this.body,
-    this.action,
+    required this.tooltip,
+    required this.label,
+    required this.onTap,
+    this.selected = false,
+    this.onTapDown,
   });
 
-  final IconData icon;
-  final String title;
-  final String body;
-  final Future<void> Function()? action;
-
   @override
-  Widget build(BuildContext context) => Center(
-    child: ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 440),
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(icon, size: 48),
-            const SizedBox(height: 16),
-            Text(title, style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 8),
-            Text(body, textAlign: TextAlign.center),
-            if (action != null) ...<Widget>[
-              const SizedBox(height: 18),
-              FilledButton(onPressed: action, child: const Text('Try again')),
-            ],
-          ],
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTapDown: (details) => onTapDown?.call(details.globalPosition),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(26),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _GlassCircle(
+                  size: 52,
+                  tint: selected ? 0.32 : 0.16,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 160),
+                    child: Icon(
+                      icon,
+                      key: ValueKey(icon),
+                      color: Colors.white,
+                      size: 26,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    shadows: [Shadow(color: Colors.black87, blurRadius: 6)],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+class _GlassCircle extends StatelessWidget {
+  final double size;
+  final double tint;
+  final Widget child;
+
+  const _GlassCircle({
+    required this.size,
+    required this.child,
+    this.tint = 0.16,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // A stable translucent surface avoids three live backdrop-blur passes
+    // over every video frame while the feed is scrolling.
+    final theme = AppThemeScope.of(context);
+    final glass = GlassChrome.enabled(theme);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: glass
+            ? Color.alphaBlend(
+                GlassChrome.fill(
+                  theme,
+                  raised: tint > 0.2,
+                ).withValues(alpha: 0.40),
+                const Color(0xAA000000),
+              )
+            : Color.lerp(const Color(0xB3000000), Colors.white, tint),
+        border: Border.all(
+          color: glass
+              ? GlassChrome.edge(theme, active: tint > 0.2)
+              : Colors.white.withValues(alpha: 0.22),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _EmptyReels extends StatelessWidget {
+  /// This build has no TMDB access, where every clip comes from.
+  final bool needsTmdb;
+  final bool connectionFailed;
+  final VoidCallback? onRetry;
+
+  const _EmptyReels({
+    required this.needsTmdb,
+    required this.connectionFailed,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.slow_motion_video_rounded,
+            size: 48,
+            color: Colors.white.withValues(alpha: 0.4),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            needsTmdb ? 'Clips need TMDB' : 'No clips right now',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            needsTmdb
+                ? 'This build has no TMDB access, where Reels finds its '
+                      'clips.'
+                : connectionFailed
+                ? 'Clips couldn\'t be loaded. Check your connection and retry.'
+                : 'No scene clips found in these titles. Search more titles to continue.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 13,
+            ),
+          ),
+          if (onRetry != null) ...[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry feed'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

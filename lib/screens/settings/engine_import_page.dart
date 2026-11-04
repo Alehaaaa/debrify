@@ -1,16 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:yaml/yaml.dart';
 import '../../services/engine/remote_engine_manager.dart';
 import '../../services/engine/local_engine_storage.dart';
 import '../../services/engine/config_loader.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../utils/tv_keys.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
+
+/// Both the embedded Settings route and standalone import page open the same
+/// dialogs. Resolve appearance from the invoking page, outside the overlay
+/// route, so the panel stays frosted through confirmation and progress states.
+@visibleForTesting
+AlertDialog buildEngineImportDialog(
+  BuildContext pageContext, {
+  Widget? title,
+  required Widget content,
+  List<Widget>? actions,
+}) {
+  final app = AppThemeScope.of(pageContext);
+  final frosted = GlassChrome.enabled(app);
+  return AlertDialog(
+    backgroundColor: frosted ? GlassChrome.fill(app, raised: true) : null,
+    shape: frosted ? GlassChrome.shape(app) : null,
+    title: title,
+    content: content,
+    actions: actions,
+  );
+}
+
+/// Page for importing and managing torrent search engines (with Scaffold wrapper)
+class EngineImportPage extends StatefulWidget {
+  const EngineImportPage({super.key});
+
+  @override
+  State<EngineImportPage> createState() => _EngineImportPageState();
+}
 
 /// Content widget for embedding in tabs (without Scaffold)
 class EngineImportPageContent extends StatefulWidget {
-  const EngineImportPageContent({super.key});
+  const EngineImportPageContent({
+    super.key,
+    this.remoteManager,
+    this.localStorage,
+  });
+
+  @visibleForTesting
+  final RemoteEngineManager? remoteManager;
+  @visibleForTesting
+  final LocalEngineStorage? localStorage;
 
   @override
   State<EngineImportPageContent> createState() =>
@@ -18,10 +59,13 @@ class EngineImportPageContent extends StatefulWidget {
 }
 
 class _EngineImportPageContentState extends State<EngineImportPageContent> {
-  final RemoteEngineManager _remoteManager = RemoteEngineManager();
-  final LocalEngineStorage _localStorage = LocalEngineStorage.instance;
+  late final RemoteEngineManager _remoteManager =
+      widget.remoteManager ?? RemoteEngineManager();
+  late final LocalEngineStorage _localStorage =
+      widget.localStorage ?? LocalEngineStorage.instance;
 
   bool _isLoading = true;
+  int _loadGeneration = 0;
   String? _error;
 
   List<ImportedEngineMetadata> _importedEngines = [];
@@ -61,15 +105,19 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
   }
 
   Future<void> _loadEngines() async {
+    final generation = ++_loadGeneration;
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      _importedEngines = await _localStorage.getImportedEngines();
+      final imported = await _localStorage.getImportedEngines();
+      if (!mounted || generation != _loadGeneration) return;
       final remoteEngines = await _remoteManager.fetchAvailableEngines();
-      final importedIds = _importedEngines.map((e) => e.id).toSet();
+      if (!mounted || generation != _loadGeneration) return;
+      _importedEngines = imported;
+      final importedIds = imported.map((e) => e.id).toSet();
       _availableEngines = remoteEngines
           .where((e) => !importedIds.contains(e.id))
           .toList();
@@ -98,6 +146,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _isLoading = false;
         _error = e.toString();
@@ -109,7 +158,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         content: Row(
           children: [
             const CircularProgressIndicator(),
@@ -165,7 +215,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
   Future<void> _deleteEngine(ImportedEngineMetadata engine) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => buildEngineImportDialog(
+        this.context,
         title: const Text('Delete Engine'),
         content: Text('Are you sure you want to delete ${engine.displayName}?'),
         actions: [
@@ -209,7 +260,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
   Future<void> _importFromLocalFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: true,
@@ -230,7 +281,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
       if (file.bytes != null) {
         yamlContent = String.fromCharCodes(file.bytes!);
       } else if (file.path != null) {
-        final fileBytes = await file.xFile.readAsBytes();
+        final fileBytes = await file.readAsBytes();
         yamlContent = String.fromCharCodes(fileBytes);
       } else {
         throw Exception('Could not read file content');
@@ -261,7 +312,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
         final confirmed = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             title: const Text('Engine Already Exists'),
             content: Text(
               'An engine with ID "$engineId" already exists. Do you want to replace it?',
@@ -286,7 +338,8 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (context) => AlertDialog(
+          builder: (context) => buildEngineImportDialog(
+            this.context,
             content: Row(
               children: [
                 const CircularProgressIndicator(),
@@ -364,22 +417,23 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
       policy: OrderedTraversalPolicy(),
       child: Stack(
         children: [
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF14101C),
-                    Color(0xFF0A0810),
-                    Color(0xFF030305),
-                  ],
-                  stops: [0.0, 0.35, 1.0],
+          if (!GlassChrome.enabled(AppThemeScope.of(context)))
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Color(0xFF14101C),
+                      Color(0xFF0A0810),
+                      Color(0xFF030305),
+                    ],
+                    stops: [0.0, 0.35, 1.0],
+                  ),
                 ),
               ),
             ),
-          ),
           Positioned(
             top: -200,
             left: 0,
@@ -412,14 +466,17 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(color: Color(0xFFED1C24)),
-            SizedBox(height: 16),
-            Text('Loading engines...', style: TextStyle(color: Colors.white70)),
+            const CircularProgressIndicator(color: Color(0xFFED1C24)),
+            const SizedBox(height: 16),
+            Text(
+              'Loading engines...',
+              style: TextStyle(color: AppThemeScope.of(context).settings.dim),
+            ),
           ],
         ),
       );
@@ -448,7 +505,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                 _error!,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: AppThemeScope.of(context).settings.dim,
                   fontSize: 12.5,
                 ),
               ),
@@ -538,12 +595,16 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                   const Color(0xFFED1C24).withValues(alpha: 0.04),
                 ],
               ),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              border: Border.all(
+                color: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.edge(AppThemeScope.of(context))
+                    : Theme.of(context).dividerColor,
+              ),
             ),
             child: Icon(
               Icons.inbox_outlined,
               size: 40,
-              color: Colors.white.withValues(alpha: 0.7),
+              color: AppThemeScope.of(context).settings.dim,
             ),
           ),
           const SizedBox(height: 18),
@@ -560,7 +621,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
             'Check your internet connection and try again,\nor import an engine YAML manually.',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: AppThemeScope.of(context).settings.dim,
               fontSize: 13,
               height: 1.45,
             ),
@@ -698,7 +759,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                     Text(
                       'Imported ${_formatDate(engine.importedAt)}',
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: AppThemeScope.of(context).settings.dim,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -788,7 +849,7 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: AppThemeScope.of(context).settings.dim,
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
                           height: 1.35,
@@ -851,6 +912,720 @@ class _EngineImportPageContentState extends State<EngineImportPageContent> {
   }
 }
 
+class _EngineImportPageState extends State<EngineImportPage> {
+  final RemoteEngineManager _remoteManager = RemoteEngineManager();
+  final LocalEngineStorage _localStorage = LocalEngineStorage.instance;
+
+  bool _isLoading = true;
+  int _loadGeneration = 0;
+  String? _error;
+
+  List<ImportedEngineMetadata> _importedEngines = [];
+  List<RemoteEngineInfo> _availableEngines = [];
+
+  // Focus nodes for TV/DPAD navigation
+  final FocusNode _refreshButtonFocusNode = FocusNode(
+    debugLabel: 'refresh-button',
+  );
+  final FocusNode _importLocalButtonFocusNode = FocusNode(
+    debugLabel: 'import-local-button',
+  );
+  final FocusNode _retryButtonFocusNode = FocusNode(debugLabel: 'retry-button');
+  final Map<String, FocusNode> _importedEngineFocusNodes = {};
+  final Map<String, FocusNode> _availableEngineFocusNodes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEngines();
+  }
+
+  @override
+  void dispose() {
+    _remoteManager.dispose();
+    _refreshButtonFocusNode.dispose();
+    _importLocalButtonFocusNode.dispose();
+    _retryButtonFocusNode.dispose();
+    for (final node in _importedEngineFocusNodes.values) {
+      node.dispose();
+    }
+    for (final node in _availableEngineFocusNodes.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadEngines() async {
+    final generation = ++_loadGeneration;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      // Load imported engines from local storage
+      final imported = await _localStorage.getImportedEngines();
+      if (!mounted || generation != _loadGeneration) return;
+
+      // Fetch available engines from GitLab
+      final remoteEngines = await _remoteManager.fetchAvailableEngines();
+      if (!mounted || generation != _loadGeneration) return;
+      _importedEngines = imported;
+
+      // Filter out already imported engines
+      final importedIds = imported.map((e) => e.id).toSet();
+      _availableEngines = remoteEngines
+          .where((e) => !importedIds.contains(e.id))
+          .toList();
+
+      // Clean up old focus nodes
+      for (final node in _importedEngineFocusNodes.values) {
+        node.dispose();
+      }
+      for (final node in _availableEngineFocusNodes.values) {
+        node.dispose();
+      }
+      _importedEngineFocusNodes.clear();
+      _availableEngineFocusNodes.clear();
+
+      // Create focus nodes for each engine
+      for (final engine in _importedEngines) {
+        _importedEngineFocusNodes[engine.id] = FocusNode(
+          debugLabel: 'imported-${engine.id}',
+        );
+      }
+      for (final engine in _availableEngines) {
+        _availableEngineFocusNodes[engine.id] = FocusNode(
+          debugLabel: 'available-${engine.id}',
+        );
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Auto-focus first item after load
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          if (_importedEngines.isNotEmpty) {
+            _importedEngineFocusNodes[_importedEngines.first.id]
+                ?.requestFocus();
+          } else if (_availableEngines.isNotEmpty) {
+            _availableEngineFocusNodes[_availableEngines.first.id]
+                ?.requestFocus();
+          }
+        }
+      });
+    } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
+      setState(() {
+        _isLoading = false;
+        _error = e.toString();
+      });
+      // Auto-focus retry button on error
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _retryButtonFocusNode.requestFocus();
+        }
+      });
+    }
+  }
+
+  Future<void> _importEngine(RemoteEngineInfo engine) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => buildEngineImportDialog(
+        this.context,
+        content: Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Text('Importing ${engine.displayName}...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      // Download YAML from GitLab
+      final yamlContent = await _remoteManager.downloadEngineYaml(
+        engine.fileName,
+      );
+
+      if (yamlContent == null) {
+        throw Exception('Failed to download engine configuration');
+      }
+
+      // Save to local storage
+      await _localStorage.saveEngine(
+        engineId: engine.id,
+        fileName: engine.fileName,
+        yamlContent: yamlContent,
+        displayName: engine.displayName,
+        icon: engine.icon,
+      );
+
+      // Reload ConfigLoader to pick up new engine
+      ConfigLoader().clearCache();
+      await EngineRegistry.instance.reload();
+
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Refresh the list
+      await _loadEngines();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${engine.displayName} imported successfully'),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to import: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteEngine(ImportedEngineMetadata engine) async {
+    // Confirm deletion
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => buildEngineImportDialog(
+        this.context,
+        title: const Text('Delete Engine'),
+        content: Text('Are you sure you want to delete ${engine.displayName}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _localStorage.deleteEngine(engine.id);
+
+      // Reload ConfigLoader to reflect deletion
+      ConfigLoader().clearCache();
+      await EngineRegistry.instance.reload();
+
+      // Refresh the list
+      await _loadEngines();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${engine.displayName} deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _importFromLocalFile() async {
+    try {
+      // Pick YAML file - use FileType.any for better Android compatibility
+      final result = await FilePick.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+        withData: true, // Loads file bytes directly (works better on Android)
+      );
+
+      if (result == null || result.files.isEmpty) {
+        return; // User cancelled
+      }
+
+      final file = result.files.first;
+
+      // Validate file extension
+      final fileName = file.name.toLowerCase();
+      if (!fileName.endsWith('.yaml') && !fileName.endsWith('.yml')) {
+        throw Exception('Please select a YAML file (.yaml or .yml)');
+      }
+
+      // Read file contents (prefer bytes if available, otherwise read from path)
+      final String yamlContent;
+      if (file.bytes != null) {
+        yamlContent = String.fromCharCodes(file.bytes!);
+      } else if (file.path != null) {
+        final fileBytes = await file.readAsBytes();
+        yamlContent = String.fromCharCodes(fileBytes);
+      } else {
+        throw Exception('Could not read file content');
+      }
+
+      // Parse YAML to extract metadata
+      final yaml = loadYaml(yamlContent);
+      if (yaml == null) {
+        throw Exception('Invalid YAML file');
+      }
+
+      final engineId = yaml['id'] as String?;
+      final displayName = yaml['display_name'] as String?;
+      final icon = yaml['icon'] as String?;
+
+      if (engineId == null || engineId.isEmpty) {
+        throw Exception('YAML file must contain an "id" field');
+      }
+
+      if (displayName == null || displayName.isEmpty) {
+        throw Exception('YAML file must contain a "display_name" field');
+      }
+
+      // Check if engine already exists
+      final existingEngines = await _localStorage.getImportedEngines();
+      final alreadyExists = existingEngines.any((e) => e.id == engineId);
+
+      if (alreadyExists) {
+        if (!mounted) return;
+
+        // Confirm overwrite
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => buildEngineImportDialog(
+            this.context,
+            title: const Text('Engine Already Exists'),
+            content: Text(
+              'An engine with ID "$engineId" already exists. Do you want to replace it?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Replace'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed != true) return;
+      }
+
+      // Show loading indicator
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => buildEngineImportDialog(
+            this.context,
+            content: Row(
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(width: 16),
+                Text('Importing $displayName...'),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Save to local storage
+      await _localStorage.saveEngine(
+        engineId: engineId,
+        fileName: file.name,
+        yamlContent: yamlContent,
+        displayName: displayName,
+        icon: icon,
+      );
+
+      // Reload ConfigLoader to pick up new engine
+      ConfigLoader().clearCache();
+      await EngineRegistry.instance.reload();
+
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Refresh the list
+      await _loadEngines();
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$displayName imported successfully')),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if open
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to import: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  IconData _getIconForEngine(String? iconName) {
+    switch (iconName) {
+      case 'sailing':
+        return Icons.sailing;
+      case 'storage':
+        return Icons.storage;
+      case 'movie':
+      case 'movie_creation':
+        return Icons.movie;
+      case 'tv':
+        return Icons.tv;
+      case 'cloud':
+        return Icons.cloud;
+      case 'search':
+        return Icons.search;
+      case 'database':
+        return Icons.storage;
+      case 'public':
+        return Icons.public;
+      default:
+        return Icons.extension;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Import Engines'),
+        actions: [
+          IconButton(
+            focusNode: _importLocalButtonFocusNode,
+            onPressed: _isLoading ? null : _importFromLocalFile,
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Import from Local File',
+          ),
+          IconButton(
+            focusNode: _refreshButtonFocusNode,
+            onPressed: _isLoading ? null : _loadEngines,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+      body: FocusTraversalGroup(
+        policy: OrderedTraversalPolicy(),
+        child: _buildBody(),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading engines...'),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to load engines',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              FocusTraversalOrder(
+                order: const NumericFocusOrder(0),
+                child: FilledButton.icon(
+                  focusNode: _retryButtonFocusNode,
+                  onPressed: _loadEngines,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Imported engines section
+        if (_importedEngines.isNotEmpty) ...[
+          _buildSectionHeader(
+            'Imported Engines',
+            Icons.check_circle,
+            Colors.green,
+          ),
+          const SizedBox(height: 8),
+          for (int i = 0; i < _importedEngines.length; i++)
+            _buildImportedEngineTile(_importedEngines[i], i),
+          const SizedBox(height: 24),
+        ],
+
+        // Available engines section
+        if (_availableEngines.isNotEmpty) ...[
+          _buildSectionHeader(
+            'Available to Import',
+            Icons.download,
+            Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 8),
+          for (int i = 0; i < _availableEngines.length; i++)
+            _buildAvailableEngineTile(_availableEngines[i], i),
+        ],
+
+        // Empty state
+        if (_importedEngines.isEmpty && _availableEngines.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(48),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.inbox_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No engines available',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Check your internet connection and try again',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon, Color color) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            title.contains('Imported')
+                ? '${_importedEngines.length}'
+                : '${_availableEngines.length}',
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildImportedEngineTile(ImportedEngineMetadata engine, int index) {
+    final focusNode = _importedEngineFocusNodes[engine.id];
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(index.toDouble()),
+      child: _TvFocusableCard(
+        focusNode: focusNode,
+        onPressed: () => _deleteEngine(engine),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.green.withValues(alpha: 0.1),
+                child: Icon(
+                  _getIconForEngine(engine.icon),
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      engine.displayName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Imported ${_formatDate(engine.importedAt)}',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.delete_outline,
+                color: Colors.red.withValues(alpha: 0.7),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvailableEngineTile(RemoteEngineInfo engine, int index) {
+    final focusNode = _availableEngineFocusNodes[engine.id];
+    // Offset by imported engines count for proper traversal order
+    final orderIndex = _importedEngines.length + index;
+    return FocusTraversalOrder(
+      order: NumericFocusOrder(orderIndex.toDouble()),
+      child: _TvFocusableCard(
+        focusNode: focusNode,
+        onPressed: () => _importEngine(engine),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  _getIconForEngine(engine.icon),
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      engine.displayName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (engine.description != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        engine.description!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Import',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays == 0) {
+      return 'today';
+    } else if (diff.inDays == 1) {
+      return 'yesterday';
+    } else if (diff.inDays < 7) {
+      return '${diff.inDays} days ago';
+    } else {
+      return '${date.day}/${date.month}/${date.year}';
+    }
+  }
+}
+
 /// A TV-friendly focusable card widget with visual focus indication
 class _TvFocusableCard extends StatefulWidget {
   const _TvFocusableCard({
@@ -903,6 +1678,8 @@ class _TvFocusableCardState extends State<_TvFocusableCard> {
 
   @override
   Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
     return Shortcuts(
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
@@ -926,27 +1703,40 @@ class _TvFocusableCardState extends State<_TvFocusableCard> {
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               curve: Curves.easeOut,
-              transform: Matrix4.identity()..scale(_isFocused ? 1.015 : 1.0),
+              transform: Matrix4.identity()
+                ..scaleByDouble(
+                  _isFocused ? 1.015 : 1.0,
+                  _isFocused ? 1.015 : 1.0,
+                  _isFocused ? 1.015 : 1.0,
+                  1.0,
+                ),
               transformAlignment: Alignment.center,
               margin: const EdgeInsets.only(bottom: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: _isFocused
-                      ? [
-                          const Color(0xFFED1C24).withValues(alpha: 0.18),
-                          const Color(0xFFED1C24).withValues(alpha: 0.06),
-                        ]
-                      : [
-                          Colors.white.withValues(alpha: 0.05),
-                          Colors.white.withValues(alpha: 0.02),
-                        ],
-                ),
+                color: frosted
+                    ? GlassChrome.fill(app, raised: _isFocused)
+                    : null,
+                gradient: frosted
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: _isFocused
+                            ? [
+                                const Color(0xFFED1C24).withValues(alpha: 0.18),
+                                const Color(0xFFED1C24).withValues(alpha: 0.06),
+                              ]
+                            : [
+                                Colors.white.withValues(alpha: 0.05),
+                                Colors.white.withValues(alpha: 0.02),
+                              ],
+                      ),
                 border: Border.all(
                   color: _isFocused
                       ? const Color(0xFFED1C24).withValues(alpha: 0.9)
+                      : frosted
+                      ? GlassChrome.edge(app)
                       : Colors.white.withValues(alpha: 0.07),
                   width: _isFocused ? 2 : 1,
                 ),
@@ -1021,6 +1811,9 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
   @override
   Widget build(BuildContext context) {
     const accent = Color(0xFFED1C24);
+    final app = AppThemeScope.of(context);
+    final frosted = GlassChrome.enabled(app);
+    final unfilledColor = frosted ? app.core.tx : accent;
     return Focus(
       focusNode: widget.focusNode,
       onKeyEvent: (node, event) {
@@ -1035,19 +1828,27 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
         duration: const Duration(milliseconds: 150),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          gradient: widget.filled
+          gradient: widget.filled && !frosted
               ? const LinearGradient(colors: [accent, Color(0xFFB81D24)])
               : null,
-          color: widget.filled ? null : Colors.white.withValues(alpha: 0.04),
+          color: widget.filled
+              ? (frosted ? GlassChrome.fill(app, raised: true) : null)
+              : frosted
+              ? GlassChrome.fill(app, raised: _focused)
+              : Colors.white.withValues(alpha: 0.04),
           border: Border.all(
             color: _focused
-                ? Colors.white.withValues(alpha: 0.95)
+                ? (frosted
+                      ? GlassChrome.edge(app, active: true)
+                      : Colors.white.withValues(alpha: 0.95))
                 : (widget.filled
-                      ? Colors.transparent
+                      ? (frosted ? GlassChrome.edge(app) : Colors.transparent)
+                      : frosted
+                      ? GlassChrome.edge(app, active: _focused)
                       : accent.withValues(alpha: 0.55)),
             width: _focused ? 2 : 1.2,
           ),
-          boxShadow: _focused || widget.filled
+          boxShadow: !frosted && (_focused || widget.filled)
               ? [
                   BoxShadow(
                     color: accent.withValues(alpha: _focused ? 0.55 : 0.3),
@@ -1071,7 +1872,9 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
                   Icon(
                     widget.icon,
                     size: 18,
-                    color: widget.filled ? Colors.white : accent,
+                    color: widget.filled && !frosted
+                        ? Colors.white
+                        : unfilledColor,
                   ),
                   const SizedBox(width: 8),
                   Flexible(
@@ -1080,7 +1883,9 @@ class _EnginePillButtonState extends State<_EnginePillButton> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: widget.filled ? Colors.white : accent,
+                        color: widget.filled && !frosted
+                            ? Colors.white
+                            : unfilledColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 13.5,
                         letterSpacing: 0.1,

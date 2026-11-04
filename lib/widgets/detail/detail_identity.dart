@@ -6,11 +6,13 @@ import '../../services/debrify_image_cache.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import '../tracker_brand_marks.dart';
-import '../rotten_tomatoes_score.dart';
 import '../season_action_region.dart';
+import '../rotten_tomatoes_score.dart';
+import '../../models/downloaded_title_state.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Shared identity + action vocabulary for the alternate detail layouts.
 ///
@@ -183,16 +185,24 @@ class DetailGhostButton extends StatefulWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
+
+  /// Touch long-press, or OK held on a remote.
+  final VoidCallback? onLongPress;
   final bool busy;
   final FocusNode? focusNode;
+
+  /// 0..1: a progress ring replaces the icon (a download in flight).
+  final double? progress;
 
   const DetailGhostButton({
     super.key,
     required this.label,
     required this.icon,
     required this.onTap,
+    this.onLongPress,
     this.busy = false,
     this.focusNode,
+    this.progress,
   });
 
   @override
@@ -201,9 +211,32 @@ class DetailGhostButton extends StatefulWidget {
 
 class _DetailGhostButtonState extends State<DetailGhostButton> {
   bool _focused = false;
+  late final TvHoldOk _hold = TvHoldOk(
+    onTap: () => widget.onTap(),
+    onHold: () => widget.onLongPress?.call(),
+  );
+
+  @override
+  void dispose() {
+    _hold.reset();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final button = _buildButton(context);
+    if (widget.onLongPress == null) return button;
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: (_, event) => isActivateOrSpaceKey(event.logicalKey)
+          ? _hold.handle(event)
+          : KeyEventResult.ignored,
+      child: button,
+    );
+  }
+
+  Widget _buildButton(BuildContext context) {
     final t = DetailThemeScope.of(context);
     return DetailFocusRing(
       focused: _focused,
@@ -215,7 +248,11 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
           focusNode: widget.focusNode,
           borderRadius: t.brBtn,
           onTap: widget.onTap,
-          onFocusChange: (f) => setState(() => _focused = f),
+          onLongPress: widget.onLongPress,
+          onFocusChange: (f) {
+            setState(() => _focused = f);
+            if (!f) _hold.reset();
+          },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             decoration: BoxDecoration(
@@ -235,7 +272,18 @@ class _DetailGhostButtonState extends State<DetailGhostButton> {
                     ),
                   )
                 else
-                  Icon(widget.icon, color: t.ghostText, size: 16),
+                  if (widget.progress != null)
+                    SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(
+                        value: widget.progress,
+                        strokeWidth: 2.2,
+                        color: t.ghostText,
+                        backgroundColor: t.ghostText.withValues(alpha: 0.25),
+                      ),
+                    )
+                  else
+                    Icon(widget.icon, color: t.ghostText, size: 16),
                 const SizedBox(width: 7),
                 Text(
                   widget.label,
@@ -598,6 +646,8 @@ class DetailMetaBar extends StatelessWidget {
     );
     final r = model.rating;
     if (r != null) add(imdbRow(r));
+    // Rotten Tomatoes + Metacritic from OMDb (and IMDb when the model has
+    // none), in the same "value + mark" grammar, marks in the theme's ink.
     final before = parts.length;
     parts.add(
       OmdbRatingsBuilder(
@@ -689,8 +739,8 @@ class DetailLogo extends StatelessWidget {
         // Logo art is often a huge transparent PNG; never decode it at full
         // resolution for a 70px lockup on a 2 GB box.
         memCacheHeight: (height * 3).round(),
-        placeholder: (_, __) => const SizedBox.shrink(),
-        errorWidget: (_, __, ___) => Text(
+        placeholder: (_, _) => const SizedBox.shrink(),
+        errorWidget: (_, _, _) => Text(
           t.displayCase(model.name),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
@@ -762,11 +812,13 @@ class DetailActionRow extends StatelessWidget {
           busy: model.trailerBusy,
           onTap: model.onTrailer,
         ),
-      if (model.isMovie && model.onBrowse != null)
+      if (model.onBrowse != null)
         DetailGhostButton(
-          label: 'Sources',
-          icon: Icons.layers_rounded,
+          label: model.downloadLabel,
+          icon: model.downloadState.icon,
           onTap: model.onBrowse!,
+          onLongPress: model.onBrowseLongPress,
+          progress: model.downloadProgress,
         ),
       if (model.onToggleMyWatchlist != null)
         DetailGhostButton(
@@ -787,11 +839,8 @@ class DetailActionRow extends StatelessWidget {
           autofocus: model.isTelevision && !model.showPrimary,
         ),
       if (model.onMetadataExplore != null)
-        DetailGhostButton(
-          label: 'Explore',
-          icon: Icons.explore_outlined,
-          onTap: model.onMetadataExplore!,
-        ),
+        DetailGhostButton(label: 'Explore', icon: Icons.explore_outlined,
+          onTap: model.onMetadataExplore!),
       if (model.onAppMenu != null)
         DetailRoundButton(
           icon: Icons.more_horiz_rounded,
@@ -800,7 +849,11 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasTrakt && model.onTraktMenu != null)
         DetailTrackerPill(
-          mark: TraktMark(size: 19, opacity: model.traktTracked ? 1 : 0.55),
+          mark: TraktMark(
+            size: 19,
+            dark: !model.traktTracked,
+            color: Colors.white,
+          ),
           brand: 'TRAKT',
           state: model.traktLabel,
           rating: model.traktRating,
@@ -811,7 +864,10 @@ class DetailActionRow extends StatelessWidget {
         ),
       if (model.hasSimkl && model.onSimklMenu != null)
         DetailTrackerPill(
-          mark: SimklMark(size: 19, opacity: model.simklTracked ? 1 : 0.55),
+          mark: SimklMark(
+            size: 19,
+            color: model.simklTracked ? kSimklCyan : Colors.white,
+          ),
           brand: 'SIMKL',
           state: model.simklLabel,
           rating: model.simklRating,
@@ -987,6 +1043,7 @@ Future<void> showDetailSeasonPicker({
   required DetailTheme theme,
 }) {
   return showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     backgroundColor: theme.pane,
     showDragHandle: true,
@@ -1125,52 +1182,48 @@ class _DetailSeasonControlState extends State<DetailSeasonControl> {
             child: Material(
               color: t.ghostFill,
               borderRadius: t.brBtn,
-              child: SeasonActionRegion(
+              child: SeasonActionRegion(onTap: widget.onPick, onOptions: widget.onOptions, child: InkWell(
+                focusNode: widget.focusNode,
+                borderRadius: t.brBtn,
                 onTap: widget.onPick,
-                onOptions: widget.onOptions,
-                child: InkWell(
-                  focusNode: widget.focusNode,
-                  borderRadius: t.brBtn,
-                  onTap: widget.onPick,
-                  onFocusChange: (f) => setState(() => _focused = f),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 13,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: t.brBtn,
-                      border: Border.all(color: t.ghostBorder),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.chevron_left_rounded,
-                          size: 17,
-                          color: widget.canPrev ? t.tx2 : t.tx3,
+                onFocusChange: (f) => setState(() => _focused = f),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: t.brBtn,
+                    border: Border.all(color: t.ghostBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.chevron_left_rounded,
+                        size: 17,
+                        color: widget.canPrev ? t.tx2 : t.tx3,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Season ${widget.seasonNumber}',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: t.tx,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Season ${widget.seasonNumber}',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700,
-                            color: t.tx,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          size: 17,
-                          color: widget.canNext ? t.tx2 : t.tx3,
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 17,
+                        color: widget.canNext ? t.tx2 : t.tx3,
+                      ),
+                    ],
                   ),
                 ),
               ),
-            ),
+            )),
           ),
           const SizedBox(width: 10),
           Text(

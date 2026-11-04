@@ -4,18 +4,6 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:debrify/services/storage/alldebrid_storage.dart';
-import 'package:debrify/services/storage/mdblist_storage.dart';
-import 'package:debrify/services/storage/pikpak_storage.dart';
-import 'package:debrify/services/storage/premiumize_storage.dart';
-import 'package:debrify/services/storage/provider_credential_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/simkl_storage.dart';
-import 'package:debrify/services/storage/torbox_storage.dart';
-import 'package:debrify/services/storage/torrent_provider_storage.dart';
-import 'package:debrify/services/storage/tracking_source_storage.dart';
-import 'package:debrify/services/storage/trakt_storage.dart';
-import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +25,7 @@ import 'udp_command_service.dart';
 import '../../widgets/remote/remote_pairing_dialog.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/stremio_service.dart';
+import '../../services/storage_service.dart';
 import '../../services/stream_badges_service.dart';
 import '../../services/tracking_source_policy.dart';
 import '../../services/account_service.dart';
@@ -237,7 +226,7 @@ class RemoteCommandRouter {
       return;
     }
     try {
-      final servers = await WebdavServerStorage.getWebDavServers();
+      final servers = await StorageService.getWebDavServers();
       if (pending != _onboardingWebDavSyncOffer ||
           !isProfileEntered() ||
           ProfileRuntime.capture() != scope) {
@@ -1089,7 +1078,7 @@ class RemoteCommandRouter {
             return;
           }
           final wasOnboarding =
-              !(await ProviderCredentialStorage.isInitialSetupComplete());
+              !(await StorageService.isInitialSetupComplete());
           final applied = await _commitProfileRemotePayload(
             context,
             profileBinding,
@@ -1728,7 +1717,7 @@ class RemoteCommandRouter {
       return;
     }
     final receivingDuringOnboarding =
-        !(await ProviderCredentialStorage.isInitialSetupComplete());
+        !(await StorageService.isInitialSetupComplete());
     final syncBinding = (await WebDavSyncBindingStore().load()).activeBinding;
     final webDavSyncOwnsProfileGraph =
         syncBinding?.circleId != null &&
@@ -1781,7 +1770,7 @@ class RemoteCommandRouter {
               'not overwritten; only the unused automatic setup profile is '
               'removed. Profiles keep their PINs when the transfer '
               'carries them.'
-              '${debrifyTvOmission?.isEmpty == false ? '\n\nDebrify TV was '
+              '${debrifyTvOmission?.isEmpty == false ? '\n\nNextup TV was '
                         'excluded when this transfer was compacted '
                         '(${debrifyTvOmission!.contentsLabel}). No empty '
                         'channels will be created. After importing, restore '
@@ -1947,7 +1936,7 @@ class RemoteCommandRouter {
             'TV imported ${report.profilesImported} profiles and '
             '${report.resourcesImported} connections'
             '${syncRestorePending ? '; WebDAV sync reconnection is pending' : ''}'
-            '${debrifyTvOmission?.isEmpty == false ? '; Debrify TV channels were not included' : ''}',
+            '${debrifyTvOmission?.isEmpty == false ? '; Nextup TV channels were not included' : ''}',
       );
       if (!acknowledged) {
         RemoteTransferDiagnostics.record(
@@ -1969,7 +1958,7 @@ class RemoteCommandRouter {
         // bootstrap Admin is still active and unlocked, is the only moment
         // this write is legal.
         try {
-          await ProviderCredentialStorage.setInitialSetupComplete(true);
+          await StorageService.setInitialSetupComplete(true);
         } catch (e) {
           debugPrint(
             'RemoteCommandRouter: could not pre-clear onboarding — $e',
@@ -1981,7 +1970,7 @@ class RemoteCommandRouter {
         'Imported ${report.profilesImported} profiles and '
         '${report.resourcesImported} connections from $sender.'
         '${report.pinResetsRequired == 0 ? '' : ' ${report.pinResetsRequired} profile(s) need a new PIN.'}'
-        '${debrifyTvOmission?.isEmpty == false ? ' Debrify TV channels were not included; import a channel ZIP or send them separately from Remote.' : ''}',
+        '${debrifyTvOmission?.isEmpty == false ? ' Nextup TV channels were not included; import a channel ZIP or send them separately from Remote.' : ''}',
       );
       if (receivingDuringOnboarding) {
         try {
@@ -3590,7 +3579,7 @@ class RemoteCommandRouter {
     try {
       final decoded = jsonDecode(data);
       if (decoded is! Map) throw const FormatException();
-      await TrackingSourceStorage.applyTrackingPreferencesPayload(decoded);
+      await StorageService.applyTrackingPreferencesPayload(decoded);
       MainPageBridge.notifyHomeSettingsChanged();
       final requested = decoded['progress_source']?.toString();
       final effective = await TrackingSourcePolicy.load();
@@ -3599,7 +3588,7 @@ class RemoteCommandRouter {
           requested != WatchProgressSource.smart.name &&
           effective.progressSource == WatchProgressSource.smart;
       if (fellBack) {
-        await TrackingSourceStorage.takeTrackingProgressFallbackNotice();
+        await StorageService.takeTrackingProgressFallbackNotice();
       }
       _showSnackBar(
         fellBack
@@ -3627,8 +3616,8 @@ class RemoteCommandRouter {
       }
 
       // Save the API key
-      await RealDebridStorage.saveApiKey(apiKey);
-      await RealDebridStorage.setRealDebridIntegrationEnabled(true);
+      await StorageService.saveApiKey(apiKey);
+      await StorageService.setRealDebridIntegrationEnabled(true);
 
       debugPrint('RemoteCommandRouter: Real-Debrid configured successfully');
       _showSnackBar('Real-Debrid configured successfully');
@@ -3651,8 +3640,8 @@ class RemoteCommandRouter {
       }
 
       // Save the API key
-      await TorboxStorage.saveTorboxApiKey(apiKey);
-      await TorboxStorage.setTorboxIntegrationEnabled(true);
+      await StorageService.saveTorboxApiKey(apiKey);
+      await StorageService.setTorboxIntegrationEnabled(true);
 
       debugPrint('RemoteCommandRouter: Torbox configured successfully');
       _showSnackBar('Torbox configured successfully');
@@ -3675,8 +3664,8 @@ class RemoteCommandRouter {
         return;
       }
 
-      await PremiumizeStorage.savePremiumizeApiKey(apiKey);
-      await PremiumizeStorage.setPremiumizeIntegrationEnabled(true);
+      await StorageService.savePremiumizeApiKey(apiKey);
+      await StorageService.setPremiumizeIntegrationEnabled(true);
 
       debugPrint('RemoteCommandRouter: Premiumize configured successfully');
       _showSnackBar('Premiumize configured successfully');
@@ -3699,8 +3688,8 @@ class RemoteCommandRouter {
         return;
       }
 
-      await AllDebridStorage.saveAllDebridApiKey(apiKey);
-      await AllDebridStorage.setAllDebridIntegrationEnabled(true);
+      await StorageService.saveAllDebridApiKey(apiKey);
+      await StorageService.setAllDebridIntegrationEnabled(true);
 
       debugPrint('RemoteCommandRouter: AllDebrid configured successfully');
       _showSnackBar('AllDebrid configured successfully');
@@ -3732,7 +3721,7 @@ class RemoteCommandRouter {
       }
 
       // Enable PikPak integration
-      await PikpakStorage.setPikPakEnabled(true);
+      await StorageService.setPikPakEnabled(true);
 
       debugPrint('RemoteCommandRouter: PikPak configured successfully');
       _showSnackBar('PikPak configured successfully');
@@ -3762,20 +3751,18 @@ class RemoteCommandRouter {
         return;
       }
 
-      await TraktStorage.setTraktSession(
+      await StorageService.setTraktSession(
         accessToken: accessToken,
         refreshToken: refreshToken,
         expiryMs: expiry,
       );
       if (username != null && username.isNotEmpty) {
-        await TraktStorage.setTraktUsername(username);
+        await StorageService.setTraktUsername(username);
       }
       // Match interactive connect: a freshly imported Trakt session starts
       // with catalog scrobbling on.
-      await TraktStorage.setTraktSyncCatalogItems(true);
-      await TrackingSourceStorage.enableTrackingScrobbleTarget(
-        TrackingSource.trakt,
-      );
+      await StorageService.setTraktSyncCatalogItems(true);
+      await StorageService.enableTrackingScrobbleTarget(TrackingSource.trakt);
 
       debugPrint('RemoteCommandRouter: Trakt session configured successfully');
       _showSnackBar('Trakt connected successfully');
@@ -3801,16 +3788,14 @@ class RemoteCommandRouter {
         return;
       }
 
-      await SimklStorage.setSimklAccessToken(accessToken);
+      await StorageService.setSimklAccessToken(accessToken);
       if (username != null && username.isNotEmpty) {
-        await SimklStorage.setSimklUsername(username);
+        await StorageService.setSimklUsername(username);
       }
       // Match interactive connect: a freshly imported Simkl session starts
       // with catalog scrobbling on.
-      await SimklStorage.setSimklSyncCatalogItems(true);
-      await TrackingSourceStorage.enableTrackingScrobbleTarget(
-        TrackingSource.simkl,
-      );
+      await StorageService.setSimklSyncCatalogItems(true);
+      await StorageService.enableTrackingScrobbleTarget(TrackingSource.simkl);
 
       debugPrint('RemoteCommandRouter: Simkl session configured successfully');
       _showSnackBar('Simkl connected successfully');
@@ -3836,7 +3821,7 @@ class RemoteCommandRouter {
         _showSnackBar('MDBList: API key validation failed', isError: true);
         return;
       }
-      await MdblistStorage.setMdblistSyncCatalogItems(true);
+      await StorageService.setMdblistSyncCatalogItems(true);
       MainPageBridge.notifyIntegrationChanged();
       _showSnackBar('MDBList connected successfully');
     } catch (_) {
@@ -3856,7 +3841,7 @@ class RemoteCommandRouter {
   Future<void> _handleConfigComplete({bool? wasOnboardingOverride}) async {
     final wasOnboarding =
         wasOnboardingOverride ??
-        !(await ProviderCredentialStorage.isInitialSetupComplete());
+        !(await StorageService.isInitialSetupComplete());
 
     if (!wasOnboarding) {
       debugPrint('RemoteCommandRouter: Config complete (already onboarded)');
@@ -3877,7 +3862,7 @@ class RemoteCommandRouter {
     // correct would strand the user on the onboarding screen behind a fully
     // imported device — the exact bug this guard exists to prevent.
     try {
-      await ProviderCredentialStorage.setInitialSetupComplete(true);
+      await StorageService.setInitialSetupComplete(true);
     } catch (e) {
       debugPrint('RemoteCommandRouter: onboarding flag write skipped — $e');
     }
@@ -4025,7 +4010,7 @@ class RemoteCommandRouter {
         return;
       }
 
-      final existing = await WebdavServerStorage.getWebDavServers();
+      final existing = await StorageService.getWebDavServers();
       final merged = List<WebDavConfig>.from(existing);
       final syncCandidates = <WebDavConfig>[];
       int imported = 0;
@@ -4061,7 +4046,7 @@ class RemoteCommandRouter {
       }
 
       final savedServers = imported > 0
-          ? await WebdavServerStorage.saveWebDavServers(merged)
+          ? await StorageService.saveWebDavServers(merged)
           : merged;
 
       if (WebDavSyncFeature.enabled &&
@@ -4122,7 +4107,7 @@ class RemoteCommandRouter {
       String fingerprint(IndexerManagerConfig c) =>
           '${c.type.value}|${normalize(c.baseUrl)}';
 
-      final existing = await TorrentProviderStorage.getIndexerManagerConfigs();
+      final existing = await StorageService.getIndexerManagerConfigs();
       final existingKeys = <String>{for (final c in existing) fingerprint(c)};
       final merged = List<IndexerManagerConfig>.from(existing);
       int imported = 0;
@@ -4155,7 +4140,7 @@ class RemoteCommandRouter {
       }
 
       if (imported > 0) {
-        await TorrentProviderStorage.setIndexerManagerConfigs(merged);
+        await StorageService.setIndexerManagerConfigs(merged);
       }
 
       if (imported > 0 && skipped == 0) {

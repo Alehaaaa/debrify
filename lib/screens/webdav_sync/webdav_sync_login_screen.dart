@@ -1,5 +1,6 @@
 import '../../widgets/webdav_sync/webdav_foreground_sync.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/webdav_protocol_client.dart';
 import '../../services/webdav_sync/webdav_sync_connect_controller.dart';
@@ -8,7 +9,9 @@ import '../../services/webdav_sync/webdav_sync_setup_service.dart';
 import '../../widgets/tv_text_field.dart';
 import '../settings/widgets/settings_widgets.dart';
 
-enum WebDavSyncProviderPreset { koofr, custom }
+enum WebDavSyncProviderPreset { koofr, pCloud, custom }
+
+enum PCloudServerSite { europe, unitedStates }
 
 typedef WebDavSyncLoginInspector =
     Future<Object?> Function(WebDavSyncLoginCredentials credentials);
@@ -36,6 +39,11 @@ final class WebDavSyncLoginScreen extends StatefulWidget {
   static final Uri koofrEndpoint = Uri.parse(
     'https://app.koofr.net/dav/Koofr/',
   );
+  static final Uri pCloudEuEndpoint = Uri.parse('https://ewebdav.pcloud.com/');
+  static final Uri pCloudUsEndpoint = Uri.parse('https://webdav.pcloud.com/');
+  static final Uri pCloudHelp = Uri.parse(
+    'https://help.pcloud.com/article/connect-to-pcloud-using-webdav-and-rsync',
+  );
 
   final WebDavSyncConnectController? connectController;
   final WebDavSyncLoginInspector? inspect;
@@ -52,6 +60,7 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
   final TextEditingController _password = TextEditingController();
 
   WebDavSyncProviderPreset _provider = WebDavSyncProviderPreset.koofr;
+  PCloudServerSite _pCloudServerSite = PCloudServerSite.europe;
   String? _error;
   bool _connecting = false;
 
@@ -95,9 +104,16 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
     try {
       endpoint = _isRepair
           ? widget.repairBinding!.location.endpoint
-          : _provider == WebDavSyncProviderPreset.koofr
-          ? WebDavSyncLoginScreen.koofrEndpoint
-          : WebDavProtocolClient.parseEndpoint(_url.text);
+          : switch (_provider) {
+              WebDavSyncProviderPreset.koofr =>
+                WebDavSyncLoginScreen.koofrEndpoint,
+              WebDavSyncProviderPreset.pCloud =>
+                _pCloudServerSite == PCloudServerSite.europe
+                    ? WebDavSyncLoginScreen.pCloudEuEndpoint
+                    : WebDavSyncLoginScreen.pCloudUsEndpoint,
+              WebDavSyncProviderPreset.custom =>
+                WebDavProtocolClient.parseEndpoint(_url.text),
+            };
     } on Object {
       setState(() => _error = 'Enter a valid HTTP or HTTPS WebDAV server URL.');
       return;
@@ -109,9 +125,11 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
       password: password,
       serverName: _isRepair
           ? widget.repairBinding!.location.serverName
-          : _provider == WebDavSyncProviderPreset.koofr
-          ? 'Koofr'
-          : endpoint.host,
+          : switch (_provider) {
+              WebDavSyncProviderPreset.koofr => 'Koofr',
+              WebDavSyncProviderPreset.pCloud => 'pCloud',
+              WebDavSyncProviderPreset.custom => endpoint.host,
+            },
     );
     setState(() {
       _connecting = true;
@@ -186,13 +204,17 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
                   const SizedBox(height: 16),
                 ] else ...[
                   DropdownButtonFormField<WebDavSyncProviderPreset>(
-                    key: const ValueKey('webdav-sync-provider'),
+                    key: const ValueKey('webdav-sync-server'),
                     initialValue: _provider,
-                    decoration: const InputDecoration(labelText: 'Provider'),
+                    decoration: const InputDecoration(labelText: 'Server'),
                     items: const [
                       DropdownMenuItem(
                         value: WebDavSyncProviderPreset.koofr,
                         child: Text('Koofr'),
+                      ),
+                      DropdownMenuItem(
+                        value: WebDavSyncProviderPreset.pCloud,
+                        child: Text('pCloud'),
                       ),
                       DropdownMenuItem(
                         value: WebDavSyncProviderPreset.custom,
@@ -210,6 +232,35 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
                           },
                   ),
                   const SizedBox(height: 16),
+                  if (_provider == WebDavSyncProviderPreset.pCloud) ...[
+                    DropdownButtonFormField<PCloudServerSite>(
+                      key: const ValueKey('pcloud-server-site'),
+                      initialValue: _pCloudServerSite,
+                      decoration: const InputDecoration(
+                        labelText: 'Server site',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: PCloudServerSite.europe,
+                          child: Text('Europe'),
+                        ),
+                        DropdownMenuItem(
+                          value: PCloudServerSite.unitedStates,
+                          child: Text('United States'),
+                        ),
+                      ],
+                      onChanged: _connecting
+                          ? null
+                          : (site) {
+                              if (site == null) return;
+                              setState(() {
+                                _pCloudServerSite = site;
+                                _error = null;
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ],
                 if (!_isRepair &&
                     _provider == WebDavSyncProviderPreset.koofr) ...[
@@ -219,6 +270,30 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
                     'email.',
                   ),
                   const SizedBox(height: 16),
+                ] else if (!_isRepair &&
+                    _provider == WebDavSyncProviderPreset.pCloud) ...[
+                  const Text(
+                    'Connect with your pCloud account email and password. '
+                    'Choose the region where your pCloud account stores its '
+                    'data. If two-factor authentication is enabled, pCloud '
+                    'may ask you to approve the connection by email.',
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      key: const ValueKey('pcloud-official-help'),
+                      onPressed: _connecting
+                          ? null
+                          : () => launchUrl(
+                              WebDavSyncLoginScreen.pCloudHelp,
+                              mode: LaunchMode.externalApplication,
+                            ),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: const Text('Open official pCloud WebDAV help'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 ] else if (!_isRepair) ...[
                   TvTextField(
                     key: const ValueKey('webdav-sync-url'),
@@ -251,6 +326,9 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
                         !_isRepair &&
                             _provider == WebDavSyncProviderPreset.koofr
                         ? 'Koofr email'
+                        : !_isRepair &&
+                              _provider == WebDavSyncProviderPreset.pCloud
+                        ? 'pCloud email'
                         : 'WebDAV username',
                   ),
                   onChanged: (_) => _changed(),
@@ -268,6 +346,9 @@ final class _WebDavSyncLoginScreenState extends State<WebDavSyncLoginScreen> {
                         !_isRepair &&
                             _provider == WebDavSyncProviderPreset.koofr
                         ? 'Koofr app password'
+                        : !_isRepair &&
+                              _provider == WebDavSyncProviderPreset.pCloud
+                        ? 'pCloud password'
                         : 'WebDAV password',
                   ),
                   onChanged: (_) => _changed(),

@@ -2,10 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'support/lib_source.dart';
-
-const _vp = 'lib/features/video_player/presentation/legacy_video_player';
-
 String _between(String source, String start, String end) {
   final from = source.indexOf(start);
   expect(from, isNonNegative, reason: 'Missing start marker: $start');
@@ -15,50 +11,20 @@ String _between(String source, String start, String end) {
 }
 
 void main() {
+  final flutterPlayer = File(
+    'lib/screens/video_player_screen.dart',
+  ).readAsStringSync();
   final nativePlayer = File(
     'android/app/src/main/kotlin/com/debrify/app/tv/AndroidTvTorrentPlayerActivity.kt',
-  ).readAsStringSync();
-  final nativePlaybackStart = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvPlaybackStartController.kt',
-  ).readAsStringSync();
-  final nativeSourceFetch = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvSourceFetchController.kt',
-  ).readAsStringSync();
-  final nativeSourceSwitcher = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvSourceSwitchController.kt',
-  ).readAsStringSync();
-  final nativeSourceApplier = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvSourceSwitchApplier.kt',
-  ).readAsStringSync();
-  final nativeStartupGate = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvStartupGateController.kt',
-  ).readAsStringSync();
-  final nativeProgressReporter = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvProgressReporter.kt',
   ).readAsStringSync();
   final playerBridge = File(
     'lib/services/android_tv_player_bridge.dart',
   ).readAsStringSync();
-  final boundPlaybackCode = File(
-    'lib/features/sources/presentation/legacy_playback/bound_source_playback.dart',
-  ).readAsStringSync();
-  final recoveryResolution = File(
-    'lib/features/sources/data/recovery_source_resolution.dart',
-  ).readAsStringSync();
-  final automaticSelection = File(
-    'lib/features/sources/presentation/legacy_playback/automatic_play_selection.dart',
-  ).readAsStringSync();
-  final playerLaunch = File(
-    'lib/features/sources/presentation/legacy_playback/source_player_launch.dart',
-  ).readAsStringSync();
-  final bindingActions = File(
-    'lib/features/sources/presentation/legacy_playback/source_binding_actions.dart',
+  final playbackService = File(
+    'lib/services/torrent_playback_service.dart',
   ).readAsStringSync();
   final launcher = File(
-    'lib/features/player_launch/presentation/legacy_launch/launch_router.dart',
-  ).readAsStringSync();
-  final nativeLauncher = File(
-    'lib/features/player_launch/data/android_tv_native_launch.dart',
+    'lib/services/video_player_launcher.dart',
   ).readAsStringSync();
 
   test('both automatic tracker launch copies retain saved-source recovery', () {
@@ -87,9 +53,9 @@ void main() {
     'recovery uses automatic probes without changing manual source resolution',
     () {
       expect(
-        nativeSourceSwitcher,
+        nativePlayer,
         contains(
-          '"automaticRecovery" to (host.startupFailoverDispatching && host.startupRecoveryCandidateIndices != null)',
+          '"automaticRecovery" to (startupFailoverDispatching && startupRecoveryCandidateIndices != null)',
         ),
       );
       expect(
@@ -101,33 +67,24 @@ void main() {
         contains('_startupSourcePlaylistResolver ?? _sourcePlaylistResolver'),
       );
       expect(
-        nativeLauncher,
-        matches(
-          RegExp(r'automaticRecovery\s*&&\s*!await recoveryPreflight\.allows'),
-        ),
+        launcher,
+        matches(RegExp(r'automaticRecovery &&\s*!await recoveryPreflight\.allows')),
       );
       expect(
-        nativeLauncher,
+        launcher,
         matches(
           RegExp(r'TorrentPlaybackService\.resolveRecoverySource\(\s*torrent,'),
         ),
       );
-      expect(
-        nativeLauncher,
-        contains(
-          ': await resolveSourceToPlaylist(torrent, canContinue: active)',
-        ),
-      );
+      expect(launcher, contains(': await resolveSourceToPlaylist(torrent)'));
       final automaticProbe = _between(
-        recoveryResolution,
+        playbackService,
         'static Future<List<PlaylistEntry>?> resolveRecoverySource(',
-        '\n}',
+        '/// Builds the [SeriesSourceFetcher]',
       );
       expect(
         automaticProbe,
-        matches(
-          RegExp(r'SourceProbing\.probeCandidates\(\s*provider,\s*\[source\]'),
-        ),
+        matches(RegExp(r'_probeCandidates\(\s*provider,\s*\[source\]')),
       );
       expect(
         automaticProbe,
@@ -136,81 +93,62 @@ void main() {
     },
   );
 
-  test('saved direct recovery snapshots its effective acquisition provider', () {
-    final launch = _between(
-      playerLaunch,
-      'static Future<void> launch(',
-      'static SourcePlaylistResolve resolverFor(',
-    );
-    expect(launch, contains('final resolverProvider ='));
-    expect(
-      launch,
-      contains('await SourceProviderConfig.defaultConfiguredProvider('),
-    );
-    expect(launch, contains('resolverFor(resolverProvider, committer)'));
-    expect(launch, contains('startupResolverProvider: resolverProvider'));
-    expect(
-      launch,
-      matches(
-        RegExp(
-          r'recoveryProvider\s*\?\?\s*await SourceProviderConfig\.defaultConfiguredProvider\(\s*canContinue:',
+  test(
+    'saved direct recovery snapshots its effective acquisition provider',
+    () {
+      final launch = _between(
+        playbackService,
+        'static Future<void> _launch(',
+        'static bool _isSeriesPlaylist(',
+      );
+      expect(launch, contains('final resolverProvider ='));
+      expect(launch, contains('await _defaultConfiguredProvider()'));
+      expect(launch, contains('_resolverFor(resolverProvider)'));
+      expect(launch, contains('startupResolverProvider: resolverProvider'));
+      expect(
+        launch,
+        contains('recoveryProvider ?? await _defaultConfiguredProvider()'),
+      );
+      expect(
+        launch,
+        contains(
+          '_lazySourceCommitter(meta, preferredProvider: resolverProvider)',
         ),
-      ),
-    );
-    expect(
-      launch,
-      matches(
-        RegExp(
-          r'_lazySourceCommitter\(\s*meta,\s*'
-          r'preferredProvider:\s*resolverProvider,\s*'
-          r'sourceBindings:\s*sourceBindings,\s*\)',
-        ),
-      ),
-    );
-    expect(
-      nativeStartupGate,
-      contains('startupResolverProvider.equals("pikpak", ignoreCase = true)'),
-    );
-    expect(
-      nativeStartupGate,
-      contains('startupPikPakTorrentAcquisitionAttempted = true'),
-    );
-  });
+      );
+      expect(
+        nativePlayer,
+        contains('startupResolverProvider.equals("pikpak", ignoreCase = true)'),
+      );
+      expect(
+        nativePlayer,
+        contains('startupPikPakTorrentAcquisitionAttempted = true'),
+      );
+    },
+  );
 
   test(
     'native recovery reports candidate production before merging duplicates',
     () {
-      expect(
-        nativeLauncher,
-        contains("'recoveryCandidateCount': automatic.length"),
-      );
-      expect(nativeSourceFetch, contains('map["recoveryCandidateCount"]'));
-      expect(nativeStartupGate, contains('startupRecoveryIsConsumed('));
+      expect(launcher, contains("'recoveryCandidateCount': automatic.length"));
+      expect(nativePlayer, contains('map["recoveryCandidateCount"]'));
+      expect(nativePlayer, contains('startupRecoveryIsConsumed('));
     },
   );
 
   test('saved direct fetch and resolution honor the preferred provider', () {
     final direct = _between(
-      boundPlaybackCode,
+      playbackService,
       '// Addon-direct pins store provenance',
       '// Cheap skip: a bound DEBRID source',
     );
     expect(direct, contains('recoveryProvider: preferredProvider'));
     expect(
       direct,
-      matches(
-        RegExp(
-          r'SourceSeriesFetcher\.seriesFetcherFor\(\s*meta:\s*meta,\s*provider:\s*preferredProvider,?\s*\)',
-        ),
-      ),
+      contains('seriesFetcherFor(meta: meta, provider: preferredProvider)'),
     );
     expect(
       direct,
-      matches(
-        RegExp(
-          r'SourceMovieFetcher\.movieFetcherFor\(\s*meta:\s*meta,\s*provider:\s*preferredProvider,?\s*\)',
-        ),
-      ),
+      contains('movieFetcherFor(meta: meta, provider: preferredProvider)'),
     );
   });
 
@@ -231,23 +169,21 @@ void main() {
   test(
     'Flutter explicit source picks validate only the selected candidate',
     () {
-      final selection = libMember(
-        '$_vp/vp_source_switch.dart',
-        'handleSourceSelected',
-        owner: 'VpSourceSwitch',
+      final selection = _between(
+        flutterPlayer,
+        'Future<void> _handleSourceSelected(',
+        'Future<bool> _switchToSourcePlaylist(',
       );
-      final directSwitch = libMember(
-        '$_vp/vp_source_switch.dart',
-        'switchToStremioSource',
-        owner: 'VpSourceSwitch',
+      final directSwitch = _between(
+        flutterPlayer,
+        'Future<void> _switchToStremioSource(',
+        '// ─── Stremio TV Guide',
       );
 
       expect(selection, contains('validateExplicitSelection: true'));
-      // P16 moved the switch into VpSourceSwitch; the candidate probe is
-      // reached through its facade Host.
-      expect(directSwitch, contains('_host.tryOpenStartupVod('));
+      expect(directSwitch, contains('_tryOpenStartupVod('));
       expect(directSwitch, contains('previous source restore failed'));
-      expect(directSwitch, isNot(contains('tryStartupSourceFailover(')));
+      expect(directSwitch, isNot(contains('_tryStartupSourceFailover(')));
       expect(
         directSwitch,
         contains('This source is unavailable. Choose another source.'),
@@ -256,85 +192,57 @@ void main() {
   );
 
   test('Flutter rejected candidates cannot complete or scrobble', () {
-    final ended = libMember(
-      '$_vp/vp_playback_ended.dart',
-      'onPlaybackEnded',
-      owner: 'VpPlaybackEnded',
+    final ended = _between(
+      flutterPlayer,
+      'Future<void> _onPlaybackEnded()',
+      'void _startTransitionOverlay()',
     );
-    final resume = libMember(
-      '$_vp/vp_resume_save.dart',
-      'saveResume',
-      owner: 'VpResumeSave',
+    final resume = _between(
+      flutterPlayer,
+      'Future<void> _saveResume(',
+      'bool _tvAutoHideBlocked',
     );
     // The gate moved into _resumeSaveBlocked when saves became serialized;
     // the contract follows the indirection: every save path consults the
     // blocker, and the blocker still enforces the validation gate.
-    final resumeBlocked = libMember(
-      '$_vp/vp_resume_save.dart',
-      'resumeSaveBlocked',
-      owner: 'VpResumeSave',
-    );
-    const method = '';
-    expect(resume, contains('Future<void> saveResume('));
-    const fields = '_host.';
-    final locked = libMember(
-      '$_vp/vp_resume_save.dart',
-      'saveResumeLocked',
-      owner: 'VpResumeSave',
+    final resumeBlocked = _between(
+      flutterPlayer,
+      'bool _resumeSaveBlocked(',
+      'Future<void> _saveResume(',
     );
 
-    const gate = 'if (_host.validationGateActive) return;';
-    expect(ended, contains(gate));
-    // Still the first statement of the EOF handler.
+    expect(ended, contains('if (_validationGateActive) return;'));
+    expect(resume, contains('_resumeSaveBlocked'));
+    expect(resumeBlocked, contains('_validationGateActive'));
     expect(
-      ended.indexOf(gate),
-      lessThan(ended.indexOf('_host.observeServerWatch')),
-    );
-    expect(resume, contains('${method}resumeSaveBlocked(debounced)'));
-    expect(locked, contains('${method}resumeSaveBlocked(debounced)'));
-    expect(resumeBlocked, contains('${fields}validationGateActive'));
-    expect(
-      resumeBlocked.indexOf('${fields}validationGateActive'),
-      lessThan(resumeBlocked.indexOf('${fields}isReady')),
-    );
-    expect(
-      libMember(
-        '$_vp/vp_startup_gate.dart',
-        'resumeTrackingAfterValidationGate',
-        owner: 'VpStartupGate',
-      ),
-      contains('void resumeTrackingAfterValidationGate()'),
+      flutterPlayer,
+      contains('void _resumeTrackingAfterValidationGate()'),
     );
   });
 
   test('Flutter failed playlist picks restore an outgoing direct stream', () {
-    final playlistSwitch = libMember(
-      '$_vp/vp_source_playlist_switch.dart',
-      'switchToSourcePlaylist',
-      owner: 'VpSourcePlaylistSwitch',
+    final playlistSwitch = _between(
+      flutterPlayer,
+      'Future<bool> _switchToSourcePlaylist(',
+      'Future<void> _switchToStremioSource(',
     );
 
     expect(playlistSwitch, contains('final outgoingDirectUrl'));
-    // P16 moved the playlist switch into VpSourcePlaylistSwitch; State-owned
-    // playback fields are reached through its facade Host.
-    expect(playlistSwitch, contains('_host.activePlaylist = null'));
+    expect(playlistSwitch, contains('_activePlaylist = null'));
     expect(playlistSwitch, contains('mk.Media(outgoingDirectUrl'));
-    expect(
-      playlistSwitch,
-      contains('_host.currentStreamUrl = outgoingDirectUrl'),
-    );
+    expect(playlistSwitch, contains('_currentStreamUrl = outgoingDirectUrl'));
   });
 
   test('PikPak keeps cold-storage retries but reports manual exhaustion', () {
-    final playlistLoad = libMember(
-      '$_vp/vp_playlist_load.dart',
-      'loadPlaylistIndexAttempt',
-      owner: 'VpPlaylistLoad',
+    final playlistLoad = _between(
+      flutterPlayer,
+      'Future<bool> _loadPlaylistIndex(',
+      'Future<String> _resolvePlaylistEntryUrl(',
     );
-    final pikPakRetry = libMember(
-      '$_vp/vp_pikpak_retry.dart',
-      'playPikPakVideoWithRetry',
-      owner: 'VpPikPakRetry',
+    final pikPakRetry = _between(
+      flutterPlayer,
+      'Future<bool> _playPikPakVideoWithRetry(',
+      'Future<void> _preloadEpisodeInfo(',
     );
 
     expect(playlistLoad, contains('final pikPakLoaded'));
@@ -354,21 +262,18 @@ void main() {
     'Android TV rejects one manual candidate and restores without failover',
     () {
       final selection = _between(
-        nativeSourceSwitcher,
-        'fun onStremioSourceSelected(',
+        nativePlayer,
+        'private fun onStremioSourceSelected(',
         'private fun resolveStremioSourceViaFlutter(',
       );
       final reject = _between(
-        nativeStartupGate,
-        'internal fun failManualSourceCandidate(',
-        'internal fun armStartupCandidate(',
+        nativePlayer,
+        'private fun failManualSourceCandidate(',
+        'private fun armStartupCandidate(',
       );
 
       expect(reject, contains('manualSourceRestoreInProgress = true'));
-      expect(
-        reject,
-        contains('host.playItem(host.currentIndex, suppressTrakt = true)'),
-      );
+      expect(reject, contains('playItem(currentIndex, suppressTrakt = true)'));
       expect(reject, contains('putAll(snapshot.perItemImdbIds)'));
       expect(
         reject,
@@ -382,14 +287,14 @@ void main() {
 
   test('Android TV gates progress and invalidates late manual resolution', () {
     final resolver = _between(
-      nativePlaybackStart,
+      nativePlayer,
       'private fun resolveAndPlay(',
       'private fun startPlayback(',
     );
     final progress = _between(
-      nativeProgressReporter,
-      'fun sendProgress(',
-      'private fun sendIptvProgress(',
+      nativePlayer,
+      'private fun sendProgress(',
+      'private fun commitStartupCandidate(',
     );
 
     expect(resolver, contains('reason=stale_manual_token'));
@@ -400,49 +305,34 @@ void main() {
 
   test('manual series packs must contain the selected episode', () {
     expect(
-      nativeSourceApplier,
+      nativePlayer,
       contains(
-        '(requireExactStartupEpisode || host.manualSourceSwitchSnapshot != null)',
+        '(requireExactStartupEpisode || manualSourceSwitchSnapshot != null)',
       ),
     );
-    final playlistSwitch = libMember(
-      '$_vp/vp_source_playlist_switch.dart',
-      'switchToSourcePlaylist',
-      owner: 'VpSourcePlaylistSwitch',
-    );
-    expect(playlistSwitch, contains('containsRequestedEpisode = false'));
-    expect(playlistSwitch, contains('if (containsRequestedEpisode)'));
+    expect(flutterPlayer, contains('containsRequestedEpisode = false'));
+    expect(flutterPlayer, contains('if (containsRequestedEpisode)'));
   });
 
   test(
     'Flutter startup failures unpin the failed source and still recover',
     () {
-      final startup = libMember(
-        '$_vp/vp_startup_failover.dart',
-        'openInitialVodWithFailover',
-        owner: 'VpStartupFailover',
+      final startup = _between(
+        flutterPlayer,
+        'Future<bool> _openInitialVodWithFailover(',
+        'Future<void> _commitValidatedStremioSource(',
       );
       final directBinding = _between(
-        boundPlaybackCode,
+        playbackService,
         '// Addon-direct pins store provenance',
         '// Cheap skip: a bound DEBRID source',
       );
 
       expect(startup, isNot(contains('_reportRejectedStremioSource')));
-      expect(
-        libMember(
-          '$_vp/vp_startup_gate.dart',
-          'reportStartupFailure',
-          owner: 'VpStartupGate',
-        ),
-        contains("'startupSourcesExhausted': true"),
-      );
-      expect(
-        boundPlaybackCode,
-        isNot(contains('_rejectedDirectSourceHandler')),
-      );
-      expect(directBinding, contains('sourceBindings.removeInvalid('));
-      expect(directBinding, contains('sourceBindings.removeCachedLink('));
+      expect(flutterPlayer, contains("'startupSourcesExhausted': true"));
+      expect(playbackService, isNot(contains('_rejectedDirectSourceHandler')));
+      expect(directBinding, contains('removeSourceEntry(imdbId, source)'));
+      expect(directBinding, contains('ResolvedPlaybackLinkCache.remove'));
       expect(directBinding, isNot(contains('[source, ...remainingSources]')));
       expect(
         directBinding,
@@ -450,30 +340,27 @@ void main() {
           'startupHasRemainingSavedSources: remainingSources.isNotEmpty',
         ),
       );
-      expect(boundPlaybackCode, contains('remainingSources'));
-      expect(bindingActions, contains('skipBoundSources: true'));
+      expect(playbackService, contains('remainingSources'));
+      expect(playbackService, contains('skipBoundSources: true'));
     },
   );
 
   test('every saved-source launch preserves remaining-pin recovery', () {
     final boundPlayback = _between(
-      boundPlaybackCode,
-      'static Future<bool> playViaBound(',
-      '\n  }\n',
+      playbackService,
+      'static Future<bool> _playViaBound(',
+      '/// Continue after a saved source resolved successfully',
     );
-    // Direct addons, media-server pins, local files, and debrid/native-cloud packs need the
+    // Direct addons, local files, and debrid/native-cloud packs all need the
     // flag, including when native startup has only one permitted attempt.
-    final launches = boundPlayback
-        .split('await SourcePlayerLaunch.launch(')
-        .skip(1)
-        .toList();
+    final launches = boundPlayback.split('await _launch(').skip(1).toList();
     expect(launches, hasLength(4));
     for (final launch in launches) {
       final arguments = launch.split('onStartupSourcesExhausted:').first;
       final cleanup = _between(
         launch,
         'onStartupSourcesExhausted:',
-        'await SourceBindingActions.recoverAfterBoundStartupFailure(',
+        'await _recoverAfterBoundStartupFailure(',
       );
       expect(cleanup, contains('await FailedSavedSource.cleanup('));
       expect(
@@ -491,31 +378,31 @@ void main() {
 
   test('bound startup recovery retains the preferred provider', () {
     final selection = _between(
-      automaticSelection,
+      playbackService,
       'static Future<void> playFromSelection(',
-      '\n  }\n',
+      'static Future<FilterLadder> loadLadder(',
     );
     final boundPlayback = _between(
-      boundPlaybackCode,
-      'static Future<bool> playViaBound(',
-      '\n  }\n',
+      playbackService,
+      'static Future<bool> _playViaBound(',
+      '/// Continue after a saved source resolved successfully',
     );
     final recovery = _between(
-      bindingActions,
-      'static Future<void> recoverAfterBoundStartupFailure(',
+      playbackService,
+      'static Future<void> _recoverAfterBoundStartupFailure(',
       '/// Pin [torrent] as the playback source',
     );
 
     expect(
       RegExp(
-        r'playViaBound\([\s\S]*?preferredProvider: preferredProvider',
+        r'_playViaBound\([\s\S]*?preferredProvider: preferredProvider',
       ).hasMatch(selection),
       isTrue,
     );
     expect(boundPlayback, contains('String? preferredProvider'));
     expect(
       RegExp(
-        r'SourceBindingActions\.recoverAfterBoundStartupFailure\([\s\S]*?preferredProvider: preferredProvider',
+        r'_recoverAfterBoundStartupFailure\([\s\S]*?preferredProvider: preferredProvider',
       ).allMatches(boundPlayback),
       hasLength(4),
     );
@@ -526,9 +413,9 @@ void main() {
 
   test('Android TV reports exhaustion without deleting failed source pins', () {
     final startupFailure = _between(
-      nativeStartupGate,
-      'internal fun failStartupCandidate(',
-      'internal fun failStartupResolution(',
+      nativePlayer,
+      'private fun failStartupCandidate(',
+      'private fun failStartupResolution(',
     );
 
     expect(startupFailure, isNot(contains('reportRejectedSource')));
@@ -559,44 +446,20 @@ void main() {
         'payloadCheck.optInt("sourcePersistenceSessionId", sourcePersistenceSessionId)',
       ),
     );
-    expect(
-      nativeStartupGate,
-      contains(
-        '"sourcePersistenceSessionId" to host.sourcePersistenceSessionId',
-      ),
-    );
     expect(playerBridge, contains('ignoring stale playback finish'));
   });
 
   test('delayed startup recovery waits for the exact player route', () {
-    final failure = libMember(
-      '$_vp/vp_startup_gate.dart',
-      'reportStartupFailure',
-      owner: 'VpStartupGate',
-    );
-    // P16 moved the report into VpStartupGate; State context/mounted are the
-    // facade Host's live forwarders.
     expect(
-      failure,
-      contains('final playerRoute = ModalRoute.of(_host.context)'),
+      flutterPlayer,
+      contains('final playerRoute = ModalRoute.of(context)'),
     );
-    // Mount/retirement checking moved into the local current() guard; follow
-    // that indirection while still requiring this exact captured route.
+    // Waits while the route is still alive but covered, and gives up unless
+    // this exact player route (still mounted, same media) is on top.
+    expect(flutterPlayer, contains('current() && playerRoute?.isActive == true'));
     expect(
-      failure,
-      matches(
-        RegExp(
-          r'bool current\(\)\s*=>\s*_host\.mounted\s*&&\s*!_host\.screenDisposed\s*&&\s*'
-          r'\(isCurrent\?\.call\(\)\s*\?\?\s*true\)\s*;',
-        ),
-      ),
-    );
-    expect(failure, contains('current() && playerRoute?.isActive == true'));
-    expect(
-      failure,
-      contains(
-        'if (!_host.mounted || !current() || playerRoute?.isCurrent != true) return;',
-      ),
+      flutterPlayer,
+      contains('!mounted || !current() || playerRoute?.isCurrent != true'),
     );
   });
 }

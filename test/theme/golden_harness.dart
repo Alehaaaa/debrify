@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -39,6 +40,19 @@ Future<void> pumpThemed(
   TextBrightness preset = TextBrightness.bright,
   Size surface = const Size(900, 1200),
 }) async {
+  // The real desktop sidebar uses WindowDragArea, which queries the native
+  // window state after its first frame. Widget tests have no window_manager
+  // plugin, and an unhandled asynchronous channel error can otherwise surface
+  // after a golden comparison as a second, unrelated test failure.
+  const windowManagerChannel = MethodChannel('window_manager');
+  final messenger = tester.binding.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(windowManagerChannel, (call) async {
+    if (call.method == 'isMaximized') return false;
+    throw MissingPluginException('Unexpected window_manager method: ${call.method}');
+  });
+  addTearDown(() =>
+      messenger.setMockMethodCallHandler(windowManagerChannel, null));
+
   await tester.binding.setSurfaceSize(surface);
   addTearDown(() => tester.binding.setSurfaceSize(null));
 

@@ -1,11 +1,10 @@
 import 'dart:convert';
-import 'package:debrify/services/storage/tracker_episode_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/widgets/clear_provider_progress_dialog.dart';
 import 'package:debrify/models/tracking_source.dart';
 import 'package:debrify/services/series_progress_reset_service.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/mdblist/mdblist_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,11 +64,12 @@ void main() {
             ),
             findsOneWidget,
           );
-          if (provider == TrackingSource.simkl)
+          if (provider == TrackingSource.simkl) {
             expect(
               find.textContaining('removes the movie from its library'),
               findsOneWidget,
             );
+          }
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();
         },
@@ -111,22 +111,22 @@ void main() {
       test(
         '$provider reset movie=$movie touches only requested provider',
         () async {
-          await VideoProgressStorage.saveVideoPlaybackState(
+          await StorageService.saveVideoPlaybackState(
             videoTitle: 'Show',
             videoUrl: 'https://test/video',
             positionMs: 1234,
             durationMs: 10000,
             imdbId: 'tt001',
           );
-          await TrackerEpisodeProgressStorage.saveEpisodeTraktProgress(
+          await StorageService.saveEpisodeTraktProgress(
             imdbId: 'tt001',
             percents: {'1_1': 50},
           );
-          await TrackerEpisodeProgressStorage.saveEpisodeSimklProgress(
+          await StorageService.saveEpisodeSimklProgress(
             imdbId: 'tt001',
             percents: {'1_1': 60},
           );
-          await TrackerEpisodeProgressStorage.saveEpisodeMdblistProgress(
+          await StorageService.saveEpisodeMdblistProgress(
             imdbId: 'tt001',
             percents: {'1_1': 70},
           );
@@ -200,27 +200,24 @@ void main() {
           expect(requests, isNotEmpty);
           expect(prefs.getString('playback_state_v1'), local);
           expect(prefs.getString('series_source_tt001'), 'keep');
-          if (provider != TrackingSource.trakt || movie)
+          if (provider != TrackingSource.trakt || movie) {
             expect(
-              await TrackerEpisodeProgressStorage.getEpisodeTraktProgress(
-                imdbId: 'tt001',
-              ),
+              await StorageService.getEpisodeTraktProgress(imdbId: 'tt001'),
               {'1_1': 50},
             );
-          if (provider != TrackingSource.simkl || movie)
+          }
+          if (provider != TrackingSource.simkl || movie) {
             expect(
-              await TrackerEpisodeProgressStorage.getEpisodeSimklProgress(
-                imdbId: 'tt001',
-              ),
+              await StorageService.getEpisodeSimklProgress(imdbId: 'tt001'),
               {'1_1': 60},
             );
-          if (provider != TrackingSource.mdblist || movie)
+          }
+          if (provider != TrackingSource.mdblist || movie) {
             expect(
-              await TrackerEpisodeProgressStorage.getEpisodeMdblistProgress(
-                imdbId: 'tt001',
-              ),
+              await StorageService.getEpisodeMdblistProgress(imdbId: 'tt001'),
               {'1_1': 70},
             );
+          }
         },
       );
     }

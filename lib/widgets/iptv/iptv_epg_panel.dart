@@ -9,6 +9,7 @@ import 'styles/iptv_style.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../utils/tv_keys.dart';
+import '../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// Formats a time as the device's clock format ("8:00 PM" / "20:00").
 String _clock(BuildContext context, DateTime t) =>
@@ -858,6 +859,7 @@ Future<void> showIptvScheduleSheet(
   // a modal captures this subtree's inherited themes, freeze included.
   final app = AppThemeScope.of(context);
   return showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
     context: context,
     isScrollControlled: true,
     backgroundColor: app.iptv.modalBg,

@@ -8,6 +8,7 @@
 
 #include <memory>
 
+#include "media_session_win.h"
 #include "win32_window.h"
 
 // A window that does nothing but host a Flutter view.
@@ -34,6 +35,7 @@ class FlutterWindow : public Win32Window {
       device_secret_channel_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       profile_privacy_channel_;
+  std::unique_ptr<MediaSessionWin> media_session_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

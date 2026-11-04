@@ -8,6 +8,8 @@ import '../../services/tmdb_metadata_repository.dart';
 import '../../services/profiles/profile_runtime.dart';
 import '../../services/metadata_details_service.dart';
 import '../../widgets/collections/tmdb_attribution.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class MetadataSettingsPage extends StatefulWidget {
   const MetadataSettingsPage({super.key, this.repository});
@@ -103,7 +105,8 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
   }
 
   Future<void> _save(MetadataPreferences next) async {
-    if (_saving || _loadedScope != ProfileRuntime.scope.value ||
+    if (_saving ||
+        _loadedScope != ProfileRuntime.scope.value ||
         _loadedRevision != MetadataPreferencesService.revision.value) {
       return;
     }
@@ -146,32 +149,40 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
     String title,
     String value,
     Map<String, String> options,
-  ) => showDialog<String>(
-    context: context,
-    builder: (context) => SimpleDialog(
-      title: Text(title),
-      children: [
-        for (final entry in options.entries)
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, entry.key),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                children: [
-                  Icon(
-                    entry.key == value
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(entry.value)),
-                ],
+  ) {
+    // The modal route may sit outside the page's scoped appearance provider.
+    final app = AppThemeScope.of(context);
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
+        title: Text(title),
+        children: [
+          for (final entry in options.entries)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, entry.key),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(
+                      entry.key == value
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(entry.value)),
+                  ],
+                ),
               ),
             ),
-          ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 
   Widget _selection(
     String title,
@@ -182,25 +193,34 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
     String? disabledReason,
   }) => ListTile(
     title: Text(title),
-    subtitle: Text([
-      options[value] ?? 'Selected provider unavailable',
-      if (!enabled && disabledReason != null) disabledReason,
-    ].join('\n')),
+    subtitle: Text(
+      [
+        options[value] ?? 'Selected provider unavailable',
+        if (!enabled && disabledReason != null) disabledReason,
+      ].join('\n'),
+    ),
     trailing: const Icon(Icons.chevron_right),
-    enabled: enabled && !_saving && _loadedRevision == MetadataPreferencesService.revision.value,
-    onTap: !enabled ? null : () async {
-      if (_loadedRevision != MetadataPreferencesService.revision.value) return;
-      final scope = ProfileRuntime.scope.value;
-      final generation = _loadGeneration;
-      final selected = await _choose(title, value, options);
-      if (!mounted ||
-          selected == null ||
-          generation != _loadGeneration ||
-          scope != ProfileRuntime.scope.value) {
-        return;
-      }
-      await _save(update(selected));
-    },
+    enabled:
+        enabled &&
+        !_saving &&
+        _loadedRevision == MetadataPreferencesService.revision.value,
+    onTap: !enabled
+        ? null
+        : () async {
+            if (_loadedRevision != MetadataPreferencesService.revision.value) {
+              return;
+            }
+            final scope = ProfileRuntime.scope.value;
+            final generation = _loadGeneration;
+            final selected = await _choose(title, value, options);
+            if (!mounted ||
+                selected == null ||
+                generation != _loadGeneration ||
+                scope != ProfileRuntime.scope.value) {
+              return;
+            }
+            await _save(update(selected));
+          },
   );
 
   static const _languages = {
@@ -228,18 +248,26 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
   Widget build(BuildContext context) {
     final prefs = _preferences;
     bool tmdb(MetadataCategory category) =>
-        _repository.configured && prefs?.provider(category) == MetadataPreferences.tmdb;
-    final artwork = tmdb(MetadataCategory.posters) || tmdb(MetadataCategory.backgrounds);
+        _repository.configured &&
+        prefs?.provider(category) == MetadataPreferences.tmdb;
+    final artwork =
+        tmdb(MetadataCategory.posters) || tmdb(MetadataCategory.backgrounds);
     final trailers = tmdb(MetadataCategory.trailers);
-    final language = _repository.configured && prefs != null && (
-        tmdb(MetadataCategory.information) || tmdb(MetadataCategory.episodeInformation) ||
-        tmdb(MetadataCategory.credits) || tmdb(MetadataCategory.recommendations) ||
-        prefs.features.any((f) => f != MetadataFeature.availability) ||
-        (artwork && prefs.artworkLanguage == 'same') ||
-        (trailers && prefs.trailerLanguage == 'same'));
-    final region = _repository.configured && prefs != null &&
+    final language =
+        _repository.configured &&
+        prefs != null &&
+        (tmdb(MetadataCategory.information) ||
+            tmdb(MetadataCategory.episodeInformation) ||
+            tmdb(MetadataCategory.credits) ||
+            tmdb(MetadataCategory.recommendations) ||
+            prefs.features.any((f) => f != MetadataFeature.availability) ||
+            (artwork && prefs.artworkLanguage == 'same') ||
+            (trailers && prefs.trailerLanguage == 'same'));
+    final region =
+        _repository.configured &&
+        prefs != null &&
         (prefs.features.contains(MetadataFeature.availability) ||
-         prefs.features.contains(MetadataFeature.discovery));
+            prefs.features.contains(MetadataFeature.discovery));
     return Scaffold(
       appBar: AppBar(title: const Text('Metadata')),
       body: prefs == null
@@ -293,7 +321,8 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
                   _languageOptions,
                   (v) => prefs.copyWith(language: v),
                   enabled: language,
-                  disabledReason: 'Enable a TMDB feature that uses metadata language.',
+                  disabledReason:
+                      'Enable a TMDB feature that uses metadata language.',
                 ),
                 _selection(
                   'Artwork language',
@@ -305,7 +334,8 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
                   },
                   (v) => prefs.copyWith(artworkLanguage: v),
                   enabled: artwork,
-                  disabledReason: 'Select TMDB for posters or backdrops to change this.',
+                  disabledReason:
+                      'Select TMDB for posters or backdrops to change this.',
                 ),
                 _selection(
                   'Trailer language',
@@ -338,7 +368,8 @@ class _MetadataSettingsPageState extends State<MetadataSettingsPage> {
                       },
                   (v) => prefs.copyWith(region: v),
                   enabled: region,
-                  disabledReason: 'Enable Where to watch or TMDB discovery to change this.',
+                  disabledReason:
+                      'Enable Where to watch or TMDB discovery to change this.',
                 ),
                 const Divider(),
                 const Padding(

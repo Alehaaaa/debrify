@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import MediaPlayer
 import CryptoKit
 import Security
 
@@ -107,6 +108,144 @@ private final class MacOsDeviceSecretCipher {
   }
 }
 
+// MARK: - Now Playing (media keys, headset/AirPods, lock screen, Control Center)
+
+/// The in-app player's Now Playing entry: title, poster and progress for the
+/// system media controls, whose play/pause/skip/seek commands go back to Dart
+/// over `debrify/media_session` as `command`. Fed by MediaSessionService.
+private final class NowPlayingBridge {
+  private var channel: FlutterMethodChannel?
+  private var commandsInstalled = false
+  private var info: [String: Any] = [:]
+  private var title = ""
+  private var subtitle: String?
+  private var canNext = false
+  private var canPrevious = false
+
+  func install(on messenger: FlutterBinaryMessenger) -> FlutterMethodChannel {
+    let channel = FlutterMethodChannel(name: "debrify/media_session", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { result(nil); return }
+      switch call.method {
+      case "update":
+        self.update(call.arguments as? [String: Any] ?? [:])
+        result(nil)
+      case "clear":
+        self.clear()
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+    self.channel = channel
+    return channel
+  }
+
+  private func send(_ action: String, _ extra: [String: Any] = [:]) {
+    var args = extra
+    args["action"] = action
+    DispatchQueue.main.async { self.channel?.invokeMethod("command", arguments: args) }
+  }
+
+  private func installCommands() {
+    guard !commandsInstalled else { return }
+    commandsInstalled = true
+    let center = MPRemoteCommandCenter.shared()
+    center.playCommand.addTarget { [weak self] _ in self?.send("play"); return .success }
+    center.pauseCommand.addTarget { [weak self] _ in self?.send("pause"); return .success }
+    center.togglePlayPauseCommand.addTarget { [weak self] _ in self?.send("toggle"); return .success }
+    center.stopCommand.addTarget { [weak self] _ in self?.send("pause"); return .success }
+    center.nextTrackCommand.addTarget { [weak self] _ in self?.send("next"); return .success }
+    center.previousTrackCommand.addTarget { [weak self] _ in self?.send("previous"); return .success }
+    center.skipForwardCommand.preferredIntervals = [10]
+    center.skipForwardCommand.addTarget { [weak self] event in
+      let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
+      self?.send("seekBy", ["offsetMs": Int(interval * 1000)])
+      return .success
+    }
+    center.skipBackwardCommand.preferredIntervals = [10]
+    center.skipBackwardCommand.addTarget { [weak self] event in
+      let interval = (event as? MPSkipIntervalCommandEvent)?.interval ?? 10
+      self?.send("seekBy", ["offsetMs": -Int(interval * 1000)])
+      return .success
+    }
+    center.changePlaybackPositionCommand.addTarget { [weak self] event in
+      guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+      self?.send("seek", ["positionMs": Int(event.positionTime * 1000)])
+      return .success
+    }
+  }
+
+  private func setCommandsEnabled(_ enabled: Bool) {
+    let center = MPRemoteCommandCenter.shared()
+    for command in [center.playCommand, center.pauseCommand, center.togglePlayPauseCommand,
+                    center.stopCommand, center.skipForwardCommand, center.skipBackwardCommand,
+                    center.changePlaybackPositionCommand] {
+      command.isEnabled = enabled
+    }
+    center.nextTrackCommand.isEnabled = enabled && canNext
+    center.previousTrackCommand.isEnabled = enabled && canPrevious
+  }
+
+  private func update(_ args: [String: Any]) {
+    installCommands()
+    if let value = args["title"] as? String { title = value }
+    if args.keys.contains("subtitle") { subtitle = args["subtitle"] as? String }
+    if let value = args["canNext"] as? Bool { canNext = value }
+    if let value = args["canPrevious"] as? Bool { canPrevious = value }
+    info[MPMediaItemPropertyTitle] = title
+    if let subtitle { info[MPMediaItemPropertyArtist] = subtitle } else { info.removeValue(forKey: MPMediaItemPropertyArtist) }
+    info[MPNowPlayingInfoPropertyMediaType] = MPNowPlayingInfoMediaType.video.rawValue
+    if let ms = args["durationMs"] as? NSNumber {
+      info[MPMediaItemPropertyPlaybackDuration] = ms.doubleValue / 1000
+    }
+    if let ms = args["positionMs"] as? NSNumber {
+      info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = ms.doubleValue / 1000
+    }
+    var playing: Bool?
+    if let value = args["playing"] as? Bool {
+      playing = value
+      let rate = (args["rate"] as? NSNumber)?.doubleValue ?? 1
+      info[MPNowPlayingInfoPropertyPlaybackRate] = value ? rate : 0
+      info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+    }
+    if args["clearArtwork"] as? Bool == true {
+      info.removeValue(forKey: MPMediaItemPropertyArtwork)
+    }
+    if let data = (args["artwork"] as? FlutterStandardTypedData)?.data, let artwork = makeArtwork(data) {
+      info[MPMediaItemPropertyArtwork] = artwork
+    }
+    let center = MPNowPlayingInfoCenter.default()
+    center.nowPlayingInfo = info
+    #if os(macOS)
+    if let playing { center.playbackState = playing ? .playing : .paused }
+    #endif
+    _ = playing
+    setCommandsEnabled(true)
+  }
+
+  private func clear() {
+    info = [:]
+    title = ""
+    subtitle = nil
+    let center = MPNowPlayingInfoCenter.default()
+    center.nowPlayingInfo = nil
+    #if os(macOS)
+    center.playbackState = .stopped
+    #endif
+    if commandsInstalled { setCommandsEnabled(false) }
+  }
+
+  private func makeArtwork(_ data: Data) -> MPMediaItemArtwork? {
+    #if os(macOS)
+    guard let image = NSImage(data: data) else { return nil }
+    #else
+    guard let image = UIImage(data: data) else { return nil }
+    #endif
+    return MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+  }
+}
+
 private final class ReelShareBridge: NSObject, NSSharingServicePickerDelegate, NSSharingServiceDelegate {
   private var picker: NSSharingServicePicker?
   private var pendingResult: FlutterResult?
@@ -119,7 +258,7 @@ private final class ReelShareBridge: NSObject, NSSharingServicePickerDelegate, N
       guard let self, self.pendingResult == nil, let view, view.window != nil,
             let args = call.arguments as? [String: Any],
             let value = args["url"] as? String,
-            let url = URL(string: value), url.scheme == "https" else {
+            let url = URL(string: value), url.scheme == "https", url.host == "youtu.be" else {
         result(false)
         return
       }
@@ -178,21 +317,32 @@ class MainFlutterWindow: NSWindow {
   private var deviceSecretChannel: FlutterMethodChannel?
   private var profilePrivacyChannel: FlutterMethodChannel?
   private let deviceSecretCipher = MacOsDeviceSecretCipher()
+  private let nowPlaying = NowPlayingBridge()
+  private var nowPlayingChannel: FlutterMethodChannel?
   private let reelShare = ReelShareBridge()
   private var reelShareChannel: FlutterMethodChannel?
 
   override func awakeFromNib() {
     let flutterViewController = FlutterViewController()
+    // Keep the native window logo-free and on the same base as Flutter's
+    // splash until its first frame. Let Flutter own its rendering layers:
+    // controller.view is a wrapper, not the Metal-backed FlutterView, and
+    // forcing a layer on the wrapper can desynchronise Retina presentation.
+    flutterViewController.backgroundColor = NSColor(
+      red: 2 / 255,
+      green: 6 / 255,
+      blue: 23 / 255,
+      alpha: 1
+    )
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
     deviceSecretChannel = deviceSecretCipher.install(on: flutterViewController.engine.binaryMessenger)
-    reelShareChannel = reelShare.install(
-      on: flutterViewController.engine.binaryMessenger,
-      view: flutterViewController.view
-    )
+    nowPlayingChannel = nowPlaying.install(on: flutterViewController.engine.binaryMessenger)
+    reelShareChannel = reelShare.install(on: flutterViewController.engine.binaryMessenger,
+                                        view: flutterViewController.view)
     profilePrivacyChannel = FlutterMethodChannel(
       name: "com.debrify.app/profile_privacy",
       binaryMessenger: flutterViewController.engine.binaryMessenger

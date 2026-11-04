@@ -1,21 +1,15 @@
-import 'package:debrify/services/storage/ambient_trailer_storage.dart';
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
-import 'package:debrify/services/storage/defaults_generation_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
-import 'package:debrify/services/storage/sidebar_storage.dart';
-import 'package:debrify/services/storage/theme_storage.dart';
-import 'package:debrify/services/storage/torrent_search_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:debrify/services/storage_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('source presentation defaults on for new installs', () async {
     SharedPreferences.setMockInitialValues({});
-    expect(await TorrentSearchStorage.getShowAddonLogos(), isTrue);
-    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isTrue);
+    expect(await StorageService.getShowAddonLogos(), isTrue);
+    expect(await StorageService.getUseAddonTextFormatting(), isTrue);
   });
 
   test('update enables both source settings once and preserves later opt-outs', () async {
@@ -24,20 +18,20 @@ void main() {
       'sources_show_addon_logos': false,
       'sources_use_addon_text': false,
     });
-    await DefaultsGenerationStorage.migrateDefaultsGeneration();
-    expect(await TorrentSearchStorage.getShowAddonLogos(), isTrue);
-    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isTrue);
-    await TorrentSearchStorage.setShowAddonLogos(false);
-    await TorrentSearchStorage.setUseAddonTextFormatting(false);
-    await DefaultsGenerationStorage.migrateDefaultsGeneration();
-    expect(await TorrentSearchStorage.getShowAddonLogos(), isFalse);
-    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isFalse);
+    await StorageService.migrateDefaultsGeneration();
+    expect(await StorageService.getShowAddonLogos(), isTrue);
+    expect(await StorageService.getUseAddonTextFormatting(), isTrue);
+    await StorageService.setShowAddonLogos(false);
+    await StorageService.setUseAddonTextFormatting(false);
+    await StorageService.migrateDefaultsGeneration();
+    expect(await StorageService.getShowAddonLogos(), isFalse);
+    expect(await StorageService.getUseAddonTextFormatting(), isFalse);
   });
 
   group('defaults generation (update-aware flagship look)', () {
     test('a pre-Spotlight install adopts the full bundle once', () async {
       SharedPreferences.setMockInitialValues({});
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
 
       expect(prefs.getString('app_theme'), 'spotlight');
@@ -55,11 +49,11 @@ void main() {
       expect(prefs.getInt('defaults_generation'), 5);
 
       // The getters resolve the migrated values (they validate the sets).
-      expect(await ThemeStorage.getAppTheme(), 'spotlight');
-      expect(await HomeAppearanceStorage.getTvHomeStyle(), 'spotlight');
-      expect(await SidebarStorage.getTvSidebarStyle(), 'pill');
-      expect(await SidebarStorage.getDesktopSidebarStyle(), 'pill');
-      expect(await DebrifyTvStorage.getDebrifyTvStyle(), 'spotlight');
+      expect(await StorageService.getAppTheme(), 'spotlight');
+      expect(await StorageService.getTvHomeStyle(), 'spotlight');
+      expect(await StorageService.getTvSidebarStyle(), 'pill');
+      expect(await StorageService.getDesktopSidebarStyle(), 'pill');
+      expect(await StorageService.getDebrifyTvStyle(), 'spotlight');
     });
 
     test('explicit choices survive; only unwritten prefs adopt', () async {
@@ -67,7 +61,7 @@ void main() {
         'app_theme': 'signal',
         'tv_sidebar_style': 'ghost',
       });
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
 
       // The user's picks are untouched...
@@ -84,12 +78,12 @@ void main() {
 
     test('synced checkpoint without appearance repairs to Spotlight', () async {
       SharedPreferences.setMockInitialValues({'defaults_generation': 3});
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
-      expect(await ThemeStorage.getAppTheme(), 'spotlight');
-      expect(await HomeAppearanceStorage.getTvHomeStyle(), 'spotlight');
-      expect(await SidebarStorage.getTvSidebarStyle(), 'pill');
-      expect(await SidebarStorage.getDesktopSidebarStyle(), 'pill');
-      expect(await DebrifyTvStorage.getDebrifyTvStyle(), 'spotlight');
+      await StorageService.migrateDefaultsGeneration();
+      expect(await StorageService.getAppTheme(), 'spotlight');
+      expect(await StorageService.getTvHomeStyle(), 'spotlight');
+      expect(await StorageService.getTvSidebarStyle(), 'pill');
+      expect(await StorageService.getDesktopSidebarStyle(), 'pill');
+      expect(await StorageService.getDebrifyTvStyle(), 'spotlight');
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('detail_page_style'), 'showcase');
       expect(prefs.getString('detail_theme'), 'spotlight');
@@ -97,7 +91,7 @@ void main() {
 
     test('an already-migrated install is a strict no-op', () async {
       SharedPreferences.setMockInitialValues({'defaults_generation': 5});
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
 
       // Nothing written: the user cleared/never-set these AFTER migration,
@@ -114,7 +108,7 @@ void main() {
       // opinion about trailers — whichever surface its form factor defaulted
       // off was simply never written.
       SharedPreferences.setMockInitialValues({'defaults_generation': 1});
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
 
       expect(prefs.getBool('home_hero_trailer_enabled'), isTrue);
@@ -123,8 +117,8 @@ void main() {
       // Generation 4 repairs absent appearance values even with an old checkpoint.
       expect(prefs.getString('app_theme'), 'spotlight');
 
-      expect(await AmbientTrailerStorage.getHomeHeroTrailerEnabled(), isTrue);
-      expect(await AmbientTrailerStorage.getDetailTrailerAutoplayEnabled(), isTrue);
+      expect(await StorageService.getHomeHeroTrailerEnabled(), isTrue);
+      expect(await StorageService.getDetailTrailerAutoplayEnabled(), isTrue);
     });
 
     test('an explicit trailer OFF is never overridden', () async {
@@ -132,20 +126,20 @@ void main() {
         'defaults_generation': 1,
         'home_hero_trailer_enabled': false,
       });
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
 
       // Said no, stays no...
       expect(prefs.getBool('home_hero_trailer_enabled'), isFalse);
-      expect(await AmbientTrailerStorage.getHomeHeroTrailerEnabled(), isFalse);
+      expect(await StorageService.getHomeHeroTrailerEnabled(), isFalse);
       // ...while the surface they never ruled on adopts.
       expect(prefs.getBool('detail_trailer_autoplay_enabled'), isTrue);
     });
 
     test('a fresh install gets both trailer surfaces on', () async {
       SharedPreferences.setMockInitialValues({});
-      expect(await AmbientTrailerStorage.getHomeHeroTrailerEnabled(), isTrue);
-      expect(await AmbientTrailerStorage.getDetailTrailerAutoplayEnabled(), isTrue);
+      expect(await StorageService.getHomeHeroTrailerEnabled(), isTrue);
+      expect(await StorageService.getDetailTrailerAutoplayEnabled(), isTrue);
     });
 
     test(
@@ -160,7 +154,7 @@ void main() {
           'tv_sidebar_style': 'ghost',
           'desktop_sidebar_style': 'rail',
         });
-        await DefaultsGenerationStorage.migrateDefaultsGeneration();
+        await StorageService.migrateDefaultsGeneration();
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getString('app_theme'), 'legacy');
         expect(prefs.getString('tv_home_style'), 'canvas');
@@ -188,7 +182,7 @@ void main() {
           'detail_theme': 'spotlight',
           'tv_home_style': 'spotlight',
         });
-        await DefaultsGenerationStorage.migrateDefaultsGeneration();
+        await StorageService.migrateDefaultsGeneration();
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getString('debrify_tv_style'), 'spotlight');
         expect(prefs.getInt('defaults_generation'), 5);
@@ -208,7 +202,7 @@ void main() {
           'detail_theme': 'spotlight',
           'tv_home_style': 'canvas',
         });
-        await DefaultsGenerationStorage.migrateDefaultsGeneration();
+        await StorageService.migrateDefaultsGeneration();
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getString('debrify_tv_style'), 'spotlight');
       },
@@ -224,7 +218,7 @@ void main() {
           'app_theme': 'spotlight',
           'debrify_tv_style': 'grid',
         });
-        await DefaultsGenerationStorage.migrateDefaultsGeneration();
+        await StorageService.migrateDefaultsGeneration();
         final prefs = await SharedPreferences.getInstance();
         expect(prefs.getString('debrify_tv_style'), 'grid');
       },
@@ -232,10 +226,10 @@ void main() {
 
     test('running twice changes nothing after the first pass', () async {
       SharedPreferences.setMockInitialValues({});
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('app_theme', 'noir'); // user changes their mind
-      await DefaultsGenerationStorage.migrateDefaultsGeneration();
+      await StorageService.migrateDefaultsGeneration();
       expect(prefs.getString('app_theme'), 'noir');
     });
   });

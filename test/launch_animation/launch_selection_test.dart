@@ -1,6 +1,6 @@
-import 'package:debrify/services/storage/launch_ident_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/profiles/profile_preference_portability.dart';
@@ -15,58 +15,58 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
-    await LaunchIdentStorage.getLaunchAnimation();
+    await StorageService.getLaunchAnimation();
     LookApplier.debugResetGenerations();
   });
   test(
     'deleting B preserves A and deleting A uses built-in fallback',
     () async {
-      await LaunchIdentStorage.setLaunchAnimation('horizon');
-      await LaunchIdentStorage.setImportedLaunchAnimation(a);
-      await LaunchIdentStorage.clearImportedLaunchAnimationIf(b);
-      expect(LaunchIdentStorage.importedLaunchAnimationCached, a);
-      await LaunchIdentStorage.clearImportedLaunchAnimationIf(a);
-      expect(LaunchIdentStorage.importedLaunchAnimationCached, isNull);
-      expect(await LaunchIdentStorage.getLaunchAnimation(), 'horizon');
+      await StorageService.setLaunchAnimation('horizon');
+      await StorageService.setImportedLaunchAnimation(a);
+      await StorageService.clearImportedLaunchAnimationIf(b);
+      expect(StorageService.importedLaunchAnimationCached, a);
+      await StorageService.clearImportedLaunchAnimationIf(a);
+      expect(StorageService.importedLaunchAnimationCached, isNull);
+      expect(await StorageService.getLaunchAnimation(), 'horizon');
     },
   );
   test('choosing same built-in fallback disables imported override', () async {
-    await LaunchIdentStorage.setLaunchAnimation('trace');
-    await LaunchIdentStorage.setImportedLaunchAnimation(a);
-    await LaunchIdentStorage.setLaunchAnimation('trace');
-    expect(LaunchIdentStorage.importedLaunchAnimationCached, isNull);
-    await LaunchIdentStorage.getLaunchAnimation();
-    expect(LaunchIdentStorage.importedLaunchAnimationCached, isNull);
+    await StorageService.setLaunchAnimation('trace');
+    await StorageService.setImportedLaunchAnimation(a);
+    await StorageService.setLaunchAnimation('trace');
+    expect(StorageService.importedLaunchAnimationCached, isNull);
+    await StorageService.getLaunchAnimation();
+    expect(StorageService.importedLaunchAnimationCached, isNull);
   });
   test('newer imported choice wins over queued built-in write', () async {
-    final old = LaunchIdentStorage.setLaunchAnimation('horizon');
-    final newer = LaunchIdentStorage.setImportedLaunchAnimation(a);
+    final old = StorageService.setLaunchAnimation('horizon');
+    final newer = StorageService.setImportedLaunchAnimation(a);
     await Future.wait([old, newer]);
-    await LaunchIdentStorage.getLaunchAnimation();
-    expect(LaunchIdentStorage.importedLaunchAnimationCached, a);
+    await StorageService.getLaunchAnimation();
+    expect(StorageService.importedLaunchAnimationCached, a);
   });
   test(
     'a new selection survives concurrent deletion of the old selection',
     () async {
-      await LaunchIdentStorage.setImportedLaunchAnimation(a);
+      await StorageService.setImportedLaunchAnimation(a);
       await Future.wait([
-        LaunchIdentStorage.clearImportedLaunchAnimationIf(a),
-        LaunchIdentStorage.setImportedLaunchAnimation(b),
+        StorageService.clearImportedLaunchAnimationIf(a),
+        StorageService.setImportedLaunchAnimation(b),
       ]);
-      await LaunchIdentStorage.getLaunchAnimation();
-      expect(LaunchIdentStorage.importedLaunchAnimationCached, b);
+      await StorageService.getLaunchAnimation();
+      expect(StorageService.importedLaunchAnimationCached, b);
     },
   );
   test('imported override never enters portable or sanitized preferences', () {
     expect(
       ProfilePreferencePortability.allowsKey(
-        LaunchIdentStorage.importedLaunchAnimationKey,
+        StorageService.importedLaunchAnimationKey,
       ),
       isFalse,
     );
     expect(
       SanitizedProfilePreferences.allowsEntry(
-        LaunchIdentStorage.importedLaunchAnimationKey,
+        StorageService.importedLaunchAnimationKey,
         a,
       ),
       isFalse,
@@ -85,14 +85,14 @@ void main() {
       sessionEpoch: 2,
     );
     await prefs.setString(
-      first.preferenceKey(LaunchIdentStorage.importedLaunchAnimationKey),
+      first.preferenceKey(StorageService.importedLaunchAnimationKey),
       a,
     );
     ProfileRuntime.initializeCommitted(first);
-    await LaunchIdentStorage.getLaunchAnimation();
-    expect(LaunchIdentStorage.importedLaunchAnimationCached, a);
+    await StorageService.getLaunchAnimation();
+    expect(StorageService.importedLaunchAnimationCached, a);
     ProfileRuntime.publish(second);
-    await LaunchIdentStorage.getLaunchAnimation();
-    expect(LaunchIdentStorage.importedLaunchAnimationCached, isNull);
+    await StorageService.getLaunchAnimation();
+    expect(StorageService.importedLaunchAnimationCached, isNull);
   });
 }

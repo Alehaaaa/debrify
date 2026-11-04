@@ -60,9 +60,10 @@ static void my_application_activate(GApplication* application) {
   FlView* view = fl_view_new(project);
 
   GdkRGBA background_color;
-  // Background defaults to black, override it here if necessary, e.g. #00000000
-  // for transparent.
-  gdk_rgba_parse(&background_color, "#000000");
+  // Match the logo-free native launch surface to Flutter's splash base. This
+  // prevents a black frame between the desktop window appearing and Flutter
+  // painting the one, current launch ident.
+  gdk_rgba_parse(&background_color, "#020617");
   fl_view_set_background_color(view, &background_color);
 
   gtk_widget_show(GTK_WIDGET(view));

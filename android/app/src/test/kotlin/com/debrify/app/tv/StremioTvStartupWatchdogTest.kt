@@ -32,22 +32,12 @@ class StremioTvStartupWatchdogTest {
     }
 
     private fun read(activity: Any, name: String): Any? =
-        TvPlayerOriginalAccess.field(activity, name)
+        activity.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(activity)
 
     private fun call(activity: Any, name: String, vararg args: Any?): Any? {
-        val owner = when (name) {
-            "waitForPikPakMetadata", "cancelPikPakRetry" ->
-                TvPlayerOriginalAccess.field(activity, "pikPakRetryController")!!
-            "sendProgress" -> TvPlayerOriginalAccess.field(activity, "progressReporter")!!
-            "initStremioTvGuide" -> TvPlayerOriginalAccess.field(activity, "stremioTvGuideController")!!
-            "beginStartupFailoverIfEligible", "commitStartupCandidate", "beginManualSourceCandidate",
-            "commitManualSourceCandidate", "schedulePikPakGateReprepare" ->
-                TvPlayerOriginalAccess.field(activity, "startupGateController")!!
-            else -> activity
-        }
-        val method = owner.javaClass.declaredMethods.first { it.name == name && it.parameterCount == args.size }
+        val method = activity.javaClass.declaredMethods.first { it.name == name && it.parameterCount == args.size }
         method.isAccessible = true
-        return method.invoke(owner, *args)
+        return method.invoke(activity, *args)
     }
 
     private fun activity(stremioTv: Boolean = false, iptv: Boolean = false, pikpak: Boolean = false, aiostreams: Boolean = false): AndroidTvTorrentPlayerActivity {

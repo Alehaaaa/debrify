@@ -14,33 +14,35 @@ void main() {
   late String appearance;
 
   setUpAll(() {
-    final src = File('lib/screens/settings/settings_tv_layout.dart')
-        .readAsStringSync();
-    final start = src.indexOf('case 6: // Appearance');
+    final src = File(
+      'lib/screens/settings/settings_tv_layout.dart',
+    ).readAsStringSync();
+    final start = src.indexOf('case 3: // Appearance');
     expect(start, isNonNegative, reason: 'Appearance case not found');
-    final end = src.indexOf('case 7: // Playback', start);
+    final end = src.indexOf('case 4: // Playback', start);
     expect(end, greaterThan(start), reason: 'Playback boundary not found');
     appearance = src.substring(start, end);
   });
 
   test('pane focus indices are contiguous from zero across every group', () {
-    final indices = RegExp(r'_paneNodes\[(\d+)\]')
-        .allMatches(appearance)
-        .map((m) => int.parse(m.group(1)!))
-        .toList();
+    final indices = RegExp(
+      r'_paneNodes\[(\d+)\]',
+    ).allMatches(appearance).map((m) => int.parse(m.group(1)!)).toList();
 
     expect(indices, isNotEmpty);
     expect(
       indices,
       List<int>.generate(indices.length, (i) => i),
-      reason: 'a gap skips a row on the way down; a repeat means two widgets '
+      reason:
+          'a gap skips a row on the way down; a repeat means two widgets '
           'share one FocusNode and one becomes unreachable',
     );
   });
 
   test('the node pool covers the category', () {
-    final src = File('lib/screens/settings/settings_tv_layout.dart')
-        .readAsStringSync();
+    final src = File(
+      'lib/screens/settings/settings_tv_layout.dart',
+    ).readAsStringSync();
     final pool = int.parse(
       RegExp(r'_kMaxCategoryRows = (\d+)').firstMatch(src)!.group(1)!,
     );

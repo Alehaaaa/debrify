@@ -1,18 +1,14 @@
-import 'package:debrify/services/storage/alldebrid_storage.dart';
-import 'package:debrify/services/storage/premiumize_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/torbox_storage.dart';
-import 'package:debrify/services/storage/torrent_provider_storage.dart';
 import 'widgets/settings_load_error.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../services/analytics_service.dart';
 import '../../services/pikpak_api_service.dart';
 import '../../services/profiles/profile_credential_facade.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 @visibleForTesting
 bool pikPakProviderIsSelectable({
@@ -58,7 +54,6 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('provider_settings');
     _loadSettings();
   }
 
@@ -86,25 +81,26 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         currentProvider,
       ) = await (() async {
         // Check which providers are available
-        final torboxConfigured = await TorboxStorage.hasTorboxCredential();
-        final rdConfigured = await RealDebridStorage.hasRealDebridCredential();
+        final torboxConfigured = await StorageService.hasTorboxCredential();
+        final rdConfigured = await StorageService.hasRealDebridCredential();
         final premiumizeConfigured =
-            await PremiumizeStorage.hasPremiumizeCredential();
+            await StorageService.hasPremiumizeCredential();
         final allDebridConfigured =
-            await AllDebridStorage.hasAllDebridCredential();
+            await StorageService.hasAllDebridCredential();
         final pikpakAuthenticated = await PikPakApiService.instance
             .isAuthenticated();
         final pikpakPresence = await ProfileCredentialFacade.isConfigured(
           'pikpak_email',
         );
 
-        final torboxEnabled = await TorboxStorage.getTorboxIntegrationEnabled();
+        final torboxEnabled =
+            await StorageService.getTorboxIntegrationEnabled();
         final rdEnabled =
-            await RealDebridStorage.getRealDebridIntegrationEnabled();
+            await StorageService.getRealDebridIntegrationEnabled();
         final premiumizeEnabled =
-            await PremiumizeStorage.getPremiumizeIntegrationEnabled();
+            await StorageService.getPremiumizeIntegrationEnabled();
         final allDebridEnabled =
-            await AllDebridStorage.getAllDebridIntegrationEnabled();
+            await StorageService.getAllDebridIntegrationEnabled();
 
         final torboxAvailable = torboxEnabled && torboxConfigured;
         final rdAvailable = rdEnabled && rdConfigured;
@@ -116,8 +112,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         );
 
         // Load current setting
-        var currentProvider =
-            await TorrentProviderStorage.getDefaultTorrentProvider();
+        var currentProvider = await StorageService.getDefaultTorrentProvider();
 
         // Display an unavailable selection as 'Ask every time', but only a
         // deliberate selection may change the saved preference.
@@ -205,7 +200,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
     setState(() {
       _selectedProvider = provider;
     });
-    await TorrentProviderStorage.setDefaultTorrentProvider(provider);
+    await StorageService.setDefaultTorrentProvider(provider);
   }
 
   @override
@@ -283,11 +278,13 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
     final t = app.settings;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: t.panel,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: t.line),
-      ),
+      decoration: GlassChrome.enabled(app)
+          ? GlassChrome.decoration(app)
+          : BoxDecoration(
+              color: t.panel,
+              borderRadius: app.shape.br(16),
+              border: Border.all(color: t.line),
+            ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

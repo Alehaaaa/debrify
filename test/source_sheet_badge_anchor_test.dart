@@ -62,7 +62,7 @@ void main() {
             sources: sources,
             currentSourceIndex: 5,
             resolveSource: (_) async => 'https://example.test',
-            onSourceSelected: (_, __) {},
+            onSourceSelected: (_, _) {},
             onClose: () {},
           ),
         ),

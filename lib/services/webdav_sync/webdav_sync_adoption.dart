@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:synchronized/synchronized.dart';
 
+import '../profiles/profile_deletion_blockers.dart';
 import '../profiles/portable_profile_package.dart';
 import '../profiles/profile_authorization.dart';
 import '../profiles/profile_restore_coordinator.dart';
@@ -301,7 +302,14 @@ final class WebDavSyncCircleAdoption implements WebDavSyncAdoptionRunner {
                 quarantineError,
               );
             }
-            _diagnostic('WebDAV sync profile prune is still pending', error);
+            // Only fixed, audited blocker labels may enter the message.
+            final reason = ProfileDeletionBlockers.describe(error);
+            _diagnostic(
+              reason == null
+                  ? 'WebDAV sync profile prune is still pending'
+                  : 'WebDAV sync profile prune is still pending: $reason',
+              error,
+            );
             continue;
           }
           state = await _stateRepository.update(namespaceId, (current) {
@@ -698,7 +706,7 @@ final class WebDavSyncCircleAdoption implements WebDavSyncAdoptionRunner {
     Map<String, String> newMap,
   ) => Map<String, String>.unmodifiable(<String, String>{
     for (final entry in oldMap.entries)
-      if (newMap[entry.key] case final newId?) entry.value: newId,
+      entry.value: ?newMap[entry.key],
   });
 
   static String? _unfinishedSource(WebDavSyncAdoptionRecord record) {

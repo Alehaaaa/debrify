@@ -283,7 +283,9 @@ class AppMotion {
   Duration scaled(Duration d) {
     if (reduced) return Duration.zero;
     if (tokens.scale == 1) return d;
-    return Duration(microseconds: (d.inMicroseconds * tokens.scale).round());
+    return Duration(
+      microseconds: (d.inMicroseconds * tokens.scale).round(),
+    );
   }
 }
 

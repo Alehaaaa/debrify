@@ -1,7 +1,5 @@
-import 'package:debrify/services/storage/tv_display_storage.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -26,7 +24,7 @@ class TvScreenSizePage extends StatefulWidget {
 
 class _TvScreenSizePageState extends State<TvScreenSizePage> {
   bool _loading = true;
-  int _percent = TvDisplayStorage.kTvUiScaleDefault;
+  int _percent = StorageService.kTvUiScaleDefault;
 
   /// Non-focusable marker around the options card; used on TV to hand entry
   /// focus to its first focusable descendant (the first option row).
@@ -39,7 +37,6 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_screen_size_settings');
     _load();
   }
 
@@ -50,7 +47,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   }
 
   Future<void> _load() async {
-    final percent = await TvDisplayStorage.getTvUiScalePercent();
+    final percent = await StorageService.getTvUiScalePercent();
     if (!mounted) return;
     setState(() {
       _percent = percent;
@@ -71,7 +68,7 @@ class _TvScreenSizePageState extends State<TvScreenSizePage> {
   Future<void> _select(int percent) async {
     if (percent == _percent) return;
     setState(() => _percent = percent);
-    await TvDisplayStorage.setTvUiScalePercent(percent);
+    await StorageService.setTvUiScalePercent(percent);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

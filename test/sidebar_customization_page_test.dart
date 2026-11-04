@@ -1,7 +1,7 @@
 import 'package:debrify/models/sidebar_configuration.dart';
 import 'package:debrify/screens/settings/sidebar_customization_page.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
-import 'package:debrify/services/storage/sidebar_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
 import 'package:debrify/utils/platform_util.dart';
@@ -63,7 +63,7 @@ void main() {
 
     expect(find.text('Start Here', skipOffstage: false), findsOneWidget);
     expect(
-      (await SidebarStorage.getSidebarConfiguration()).labelForId('home'),
+      (await StorageService.getSidebarConfiguration()).labelForId('home'),
       'Start Here',
     );
   });
@@ -90,7 +90,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.select);
     await tester.pumpAndSettle();
 
-    final moved = await SidebarStorage.getSidebarConfiguration();
+    final moved = await StorageService.getSidebarConfiguration();
     expect(moved.order.take(2), <String>['home', 'search']);
     expect(find.text('MOVING', skipOffstage: false), findsNothing);
 
@@ -115,7 +115,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.select);
     await tester.pumpAndSettle();
 
-    for (var i = 0; i < 10; i++) {
+    // From the second row down to the last (Settings), however many
+    // destinations the catalog holds.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
@@ -137,7 +139,8 @@ void main() {
       reason: 'editor viewport $editorRect did not reveal row $settingsRect',
     );
 
-    for (var i = 0; i < 10; i++) {
+    // Back up to the second row.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
     }
@@ -154,7 +157,8 @@ void main() {
       reason: 'editor viewport did not reveal the earlier row $searchRect',
     );
 
-    for (var i = 0; i < 10; i++) {
+    // Down to the last row again, then one more to Reset.
+    for (var i = 0; i < sidebarDestinations.length - 2; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
@@ -167,7 +171,7 @@ void main() {
   });
 
   testWidgets('reset restores both default order and names', (tester) async {
-    await SidebarStorage.setSidebarConfiguration(
+    await StorageService.setSidebarConfiguration(
       SidebarConfiguration(
         order: const <String>['settings', 'home'],
         labels: const <String, String>{'home': 'Start'},
@@ -183,7 +187,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Reset'));
     await tester.pumpAndSettle();
 
-    expect((await SidebarStorage.getSidebarConfiguration()).isDefault, isTrue);
+    expect((await StorageService.getSidebarConfiguration()).isDefault, isTrue);
     expect(find.text('Start'), findsNothing);
   });
 }

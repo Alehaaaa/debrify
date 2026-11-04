@@ -5,10 +5,7 @@ import 'package:debrify/services/secret_vault.dart';
 import 'package:debrify/services/simkl/simkl_continue_watching_service.dart';
 import 'package:debrify/services/simkl/simkl_item_transformer.dart';
 import 'package:debrify/services/simkl/simkl_service.dart';
-import 'package:debrify/services/storage/episode_resume_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/simkl_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -30,7 +27,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     SecretVault.debugReset(deviceIdOverride: 'native-simkl-test');
     simkl.resetProfileScope();
-    await SimklStorage.setSimklAccessToken('synthetic');
+    await StorageService.setSimklAccessToken('synthetic');
   });
   tearDown(() {
     simkl.resetProfileScope();
@@ -192,7 +189,7 @@ void main() {
   test(
     'revival progress never borrows or overwrites the same-title original',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Big Brother',
         season: 20,
         episode: 6,
@@ -201,13 +198,13 @@ void main() {
         imdbId: 'tt0251497',
       );
       expect(
-        await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
+        await StorageService.getMergedEpisodeProgress(
           seriesTitle: 'Big Brother',
           imdbId: 'tmdb:237243',
         ),
         isEmpty,
       );
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Big Brother',
         season: 4,
         episode: 6,
@@ -216,22 +213,21 @@ void main() {
         imdbId: 'tmdb:237243',
       );
       expect(
-        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+        (await StorageService.getLastPlayedEpisodeByImdbId(
           'tt0251497',
         ))?['season'],
         20,
       );
       expect(
-        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+        (await StorageService.getLastPlayedEpisodeByImdbId(
           'tmdb:237243',
         ))?['season'],
         4,
       );
-      final original =
-          await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
-            seriesTitle: 'Big Brother',
-            imdbId: 'tt0251497',
-          );
+      final original = await StorageService.getMergedEpisodeProgress(
+        seriesTitle: 'Big Brother',
+        imdbId: 'tt0251497',
+      );
       expect(original.keys, isNot(contains('4-6')));
     },
   );

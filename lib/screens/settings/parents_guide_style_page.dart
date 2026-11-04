@@ -1,8 +1,6 @@
-import 'package:debrify/services/storage/detail_page_storage.dart';
 import '../../theme/app_looks.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -50,7 +48,6 @@ class _ParentsGuideStylePageState extends State<ParentsGuideStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('parents_guide_style_settings');
     _load();
   }
 
@@ -61,7 +58,7 @@ class _ParentsGuideStylePageState extends State<ParentsGuideStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await DetailPageStorage.getParentsGuideStyle();
+    final style = await StorageService.getParentsGuideStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -83,7 +80,7 @@ class _ParentsGuideStylePageState extends State<ParentsGuideStylePage> {
     // Tell an in-flight Look apply that a human just chose this key, so it
     // does not stamp over the choice. See theme/app_looks.dart.
     LookApplier.noteExternalWrite('parents_guide_style');
-    await DetailPageStorage.setParentsGuideStyle(value);
+    await StorageService.setParentsGuideStyle(value);
   }
 
   @override

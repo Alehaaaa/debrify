@@ -1,8 +1,8 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
@@ -77,7 +77,7 @@ class VideoController {
     player.platform?.isVideoControllerAttached = true;
 
     () async {
-      final completer = Completer();
+      final completer = Completer<void>();
       WidgetsBinding.instance.addPostFrameCallback((_) => completer.complete());
       await completer.future;
 

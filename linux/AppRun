@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Launcher for the Debrify AppImage.
+# Launcher for the Nextup AppImage.
 #
 # Lives here rather than in a heredoc inside .github/workflows/build.yml so the
 # x64 and arm64 jobs cannot drift apart, and so the driver-path logic below is
@@ -18,9 +18,9 @@ export PATH="${HERE}/usr/bin:${PATH}"
 # No LD_LIBRARY_PATH is exported: GTK, Mesa, VA-API, Vulkan and audio dispatch
 # libraries must remain the host's copies for the lifetime of the process.
 if [ ! -f "$PRIVATE_MPV" ]; then
-  echo "Debrify AppImage is missing its private libmpv: $PRIVATE_MPV" >&2
+  echo "Nextup AppImage is missing its private libmpv: $PRIVATE_MPV" >&2
   exit 127
 fi
 export LIBMPV_LIBRARY_PATH="$PRIVATE_MPV"
 
-exec "${HERE}/usr/bin/debrify" "$@"
+exec "${HERE}/usr/bin/nextup" "$@"

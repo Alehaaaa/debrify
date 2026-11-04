@@ -8,7 +8,6 @@ import 'package:path/path.dart' as p;
 
 import '../../models/profiles/profile_policy.dart';
 import '../../models/profiles/user_profile.dart';
-import '../../utils/app_storage.dart';
 import '../engine/local_engine_storage.dart';
 import 'profile_authorization.dart';
 import 'profile_data_generation.dart';
@@ -16,6 +15,7 @@ import 'profile_registry.dart';
 import 'profile_runtime.dart';
 import 'profile_preferences.dart';
 import 'profile_scope.dart';
+import 'profile_storage_paths.dart';
 
 class ProfileEngineAssignment {
   const ProfileEngineAssignment({
@@ -259,7 +259,7 @@ class ProfileEngineAssignmentService {
   );
 
   static Future<_EngineSnapshot> _readSnapshot(ProfileScope scope) async {
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     final directory = Directory(
       p.join(scope.storageDirectory(root, 'documents').path, 'engines'),
     );
@@ -326,7 +326,7 @@ class ProfileEngineAssignmentService {
     Map<String, _StoredEngine> engines,
     Set<String> deletedIds,
   ) async {
-    final root = await AppStorage.documents();
+    final root = await ProfileStoragePaths.profileDataRoot();
     final directory = Directory(
       p.join(scope.storageDirectory(root, 'documents').path, 'engines'),
     );

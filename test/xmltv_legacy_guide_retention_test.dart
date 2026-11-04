@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import 'package:debrify/services/iptv_catalog_db.dart';
+import 'package:debrify/utils/app_storage.dart';
 import 'package:debrify/services/xmltv_epg_source.dart';
 
 /// The JSON `epg_cache` shipped in v0.6.3-alpha.1, so real installs upgrade
@@ -52,6 +53,8 @@ void main() {
   setUp(() async {
     storageRoot = await Directory.systemTemp.createTemp('epg_retention');
     PathProviderPlatform.instance = _FakePathProvider(storageRoot.path);
+    // AppStorage caches its directories; each test has its own root.
+    AppStorage.debugReset();
 
     dbDir = await Directory.systemTemp.createTemp('epg_retention_db');
     IptvCatalogDb.debugDirectoryOverride = dbDir.path;

@@ -27,8 +27,9 @@ class RecoveryDirectPreflight {
   Future<bool> allows(Torrent source, {required bool enabled}) async {
     if (!enabled ||
         source.streamType != StreamType.directUrl ||
-        !shouldProbe(source))
+        !shouldProbe(source)) {
       return true;
+    }
     final url = source.directUrl;
     if (url == null || url.isEmpty) return false;
     final headerKeys = source.httpHeaders?.keys.toList() ?? <String>[];

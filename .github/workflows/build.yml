@@ -3,6 +3,16 @@ name: Build Release Artifacts
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      job:
+        description: Platform to build from another workflow
+        required: true
+        type: string
+      release_tag:
+        description: Existing per-commit release to attach the build to
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       job:
@@ -19,23 +29,38 @@ on:
           - tvos
           - linux
           - linux-arm64
+      release_tag:
+        description: 'Existing release tag for Android / Android TV publication (optional)'
+        required: false
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   android:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'android'
+    # No original release keystore is available. Never auto-publish an APK with
+    # a different signature: it cannot update existing installations. Android
+    # remains an explicit manual choice once the signing secrets are restored.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.job == 'android'
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Verify target release exists
+      if: inputs.release_tag != ''
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TARGET_RELEASE_TAG: ${{ inputs.release_tag }}
+      run: gh release view "$TARGET_RELEASE_TAG" --json tagName -q .tagName
+
     - name: Configure TMDB build token
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -43,7 +68,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Java
       uses: actions/setup-java@v4
@@ -93,28 +119,55 @@ jobs:
     - name: Build PGS-capable MediaKit Android libraries
       run: dev/scripts/build_android_media_kit_libraries.sh packages/media_kit_libs_android_video_patched/android/libs
 
-    - name: Restore Java 21 for Debrify Android build
+    - name: Restore Java 21 for Nextup Android build
       uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '21'
 
     - name: Decode keystore
-      run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      run: |
+        if [ -z "$KEYSTORE_BASE64" ]; then
+          echo "::error::KEYSTORE_BASE64 is missing. A stable release signing key is required for Android updates."
+          exit 1
+        fi
+        printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
 
     - name: Create key.properties
+      env:
+        STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
+        if [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+          echo "::error::Android signing secrets KEYSTORE_PASSWORD, KEY_PASSWORD and KEY_ALIAS are required."
+          exit 1
+        fi
         cat > android/key.properties << EOF
-        storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-        keyPassword=${{ secrets.KEY_PASSWORD }}
-        keyAlias=${{ secrets.KEY_ALIAS }}
+        storePassword=$STORE_PASSWORD
+        keyPassword=$KEY_PASSWORD
+        keyAlias=$KEY_ALIAS
         storeFile=release.keystore
         EOF
 
     - name: Build APK
+      shell: bash
       env:
         ORG_GRADLE_PROJECT_debrifyLocalDiagnostics: "false"
-      run: flutter build apk --release --dart-define=DEBRIFY_LOCAL_VALIDATION=false --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
+        TARGET_RELEASE_TAG: ${{ inputs.release_tag || github.event.release.tag_name }}
+      run: |
+        set -euo pipefail
+        build_number=()
+        # Android's versionCode must increase between automatic commit builds.
+        # The tag's run number is stable across retries and manual backfills.
+        if [[ "$TARGET_RELEASE_TAG" =~ ^build-([0-9]+)-[0-9a-f]{7}$ ]]; then
+          build_number=(--build-number="${BASH_REMATCH[1]}")
+        fi
+        flutter build apk --release "${build_number[@]}" \
+          --dart-define=DEBRIFY_LOCAL_VALIDATION=false \
+          --dart-define-from-file="${{ runner.temp }}/nextup-build-config.json"
 
     - name: Reject debuggable release APK
       shell: bash
@@ -125,27 +178,50 @@ jobs:
     - name: Verify packaged Android subtitle decoders
       run: dev/scripts/verify_android_subtitle_decoders.sh build/app/outputs/flutter-apk/app-release.apk
 
-    - name: Rename APK (release)
-      if: github.event_name == 'release'
-      run: mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}.apk
+    # One universal APK serves phones AND Android TV (leanback and touchscreen
+    # are optional in the manifest). It is published under both names so
+    # people pick the obvious download; the two files are byte-identical, so
+    # the in-app updater (which takes any .apk asset) is unaffected.
+    - name: Name APKs for Android and Android TV
+      id: apk
+      shell: bash
+      run: |
+        set -euo pipefail
+        SUFFIX="${{ inputs.release_tag || github.event.release.tag_name || 'dev' }}"
+        cd build/app/outputs/flutter-apk
+        cp app-release.apk "nextup-${SUFFIX}-android.apk"
+        cp app-release.apk "nextup-${SUFFIX}-androidtv.apk"
+        echo "phone=build/app/outputs/flutter-apk/nextup-${SUFFIX}-android.apk" >> "$GITHUB_OUTPUT"
+        echo "tv=build/app/outputs/flutter-apk/nextup-${SUFFIX}-androidtv.apk" >> "$GITHUB_OUTPUT"
 
-    - name: Attach APK to GitHub Release
-      if: github.event_name == 'release'
+    - name: Attach APKs to GitHub Release
+      if: github.event_name == 'release' || inputs.release_tag != ''
       uses: softprops/action-gh-release@v1
       with:
-        files: build/app/outputs/flutter-apk/nextup-${{ github.event.release.tag_name }}.apk
+        tag_name: ${{ inputs.release_tag || github.event.release.tag_name }}
+        fail_on_unmatched_files: true
+        files: |
+          ${{ steps.apk.outputs.phone }}
+          ${{ steps.apk.outputs.tv }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload APK as artifact (manual)
-      if: github.event_name == 'workflow_dispatch'
+    - name: Upload Android APK as artifact (manual)
+      if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
       uses: actions/upload-artifact@v4
       with:
         name: nextup-android
-        path: build/app/outputs/flutter-apk/app-release.apk
+        path: build/app/outputs/flutter-apk/nextup-dev-android.apk
+
+    - name: Upload Android TV APK as artifact (manual)
+      if: github.event_name == 'workflow_dispatch' && inputs.release_tag == ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: nextup-androidtv
+        path: build/app/outputs/flutter-apk/nextup-dev-androidtv.apk
 
   macos:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'macos'
     # The pinned native dependency set predates Xcode 26; HarfBuzz 8.1.1
     # references sincosf, which is no longer publicly declared by that SDK.
     runs-on: macos-15
@@ -157,6 +233,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -164,7 +241,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -250,7 +328,7 @@ jobs:
         path: build/macos/Build/Products/Release/nextup.dmg
 
   windows:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'windows'
     runs-on: windows-2022
     steps:
     - name: Checkout code
@@ -260,6 +338,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -267,7 +346,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -309,7 +389,7 @@ jobs:
         path: build/windows/installer/nextup-dev-setup.exe
 
   ios:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'ios'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'ios'
     runs-on: macos-latest
     steps:
     - name: Checkout code
@@ -319,6 +399,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -326,7 +407,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Setup Flutter
       uses: subosito/flutter-action@v2
@@ -409,7 +491,7 @@ jobs:
         path: build/ios/iphoneos/nextup-unsigned.ipa
 
   tvos:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'tvos'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'tvos'
     runs-on: macos-latest
     env:
       # The fork publishes no tags and `dev` moves, so pin the SHA. Bumping this
@@ -423,6 +505,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -430,7 +513,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     # tvOS can't use subosito/flutter-action. The build needs the
     # fluttertv/flutter-tvos CLI, which clones its own pinned stock Flutter
@@ -582,7 +666,7 @@ jobs:
         path: build/tvos/Release-appletvos/nextup-tvos-unsigned.ipa
 
   linux:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux'
     # Pinned: both the Flutter runner and private libmpv inherit this image's
     # glibc floor. Ubuntu 22.04 (glibc 2.35) covers Mint 21+, Mint 22 and current
     # SteamOS without importing either distro's multimedia stack.
@@ -595,6 +679,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -602,7 +687,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Install Linux dependencies
       run: |
@@ -669,23 +755,23 @@ jobs:
 
         # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
         mkdir -p AppDir/usr/share/applications
 
         # Copy built app
         cp -r build/linux/x64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/app_icon.png AppDir/usr/share/icons/hicolor/256x256/apps/debrify.png
-        cp assets/app_icon.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/nextup.png
+        cp assets/icon/app_icon_rounded.png AppDir/nextup.png
 
         # Create desktop file
-        cat > AppDir/debrify.desktop << EOF
+        cat > AppDir/nextup.desktop << EOF
         [Desktop Entry]
         Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
-        Exec=debrify
-        Icon=debrify
+        Exec=nextup
+        Icon=nextup
         Type=Application
         Categories=Utility;Network;
         X-AppImage-Name=Nextup
@@ -693,7 +779,7 @@ jobs:
         X-AppImage-Arch=x86_64
         EOF
 
-        cp AppDir/debrify.desktop AppDir/usr/share/applications/
+        cp AppDir/nextup.desktop AppDir/usr/share/applications/
 
         # Create AppRun. Checked in at linux/AppRun so both arch jobs share one
         # copy — it carries the libmpv and GPU driver path setup.
@@ -738,7 +824,7 @@ jobs:
         "./${APPIMAGE}" --appimage-extract >/dev/null
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
@@ -758,7 +844,7 @@ jobs:
 
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=x86_64' "$DESKTOP_FILE"
@@ -782,7 +868,7 @@ jobs:
         path: nextup-dev-x86_64.AppImage
 
   linux-arm64:
-    if: github.event_name == 'release' || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux-arm64'
+    if: (github.event_name == 'release' && !startsWith(github.event.release.tag_name, 'build-')) || github.event.inputs.job == 'all' || github.event.inputs.job == 'linux-arm64'
     runs-on: ubuntu-24.04-arm
     steps:
     - name: Checkout code
@@ -792,6 +878,7 @@ jobs:
       shell: python
       env:
         TMDB_READ_ACCESS_TOKEN: ${{ secrets.TMDB_READ_ACCESS_TOKEN }}
+        OMDB_API_KEY: ${{ secrets.OMDB_API_KEY }}
       run: |
         import json, os
         from pathlib import Path
@@ -799,7 +886,8 @@ jobs:
         if not token:
             raise SystemExit("Missing repository secret: TMDB_READ_ACCESS_TOKEN")
         config = Path(os.environ["RUNNER_TEMP"]) / "nextup-build-config.json"
-        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token}), encoding="utf-8")
+        omdb = os.environ.get("OMDB_API_KEY", "").strip()
+        config.write_text(json.dumps({"TMDB_READ_ACCESS_TOKEN": token, **({"OMDB_API_KEY": omdb} if omdb else {})}), encoding="utf-8")
 
     - name: Install Linux dependencies
       run: |
@@ -871,23 +959,23 @@ jobs:
 
         # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        mkdir -p AppDir/usr/share/icons/hicolor/512x512/apps
         mkdir -p AppDir/usr/share/applications
 
         # Copy built app (arm64 path)
         cp -r build/linux/arm64/release/bundle/* AppDir/usr/bin/
 
         # Copy icon
-        cp assets/app_icon.png AppDir/usr/share/icons/hicolor/256x256/apps/debrify.png
-        cp assets/app_icon.png AppDir/debrify.png
+        cp assets/icon/app_icon_rounded.png AppDir/usr/share/icons/hicolor/512x512/apps/nextup.png
+        cp assets/icon/app_icon_rounded.png AppDir/nextup.png
 
         # Create desktop file
-        cat > AppDir/debrify.desktop << EOF
+        cat > AppDir/nextup.desktop << EOF
         [Desktop Entry]
         Name=Nextup
         Comment=Modern debrid companion with torrent search and playlist management
-        Exec=debrify
-        Icon=debrify
+        Exec=nextup
+        Icon=nextup
         Type=Application
         Categories=Utility;Network;
         X-AppImage-Name=Nextup
@@ -895,7 +983,7 @@ jobs:
         X-AppImage-Arch=aarch64
         EOF
 
-        cp AppDir/debrify.desktop AppDir/usr/share/applications/
+        cp AppDir/nextup.desktop AppDir/usr/share/applications/
 
         # Create AppRun. Checked in at linux/AppRun so both arch jobs share one
         # copy — it carries the libmpv and GPU driver path setup.
@@ -943,7 +1031,7 @@ jobs:
         "./${APPIMAGE}" --appimage-extract >/dev/null
         VERSION="${{ github.event.release.tag_name }}"
         VERSION="${VERSION#v}"
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx "X-AppImage-Version=${VERSION}" "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"
@@ -963,7 +1051,7 @@ jobs:
 
         rm -rf squashfs-root
         "./${APPIMAGE}" --appimage-extract >/dev/null
-        for DESKTOP_FILE in squashfs-root/debrify.desktop squashfs-root/usr/share/applications/debrify.desktop; do
+        for DESKTOP_FILE in squashfs-root/nextup.desktop squashfs-root/usr/share/applications/nextup.desktop; do
           grep -Fx 'X-AppImage-Name=Nextup' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Version=dev' "$DESKTOP_FILE"
           grep -Fx 'X-AppImage-Arch=aarch64' "$DESKTOP_FILE"

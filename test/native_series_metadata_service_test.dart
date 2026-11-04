@@ -1,12 +1,10 @@
 import 'dart:convert';
-
-import 'package:debrify/features/sources/data/source_series_fetcher.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/native_series_metadata_service.dart';
-import 'package:debrify/services/next_episode_service.dart';
-import 'package:debrify/services/storage/watchlist_storage.dart';
-import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/services/tmdb_metadata_repository.dart';
+import 'package:debrify/services/stremio_service.dart';
+import 'package:debrify/services/next_episode_service.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -71,7 +69,7 @@ void main() {
               ),
               (season: 1, episode: 4),
             );
-            final fetcher = SourceSeriesFetcher.seriesFetcherFor(
+            final fetcher = TorrentPlaybackService.seriesFetcherFor(
               meta: PlaybackMeta.catalog(
                 imdbId: 'tt0118360',
                 contentType: 'series',
@@ -410,7 +408,7 @@ void main() {
     'saved tracker title restores built-in metadata and canonical progress',
     () async {
       SharedPreferences.setMockInitialValues({});
-      final saved = WatchlistStorage.withMyWatchlistSource(
+      final saved = StorageService.withMyWatchlistSource(
         const StremioMeta(
           id: 'tt0118360',
           imdbId: 'tt0118360',
@@ -419,8 +417,8 @@ void main() {
         ),
         NativeSeriesMetadataService.addon,
       );
-      await WatchlistStorage.setMyWatchlistItem(saved, true);
-      final restored = (await WatchlistStorage.getMyWatchlistItems()).single;
+      await StorageService.setMyWatchlistItem(saved, true);
+      final restored = (await StorageService.getMyWatchlistItems()).single;
       final addon = NativeSeriesMetadataService.addonForItem(restored);
       expect(addon.id, NativeSeriesMetadataService.addon.id);
       expect(addon.baseUrl, isEmpty);

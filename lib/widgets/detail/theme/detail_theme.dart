@@ -27,15 +27,12 @@ extension DetailFontRoleX on DetailFontRole {
   ///    "whatever the platform decides" stops being acceptable.
   ///
   /// **Why Fraunces and not Source Serif**, which the picker also names:
-  /// `assets/fonts/SourceSerifPro-Regular.ttf` and `Merriweather-Regular.ttf`
-  /// are not fonts. Both files — and both Roboto faces — are HTML error pages
-  /// saved with a `.ttf` extension (they begin `<!DOCTYPE html>`), so anything
-  /// asking for them silently falls back to the platform default. That is a
-  /// pre-existing bug with its own blast radius (the subtitle font picker
-  /// offers all three), and replacing them means adding megabytes of variable
-  /// font to the bundle — a size decision, not a theming one. Fraunces is
-  /// real, licensed (`assets/fonts/licenses/OFL-Fraunces.txt`) and already
-  /// shipping, so the theme layer uses what actually exists.
+  /// Fraunces was chosen when `SourceSerifPro-Regular.ttf`,
+  /// `Merriweather-Regular.ttf` and both Roboto faces were HTML error pages
+  /// saved with a `.ttf` extension. Those files are now real static faces
+  /// (Source Serif 4, Merriweather, Roboto; licenses in
+  /// `assets/fonts/licenses/`), so switching the serif role is purely a design
+  /// call — but Fraunces remains the shipped look.
   ///
   /// `sans` stays null, so **Signal — the shipped look — does not move**, and
   /// neither does any site that resolves to it.
@@ -456,14 +453,23 @@ class DetailTheme {
   bool get _btnIsAccent =>
       btnFill.withValues(alpha: 1) == accent.withValues(alpha: 1);
 
-  /// This theme's COLOURS and identity, wearing another theme's STRUCTURE —
-  /// corners, type, artwork framing, focus expression, motion, surfaces, grain.
+  /// This theme's COLOURS wearing [s]'s FORM — Appearance → Looks with a
+  /// structure picked separately from the palette.
   ///
-  /// Appearance → Form picks a structure independently of the colour palette;
-  /// this is how the two are composed. Narrow and explicit on purpose (like
-  /// [withTokens]): every colour/identity field comes from `this`, every
-  /// structural field from `s`, so a palette change can never move the form and
-  /// a form change can never move a colour.
+  /// The split is by kind, not by taste:
+  ///  * **Palette (kept from this theme):** every colour and gradient, the
+  ///    light/dark polarity that follows the ground, button and ghost fills
+  ///    and borders, and whether the accent follows the artwork.
+  ///  * **Structure (taken from [s]):** corner radii, the three font roles
+  ///    and every type metric, button weight and border width, the focus ring
+  ///    geometry, elevation shadows, grain, the grid, and how strongly the
+  ///    room reacts to the title.
+  ///
+  /// Shadows count as structure even though they have a colour: they are
+  /// elevation, and every shipped theme authors them as black at alpha, so
+  /// they read on any palette. Identity stays this theme's — the details page
+  /// dispatches on the palette id, and a structure must not change which
+  /// layout a title opens in.
   DetailTheme withStructureOf(DetailTheme s) => DetailTheme(
     id: id,
     label: label,

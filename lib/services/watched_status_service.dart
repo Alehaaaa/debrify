@@ -1,6 +1,3 @@
-import 'package:debrify/services/storage/local_completion_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/tracking_source_storage.dart';
 import '../models/media_identity.dart';
 import 'dart:async';
 import '../models/custom_series_identity.dart';
@@ -10,6 +7,7 @@ import 'package:flutter/foundation.dart';
 
 import 'simkl/simkl_service.dart';
 import 'local_series_completion_service.dart';
+import 'storage_service.dart';
 import 'watched_snapshot_retry.dart';
 import 'trakt/trakt_service.dart';
 import 'mdblist/mdblist_service.dart';
@@ -22,10 +20,10 @@ import '../models/tracking_source.dart';
 /// lookups after that are O(1) set membership checks.
 class WatchedStatusService extends ChangeNotifier {
   WatchedStatusService._() {
-    MovieProgressStorage.movieFinishedRevision.addListener(refresh);
-    LocalCompletionStorage.localCompletionRevision.addListener(_refreshLocal);
+    StorageService.movieFinishedRevision.addListener(refresh);
+    StorageService.localCompletionRevision.addListener(_refreshLocal);
     MdblistService.instance.watchedRevision.addListener(_markMdblistDirty);
-    TrackingSourceStorage.trackingSourceRevision.addListener(_refreshTickPolicy);
+    StorageService.trackingSourceRevision.addListener(_refreshTickPolicy);
     _refreshTickPolicy();
   }
 
@@ -111,7 +109,7 @@ class WatchedStatusService extends ChangeNotifier {
 
   void _refreshTickPolicy() {
     unawaited(() async {
-      final next = await TrackingSourceStorage.getHomeTickSources();
+      final next = await StorageService.getHomeTickSources();
       if (setEquals(next, _tickSources)) return;
       _tickSources = next;
       notifyListeners();
@@ -217,9 +215,9 @@ class WatchedStatusService extends ChangeNotifier {
       () async {
         final results = await readWatchedSnapshotWithRetry(
           () => Future.wait([
-            MovieProgressStorage.getFinishedMovieIds(),
+            StorageService.getFinishedMovieIds(),
             LocalSeriesCompletionService.instance.caughtUpIds(),
-            MovieProgressStorage.getExplicitlyWatchedSeriesIds(),
+            StorageService.getExplicitlyWatchedSeriesIds(),
           ]),
         );
         if (generation != _localGeneration) return;
@@ -233,7 +231,7 @@ class WatchedStatusService extends ChangeNotifier {
         final calendarSeries = await LocalSeriesCompletionService.instance
             .refreshCalendarIfDue();
         final explicitSeries =
-            await MovieProgressStorage.getExplicitlyWatchedSeriesIds();
+            await StorageService.getExplicitlyWatchedSeriesIds();
         final combinedSeries = <String>{...calendarSeries, ...explicitSeries};
         if (generation != _localGeneration ||
             setEquals(_localSeries, combinedSeries)) {
@@ -301,9 +299,9 @@ class WatchedStatusService extends ChangeNotifier {
     try {
       local = await readWatchedSnapshotWithRetry(
         () => Future.wait([
-          MovieProgressStorage.getFinishedMovieIds(),
+          StorageService.getFinishedMovieIds(),
           LocalSeriesCompletionService.instance.caughtUpIds(),
-          MovieProgressStorage.getExplicitlyWatchedSeriesIds(),
+          StorageService.getExplicitlyWatchedSeriesIds(),
         ]),
       );
     } catch (error) {
@@ -341,7 +339,7 @@ class WatchedStatusService extends ChangeNotifier {
     if (localGeneration == _localGeneration) {
       _localSeries = <String>{
         ...results[2] as Set<String>,
-        ...await MovieProgressStorage.getExplicitlyWatchedSeriesIds(),
+        ...await StorageService.getExplicitlyWatchedSeriesIds(),
       };
     }
     final mdblist = results[3] as ({Set<String> movies, Set<String> series})?;

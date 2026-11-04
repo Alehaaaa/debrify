@@ -1,9 +1,7 @@
-import 'package:debrify/services/storage/torrent_search_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../services/analytics_service.dart';
 import '../services/main_page_bridge.dart';
+import '../services/storage_service.dart';
 import '../theme/app_theme_scope.dart';
 import 'addons/addon_hub_screen.dart';
 import 'settings/stremio_addons_page.dart';
@@ -30,8 +28,7 @@ class _AddonsSwitcherState extends State<AddonsScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('addons');
-    TorrentSearchStorage.getStremioAddonHubEnabled().then((on) {
+    StorageService.getStremioAddonHubEnabled().then((on) {
       if (mounted) setState(() => _useHub = on);
     });
   }

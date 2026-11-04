@@ -37,13 +37,13 @@ void main() {
             PlayerMenuTrackOption('2', 'Français'),
           ],
           selectedAudioId: '1',
-          onAudioSelected: (_, __) async {},
+          onAudioSelected: (_, _) async {},
           embeddedSubtitles: const [PlayerMenuTrackOption('3', 'English')],
           selectedSubtitleId: selectedSubtitleId,
           onSubtitlesOff: onSubtitlesOff ?? (_) async => true,
           onEmbeddedSubtitleSelected:
-              onEmbeddedSubtitleSelected ?? ((_, __) async => true),
-          onAddonSubtitleSelected: (_, __) async => true,
+              onEmbeddedSubtitleSelected ?? ((_, _) async => true),
+          onAddonSubtitleSelected: (_, _) async => true,
           showSpeed: showSpeed,
           speed: speed,
           onSpeedSelected: onSpeed ?? (_) {},
@@ -233,7 +233,7 @@ void main() {
       var attempts = 0;
       await tester.pumpWidget(
         host(
-          onEmbeddedSubtitleSelected: (_, __) async {
+          onEmbeddedSubtitleSelected: (_, _) async {
             attempts++;
             return false;
           },

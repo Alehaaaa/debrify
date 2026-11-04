@@ -52,7 +52,7 @@ void main() {
       ch(1, name: 'BBC News', group: 'News'),
       ch(2, name: 'Sky Cinema', group: 'Movies'),
     ]);
-    final cache = LinkedHashMap<int, IptvChannel>();
+    final cache = LinkedHashMap<int, IptvChannel>.of({});
 
     // "all" facade — fault the first row.
     final all = DbChannelList(snap, instanceCache: cache);
@@ -63,8 +63,11 @@ void main() {
     final searched = DbChannelList(snap, search: 'sky', instanceCache: cache);
     final fromSearch = searched[0];
 
-    expect(identical(fromAll, fromSearch), isTrue,
-        reason: 'same catalog row across recomputes → same instance');
+    expect(
+      identical(fromAll, fromSearch),
+      isTrue,
+      reason: 'same catalog row across recomputes → same instance',
+    );
   });
 
   test('without a shared cache, recomputes mint new instances', () {
@@ -83,14 +86,14 @@ void main() {
       ch(0, name: 'Dup', url: 'http://h/live/u/p/same.ts'),
       ch(1, name: 'Dup', url: 'http://h/live/u/p/same.ts'),
     ]);
-    final cache = LinkedHashMap<int, IptvChannel>();
+    final cache = LinkedHashMap<int, IptvChannel>.of({});
     final list = DbChannelList(snap, instanceCache: cache);
     expect(identical(list[0], list[1]), isFalse);
   });
 
   test('the cache is bounded and evicts the eldest', () {
     final snap = seed([for (var i = 0; i < 1000; i++) ch(i)]);
-    final cache = LinkedHashMap<int, IptvChannel>();
+    final cache = LinkedHashMap<int, IptvChannel>.of({});
     final list = DbChannelList(snap, instanceCache: cache);
     // Walk far more rows than the cap.
     for (var i = 0; i < 1000; i++) {
@@ -105,7 +108,7 @@ void main() {
       ch(1, name: 'BBC'),
       ch(2, name: 'Sky News'),
     ]);
-    final cache = LinkedHashMap<int, IptvChannel>();
+    final cache = LinkedHashMap<int, IptvChannel>.of({});
     final searched = DbChannelList(snap, search: 'sky', instanceCache: cache);
     expect(searched.length, 2);
     expect(searched.map((c) => c.name), ['Sky Sports', 'Sky News']);

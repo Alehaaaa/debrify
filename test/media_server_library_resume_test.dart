@@ -1,10 +1,5 @@
 import 'package:debrify/services/local_playback_resume_resolver.dart';
-import 'package:debrify/services/storage/continue_watching_storage.dart';
-import 'package:debrify/services/storage/discover_storage.dart';
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,7 +15,7 @@ void main() {
         'medialibrary:one:show': 20000,
         'medialibrary:two:show': 30000,
       }.entries) {
-        await SeriesProgressStorage.saveSeriesPlaybackState(
+        await StorageService.saveSeriesPlaybackState(
           seriesTitle: 'Show',
           season: 1,
           episode: 1,
@@ -53,14 +48,14 @@ void main() {
         ),
         isNull,
       );
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Show',
         season: 1,
         episode: 1,
         imdbId: 'tt123',
       );
       expect(
-        await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+        await StorageService.getMergedFinishedEpisodes(
           seriesTitle: 'Show',
           imdbId: 'medialibrary:one:show',
         ),
@@ -76,7 +71,7 @@ void main() {
         'medialibrary:one:recording',
         'medialibrary:two:recording',
       ]) {
-        await VideoProgressStorage.saveVideoPlaybackState(
+        await StorageService.saveVideoPlaybackState(
           videoTitle: 'Recording',
           videoUrl: 'https://server/video',
           positionMs: id == 'tt123'
@@ -108,20 +103,19 @@ void main() {
         ),
         isNull,
       );
-      await ContinueWatchingStorage.saveContinueWatchingItem(
+      await StorageService.saveContinueWatchingItem(
         imdbId: 'medialibrary:one:recording',
         title: 'Recording',
         contentType: 'movie',
       );
-      expect(await ContinueWatchingStorage.getContinueWatchingItems(), isEmpty);
-      await ContinueWatchingStorage.saveContinueWatchingItem(
+      expect(await StorageService.getContinueWatchingItems(), isEmpty);
+      await StorageService.saveContinueWatchingItem(
         imdbId: 'tt123',
         title: 'Movie',
         contentType: 'movie',
       );
       expect(
-        (await ContinueWatchingStorage.getContinueWatchingItems())
-            .single['imdbId'],
+        (await StorageService.getContinueWatchingItems()).single['imdbId'],
         'tt123',
       );
     },
@@ -142,8 +136,8 @@ void main() {
   );
   test('both servers are accepted as saved Discover defaults', () async {
     for (final value in ['jellyfin', 'emby']) {
-      await DiscoverStorage.setDiscoverLastSource(value);
-      expect(await DiscoverStorage.getDiscoverLastSource(), value);
+      await StorageService.setDiscoverLastSource(value);
+      expect(await StorageService.getDiscoverLastSource(), value);
     }
   });
 }

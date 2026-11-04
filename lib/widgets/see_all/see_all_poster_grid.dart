@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../theme/app_theme_scope.dart';
+import '../card_action_menu.dart';
 import '../catalog_item_tile.dart';
 import 'discover_card_settings_scope.dart';
 import 'discover_shelf_scope.dart';
@@ -106,9 +108,16 @@ class SeeAllPosterGrid extends StatefulWidget {
 
   /// Open the detail page for an item (SELECT / tap).
   final void Function(StremioMeta item) onOpen;
+  final bool localOnly;
 
-  /// Optional long-press / Quick Play straight from the grid.
+  /// Optional long-press / Quick Play straight from the grid. Hold only
+  /// quick-plays when the grid has no options menu (see [onOptions]).
   final void Function(StremioMeta item)? onQuickPlay;
+
+  /// Opens the card's action menu (hold, hold-OK on TV, or right-click). When
+  /// null, a surrounding [CardOptionsScope] supplies one; with neither, hold
+  /// falls back to [onQuickPlay] and right-click does nothing.
+  final void Function(StremioMeta item)? onOptions;
 
   /// Fires when a tile gains focus — carries the focused item up to the host
   /// (the Discover two-pane detail rail listens to this).
@@ -126,6 +135,11 @@ class SeeAllPosterGrid extends StatefulWidget {
 
   /// Optional resume progress (0..1) per item — draws the red bar.
   final double? Function(StremioMeta item)? progressOf;
+
+  /// Optional download state per item — draws the radial download sweep
+  /// over the poster (see [CatalogItemTile.downloadProgress]).
+  final ({double value, String? status})? Function(StremioMeta item)?
+  downloadOf;
 
   /// Optional "has a pinned source" flag per item — draws the bookmark badge.
   final bool Function(StremioMeta item)? isBound;
@@ -150,12 +164,15 @@ class SeeAllPosterGrid extends StatefulWidget {
     required this.loadingMore,
     required this.exhausted,
     required this.onOpen,
+    this.localOnly = false,
     required this.onLoadMore,
     this.onQuickPlay,
+    this.onOptions,
     this.onItemFocused,
     this.showTypeBadge = true,
     this.showRatingBadge = true,
     this.progressOf,
+    this.downloadOf,
     this.isBound,
     this.onExitTop,
     this.onExitLeft,
@@ -392,6 +409,33 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     return KeyEventResult.ignored;
   }
 
+  /// The card menu for this grid: the host's own [SeeAllPosterGrid.onOptions],
+  /// else the surrounding library's [CardOptionsScope] fed this grid's own
+  /// open / quick-play for the item.
+  void Function(StremioMeta item)? _resolveOptions() {
+    final own = widget.onOptions;
+    if (own != null) return own;
+    final scoped = CardOptionsScope.maybeOf(context);
+    if (scoped == null) return null;
+    final quickPlay = widget.onQuickPlay;
+    return (item) => scoped(
+      item,
+      open: () => widget.onOpen(item),
+      quickPlay: quickPlay == null ? null : () => quickPlay(item),
+    );
+  }
+
+  /// Hold opens the menu when there is one; otherwise it keeps the grid's
+  /// original hold-to-Quick-Play.
+  VoidCallback? _holdFor(
+    StremioMeta item,
+    void Function(StremioMeta item)? options,
+  ) {
+    if (options != null) return () => options(item);
+    final quickPlay = widget.onQuickPlay;
+    return quickPlay == null ? null : () => quickPlay(item);
+  }
+
   /// The STAGE shelf: one row of posters pinned to the bottom of the box the
   /// host gave us, with a position line above it. No per-poster title band —
   /// the identity block on the stage names the focused title at full size, and
@@ -403,6 +447,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
   }) {
     final app = AppThemeScope.of(context);
     final items = widget.items;
+    final options = _resolveOptions();
     return Align(
       alignment: Alignment.bottomLeft,
       child: Column(
@@ -433,7 +478,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                   // rather than implying a count nobody knows.
                   ValueListenableBuilder<int>(
                     valueListenable: _focusIndex,
-                    builder: (_, i, __) {
+                    builder: (_, i, _) {
                       if (i < 0 || items.isEmpty) {
                         return const SizedBox.shrink();
                       }
@@ -470,13 +515,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
           SizedBox(
             height: m.boxHeight,
             child: ListView.builder(
+              scrollCacheExtent: ScrollCacheExtent.pixels(400),
               controller: _scroll,
               scrollDirection: Axis.horizontal,
               clipBehavior: Clip.hardEdge,
-              // ~1.5 cards of lookahead, matching the wall's reasoning: a
-              // DPAD target must already be built, since requestFocus on an
-              // unbuilt tile's detached node is a silent no-op (dead DPAD).
-              cacheExtent: 400,
               padding: EdgeInsets.symmetric(horizontal: m.hPad),
               itemCount: items.length,
               itemBuilder: (context, index) {
@@ -494,6 +536,7 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                         skipTraversal: true,
                         onKeyEvent: (_, e) => _handleShelfArrows(index, e),
                         child: CatalogItemTile(
+                          localOnly: widget.localOnly,
                           item: item,
                           isTelevision: widget.isTelevision,
                           focusNode: index < _nodes.length
@@ -501,14 +544,19 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                               : null,
                           hasBoundSource: widget.isBound?.call(item) ?? false,
                           onOpen: () => widget.onOpen(item),
-                          onLongPress: widget.onQuickPlay == null
+                          onLongPress: _holdFor(item, options),
+                          onSecondaryTap: options == null
                               ? null
-                              : () => widget.onQuickPlay!(item),
+                              : () => options(item),
                           onFocused: () {
                             _focusIndex.value = index;
                             widget.onItemFocused?.call(item);
                           },
                           progress: widget.progressOf?.call(item),
+                          downloadProgress: widget.downloadOf
+                              ?.call(item)
+                              ?.value,
+                          downloadStatus: widget.downloadOf?.call(item)?.status,
                           showInlineTitle: false,
                           showTypeBadge: showTypeBadge,
                           showRatingBadge: showRatingBadge,
@@ -520,6 +568,10 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                           // move like it: the board's rise, the board's poster
                           // fade, and a glide instead of a jump.
                           boardChrome: true,
+                          // Home's card look on Discover pages only.
+                          homeChrome:
+                              DiscoverCardSettingsScope.maybeOf(context) !=
+                              null,
                         ),
                       ),
                     ),
@@ -559,16 +611,13 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
     final cols = m.columns;
     final titleH = m.titleHeight;
     const titleGap = SeeAllGridMetrics.titleGap;
+    final options = _resolveOptions();
 
     return CustomScrollView(
+      scrollCacheExtent: ScrollCacheExtent.pixels(
+        widget.isTelevision ? 400 : 250,
+      ),
       controller: _scroll,
-      // Pre-warm offscreen posters so DPAD scrolling doesn't decode on-screen
-      // mid-scroll. ~1.5 rows of lookahead: a DPAD-down target row is always
-      // already built (requestFocus on an unbuilt tile's detached node is a
-      // silent no-op — dead DPAD), while the old 800px window mounted ~16 extra
-      // offscreen tiles on every grid mount, a real slice of the Discover tab's
-      // entry cost on TV.
-      cacheExtent: widget.isTelevision ? 400 : 250,
       slivers: [
         SliverPadding(
           padding: SeeAllGridMetrics.padding,
@@ -590,22 +639,32 @@ class SeeAllPosterGridState extends State<SeeAllPosterGrid> {
                   children: [
                     Expanded(
                       child: CatalogItemTile(
+                        localOnly: widget.localOnly,
                         item: item,
                         isTelevision: widget.isTelevision,
                         focusNode: index < _nodes.length ? _nodes[index] : null,
                         hasBoundSource: widget.isBound?.call(item) ?? false,
                         onOpen: () => widget.onOpen(item),
-                        onLongPress: widget.onQuickPlay == null
+                        onLongPress: _holdFor(item, options),
+                        onSecondaryTap: options == null
                             ? null
-                            : () => widget.onQuickPlay!(item),
+                            : () => options(item),
                         onFocused: widget.onItemFocused == null
                             ? null
                             : () => widget.onItemFocused!(item),
                         progress: widget.progressOf?.call(item),
+                        downloadProgress: widget.downloadOf?.call(item)?.value,
+                        downloadStatus: widget.downloadOf?.call(item)?.status,
+                        // Discover's "Show titles" preference controls both
+                        // the caption below a poster and its inline overlay.
+                        // Hiding the lower caption must not move the title
+                        // onto the poster and defeat that preference.
                         showInlineTitle: false,
                         showTypeBadge: showTypeBadge,
                         showRatingBadge: showRatingBadge,
                         compactBadgeLayout: m.childWidth < 142,
+                        // Home's card look on Discover pages only.
+                        homeChrome: discoverSettings != null,
                       ),
                     ),
                     if (showTitles) ...[

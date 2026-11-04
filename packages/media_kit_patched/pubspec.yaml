@@ -29,7 +29,7 @@ topics:
   - cross-platform
 
 environment:
-  sdk: ">=3.1.0 <4.0.0"
+  sdk: ">=3.8.1 <4.0.0"
 
 dependencies:
   collection: ^1.17.0
@@ -46,7 +46,7 @@ dependencies:
 
 dev_dependencies:
   test: ^1.24.1
-  lints: ^5.0.0
+  lints: ^6.1.0
 
 ffigen:
   name: MPV

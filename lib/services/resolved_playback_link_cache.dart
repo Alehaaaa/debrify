@@ -44,8 +44,9 @@ class ResolvedPlaybackLinkCache {
     final query =
         Uri.tryParse(url)?.queryParameters ?? const <String, String>{};
     for (final entry in query.entries) {
-      if (!const ['exp', 'expires', 'expiry'].contains(entry.key.toLowerCase()))
+      if (!const ['exp', 'expires', 'expiry'].contains(entry.key.toLowerCase())) {
         continue;
+      }
       final n = int.tryParse(entry.value);
       final value = n == null
           ? DateTime.tryParse(entry.value)
@@ -74,18 +75,15 @@ class ResolvedPlaybackLinkCache {
     int? season,
     int? episode,
     required Torrent source,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) return;
     if (source.directUrl == null ||
         source.stremioAddonKey == null ||
-        source.stremioStreamKey == null)
+        source.stremioStreamKey == null) {
       return;
+    }
     if (type != 'movie' && (season == null || episode == null)) return;
     final prefs = await ProfilePreferences.instance();
-    if (canContinue?.call() == false) return;
     await _lock.synchronized(() async {
-      if (canContinue?.call() == false) return;
       final now = DateTime.now();
       var expiry = expiresAt(source.directUrl!, now);
       if (!expiry.isAfter(now)) return;
@@ -118,15 +116,10 @@ class ResolvedPlaybackLinkCache {
       while (entries.length > 64) {
         entries.remove(entries.keys.first);
       }
-      final sealed = await SecretVault.seal(jsonEncode(entries));
-      if (canContinue == null) {
-        await prefs.setString(preferenceKey, sealed);
-      } else {
-        await ProfilePreferences.synchronizeExternalMutation(() async {
-          if (!canContinue()) return;
-          await prefs.setString(preferenceKey, sealed);
-        }, marksMutation: false);
-      }
+      await prefs.setString(
+        preferenceKey,
+        await SecretVault.seal(jsonEncode(entries)),
+      );
     });
   }
 
@@ -152,14 +145,16 @@ class ResolvedPlaybackLinkCache {
             pin.streamKey ?? '',
           )];
       if (entry == null ||
-          (entry['expires'] as int) <= DateTime.now().millisecondsSinceEpoch)
+          (entry['expires'] as int) <= DateTime.now().millisecondsSinceEpoch) {
         return null;
+      }
       final source = Torrent.fromJson(
         Map<String, dynamic>.from(entry['source']),
       );
       if (source.stremioBingeGroup != pin.bingeGroup ||
-          source.stremioStreamIndex != pin.streamIndex)
+          source.stremioStreamIndex != pin.streamIndex) {
         return null;
+      }
       return source;
     } catch (_) {
       return null;
@@ -172,27 +167,18 @@ class ResolvedPlaybackLinkCache {
     int? season,
     int? episode,
     required SeriesSource pin,
-    bool Function()? canContinue,
   }) async {
-    if (canContinue?.call() == false) return;
     if (pin.addonCatalogId != null || pin.addonCatalogKey != null) return;
     final prefs = await ProfilePreferences.instance();
-    if (canContinue?.call() == false) return;
     await _lock.synchronized(() async {
-      if (canContinue?.call() == false) return;
       final entries = await _read(prefs);
       entries.remove(
         key(id, type, season, episode, pin.addonKey!, pin.streamKey ?? ''),
       );
-      final sealed = await SecretVault.seal(jsonEncode(entries));
-      if (canContinue == null) {
-        await prefs.setString(preferenceKey, sealed);
-      } else {
-        await ProfilePreferences.synchronizeExternalMutation(() async {
-          if (!canContinue()) return;
-          await prefs.setString(preferenceKey, sealed);
-        }, marksMutation: false);
-      }
+      await prefs.setString(
+        preferenceKey,
+        await SecretVault.seal(jsonEncode(entries)),
+      );
     });
   }
 }

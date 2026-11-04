@@ -45,7 +45,7 @@ void main() {
 
   setUp(() async {
     root = await Directory.systemTemp.createTemp('portable-avatar-');
-    AppStorage.debugOverride(documents: root);
+    AppStorage.debugOverride(documents: root, support: root);
   });
 
   tearDown(() async {

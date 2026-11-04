@@ -4,14 +4,12 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'profiles/profile_storage_paths.dart';
 import 'profiles/profile_database_adoption_gate.dart';
 import 'profiles/profile_runtime.dart';
 import 'profiles/profile_scope.dart';
-import 'package:sqlite3/open.dart' as sqlite_open;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../models/iptv_playlist.dart';
@@ -32,8 +30,8 @@ final class IptvCatalogWriteTarget {
 
 /// Worker entry for cold catalog initialization. The native handle is opened
 /// with FULLMUTEX because ownership moves to Flutter's isolate after this job;
-/// no Dart [Database] wrapper is created here, so no worker finalizer can close
-/// the transferred handle when the isolate exits.
+/// the worker's [Database] wrapper is leaked (finalizer detached), so no
+/// worker finalizer can close the transferred handle when the isolate exits.
 _CatalogDbPreparation _prepareCatalogDb(String path) {
   final api = _NativeSqliteApi.open();
   final handleAddress = api.openPrepared(path);
@@ -74,7 +72,7 @@ bool _removeCatalogsJob(
       ownerAux: job.ownerAux,
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -104,7 +102,7 @@ bool _setCategoryOrderJob(
     );
     return true;
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -129,7 +127,7 @@ bool _setGroupChannelOrderJob(
       ordered: job.ordered,
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -144,7 +142,7 @@ int _adoptNumberingJob(List<String> args) {
       sourceKey: args[2],
     );
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -157,7 +155,7 @@ int _migrateCatalogDb(String path) {
   try {
     return IptvCatalogDb._runPendingMigrations(db);
   } finally {
-    db.dispose();
+    db.close();
   }
 }
 
@@ -171,115 +169,38 @@ class _CatalogDbPreparation {
   final String? isolateName;
 }
 
-typedef _SqliteOpenNative =
-    Int32 Function(Pointer<Utf8>, Pointer<Pointer<Void>>, Int32, Pointer<Utf8>);
-typedef _SqliteOpenDart =
-    int Function(Pointer<Utf8>, Pointer<Pointer<Void>>, int, Pointer<Utf8>);
-typedef _SqliteExecNative =
-    Int32 Function(
-      Pointer<Void>,
-      Pointer<Utf8>,
-      Pointer<Void>,
-      Pointer<Void>,
-      Pointer<Pointer<Utf8>>,
-    );
-typedef _SqliteExecDart =
-    int Function(
-      Pointer<Void>,
-      Pointer<Utf8>,
-      Pointer<Void>,
-      Pointer<Void>,
-      Pointer<Pointer<Utf8>>,
-    );
-typedef _SqliteCloseNative = Int32 Function(Pointer<Void>);
-typedef _SqliteCloseDart = int Function(Pointer<Void>);
-typedef _SqliteFreeNative = Void Function(Pointer<Void>);
-typedef _SqliteFreeDart = void Function(Pointer<Void>);
-typedef _SqliteErrmsgNative = Pointer<Utf8> Function(Pointer<Void>);
-typedef _SqliteErrmsgDart = Pointer<Utf8> Function(Pointer<Void>);
-typedef _SqliteExtendedResultsNative = Int32 Function(Pointer<Void>, Int32);
-typedef _SqliteExtendedResultsDart = int Function(Pointer<Void>, int);
-
-/// Minimal native API used only to create a connection on a worker and
-/// transfer its ownership. Normal queries continue through package:sqlite3's
-/// safe Dart wrapper after [sqlite3.fromPointer] adopts this handle.
+/// Creates a connection on a worker and transfers its ownership. sqlite3 3.x
+/// loads SQLite through build hooks (no DynamicLibrary to look symbols up
+/// in), so the connection is opened with the regular API and handed over as
+/// a raw pointer via [Database.leak]; the UI isolate adopts it with
+/// [Sqlite3.fromPointer] and normal queries go through the safe wrapper.
 class _NativeSqliteApi {
-  _NativeSqliteApi._(DynamicLibrary library)
-    : _open = library
-          .lookup<NativeFunction<_SqliteOpenNative>>('sqlite3_open_v2')
-          .asFunction(),
-      _exec = library
-          .lookup<NativeFunction<_SqliteExecNative>>('sqlite3_exec')
-          .asFunction(),
-      _close = library
-          .lookup<NativeFunction<_SqliteCloseNative>>('sqlite3_close_v2')
-          .asFunction(),
-      _free = library
-          .lookup<NativeFunction<_SqliteFreeNative>>('sqlite3_free')
-          .asFunction(),
-      _errmsg = library
-          .lookup<NativeFunction<_SqliteErrmsgNative>>('sqlite3_errmsg')
-          .asFunction(),
-      _extendedResults = library
-          .lookup<NativeFunction<_SqliteExtendedResultsNative>>(
-            'sqlite3_extended_result_codes',
-          )
-          .asFunction();
+  const _NativeSqliteApi._();
 
-  factory _NativeSqliteApi.open() =>
-      _NativeSqliteApi._(sqlite_open.open.openSqlite());
-
-  // https://sqlite.org/c3ref/c_open_autoproxy.html
-  static const _openReadWrite = 0x00000002;
-  static const _openCreate = 0x00000004;
-  static const _openFullMutex = 0x00010000;
-  static const _ok = 0;
-
-  final _SqliteOpenDart _open;
-  final _SqliteExecDart _exec;
-  final _SqliteCloseDart _close;
-  final _SqliteFreeDart _free;
-  final _SqliteErrmsgDart _errmsg;
-  final _SqliteExtendedResultsDart _extendedResults;
+  factory _NativeSqliteApi.open() => const _NativeSqliteApi._();
 
   int openPrepared(String path) {
-    final pathPtr = path.toNativeUtf8();
-    final out = calloc<Pointer<Void>>();
-    Pointer<Void> handle = nullptr;
+    // FULLMUTEX, as before: the handle is used from another isolate.
+    final db = sqlite3.open(path, mutex: true);
     var transferred = false;
     try {
-      final result = _open(
-        pathPtr,
-        out,
-        _openReadWrite | _openCreate | _openFullMutex,
-        nullptr,
-      );
-      handle = out.value;
-      if (result != _ok || handle == nullptr) {
-        final message = handle == nullptr
-            ? 'SQLite returned code $result without a database handle'
-            : _errmsg(handle).toDartString();
-        throw StateError('Could not open IPTV catalog database: $message');
-      }
-      _extendedResults(handle, 1);
-
       for (final sql in IptvCatalogDb._connectionSetupSql) {
-        _execute(handle, sql);
+        db.execute(sql);
       }
       for (final sql in IptvCatalogDb._defensiveCleanupSql) {
         try {
-          _execute(handle, sql);
+          db.execute(sql);
         } catch (_) {
           // A malformed leftover must not prevent the clean schema from
           // opening, matching the previous _createSchema behavior.
         }
       }
       for (final sql in IptvCatalogDb._schemaSql) {
-        _execute(handle, sql);
+        db.execute(sql);
       }
       for (final sql in IptvCatalogDb._columnMigrationSql) {
         try {
-          _execute(handle, sql);
+          db.execute(sql);
         } catch (_) {
           // ALTER ADD COLUMN intentionally fails once an upgraded database
           // already has the column — the only outcome that matters here is
@@ -287,41 +208,23 @@ class _NativeSqliteApi {
         }
       }
       for (final sql in IptvCatalogDb._postColumnSchemaSql) {
-        _execute(handle, sql);
+        db.execute(sql);
       }
+      // Detach the native handle (finalizer off) so it outlives this
+      // isolate; the receiver becomes its only owner.
+      final address = db.leak().address;
       transferred = true;
-      return handle.address;
+      return address;
+    } catch (error) {
+      throw StateError('Could not open IPTV catalog database: $error');
     } finally {
-      calloc.free(pathPtr);
-      calloc.free(out);
-      if (!transferred && handle != nullptr) {
-        _close(handle);
-      }
+      if (!transferred) db.close();
     }
   }
 
   void closeHandle(int address) {
     if (address == 0) return;
-    _close(Pointer<Void>.fromAddress(address));
-  }
-
-  void _execute(Pointer<Void> handle, String sql) {
-    final sqlPtr = sql.toNativeUtf8();
-    final errorOut = calloc<Pointer<Utf8>>();
-    try {
-      final result = _exec(handle, sqlPtr, nullptr, nullptr, errorOut);
-      if (result == _ok) return;
-      final error = errorOut.value;
-      final message = error == nullptr
-          ? _errmsg(handle).toDartString()
-          : error.toDartString();
-      throw StateError('IPTV catalog SQL failed ($result): $message');
-    } finally {
-      final error = errorOut.value;
-      if (error != nullptr) _free(error.cast());
-      calloc.free(errorOut);
-      calloc.free(sqlPtr);
-    }
+    sqlite3.fromPointer(Pointer<Void>.fromAddress(address)).close();
   }
 }
 
@@ -846,7 +749,7 @@ class IptvCatalogDb {
       _runPendingMigrations(db);
       return action(db);
     } finally {
-      db.dispose();
+      db.close();
     }
   });
 
@@ -920,7 +823,7 @@ class IptvCatalogDb {
           );
         }
       } finally {
-        normalize.dispose();
+        normalize.close();
       }
       final revision = _webDavSyncRevision(db);
       db.execute('COMMIT');
@@ -1072,7 +975,7 @@ class IptvCatalogDb {
               insert.execute([target.catalogKey, target.groups[index], index]);
             }
           } finally {
-            insert.dispose();
+            insert.close();
           }
         }
         db.execute(
@@ -1228,7 +1131,7 @@ class IptvCatalogDb {
   static void debugClose() {
     _writeRevision++;
     _activeRevalidations.clear();
-    _db?.dispose();
+    _db?.close();
     _db = null;
     _path = null;
     _opening = null;
@@ -1254,7 +1157,7 @@ class IptvCatalogDb {
       }
     }
     _writeRevision++;
-    _db?.dispose();
+    _db?.close();
     _db = null;
     _path = null;
     _opening = null;
@@ -1485,11 +1388,11 @@ class IptvCatalogDb {
         } catch (_) {}
         rethrow;
       } finally {
-        insert.dispose();
+        insert.close();
       }
       return digest;
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1677,8 +1580,8 @@ class IptvCatalogDb {
       }
       rethrow;
     } finally {
-      insertChannel?.dispose();
-      insertNumberBase?.dispose();
+      insertChannel?.close();
+      insertNumberBase?.close();
       if (!published && generation > 0) {
         try {
           db.execute(
@@ -1687,7 +1590,7 @@ class IptvCatalogDb {
           );
         } catch (_) {}
       }
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1748,7 +1651,7 @@ class IptvCatalogDb {
           CatalogGroup(row['grp'] as String?, row['c'] as int),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1787,7 +1690,7 @@ class IptvCatalogDb {
       );
       return CatalogSnapshot._orderEntriesFromRows(rows);
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -1950,7 +1853,7 @@ class IptvCatalogDb {
         upsert.execute([namespaceId, entry.value, number, now]);
       }
     } finally {
-      upsert.dispose();
+      upsert.close();
     }
     db.execute(
       'UPDATE channel_number_namespaces SET active_source_key = ?, '
@@ -2217,7 +2120,7 @@ class IptvCatalogDb {
         if (rows.length < _adoptionChunkSize) break;
       }
     } finally {
-      page.dispose();
+      page.close();
     }
     if (identities.isEmpty) return 0;
 
@@ -2258,7 +2161,7 @@ class IptvCatalogDb {
           corrected += db.updatedRows;
         }
       } finally {
-        update.dispose();
+        update.close();
       }
       db.execute('COMMIT');
       return corrected;
@@ -2290,7 +2193,7 @@ class IptvCatalogDb {
         insert.execute([identity]);
       }
     } finally {
-      insert.dispose();
+      insert.close();
     }
     return _archivedNamespaceMatchFromIncoming(db, incomingIdentities.length);
   }
@@ -2383,7 +2286,7 @@ class IptvCatalogDb {
           }(),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -2418,7 +2321,7 @@ class IptvCatalogDb {
           ),
       ];
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -2496,10 +2399,10 @@ class IptvCatalogDb {
         _rollbackQuietly(db);
         rethrow;
       } finally {
-        insert.dispose();
+        insert.close();
       }
     } finally {
-      db.dispose();
+      db.close();
     }
   }
 
@@ -3054,7 +2957,7 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert?.dispose();
+      insert?.close();
     }
   }
 
@@ -3212,8 +3115,8 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert?.dispose();
-      update?.dispose();
+      insert?.close();
+      update?.close();
     }
     return true;
   }
@@ -3432,7 +3335,7 @@ class IptvCatalogDb {
       _rollbackQuietly(db);
       rethrow;
     } finally {
-      insert.dispose();
+      insert.close();
     }
     if (origin == WebDavSyncMutationOrigin.user) {
       WebDavSyncLibraryMutation.notifyUserMutation();
@@ -3699,10 +3602,10 @@ class CatalogSnapshot {
   List<Object?> _args({String? group, String? search, int? beforePosition}) => [
     catalogKey,
     generation,
-    if (group != null) group,
+    ?group,
     if (search != null && search.isNotEmpty)
       '%${_escapeLike(search.toLowerCase())}%',
-    if (beforePosition != null) beforePosition,
+    ?beforePosition,
   ];
 
   String _where({

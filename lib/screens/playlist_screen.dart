@@ -1,15 +1,12 @@
 import 'dart:async';
 
-import 'package:debrify/services/storage/playlist_poster_storage.dart';
-import 'package:debrify/services/storage/playlist_preferences_storage.dart';
-import 'package:debrify/services/storage/playlist_progress_storage.dart';
-import 'package:debrify/services/storage/playlist_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/services.dart';
-
-import '../services/analytics_service.dart';
+import '../services/storage_service.dart';
 import '../services/main_page_bridge.dart';
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../services/playlist_player_service.dart';
 import '../widgets/adaptive_playlist_section.dart';
 import '../widgets/tv_text_field.dart';
@@ -58,7 +55,6 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('playlist');
     _initFuture = _init();
 
     // Search controller listener with debounce
@@ -140,11 +136,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _loadData() async {
-    final items = await PlaylistStorage.getPlaylistItemsRaw();
+    final items = await StorageService.getPlaylistItemsRaw();
 
     // Apply poster overrides for items that have saved custom posters
     for (var item in items) {
-      final posterOverride = await PlaylistPosterStorage.getPlaylistPosterOverride(
+      final posterOverride = await StorageService.getPlaylistPosterOverride(
         item,
       );
       if (posterOverride != null && posterOverride.isNotEmpty) {
@@ -153,10 +149,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
 
     // Load progress data from playback state
-    final progressMap = await PlaylistProgressStorage.buildPlaylistProgressMap(items);
+    final progressMap = await StorageService.buildPlaylistProgressMap(items);
 
     // Load favorites
-    final favoriteKeys = await PlaylistPreferencesStorage.getPlaylistFavoriteKeys();
+    final favoriteKeys = await StorageService.getPlaylistFavoriteKeys();
 
     if (!mounted) return;
     setState(() {
@@ -191,7 +187,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   // Favorites section items (filtered by search)
   List<Map<String, dynamic>> _getFavoriteItems(String query) {
     return _getFilteredItems(query).where((item) {
-      final dedupeKey = PlaylistStorage.computePlaylistDedupeKey(item);
+      final dedupeKey = StorageService.computePlaylistDedupeKey(item);
       return _favoriteKeys.contains(dedupeKey);
     }).toList();
   }
@@ -203,10 +199,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
   // Toggle favorite status for an item
   Future<void> _toggleFavorite(Map<String, dynamic> item) async {
-    final dedupeKey = PlaylistStorage.computePlaylistDedupeKey(item);
+    final dedupeKey = StorageService.computePlaylistDedupeKey(item);
     final isCurrentlyFavorited = _favoriteKeys.contains(dedupeKey);
 
-    await PlaylistPreferencesStorage.setPlaylistItemFavorited(item, !isCurrentlyFavorited);
+    await StorageService.setPlaylistItemFavorited(item, !isCurrentlyFavorited);
 
     if (!mounted) return;
     setState(() {
@@ -266,11 +262,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: app.home.sheetBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: app.shape.br(18),
-          side: BorderSide(color: app.fade(app.core.tx, 0.08)),
-        ),
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : app.home.sheetBg,
+        shape: GlassChrome.enabled(app)
+            ? GlassChrome.shape(app, radius: 18)
+            : RoundedRectangleBorder(
+                borderRadius: app.shape.br(18),
+                side: BorderSide(color: app.fade(app.core.tx, 0.08)),
+              ),
         title: const Text(
           'Remove from playlist?',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -313,12 +313,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         // Find the index of the item being deleted for focus restoration
         final currentIndex = _allItems.indexWhere(
           (playlistItem) =>
-              PlaylistStorage.computePlaylistDedupeKey(playlistItem) ==
-              PlaylistStorage.computePlaylistDedupeKey(item),
+              StorageService.computePlaylistDedupeKey(playlistItem) ==
+              StorageService.computePlaylistDedupeKey(item),
         );
 
-        final dedupeKey = PlaylistStorage.computePlaylistDedupeKey(item);
-        await PlaylistStorage.removePlaylistItemByKey(dedupeKey);
+        final dedupeKey = StorageService.computePlaylistDedupeKey(item);
+        await StorageService.removePlaylistItemByKey(dedupeKey);
         if (!mounted) return;
         ScaffoldMessenger.of(
           context,
@@ -367,11 +367,15 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: app.home.sheetBg,
-        shape: RoundedRectangleBorder(
-          borderRadius: app.shape.br(18),
-          side: BorderSide(color: app.fade(app.core.tx, 0.08)),
-        ),
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : app.home.sheetBg,
+        shape: GlassChrome.enabled(app)
+            ? GlassChrome.shape(app, radius: 18)
+            : RoundedRectangleBorder(
+                borderRadius: app.shape.br(18),
+                side: BorderSide(color: app.fade(app.core.tx, 0.08)),
+              ),
         title: const Text(
           'Clear watch progress?',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -405,7 +409,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     if (confirmed == true) {
       final title = item['title'] as String? ?? '';
-      await PlaylistProgressStorage.clearPlaylistProgress(title: title);
+      await StorageService.clearPlaylistProgress(title: title);
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -474,10 +478,10 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   backgroundColor: app.cloud.dialogSurface,
                   color: app.playlist.accent,
                   child: CustomScrollView(
+                    scrollCacheExtent: ScrollCacheExtent.pixels(500.0),
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),
-                    cacheExtent: 500.0,
                     slivers: [
                       // Search area - inline bar + toggle button
                       SliverToBoxAdapter(child: _buildSearchArea(query)),
@@ -735,22 +739,29 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           final isFocused = Focus.of(context).hasFocus;
           return GestureDetector(
             onTap: _toggleSearchField,
+            behavior: HitTestBehavior.opaque,
             child: Container(
               height: 40,
               width: 40,
-              decoration: BoxDecoration(
-                color: isFocused
-                    ? app.playlist.controlFill
-                    // No token carries this near-black; left literal.
-                    : const Color(0xFF141414),
-                borderRadius: app.shape.br(20),
-                border: isFocused
-                    ? Border.all(
-                        color: app.fade(app.core.tx, 0.6),
-                        width: 2,
-                      )
-                    : null,
-              ),
+              decoration: GlassChrome.enabled(app)
+                  ? GlassChrome.decoration(
+                      app,
+                      radius: app.shape.br(20),
+                      raised: isFocused || hasActiveSearch || _showSearchField,
+                      active: isFocused,
+                    )
+                  : BoxDecoration(
+                      color: isFocused
+                          ? app.playlist.controlFill
+                          : const Color(0xFF141414),
+                      borderRadius: app.shape.br(20),
+                      border: isFocused
+                          ? Border.all(
+                              color: app.fade(app.core.tx, 0.6),
+                              width: 2,
+                            )
+                          : null,
+                    ),
               child: Icon(
                 Icons.search_rounded,
                 size: 20,
@@ -774,8 +785,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: app.fade(app.playlist.card, 0.5),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app)
+                  : app.fade(app.playlist.card, 0.5),
               shape: BoxShape.circle,
+              border: GlassChrome.enabled(app)
+                  ? Border.all(color: GlassChrome.edge(app))
+                  : null,
             ),
             child: Icon(
               Icons.video_library_outlined,
@@ -814,8 +830,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: app.fade(app.playlist.card, 0.5),
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app)
+                  : app.fade(app.playlist.card, 0.5),
               shape: BoxShape.circle,
+              border: GlassChrome.enabled(app)
+                  ? Border.all(color: GlassChrome.edge(app))
+                  : null,
             ),
             child: Icon(
               Icons.search_off_rounded,

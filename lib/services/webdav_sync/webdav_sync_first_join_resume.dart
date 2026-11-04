@@ -126,7 +126,7 @@ final class WebDavSyncFirstJoinAutoResume {
         throw StateError('WebDAV first-sync completion left invalid state');
       }
       _authenticationFailures.remove(binding.id);
-      return _waitOrExhaust(binding.id);
+      return await _waitOrExhaust(binding.id);
     } catch (error) {
       // The connector preserves the committed authority boundary by wrapping
       // failures after adoption. Retry classification uses the cause, without

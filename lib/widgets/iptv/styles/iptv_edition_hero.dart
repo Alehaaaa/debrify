@@ -196,7 +196,7 @@ class _IptvEditionHeroState extends State<IptvEditionHero> {
     final kicker = [
       if (ch.channelNumber != null) 'CH ${ch.channelNumber}',
       displayName.toUpperCase(),
-      if (resolution != null) resolution,
+      ?resolution,
     ].join('   ·   ');
 
     return Container(

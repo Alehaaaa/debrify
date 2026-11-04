@@ -332,12 +332,10 @@ void main() {
     'Favorites and custom-list view activate their origin-aware guide path',
     () {
       final source = File(
-        'lib/features/iptv/presentation/legacy_iptv/iptv_guide_context.dart',
+        'lib/widgets/iptv/iptv_results_view.dart',
       ).readAsStringSync();
-      final start = source.indexOf('void updateEpgContext(');
-      expect(start, isNonNegative, reason: 'Missing guide method marker');
+      final start = source.indexOf('void _updateEpgContext(');
       final end = source.indexOf('final isPlainM3u', start);
-      expect(end, greaterThan(start), reason: 'Missing list-branch end marker');
       final listBranch = source.substring(start, end);
       expect(
         listBranch,
@@ -345,7 +343,7 @@ void main() {
       );
       expect(listBranch, contains('service.setListEpgContext('));
       expect(listBranch, contains('channels: result.channels'));
-      expect(listBranch, contains('ticket == _catalogState.loadTicket'));
+      expect(listBranch, contains('ticket == _loadTicket'));
     },
   );
 
@@ -497,7 +495,7 @@ void main() {
     url: 'http://127.0.0.1:$port/live/user/pass/$id.ts',
     duration: -1,
     contentType: 'live',
-    attributes: {if (tvgId != null) 'tvg-id': tvgId},
+    attributes: {'tvg-id': ?tvgId},
   );
 
   test('shifted panel: schedule keeps the XMLTV timeline while merging '

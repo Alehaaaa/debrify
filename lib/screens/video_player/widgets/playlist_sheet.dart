@@ -1,5 +1,3 @@
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/tracker_episode_progress_storage.dart';
 import 'package:flutter/material.dart';
 import '../../../models/series_playlist.dart';
 import '../../../models/movie_collection.dart';
@@ -8,6 +6,7 @@ import '../../../widgets/series_browser.dart';
 import '../../../widgets/movie_collection_browser.dart';
 import '../models/playlist_entry.dart';
 import '../constants/color_constants.dart';
+import '../../../services/storage_service.dart';
 import '../../../services/tracking_source_policy.dart';
 import '../../../utils/episode_progress_merge.dart';
 import '../constants/timing_constants.dart';
@@ -53,7 +52,7 @@ class PlaylistSheet {
     // wants the full width, so unlike the small pickers this keeps its shape
     // and only adopts the black glass + hairline.
     await showModalBottomSheet(
-      sheetAnimationStyle: kMenuSheetAnimation,
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: const Color(0xFF101012),
       isScrollControlled: true,
@@ -93,20 +92,20 @@ class PlaylistSheet {
                             ? seriesPlaylist.imdbId!.trim()
                             : imdbId?.trim());
                         final localProgress =
-                            await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
+                            await StorageService.getMergedEpisodeProgress(
                               seriesTitle: title,
                               imdbId: resolvedImdbId,
                             );
                         final trackerMaps =
                             resolvedImdbId != null && resolvedImdbId.isNotEmpty
                             ? await Future.wait([
-                                TrackerEpisodeProgressStorage.getEpisodeTraktProgress(
+                                StorageService.getEpisodeTraktProgress(
                                   imdbId: resolvedImdbId,
                                 ),
-                                TrackerEpisodeProgressStorage.getEpisodeSimklProgress(
+                                StorageService.getEpisodeSimklProgress(
                                   imdbId: resolvedImdbId,
                                 ),
-                                TrackerEpisodeProgressStorage.getEpisodeMdblistProgress(
+                                StorageService.getEpisodeMdblistProgress(
                                   imdbId: resolvedImdbId,
                                 ),
                               ])

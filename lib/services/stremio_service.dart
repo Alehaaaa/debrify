@@ -1,7 +1,7 @@
-import 'pinned_direct_stream_match.dart';
-import '../models/addon_search_status.dart';
+import 'dart:async';
 import '../models/media_identity.dart';
 import 'native_series_metadata_service.dart';
+import 'offline_title_store.dart';
 import 'metadata_preferences_service.dart';
 import 'home_return_cache.dart';
 import 'local_series_completion_service.dart';
@@ -18,14 +18,48 @@ import '../utils/json_isolate.dart';
 import '../utils/stremio_url.dart';
 import 'profiles/profile_preferences.dart';
 import 'profiles/profile_runtime.dart';
-import 'profiles/profile_session_memory.dart';
 import 'profiles/profile_collection_resource_facade.dart';
 import 'profiles/connection_resource_service.dart';
 import 'profiles/profile_async_authorization.dart';
 import '../models/profiles/connection_resource.dart';
 import '../models/profiles/profile_policy.dart';
 
-export '../models/addon_search_status.dart';
+/// One addon's outcome for a single stream search — lets the source provider
+/// row retain retry controls for addons that failed or returned nothing (the
+/// count maps alone lose zero-count addons once counts are rebuilt from the
+/// final rows).
+///
+/// [sourceKey] matches `Torrent.source` and identifies one configured addon;
+/// [count] is the addon's RAW stream count before cross-addon dedupe, so
+/// "returned something that deduped away" still reads as activity.
+class AddonSearchStatus {
+  final String addonId;
+  final String? addonKey;
+  final String name;
+  final String sourceKey;
+  final int count;
+  final String? error;
+
+  const AddonSearchStatus({
+    required this.addonId,
+    this.addonKey,
+    required this.name,
+    required this.sourceKey,
+    required this.count,
+    this.error,
+  });
+
+  bool get failed => error != null;
+  String get requestKey => addonKey ?? addonId;
+
+  AddonSearchStatus withResult(int count) => AddonSearchStatus(
+    addonId: addonId,
+    addonKey: addonKey,
+    name: name,
+    sourceKey: sourceKey,
+    count: count,
+  );
+}
 
 class StremioAddonImportResult {
   final int discovered;
@@ -101,9 +135,6 @@ class StremioService {
 
   // In-memory cache of addons
   List<StremioAddon>? _addonsCache;
-  ProfileSessionOwner? _addonsCacheOwner;
-  ProfileSessionOwner? _hydrationCacheOwner;
-  int _addonsGeneration = 0;
 
   // Resolved "Watch Next" recommendations, keyed by '<type>:<imdbId>'.
   // Session-lived; recommendations are stable enough not to need a TTL.
@@ -114,36 +145,6 @@ class StremioService {
   // preferred-provider meta so their detail screen matches a normal catalog
   // open without leaking a result across provider changes.
   final Map<String, StremioMeta> _metaDetailsCache = {};
-  ProfileSessionOwner? _detailCacheOwner;
-  int _detailCacheGeneration = 0;
-
-  void _clearDetailCaches() {
-    _detailCacheGeneration++;
-    _recommendationsCache.clear();
-    _metaDetailsCache.clear();
-    _nonRecommendationAddonIds.clear();
-  }
-
-  /// Capture before any await: a retired request may neither borrow nor refill
-  /// another session's caches. Cache work is separate from route acceptance.
-  bool Function() _detailReadGuard(
-    bool Function()? canContinue, {
-    bool watchInvalidation = true,
-  }) {
-    final owner = ProfileSessionMemory.captureOwner();
-    final scope = owner.scope;
-    final scopeMatches = scope == null || ProfileRuntime.capture() == scope;
-    if (!scopeMatches || canContinue?.call() == false) return () => false;
-    if (_detailCacheOwner != owner) {
-      _clearDetailCaches();
-      _detailCacheOwner = owner;
-    }
-    final generation = _detailCacheGeneration;
-    return () =>
-        owner == ProfileSessionMemory.captureOwner() &&
-        (!watchInvalidation || generation == _detailCacheGeneration) &&
-        canContinue?.call() != false;
-  }
 
   // Series meta videos (episode lists), keyed by '<addonId>:<contentId>'.
   // Short TTL so newly-aired episodes still show up within a session; small
@@ -179,9 +180,6 @@ class StremioService {
 
   @visibleForTesting
   Future<StremioAddon> Function(String manifestUrl)? debugManifestFetcher;
-
-  @visibleForTesting
-  Future<dynamic> Function(String source)? debugAddonDecoder;
 
   @visibleForTesting
   http.Client Function()? debugStreamHttpClientFactory;
@@ -220,7 +218,6 @@ class StremioService {
     bool forSettings = false,
     bool forRemoteTransfer = false,
   }) async {
-    final owner = ProfileSessionMemory.captureOwner();
     final startingScope =
         ProfileRuntime.isInitialized && ProfileRuntime.isProfileCommitted
         ? ProfileRuntime.capture()
@@ -240,8 +237,7 @@ class StremioService {
       // must remain visible rather than masquerading as an empty collection.
       if (forSettings ||
           forRemoteTransfer ||
-          (ProfileRuntime.scope.value == startingScope &&
-              owner == ProfileSessionMemory.captureOwner())) {
+          ProfileRuntime.scope.value == startingScope) {
         rethrow;
       }
       return [];
@@ -251,27 +247,7 @@ class StremioService {
   Future<List<StremioAddon>> _getAddons({
     required bool forSettings,
     required bool forRemoteTransfer,
-    bool persistHydration = true,
   }) async {
-    final owner = ProfileSessionMemory.captureOwner();
-    final generation = _addonsGeneration;
-    void checkCurrent() {
-      if (owner != ProfileSessionMemory.captureOwner() ||
-          (owner.scope != null && ProfileRuntime.capture() != owner.scope)) {
-        throw StateError('Addon inventory read retired');
-      }
-    }
-
-    // A same-profile save during the read still returns what was read, as
-    // before; it only keeps that stale list out of the cache and storage.
-    bool inventoryCurrent() => generation == _addonsGeneration;
-
-    checkCurrent();
-    if (_hydrationCacheOwner != owner) {
-      _hydrationFailedUrls.clear();
-      _hydrationCacheOwner = owner;
-    }
-
     // READING addons is an operation every profile keeps ([ProfileFeature
     // .addonUse]) — Home shelves and catalog search must survive "Manage own
     // sources" being off. The management entry points (add/remove/import/
@@ -281,17 +257,13 @@ class StremioService {
           ? ProfileFeature.remoteTransfer
           : ProfileFeature.addonUse,
     );
-    checkCurrent();
-    final cached = _addonsCacheOwner == owner ? _addonsCache : null;
-    if (!forSettings && !forRemoteTransfer && cached != null) {
-      var usable = true;
+    if (!forSettings && !forRemoteTransfer && _addonsCache != null) {
       if (authorization != null) {
         await authorization.runIfCurrent(() async {});
       }
       if (ProfileCollectionResourceFacade.active) {
         try {
-          for (final addon in cached) {
-            checkCurrent();
+          for (final addon in _addonsCache!) {
             await ProfileCollectionResourceFacade.authorizeExecution(
               resourceId: addon.connectionResourceId,
               resourceRevision: addon.connectionResourceRevision,
@@ -305,13 +277,10 @@ class StremioService {
           // A resource was rotated, revoked, disabled, or deleted without
           // going through this singleton. Never serve its decrypted URL from
           // process memory; rebuild the cache from the current graph below.
-          checkCurrent();
-          if (identical(_addonsCache, cached)) _addonsCache = null;
-          usable = false;
+          _addonsCache = null;
         }
       }
-      checkCurrent();
-      if (usable) return List.from(cached);
+      if (_addonsCache != null) return List.from(_addonsCache!);
     }
 
     if (ProfileCollectionResourceFacade.active) {
@@ -327,7 +296,6 @@ class StremioService {
       final rows = authorization == null
           ? await read()
           : await authorization.runIfCurrent(read);
-      checkCurrent();
       // Restored rows (remote import, file backup) carry only a manifest URL
       // — the restore adapters cannot fetch manifests. The strict parse used
       // to throw on the first such row, which took EVERY catalog down with a
@@ -356,9 +324,7 @@ class StremioService {
         final hydrated = await _hydrateRestoredAddons(
           restoredRows,
           stubUnfetchable: true,
-          checkCurrent: checkCurrent,
         );
-        checkCurrent();
         addons = <StremioAddon>[...parsed, ...hydrated];
         final anyReal = hydrated.any(
           (a) => !a.id.startsWith(_restoredPendingIdPrefix),
@@ -369,11 +335,7 @@ class StremioService {
         // recreation instant, a settings-read persist becomes an endless
         // save→notify→reload loop that re-seals secrets and bumps every
         // addon's authorization revision each turn.
-        if (anyReal &&
-            persistHydration &&
-            inventoryCurrent() &&
-            !forRemoteTransfer &&
-            !forSettings) {
+        if (anyReal && !forRemoteTransfer && !forSettings) {
           // Best-effort: a profile allowed to USE addons but not manage
           // them cannot write the collection — serve the hydrated list for
           // this session and let a manager's read repair it durably. The
@@ -390,17 +352,9 @@ class StremioService {
             // management callers retain disabled rows. Re-read through the
             // execution path here; a playback caller must never receive that
             // settings representation (including redacted shared addons).
-            // Our own hydration save invalidates the inventory generation.
-            // Keep the originating owner, then re-read the committed inventory.
-            if (owner != ProfileSessionMemory.captureOwner()) {
-              throw StateError('Addon hydration owner retired');
-            }
             return await _getAddons(
               forSettings: false,
               forRemoteTransfer: false,
-              // Borrowed restored records cannot be rewritten by this owner.
-              // Re-authorize once without recursively retrying their save.
-              persistHydration: false,
             );
           } on ResourceAuthorizationException {
             rethrow;
@@ -412,48 +366,32 @@ class StremioService {
           }
         }
       }
-      checkCurrent();
       if (!forSettings && !forRemoteTransfer) {
         if (authorization != null && !authorization.isCurrentlyActive) {
           throw StateError('Profile session changed before addon publication');
         }
-        if (inventoryCurrent()) {
-          _addonsCache = addons;
-          _addonsCacheOwner = owner;
-        }
+        _addonsCache = addons;
       }
       return List<StremioAddon>.from(addons);
     }
 
     final prefs = await ProfilePreferences.instance();
-    checkCurrent();
     final jsonString = prefs.getString(_addonsKey);
 
     if (jsonString == null || jsonString.isEmpty) {
       _addonsCache = [];
-      _addonsCacheOwner = owner;
       return [];
     }
 
     try {
-      final List<dynamic> jsonList =
-          await (debugAddonDecoder ?? decodeJsonAsync)(jsonString);
-      checkCurrent();
-      final decoded = jsonList
+      final List<dynamic> jsonList = await decodeJsonAsync(jsonString);
+      _addonsCache = jsonList
           .map((j) => StremioAddon.fromJson(j as Map<String, dynamic>))
           .toList();
-      if (inventoryCurrent()) {
-        _addonsCache = decoded;
-        _addonsCacheOwner = owner;
-      }
-      return List.from(decoded);
+      return List.from(_addonsCache!);
     } catch (_) {
-      checkCurrent();
       debugPrint('StremioService: Addon storage could not be decoded');
-      if (inventoryCurrent()) {
-        _addonsCache = [];
-        _addonsCacheOwner = owner;
-      }
+      _addonsCache = [];
       return [];
     }
   }
@@ -478,8 +416,7 @@ class StremioService {
     }
     final executableByResourceId = <String, StremioAddon>{
       for (final addon in executable)
-        if (addon.connectionResourceId case final resourceId?)
-          resourceId: addon,
+        ?addon.connectionResourceId: addon,
     };
     final merged = <StremioAddon>[];
     final seenResourceIds = <String>{};
@@ -519,7 +456,7 @@ class StremioService {
 
   /// URLs whose manifest fetch failed this session — without this memo an
   /// offline device would pay a full network timeout on EVERY catalog load
-  /// until the fetch succeeds. Cleared on profile-session change or restart.
+  /// until the fetch succeeds. Cleared by restart (retry is cheap then).
   static final Set<String> _hydrationFailedUrls = <String>{};
 
   /// Fetches the real manifest for restored URL-only rows and rebinds each
@@ -533,11 +470,9 @@ class StremioService {
   Future<List<StremioAddon>> _hydrateRestoredAddons(
     List<Map<String, dynamic>> rows, {
     bool stubUnfetchable = false,
-    required void Function() checkCurrent,
   }) async {
     final result = <StremioAddon>[];
     for (final row in rows) {
-      checkCurrent();
       final raw = (row['manifestUrl'] ?? row['manifest_url']) as String?;
       final url = raw?.trim() ?? '';
       void addStub() {
@@ -565,7 +500,6 @@ class StremioService {
       }
       try {
         final fetched = await fetchManifest(_normalizeManifestUrl(url));
-        checkCurrent();
         result.add(
           fetched.copyWith(
             connectionResourceId: row['_connectionResourceId'] as String?,
@@ -574,7 +508,6 @@ class StremioService {
           ),
         );
       } catch (_) {
-        checkCurrent();
         debugPrint('StremioService: could not hydrate restored addon');
         _hydrationFailedUrls.add(url);
         addStub();
@@ -600,7 +533,6 @@ class StremioService {
     final prefs = await ProfilePreferences.instance();
     if (prefs.getString(_metadataProviderKey) == value) return;
     await prefs.setString(_metadataProviderKey, value);
-    _detailCacheGeneration++;
     _metaDetailsCache.clear();
     MetadataPreferencesService.revision.value++;
   }
@@ -705,12 +637,13 @@ class StremioService {
     // disabled rows. It may also contain redacted borrowed rows, so it must
     // never seed the executable cache; the next playback read rebuilds that
     // cache from an authorized use-mode read.
-    _addonsGeneration++;
     _addonsCache = null;
     // Addon set changed — drop recommendation caches so a title viewed
     // before installing a "Watch Next"-style addon picks it up without an
     // app restart (and a removed addon stops contributing).
-    _clearDetailCaches();
+    _recommendationsCache.clear();
+    _metaDetailsCache.clear();
+    _nonRecommendationAddonIds.clear();
     // Catalog pages too: a reconfigured addon can serve different content from
     // the same catalog URL, so nothing cached before the change may survive it.
     _catalogCache.clear();
@@ -1007,9 +940,10 @@ class StremioService {
       if (authorization != null && !authorization.isCurrentlyActive) {
         throw StateError('Profile session changed before addon publication');
       }
-      _addonsGeneration++;
       _addonsCache = null;
-      _clearDetailCaches();
+      _recommendationsCache.clear();
+      _metaDetailsCache.clear();
+      _nonRecommendationAddonIds.clear();
       _catalogCache.clear();
       _notifyAddonsChanged();
       return;
@@ -1678,12 +1612,30 @@ class StremioService {
     required String streamKey,
     required int streamIndex,
     String? bingeGroup,
-  }) => matchPinnedDirectStream(
-    direct,
-    streamKey: streamKey,
-    streamIndex: streamIndex,
-    bingeGroup: bingeGroup,
-  );
+  }) {
+    if (bingeGroup != null && bingeGroup.isNotEmpty) {
+      final matches = direct
+          .where((t) => t.stremioBingeGroup == bingeGroup)
+          .toList();
+      // An explicit group disappearing is a miss, not permission to change groups.
+      if (matches.isEmpty) return null;
+      return matches.firstWhere(
+        (t) => t.stremioStreamKey == streamKey,
+        orElse: () => matches.first,
+      );
+    }
+    final profileMatches = direct
+        .where((torrent) => torrent.stremioStreamKey == streamKey)
+        .toList(growable: false);
+    if (profileMatches.length == 1) return profileMatches.single;
+    if (profileMatches.isNotEmpty) {
+      for (final torrent in profileMatches) {
+        if (torrent.stremioStreamIndex == streamIndex) return torrent;
+      }
+      return profileMatches.first;
+    }
+    return null;
+  }
 
   /// Smart fallback for series search without specific season/episode
   ///
@@ -2032,21 +1984,24 @@ class StremioService {
               'exp',
               'expires',
               'expiry',
-            }.contains(parameter.key.toLowerCase()))
+            }.contains(parameter.key.toLowerCase())) {
               continue;
+            }
             final seconds = int.tryParse(parameter.value);
             if (seconds == null) {
               final expiry = DateTime.tryParse(parameter.value);
               if (expiry != null &&
-                  (earliest == null || expiry.isBefore(earliest)))
+                  (earliest == null || expiry.isBefore(earliest))) {
                 earliest = expiry;
+              }
               continue;
             }
             final millis = seconds > 100000000000 ? seconds : seconds * 1000;
             if (millis.abs() > 8640000000000000) continue;
             final expiry = DateTime.fromMillisecondsSinceEpoch(millis);
-            if (earliest == null || expiry.isBefore(earliest))
+            if (earliest == null || expiry.isBefore(earliest)) {
               earliest = expiry;
+            }
           }
         }
         return earliest;
@@ -2171,14 +2126,7 @@ class StremioService {
   Future<List<StremioMeta>> getRecommendations({
     required String imdbId,
     required String type,
-    bool Function()? canContinue,
   }) async {
-    final originCurrent = _detailReadGuard(
-      canContinue,
-      watchInvalidation: false,
-    );
-    var current = originCurrent;
-    if (!current()) return const [];
     if (!imdbId.startsWith('tt') || (type != 'movie' && type != 'series')) {
       return const [];
     }
@@ -2188,10 +2136,6 @@ class StremioService {
 
     try {
       final addons = await getStreamingAddons();
-      if (!current()) return const [];
-      // Inventory hydration may legitimately invalidate caches. Fence network
-      // publication against changes after that inventory has been accepted.
-      current = _detailReadGuard(originCurrent);
       final candidates = addons
           .where(
             (a) =>
@@ -2206,7 +2150,6 @@ class StremioService {
       // failures. Order is preserved, which the perAddon[i]/candidates[i]
       // alignment below relies on.
       final perAddon = await mapWithConcurrency(candidates, (a) async {
-        if (!current()) return <StremioStream>[];
         try {
           return await _fetchStreamsFromAddon(
             a,
@@ -2218,8 +2161,6 @@ class StremioService {
           return <StremioStream>[];
         }
       });
-
-      if (!current()) return const [];
 
       // Learn which candidates are not recommendation providers so later
       // detail opens skip them. Rule: returned ≥1 stream but none were rec
@@ -2236,7 +2177,7 @@ class StremioService {
       // Build recommendations directly from the addon entries. Posters /
       // backdrops come from Stremio's MetaHub CDN keyed purely by IMDb id
       // (no metadata addon dependency — the same source the Trakt path
-      // uses); the title and overview come from the entry itself. Unique,
+      // uses); the title comes from the entry itself. Unique,
       // first-seen order, capped, excluding the title itself.
       const maxItems = 24;
       final seen = <String>{};
@@ -2248,7 +2189,6 @@ class StremioService {
           if (t == null || t.imdbId == imdbId) continue;
           if (!seen.add('${t.type}:${t.imdbId}')) continue;
           final name = s.name?.trim();
-          final overview = s.title?.trim();
           recommendations.add(
             StremioMeta(
               id: t.imdbId,
@@ -2259,10 +2199,11 @@ class StremioService {
                   'https://images.metahub.space/poster/medium/${t.imdbId}/img',
               background:
                   'https://images.metahub.space/background/medium/${t.imdbId}/img',
-              description:
-                  (overview != null && overview.isNotEmpty && overview != name)
-                  ? overview
-                  : null,
+              // No description from the stream entry: recommendation addons
+              // fill its title with "📆 Release / 📈 Popularity / 📖
+              // Overview" stat blocks, not a synopsis. Like a Home card, the
+              // item carries its identity and art, and the detail page loads
+              // the real metadata.
             ),
           );
           if (recommendations.length >= maxItems) break outer;
@@ -2291,18 +2232,37 @@ class StremioService {
   /// which are built straight from an addon's stream entry and so lack the
   /// structured fields a Cinemeta catalog item carries. Returns null when
   /// no meta-capable addon resolves it (the caller keeps what it had).
+  ///
+  /// Titles that are downloaded keep their last answer on the device
+  /// ([OfflineTitleStore]) and get it back when no addon can be reached.
   Future<StremioMeta?> fetchMetaDetails({
     required String imdbId,
     required String type,
     String? providerOverride,
-    bool Function()? canContinue,
   }) async {
-    final originCurrent = _detailReadGuard(
-      canContinue,
-      watchInvalidation: false,
+    final live = await _fetchMetaDetailsLive(
+      imdbId: imdbId,
+      type: type,
+      providerOverride: providerOverride,
     );
-    var current = originCurrent;
-    if (!current()) return null;
+    if (providerOverride != null) return live;
+    final store = OfflineTitleStore.instance;
+    final slot = '${OfflineTitleStore.meta}:$type';
+    if (live != null) {
+      unawaited(store.write(imdbId, slot, live.toJson()));
+      return live;
+    }
+    final saved = await store.read(imdbId, slot);
+    return saved is Map
+        ? StremioMeta.fromJson(Map<String, dynamic>.from(saved))
+        : null;
+  }
+
+  Future<StremioMeta?> _fetchMetaDetailsLive({
+    required String imdbId,
+    required String type,
+    String? providerOverride,
+  }) async {
     if ((providerOverride == null && !imdbId.startsWith('tt')) ||
         imdbId.isEmpty ||
         (type != 'movie' && type != 'series')) {
@@ -2310,8 +2270,6 @@ class StremioService {
     }
     try {
       final addons = await getEnabledAddons();
-      if (!current()) return null;
-      current = _detailReadGuard(originCurrent);
       final metadataAddons = addons
           .where((a) => a.resources.contains('meta') && a.baseUrl.isNotEmpty)
           .toList();
@@ -2323,7 +2281,6 @@ class StremioService {
       }
       final preference =
           providerOverride ?? await getMetadataProviderPreference();
-      if (!current()) return null;
       final preferred = metadataCandidatesForPreference(
         metadataAddons,
         preference,
@@ -2349,7 +2306,6 @@ class StremioService {
       // up enrichment. mapWithConcurrency preserves order, so results stay in
       // addon priority.
       final results = await mapWithConcurrency(candidates, (addon) async {
-        if (!current()) return null;
         final url = buildStremioResourceUri(addon.baseUrl, <String>[
           'meta',
           type,
@@ -2378,8 +2334,6 @@ class StremioService {
           client.close();
         }
       });
-
-      if (!current()) return null;
 
       // Prefer the first result (by addon priority) that carries real
       // structured metadata. Only fall back to a description-only result
@@ -2857,7 +2811,29 @@ class StremioService {
 
   /// Fetch full meta (including videos/episodes) from an addon's meta endpoint.
   /// Returns the raw videos list, or null if the addon doesn't support meta or the fetch fails.
+  ///
+  /// A downloaded series keeps its last episode list on the device
+  /// ([OfflineTitleStore]) and gets it back when the addon can't be reached.
   Future<List<Map<String, dynamic>>?> fetchSeriesMeta(
+    StremioAddon addon,
+    String contentId,
+  ) async {
+    final live = await _fetchSeriesMetaLive(addon, contentId);
+    final store = OfflineTitleStore.instance;
+    if (live != null && live.isNotEmpty) {
+      unawaited(store.write(contentId, OfflineTitleStore.videos, live));
+      return live;
+    }
+    final saved = await store.read(contentId, OfflineTitleStore.videos);
+    if (saved is! List) return live;
+    final videos = [
+      for (final v in saved)
+        if (v is Map) Map<String, dynamic>.from(v),
+    ];
+    return videos.isEmpty ? live : videos;
+  }
+
+  Future<List<Map<String, dynamic>>?> _fetchSeriesMetaLive(
     StremioAddon addon,
     String contentId,
   ) async {
@@ -3027,7 +3003,9 @@ class StremioService {
   Future<String?> restoredCatalogProgressIdentity(StremioMeta item) async {
     final addon = item.sourceAddon;
     if (item.type != 'series' || addon == null ||
-        CustomSeriesIdentity.isCustom(item.imdbId)) return catalogProgressIdentity(item);
+        CustomSeriesIdentity.isCustom(item.imdbId)) {
+      return catalogProgressIdentity(item);
+    }
     final key = '${addon.portableConfigurationKey}:${item.id}';
     final prefs = await ProfilePreferences.instance();
     final saved = prefs.getString('$_progressIdentityPrefix$key');
@@ -3049,29 +3027,11 @@ class StremioService {
         (isCanonicalCatalogAlias(item.id, id) ? id : null);
   }
 
-  Future<void> _rememberCatalogProgress(
-    StremioMeta item,
-    StremioAddon addon, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue != null && !canContinue()) return;
+  Future<void> _rememberCatalogProgress(StremioMeta item, StremioAddon addon) async {
     final key = '${addon.portableConfigurationKey}:${item.id}';
     final id = item.effectiveImdbId ?? item.id;
     final prefs = await ProfilePreferences.instance();
-    Future<void> write() async {
-      if (canContinue != null && !canContinue()) return;
-      await prefs.setString('$_progressIdentityPrefix$key', id);
-    }
-
-    if (canContinue == null) {
-      await prefs.setString('$_progressIdentityPrefix$key', id);
-    } else {
-      await ProfilePreferences.synchronizeExternalMutation(
-        write,
-        marksMutation: false,
-      );
-    }
-    if (canContinue != null && !canContinue()) return;
+    await prefs.setString('$_progressIdentityPrefix$key', id);
     if (_catalogProgressIdentities[key] == id) return;
     _catalogProgressIdentities[key] = id;
     catalogProgressRevision.value++;
@@ -3080,88 +3040,61 @@ class StremioService {
   /// Classify before reading history. Unknown catalog-owned series must never
   /// borrow the history of an IMDb match. Known canonical aliases stay shared.
   Future<StremioMeta> scopeSeriesProgress(
-    StremioMeta item,
-    StremioAddon addon, {
-    bool Function()? canContinue,
-  }) async {
-    if (canContinue != null && !canContinue()) return item;
+    StremioMeta item, StremioAddon addon,
+  ) async {
     if (item.type != 'series' || CustomSeriesIdentity.isCustom(item.imdbId)) {
-      if (item.type == 'series') {
-        await _rememberCatalogProgress(item, addon, canContinue: canContinue);
-      }
+      if (item.type == 'series') await _rememberCatalogProgress(item, addon);
       return item;
     }
-    if (MediaIdentity.isNative(item.id) &&
-        item.imdbId == null &&
-        addon.baseUrl.isEmpty) {
-      await _rememberCatalogProgress(item, addon, canContinue: canContinue);
+    if (MediaIdentity.isNative(item.id) && item.imdbId == null && addon.baseUrl.isEmpty) {
+      await _rememberCatalogProgress(item, addon);
       return item;
     }
     final imdb = item.effectiveImdbId ?? item.id;
     final canonical = isCanonicalCatalogAlias(item.id, imdb);
     final prefs = await ProfilePreferences.instance();
-    if (canContinue != null && !canContinue()) return item;
-    final previous = prefs.getString(
-      '$_progressIdentityPrefix${addon.portableConfigurationKey}:${item.id}',
-    );
+    final previous = prefs.getString('$_progressIdentityPrefix${addon.portableConfigurationKey}:${item.id}');
     // A proven custom catalog remains isolated even while its provider is down.
     if (CustomSeriesIdentity.isCustom(previous)) {
       final scoped = item.withCustomSeriesIdentity(addon);
-      await _rememberCatalogProgress(scoped, addon, canContinue: canContinue);
+      await _rememberCatalogProgress(scoped, addon);
       return scoped;
     }
-    final cached =
-        _seriesMetaCache['${addon.portableConfigurationKey}:${item.id}'];
-    final cachedVideos =
-        cached != null &&
-            DateTime.now().difference(cached.fetchedAt) < _seriesMetaCacheTtl
-        ? cached.videos
-        : null;
-    final needsMetadata =
-        addon.supportsMeta &&
-        addon.baseUrl.isNotEmpty &&
+    final cached = _seriesMetaCache['${addon.portableConfigurationKey}:${item.id}'];
+    final cachedVideos = cached != null && DateTime.now().difference(cached.fetchedAt) < _seriesMetaCacheTtl
+        ? cached.videos : null;
+    final needsMetadata = addon.supportsMeta && addon.baseUrl.isNotEmpty &&
         (!canonical || addon.id != 'com.linvo.cinemeta');
-    final videos =
-        cachedVideos ??
-        (needsMetadata ? await fetchSeriesMeta(addon, item.id) : null);
-    if (canContinue != null && !canContinue()) return item;
+    final videos = cachedVideos ?? (needsMetadata
+        ? await fetchSeriesMeta(addon, item.id)
+        : null);
     if (videos == null && previous == imdb) {
-      await _rememberCatalogProgress(item, addon, canContinue: canContinue);
+      await _rememberCatalogProgress(item, addon);
       return item;
     }
     // Do not read canonical history while an addon-owned episode identity is
     // unknown. Use the metadata request's normal bounded timeout, and allow a
     // retry on failure rather than committing a timing-dependent progress key.
     if (needsMetadata && videos == null && previous != imdb) {
-      throw StateError(
-        'Could not verify series episode identity. Please retry.',
-      );
+      throw StateError('Could not verify series episode identity. Please retry.');
     }
     final ids = (videos ?? const <Map<String, dynamic>>[])
-        .where((v) => v['id']?.toString().isNotEmpty == true)
-        .toList();
-    final custom = ids.isEmpty
-        ? !canonical
-        : ids.any((v) {
-            final s = _videoCoordinate(v['season']);
-            final e = _videoCoordinate(v['number'] ?? v['episode']);
-            return s == null ||
-                e == null ||
-                !isCanonicalEpisodeId(imdb, v['id'].toString(), s, e);
-          });
+        .where((v) => v['id']?.toString().isNotEmpty == true).toList();
+    final custom = ids.isEmpty ? !canonical : ids.any((v) {
+      final s = _videoCoordinate(v['season']);
+      final e = _videoCoordinate(v['number'] ?? v['episode']);
+      return s == null || e == null ||
+          !isCanonicalEpisodeId(imdb, v['id'].toString(), s, e);
+    });
     if (!custom) {
-      await _rememberCatalogProgress(item, addon, canContinue: canContinue);
+      await _rememberCatalogProgress(item, addon);
       return item;
     }
     final scoped = item.withCustomSeriesIdentity(addon);
-    await _rememberCatalogProgress(scoped, addon, canContinue: canContinue);
-    if (canContinue != null && !canContinue()) return scoped;
+    await _rememberCatalogProgress(scoped, addon);
     if (videos != null && videos.isNotEmpty) {
       await LocalSeriesCompletionService.instance.recordRawEpisodeInventory(
-        imdbId: scoped.imdbId!,
-        seriesTitle: item.name,
-        videos: videos,
-        canCommit: canContinue,
+        imdbId: scoped.imdbId!, seriesTitle: item.name, videos: videos,
       );
     }
     return scoped;
@@ -3847,6 +3780,9 @@ class StremioService {
   /// Replay local addon notifications after an external registry commit.
   void refreshAfterExternalChange() {
     invalidateCache();
+    _recommendationsCache.clear();
+    _metaDetailsCache.clear();
+    _nonRecommendationAddonIds.clear();
     for (final listener in List<VoidCallback>.of(_addonsChangedListeners)) {
       try {
         listener();
@@ -3858,9 +3794,7 @@ class StremioService {
 
   /// Invalidate cache (call after external changes)
   void invalidateCache() {
-    _clearDetailCaches();
     HomeReturnCache.invalidate();
-    _addonsGeneration++;
     _addonsCache = null;
     _catalogCache.clear();
     _seriesMetaCache.clear();

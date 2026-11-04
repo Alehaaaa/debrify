@@ -601,9 +601,7 @@ class CollectionNativeSourceService {
     final items = [
       for (final item in raw)
         if (item is Map<String, dynamic>)
-          if (_tmdbMeta(item, kind == 'COLLECTION' ? 'movie' : media)
-              case final meta?)
-            meta,
+          ?_tmdbMeta(item, kind == 'COLLECTION' ? 'movie' : media),
     ];
     return CollectionSourcePage(
       items: resolveIds && enrich
@@ -833,7 +831,7 @@ class CollectionNativeSourceService {
     final items = [
       for (final item in raw)
         if (item is Map<String, dynamic>)
-          if (_traktMeta(item, type) case final meta?) meta,
+          ?_traktMeta(item, type),
     ];
     return CollectionSourcePage(
       items: resolveIds && enrich

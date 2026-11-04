@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -14,6 +13,7 @@ import 'player_visibility.dart';
 import 'profiles/profile_async_authorization.dart';
 import 'profiles/profile_preferences.dart';
 import 'profiles/profile_runtime.dart';
+import 'storage_service.dart';
 import 'xtream_codes_service.dart';
 
 /// One download/ingest at a time, shared by launch, settings and source search.
@@ -32,8 +32,6 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
   Timer? _timer;
   Timer? _launchTimer;
   bool _running = false;
-  // Changed only by [debugSettle]; constant in the app.
-  int _generation = 0;
   bool _checking = false;
   bool _started = false;
   bool _foreground = true;
@@ -97,21 +95,18 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _foreground = state == AppLifecycleState.resumed;
+    // An observer callback may already be in flight while the service is
+    // stopping. Disposed (or never-started) instances must not discover new
+    // jobs against a profile or source whose lifetime has ended.
+    if (!_started) return;
     if (_foreground) {
       unawaited(refreshDue());
       unawaited(_pump());
     }
   }
 
-  @visibleForTesting
-  static int debugRefreshDueInvocations = 0;
-
   /// A due check is cheap: only catalog metadata is read, never channel lists.
   Future<void> refreshDue() async {
-    assert(() {
-      debugRefreshDueInvocations++;
-      return true;
-    }());
     if (kIsWeb || _checking || (_started && !_canSchedule)) return;
     _checking = true;
     final scope = ProfileRuntime.scope.value;
@@ -120,7 +115,7 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
       // Refresh uses connection-use authorization, not settings visibility:
       // shared/restricted profiles need usable credentials, and disabled
       // connections must not be scheduled.
-      final playlists = await IptvPlaylistStorage.getIptvPlaylists(
+      final playlists = await StorageService.getIptvPlaylists(
         forSettings: false,
       );
       if (scope != ProfileRuntime.scope.value || playlists.isEmpty) return;
@@ -170,7 +165,7 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
           _pending.insert(0, existing);
         }
         unawaited(_pump());
-        return existing.done.future;
+        return await existing.done.future;
       }
       if (!force && (_retryAfter[id]?.isAfter(DateTime.now()) ?? false)) {
         return _failure('Refresh will retry later');
@@ -261,34 +256,10 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
         _pending.add(job);
       }
       unawaited(_pump());
-      return job.done.future;
+      return await job.done.future;
     } catch (error) {
       return _failure('Refresh unavailable (${error.runtimeType})');
     }
-  }
-
-  /// Test-only: gives a job that is genuinely running a moment to finish,
-  /// then abandons the queue so the next test starts with an idle service.
-  /// A job left behind (for example, frozen on a finished widget test's fake
-  /// clock) can't touch the new queue: [_pump] checks [_generation], which
-  /// only this method changes. Queued jobs complete with a failure result.
-  @visibleForTesting
-  Future<void> debugSettle({
-    Duration timeout = const Duration(seconds: 2),
-  }) async {
-    final deadline = DateTime.now().add(timeout);
-    while (_running && DateTime.now().isBefore(deadline)) {
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-    }
-    _generation++;
-    _running = false;
-    for (final job in _pending) {
-      if (!job.done.isCompleted) job.done.complete(_failure('Test reset'));
-    }
-    _pending.clear();
-    _jobs.clear();
-    _retryAfter.clear();
-    _failures.clear();
   }
 
   @visibleForTesting
@@ -301,7 +272,6 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
   Future<void> _pump() async {
     if (_running) return;
     _running = true;
-    final generation = _generation;
     try {
       while (_pending.isNotEmpty) {
         if (_pending.first.automatic &&
@@ -315,11 +285,6 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
           result = await job.run();
         } catch (error) {
           result = _failure('Refresh failed (${error.runtimeType})');
-        }
-        if (generation != _generation) {
-          // Abandoned by a test reset: finish this caller, touch nothing else.
-          if (!job.done.isCompleted) job.done.complete(result);
-          return;
         }
         if (result.hasError) {
           final failures = (_failures[job.id] ?? 0) + 1;
@@ -337,10 +302,9 @@ class IptvCatalogRefreshService with WidgetsBindingObserver {
         // Yield between providers/catalogs even with an instantaneous mock or
         // cache hit. UI work and pending cancellation get an execution turn.
         await Future<void>.delayed(const Duration(milliseconds: 100));
-        if (generation != _generation) return;
       }
     } finally {
-      if (generation == _generation) _running = false;
+      _running = false;
     }
   }
 

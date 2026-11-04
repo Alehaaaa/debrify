@@ -566,7 +566,9 @@ class _StremioTvGuideSheetState extends State<StremioTvGuideSheet>
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.06),
                   shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.06),
+                  ),
                 ),
                 child: Icon(
                   Icons.close_rounded,
@@ -599,11 +601,18 @@ class _StremioTvGuideSheetState extends State<StremioTvGuideSheet>
               ? Colors.white.withValues(alpha: 0.08)
               : Colors.white.withValues(alpha: 0.04),
           border: Border.all(
-            color: hasFocus ? _accent.withValues(alpha: 0.4) : Colors.transparent,
+            color: hasFocus
+                ? _accent.withValues(alpha: 0.4)
+                : Colors.transparent,
             width: 1.5,
           ),
           boxShadow: hasFocus
-              ? [BoxShadow(color: _accent.withValues(alpha: 0.08), blurRadius: 16)]
+              ? [
+                  BoxShadow(
+                    color: _accent.withValues(alpha: 0.08),
+                    blurRadius: 16,
+                  ),
+                ]
               : [],
         ),
         child: TvTextField(
@@ -770,29 +779,6 @@ class _StremioTvGuideSheetState extends State<StremioTvGuideSheet>
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────
-
-  static Widget _letterAvatar(String name, double fontSize) {
-    final letter = name.isNotEmpty ? name[0].toUpperCase() : '?';
-    final color = _avatarColor(name);
-    return Container(
-      color: color.withValues(alpha: 0.15),
-      alignment: Alignment.center,
-      child: Text(
-        letter,
-        style: TextStyle(
-          color: color,
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  static Color _avatarColor(String name) {
-    const hues = [0.0, 15.0, 160.0, 190.0, 210.0, 240.0, 270.0, 300.0, 330.0];
-    final index = name.hashCode.abs() % hues.length;
-    return HSLColor.fromAHSL(1.0, hues[index], 0.6, 0.6).toColor();
-  }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -827,8 +813,7 @@ class _ChannelData {
     required this.type,
     required this.number,
     this.isFavorite = false,
-    this.hasGuideData = false,
-  });
+  }) : hasGuideData = false;
 
   factory _ChannelData.fromMap(Map<String, dynamic> map, {int index = 0}) {
     final ch = _ChannelData(
@@ -1257,8 +1242,8 @@ class _ChannelTile extends StatelessWidget {
                     imageUrl: channel.nowPlayingPoster!,
                     memCacheWidth: 120,
                     fit: BoxFit.cover,
-                    placeholder: (_, __) => _buildLetterAvatar(),
-                    errorWidget: (_, __, ___) => _buildLetterAvatar(),
+                    placeholder: (_, _) => _buildLetterAvatar(),
+                    errorWidget: (_, _, _) => _buildLetterAvatar(),
                   )
                 : _buildLetterAvatar(),
           ),
@@ -1274,7 +1259,10 @@ class _ChannelTile extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.4)],
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.4),
+                    ],
                   ),
                 ),
               ),

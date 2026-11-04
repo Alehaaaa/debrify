@@ -4,6 +4,8 @@ import 'package:debrify/services/text_brightness.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_adapter.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -72,5 +74,43 @@ void main() {
     await tester.tap(find.text('OK'));
     await tester.pumpAndSettle();
     expect(find.text('Running in legacy mode'), findsNothing);
+  });
+
+  testWidgets('legacy information popup uses the selected glass material', (
+    tester,
+  ) async {
+    Widget screen(AppTheme theme) => MaterialApp(
+      home: AppThemeScope(
+        theme: theme,
+        child: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showLegacyModeInfoDialog(context),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(screen(glass));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+      GlassChrome.fill(glass, raised: true),
+    );
+    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.pumpWidget(screen(AppThemes.legacy));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AlertDialog>(find.byType(AlertDialog)).backgroundColor,
+      AppThemes.legacy.sheetSurface,
+    );
+    expect(find.text('OK'), findsOneWidget);
   });
 }

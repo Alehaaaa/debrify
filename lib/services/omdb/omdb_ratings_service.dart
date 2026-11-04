@@ -148,22 +148,11 @@ class OmdbRatingsService {
   @visibleForTesting
   static DateTime? parseReleased(Map<dynamic, dynamic> body) {
     const months = {
-      'jan': 1,
-      'feb': 2,
-      'mar': 3,
-      'apr': 4,
-      'may': 5,
-      'jun': 6,
-      'jul': 7,
-      'aug': 8,
-      'sep': 9,
-      'oct': 10,
-      'nov': 11,
-      'dec': 12,
+      'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+      'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
     };
-    final m = RegExp(
-      r'^(\d{1,2}) ([A-Za-z]{3}) (\d{4})$',
-    ).firstMatch('${body['Released'] ?? ''}'.trim());
+    final m = RegExp(r'^(\d{1,2}) ([A-Za-z]{3}) (\d{4})$')
+        .firstMatch('${body['Released'] ?? ''}'.trim());
     if (m != null) {
       final month = months[m.group(2)!.toLowerCase()];
       if (month != null) {
@@ -187,12 +176,10 @@ class OmdbRatingsService {
       final id = _queue.removeFirst();
       _queued.remove(id);
       _inFlight.add(id);
-      unawaited(
-        _fetch(id).whenComplete(() {
-          _inFlight.remove(id);
-          _pump();
-        }),
-      );
+      unawaited(_fetch(id).whenComplete(() {
+        _inFlight.remove(id);
+        _pump();
+      }));
     }
   }
 
@@ -204,9 +191,9 @@ class OmdbRatingsService {
         'i': imdbId,
         'tomatoes': 'true',
       });
-      final response = await client
-          .get(uri)
-          .timeout(const Duration(seconds: 10));
+      final response = await client.get(uri).timeout(
+        const Duration(seconds: 10),
+      );
       final body = jsonDecode(response.body);
       if (body is! Map) throw const FormatException('Unexpected OMDb body');
       final ok = '${body['Response']}'.toLowerCase() == 'true';
@@ -262,10 +249,10 @@ class OmdbRatingsService {
     if (paused != null && paused.isAfter(_now())) return cached?.ratings;
     return _seasonPending[key] ??= _fetchSeason(showImdbId, season, cached)
         .whenComplete(() {
-          // A block body: `=> remove(key)` would return this very future and
-          // make whenComplete wait on itself.
-          _seasonPending.remove(key);
-        });
+      // A block body: `=> remove(key)` would return this very future and
+      // make whenComplete wait on itself.
+      _seasonPending.remove(key);
+    });
   }
 
   Future<Map<int, double>?> _fetchSeason(
@@ -280,9 +267,9 @@ class OmdbRatingsService {
         'i': showImdbId,
         'Season': '$season',
       });
-      final response = await client
-          .get(uri)
-          .timeout(const Duration(seconds: 10));
+      final response = await client.get(uri).timeout(
+        const Duration(seconds: 10),
+      );
       final body = jsonDecode(response.body);
       if (body is! Map) return stale?.ratings;
       if ('${body['Response']}'.toLowerCase() != 'true') {
@@ -291,11 +278,7 @@ class OmdbRatingsService {
           _pausedUntil = _now().add(_limitCooldown);
           return stale?.ratings;
         }
-        _storeSeason(
-          showImdbId,
-          season,
-          OmdbSeasonEntry(ratings: const {}, at: _now()),
-        );
+        _storeSeason(showImdbId, season, OmdbSeasonEntry(ratings: const {}, at: _now()));
         return const {};
       }
       final entry = parseSeason(body, _now());
@@ -350,8 +333,7 @@ class OmdbRatingsService {
       lastAired: lastAired,
       // An undated stray (unaired pilot, special) on a long-finished season
       // doesn't make it "airing".
-      airing:
-          future ||
+      airing: future ||
           (undated &&
               (lastAired == null ||
                   now.difference(lastAired) < const Duration(days: 365))),

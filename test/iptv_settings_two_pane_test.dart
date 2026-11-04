@@ -2,7 +2,7 @@ import 'package:debrify/models/iptv_playlist.dart';
 import 'package:debrify/screens/settings/iptv_settings_page.dart';
 import 'package:debrify/screens/settings/iptv_settings_two_pane.dart';
 import 'package:debrify/services/iptv_media_store.dart';
-import 'package:debrify/services/storage/startup_iptv_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,7 +41,7 @@ void main() {
           refreshingIds: const {},
           customLists: lists,
           startupEnabled: startupEnabled,
-          startupMode: StartupIptvStorage.startupIptvModeLast,
+          startupMode: StorageService.startupIptvModeLast,
           startupChannelLabel: 'Not set',
           lastLiveChannelLabel: 'CH 2 · SKY',
           hasStartupChannel: false,
@@ -322,7 +322,7 @@ void main() {
                 ),
               ],
               startupEnabled: false,
-              startupMode: StartupIptvStorage.startupIptvModeLast,
+              startupMode: StorageService.startupIptvModeLast,
               startupChannelLabel: 'Not set',
               lastLiveChannelLabel: 'x',
               hasStartupChannel: false,
@@ -419,16 +419,15 @@ void main() {
 
     key.currentState!.focusRail();
     await tester.pump();
-    // Walk past every destination, including the final Sports & leagues
-    // entry.
-    for (var i = 0; i < 10; i++) {
+    // Walk past every destination, including the final Auto-refresh entry.
+    for (var i = 0; i < 9; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
 
-    // Still on Sports & leagues rather than flung sideways into its pane.
-    expect(find.text('Choose sports and leagues'), findsOneWidget);
-    expect(FocusManager.instance.primaryFocus?.debugLabel, 'iptv-2p-rail-8');
+    // Still on Auto-refresh rather than flung sideways into its pane.
+    expect(find.text('All sources in this profile'), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'iptv-2p-rail-7');
     expect(cwToggles, isEmpty);
     expect(startupToggles, isEmpty);
   });

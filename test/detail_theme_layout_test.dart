@@ -1,4 +1,3 @@
-import 'package:debrify/services/storage/detail_page_storage.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/imdb_parents_guide_service.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/trakt/trakt_episode_model.dart';
 import 'package:debrify/widgets/detail/detail_layout_console.dart';
 import 'package:debrify/widgets/detail/detail_layout_dossier.dart';
@@ -486,8 +486,8 @@ void main() {
     testWidgets('Console renders Compass as a read-only themed dashboard', (
       tester,
     ) async {
-      DetailPageStorage.parentsGuideStyleCached = 'compass';
-      addTearDown(() => DetailPageStorage.parentsGuideStyleCached = 'compass');
+      StorageService.parentsGuideStyleCached = 'compass';
+      addTearDown(() => StorageService.parentsGuideStyleCached = 'compass');
       await _pump(
         tester,
         'console',
@@ -510,8 +510,8 @@ void main() {
     testWidgets('Console still honors the Classic Parents Guide choice', (
       tester,
     ) async {
-      DetailPageStorage.parentsGuideStyleCached = 'classic';
-      addTearDown(() => DetailPageStorage.parentsGuideStyleCached = 'compass');
+      StorageService.parentsGuideStyleCached = 'classic';
+      addTearDown(() => StorageService.parentsGuideStyleCached = 'compass');
       await _pump(
         tester,
         'console',

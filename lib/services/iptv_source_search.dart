@@ -2,13 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
-import 'package:debrify/services/storage/subtitle_settings_storage.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/advanced_search_selection.dart';
 import '../models/iptv_playlist.dart';
-import '../models/iptv_source_result.dart';
 import '../models/profiles/profile_policy.dart';
 import '../models/torrent.dart';
 import '../utils/iptv_title.dart';
@@ -19,10 +16,32 @@ import 'profiles/profile_async_authorization.dart';
 import 'profiles/profile_runtime.dart';
 import 'series_source_service.dart';
 import 'source_selection_diagnostics.dart';
-import 'source_search_preferences.dart';
+import 'storage_service.dart';
 import 'xtream_codes_service.dart';
 
-export '../models/iptv_source_result.dart';
+class IptvSourceResult {
+  const IptvSourceResult(
+    this.key,
+    this.name,
+    this.message,
+    this.torrents, {
+    this.retryableFailure = false,
+  });
+  final String key;
+  final String name;
+  final String message;
+  final List<Torrent> torrents;
+  final bool retryableFailure;
+}
+
+enum IptvEpisodeResolutionStatus { resolved, missing, unavailable }
+
+class IptvEpisodeResolution {
+  const IptvEpisodeResolution(this.status, [this.source]);
+
+  final IptvEpisodeResolutionStatus status;
+  final Torrent? source;
+}
 
 /// Searches cached catalogs; the shared queue prepares missing/stale catalogs.
 class IptvSourceSearch {
@@ -489,8 +508,7 @@ class IptvSourceSearch {
     final stopwatch = Stopwatch()..start();
     final scope = ProfileRuntime.scope.value;
     try {
-      final savedAudioLanguage =
-          await SubtitleSettingsStorage.getDefaultAudioLanguage();
+      final savedAudioLanguage = await StorageService.getDefaultAudioLanguage();
       final preferredAudioLanguage =
           savedAudioLanguage?.trim().toLowerCase().isNotEmpty == true
           ? savedAudioLanguage!.trim().toLowerCase()
@@ -498,13 +516,10 @@ class IptvSourceSearch {
       final capability = await ProfileAsyncAuthorization.capture(
         ProfileFeature.iptv,
       );
-      final playlists = await IptvPlaylistStorage.getIptvPlaylists(
+      final playlists = await StorageService.getIptvPlaylists(
         forSettings: false,
       );
-      final choices = await SourceSearchPreferences.readOrDefault();
-      final eligibleCount = playlists
-          .where((p) => _eligiblePlaylist(p) && choices.includesPlaylist(p.id))
-          .length;
+      final eligibleCount = playlists.where(_eligiblePlaylist).length;
       logIptvSourceEvent(
         'discovery_started',
         catalogType: selection.isSeries ? 'series' : 'vod',
@@ -537,12 +552,7 @@ class IptvSourceSearch {
           );
           return const [];
         }
-        final batch = playlists
-            .skip(start)
-            .take(3)
-            .where(
-              (p) => _eligiblePlaylist(p) && choices.includesPlaylist(p.id),
-            );
+        final batch = playlists.skip(start).take(3).where(_eligiblePlaylist);
         await Future.wait(
           batch.map((playlist) async {
             final result = await _playlist(
@@ -615,9 +625,7 @@ class IptvSourceSearch {
 
   static Future<({IptvPlaylist playlist, Future<void> Function() check})?>
   _currentPlaylist(String playlistId) async {
-    final playlists = await IptvPlaylistStorage.getIptvPlaylists(
-      forSettings: false,
-    );
+    final playlists = await StorageService.getIptvPlaylists(forSettings: false);
     final matches = playlists.where(
       (playlist) => playlist.id == playlistId && _eligiblePlaylist(playlist),
     );
@@ -634,9 +642,7 @@ class IptvSourceSearch {
         throw StateError('Profile changed');
       }
       if (capability != null) await capability.run(() async {});
-      final current = await IptvPlaylistStorage.getIptvPlaylists(
-        forSettings: false,
-      );
+      final current = await StorageService.getIptvPlaylists(forSettings: false);
       final unchanged = current.any((candidate) {
         if (candidate.id != playlist.id || candidate.credentialsRedacted) {
           return false;
@@ -829,7 +835,7 @@ class IptvSourceSearch {
                   IptvCatalogKey.forPlaylist(playlist, catalogType)!,
                 )?.generation !=
                 snapshot.generation) {
-          return _playlist(
+          return await _playlist(
             playlist,
             selection,
             shouldContinue,

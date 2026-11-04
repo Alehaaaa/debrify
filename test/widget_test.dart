@@ -17,5 +17,11 @@ void main() {
 
     // Verify that the app loads without errors
     expect(find.byType(MaterialApp), findsOneWidget);
+
+    // Start-up deliberately time-boxes slow work (e.g. the 4 s migration
+    // budget). Let those timers run out before the test tears down.
+    await tester.pump(const Duration(seconds: 10));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 10));
   });
 }

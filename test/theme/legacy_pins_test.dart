@@ -124,7 +124,7 @@ void main() {
   });
 
   test('the shared sheet surface is one token, not several', () {
-    // cw_card_menu, both merged-details quick-action sheets and the episode
+    // card_action_menu, both merged-details quick-action sheets and the episode
     // options sheet all pinned the SAME literal; Cloud's context menu is a
     // different one and keeps its own token. Asserting both halves stops a
     // future edit from quietly collapsing them.

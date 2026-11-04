@@ -127,7 +127,7 @@ class _ThemedSkeletonState extends State<ThemedSkeleton>
             ? ColoredBox(color: base)
             : AnimatedBuilder(
                 animation: _ctrl!,
-                builder: (_, __) {
+                builder: (_, _) {
                   final t = (_ctrl!.value * 2 - 1).abs();
                   return ColoredBox(color: Color.lerp(base, hi, t)!);
                 },
@@ -138,7 +138,7 @@ class _ThemedSkeletonState extends State<ThemedSkeleton>
             ? ColoredBox(color: base)
             : AnimatedBuilder(
                 animation: _ctrl!,
-                builder: (_, __) {
+                builder: (_, _) {
                   final x = _ctrl!.value * 2 - 1;
                   return DecoratedBox(
                     decoration: BoxDecoration(

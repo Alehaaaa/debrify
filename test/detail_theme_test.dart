@@ -165,10 +165,8 @@ void main() {
       //
       // `sans` stays null: Signal is the shipped look and must not move.
       expect(DetailFontRole.sans.family, isNull);
-      // Fraunces, not Source Serif: `SourceSerifPro-Regular.ttf`,
-      // `Merriweather-Regular.ttf` and both Roboto files in assets/fonts are
-      // HTML error pages saved with a .ttf extension, so anything naming them
-      // silently falls back. See the note on `DetailFontRoleX.family`.
+      // Fraunces is the shipped serif. See the note on
+      // `DetailFontRoleX.family`.
       expect(DetailFontRole.serif.family, 'Fraunces72');
       expect(DetailFontRole.mono.family, 'JetBrainsMono');
       expect(DetailFontRole.sans.fallback, isNull);
@@ -295,15 +293,16 @@ void _literalGuard() {
   group('no raw colour literals survive in the themed files', () {
     // Deliberate exceptions, each a semantic constant rather than a style
     // choice: a third party's logo, a scrim over a PHOTOGRAPH (not over a
-    // themed surface), the parents-guide severity scale, where green→red
-    // has to mean the same thing in every theme, and the hold-hint pill's
-    // white ink on its own black glass.
+    // themed surface), and the parents-guide severity scale, where green→red
+    // has to mean the same thing in every theme.
     final allowed = RegExp(
       r'0xFFF5C518' // IMDb badge
       r'|0xFF4ADE80|0xFFFBBF24|0xFFFB923C|0xFFEF4444|0xFF8A8A8A' // severity
       r'|Colors\.black\.withValues' // scrim over artwork
       r'|color: Colors\.black,' // IMDb badge foreground
-      r'|_holdPillInk = ', // hold-hint pill ink, over its own black glass
+      // Chrome that floats ABOVE the page in every theme (the long-press hint
+      // pill: black glass, white ink). Opted in per line, never per file.
+      r'|// theme-independent overlay',
     );
     final literal = RegExp(
       r'Colors\.(white|black)\w*|Color\(0x[0-9A-Fa-f]{8}\)',

@@ -280,32 +280,20 @@ class PremiumizeService {
     String apiKey,
     String magnet, {
     int timeoutSeconds = 120,
-    bool Function()? canContinue,
   }) async {
-    void checkCurrent() {
-      if (canContinue?.call() == false) {
-        throw StateError('Source action retired');
-      }
-    }
-
-    checkCurrent();
     // Add to cloud — for cached content Premiumize fills the folder quickly.
     // (Premiumize dedupes, so re-adding an existing item is harmless.)
     final transferId = await createTransfer(apiKey, magnet);
-    checkCurrent();
     if (transferId.isEmpty) {
       throw Exception('Premiumize did not return a transfer id');
     }
 
     // Poll until the transfer has a cloud folder/file id ready.
     var lookup = await _lookupTransfer(apiKey, transferId);
-    checkCurrent();
     final deadline = DateTime.now().add(Duration(seconds: timeoutSeconds));
     while (lookup.isPending && DateTime.now().isBefore(deadline)) {
       await Future.delayed(const Duration(seconds: 4));
-      checkCurrent();
       lookup = await _lookupTransfer(apiKey, transferId);
-      checkCurrent();
     }
 
     if (lookup.folderId != null) {
@@ -443,26 +431,21 @@ class PremiumizeService {
     String folderId, {
     String basePath = '',
     int depth = 0,
-    bool Function()? canContinue,
   }) async {
     // Guard against pathological/cyclic structures.
-    if (depth > 12 || canContinue?.call() == false) return const [];
+    if (depth > 12) return const [];
     final result = <PremiumizeFolderItem>[];
     final listing = await listFolder(apiKey, folderId: folderId);
-    if (canContinue?.call() == false) return const [];
     for (final item in listing.items) {
-      if (canContinue?.call() == false) return const [];
       if (item.isFolder) {
-        final childBase = basePath.isEmpty
-            ? item.name
-            : '$basePath/${item.name}';
+        final childBase =
+            basePath.isEmpty ? item.name : '$basePath/${item.name}';
         result.addAll(
           await listFolderRecursive(
             apiKey,
             item.id,
             basePath: childBase,
             depth: depth + 1,
-            canContinue: canContinue,
           ),
         );
       } else {

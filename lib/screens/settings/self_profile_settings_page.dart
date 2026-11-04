@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -100,7 +101,7 @@ class _SelfProfileSettingsPageState extends State<SelfProfileSettingsPage> {
     if (_busy) return;
     String? pickerCopy;
     try {
-      final pick = await FilePicker.platform.pickFiles(
+      final pick = await FilePick.pickFiles(
         dialogTitle: 'Choose an avatar image or GIF',
         type: FileType.any,
         withData: false,
@@ -128,7 +129,7 @@ class _SelfProfileSettingsPageState extends State<SelfProfileSettingsPage> {
     }
   }
 
-  Future<Uint8List> _readPickedBytes(PlatformFile picked) async {
+  Future<Uint8List> _readPickedBytes(PickedFile picked) async {
     final inline = picked.bytes;
     if (inline != null) {
       if (inline.length > ProfileAvatarIngest.maxInputBytes) {

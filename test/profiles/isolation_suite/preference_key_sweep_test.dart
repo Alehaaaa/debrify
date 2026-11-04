@@ -3,11 +3,9 @@ import 'dart:io';
 import 'package:debrify/services/profiles/profile_preferences.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:debrify/services/storage/storage_profile_caches.dart';
 
 /// Enumerate-then-assert over the whole preference store.
 ///
@@ -60,8 +58,8 @@ void main() {
   }
 
   test('a real settings write lands inside the active profile scope', () async {
-    await HomeAppearanceStorage.setTvHomeStyle('atrium');
-    await DetailPageStorage.setDetailTheme('dossier');
+    await StorageService.setTvHomeStyle('atrium');
+    await StorageService.setDetailTheme('dossier');
 
     final result = await classify();
 
@@ -86,23 +84,23 @@ void main() {
 
   test('the second profile reads none of the first profile\'s values',
       () async {
-    await HomeAppearanceStorage.setTvHomeStyle('atrium');
-    expect(await HomeAppearanceStorage.getTvHomeStyle(), 'atrium');
+    await StorageService.setTvHomeStyle('atrium');
+    expect(await StorageService.getTvHomeStyle(), 'atrium');
 
     // What a switch does to storage-facing state: publish the new scope and
     // drop the synchronous mirrors. No relaunch.
     ProfileRuntime.publish(
       ProfileScope(profileId: 'other', dataGeneration: 1, sessionEpoch: 2),
     );
-    resetStorageProfileCaches();
+    StorageService.resetProfileCaches();
 
     expect(
-      await HomeAppearanceStorage.getTvHomeStyle(),
+      await StorageService.getTvHomeStyle(),
       isNot('atrium'),
       reason: 'profile B read profile A\'s setting',
     );
     expect(
-      HomeAppearanceStorage.tvHomeStyleCached,
+      StorageService.tvHomeStyleCached,
       isNot('atrium'),
       reason:
           'the synchronous mirror is what the UI paints from — a stale value '

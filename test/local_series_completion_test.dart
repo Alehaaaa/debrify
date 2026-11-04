@@ -1,14 +1,6 @@
-import 'dart:async';
 import 'dart:convert';
-import 'package:debrify/services/profiles/profile_preferences.dart';
-import 'package:debrify/services/profiles/profile_session_memory.dart';
 import 'package:debrify/services/local_series_completion_service.dart';
-import 'package:debrify/services/storage/continue_watching_storage.dart';
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
-import 'package:debrify/services/storage/local_completion_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:debrify/services/trakt/trakt_episode_model.dart';
 import 'package:debrify/services/watched_action_coordinator.dart';
@@ -21,50 +13,6 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
   });
-
-  test(
-    'retired season inventory queued behind preference snapshot cannot commit',
-    () async {
-      final owner = ProfileSessionMemory.captureOwner();
-      final entered = Completer<void>();
-      final release = Completer<void>();
-      final snapshot = ProfilePreferences.captureMutationSnapshot((
-        token,
-      ) async {
-        entered.complete();
-        await release.future;
-      });
-      await entered.future;
-      final revision = LocalCompletionStorage.localCompletionRevision.value;
-      var guardCalls = 0;
-      final write = LocalSeriesCompletionService.instance
-          .recordRawEpisodeInventory(
-            imdbId: 'tt-retired-guide',
-            seriesTitle: 'Fixture',
-            videos: [
-              {'season': 1, 'episode': 1, 'released': '2025-01-01T00:00:00Z'},
-            ],
-            canCommit: () {
-              guardCalls++;
-              return owner == ProfileSessionMemory.captureOwner();
-            },
-          );
-      // Let the real service read/recalculate and reach the held write barrier.
-      await Future<void>.delayed(Duration.zero);
-      expect(guardCalls, greaterThanOrEqualTo(2));
-      ProfileSessionMemory.clearAll();
-      release.complete();
-      await snapshot;
-      await write;
-      final prefs = await SharedPreferences.getInstance();
-      expect(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey),
-        isNull,
-      );
-      expect(LocalCompletionStorage.localCompletionRevision.value, revision);
-      expect(guardCalls, greaterThanOrEqualTo(3));
-    },
-  );
 
   TraktSeason season(List<TraktEpisode> episodes) =>
       TraktSeason(number: 1, episodeCount: episodes.length, episodes: episodes);
@@ -87,7 +35,7 @@ void main() {
         seasons: [season(episodes)],
       );
       final state = jsonDecode(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey)!,
+        prefs.getString(StorageService.localSeriesCompletionStateKey)!,
       );
       state['tt-noop']['validatedAt'] = 123;
       state['tt-noop']['continueWatching'] = {
@@ -96,20 +44,20 @@ void main() {
       };
       final before = jsonEncode(state);
       await prefs.setString(
-        LocalCompletionStorage.localSeriesCompletionStateKey,
+        StorageService.localSeriesCompletionStateKey,
         before,
       );
-      final revision = LocalCompletionStorage.localCompletionRevision.value;
+      final revision = StorageService.localCompletionRevision.value;
       await LocalSeriesCompletionService.instance.recordEpisodeInventory(
         imdbId: 'tt-noop',
         seriesTitle: 'Unchanged',
         seasons: [season(episodes)],
       );
       expect(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey),
+        prefs.getString(StorageService.localSeriesCompletionStateKey),
         before,
       );
-      expect(LocalCompletionStorage.localCompletionRevision.value, revision);
+      expect(StorageService.localCompletionRevision.value, revision);
 
       await LocalSeriesCompletionService.instance.recordEpisodeInventory(
         imdbId: 'tt-noop',
@@ -117,13 +65,13 @@ void main() {
         seasons: [season(episodes)],
       );
       final changed = jsonDecode(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey)!,
+        prefs.getString(StorageService.localSeriesCompletionStateKey)!,
       )['tt-noop'];
       expect(changed['title'], 'Renamed');
       expect(changed['validatedAt'], isNot(123));
       expect(changed['continueWatching']['posterUrl'], 'poster');
       expect(
-        LocalCompletionStorage.localCompletionRevision.value,
+        StorageService.localCompletionRevision.value,
         greaterThan(revision),
       );
     },
@@ -143,25 +91,25 @@ void main() {
           );
       await record([first, second]);
       final before = prefs.getString(
-        LocalCompletionStorage.localSeriesCompletionStateKey,
+        StorageService.localSeriesCompletionStateKey,
       );
-      final revision = LocalCompletionStorage.localCompletionRevision.value;
+      final revision = StorageService.localCompletionRevision.value;
       await record([second, first]);
       expect(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey),
+        prefs.getString(StorageService.localSeriesCompletionStateKey),
         before,
       );
-      expect(LocalCompletionStorage.localCompletionRevision.value, revision);
+      expect(StorageService.localCompletionRevision.value, revision);
       await record([first, episode(2, DateTime.utc(2025, 3))]);
       final state = jsonDecode(
-        prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey)!,
+        prefs.getString(StorageService.localSeriesCompletionStateKey)!,
       );
       expect(
         state['tt-order']['episodes']['1-2'],
         DateTime.utc(2025, 3).millisecondsSinceEpoch,
       );
       expect(
-        LocalCompletionStorage.localCompletionRevision.value,
+        StorageService.localCompletionRevision.value,
         greaterThan(revision),
       );
     },
@@ -171,13 +119,13 @@ void main() {
     'series is caught up when every aired regular episode is finished',
     () async {
       final now = DateTime.now();
-      await ContinueWatchingStorage.saveContinueWatchingItem(
+      await StorageService.saveContinueWatchingItem(
         imdbId: 'tt-local-show',
         title: 'Local Show',
         contentType: 'series',
         posterUrl: 'https://example.com/poster.jpg',
       );
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Local Show',
         season: 1,
         episode: 1,
@@ -199,9 +147,9 @@ void main() {
         await LocalSeriesCompletionService.instance.caughtUpIds(),
         contains('tt-local-show'),
       );
-      expect(await ContinueWatchingStorage.getContinueWatchingItems(), isEmpty);
+      expect(await StorageService.getContinueWatchingItems(), isEmpty);
 
-      await EpisodeCompletionStorage.unmarkEpisodeAsFinished(
+      await StorageService.unmarkEpisodeAsFinished(
         seriesTitle: 'Local Show',
         season: 1,
         episode: 1,
@@ -211,7 +159,7 @@ void main() {
         isNot(contains('tt-local-show')),
       );
       expect(
-        await ContinueWatchingStorage.getContinueWatchingItems(),
+        await StorageService.getContinueWatchingItems(),
         contains(
           predicate<Map<String, dynamic>>((item) {
             return item['imdbId'] == 'tt-local-show' &&
@@ -224,7 +172,7 @@ void main() {
 
   test('newly aired unwatched episode clears local caught-up status', () async {
     final now = DateTime.now();
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Returning Show',
       season: 1,
       episode: 1,
@@ -250,10 +198,10 @@ void main() {
 
   test('series-level unwatch clears derived local completion', () async {
     final now = DateTime.now();
-    await TrackingSourceStorage.setTrackingScrobbleTargets(<TrackingSource>{
+    await StorageService.setTrackingScrobbleTargets(<TrackingSource>{
       TrackingSource.local,
     });
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Unwatched Show',
       season: 1,
       episode: 1,
@@ -265,7 +213,7 @@ void main() {
         season([episode(1, now.subtract(const Duration(days: 1)))]),
       ],
     );
-    await MovieProgressStorage.setSeriesExplicitlyWatched(
+    await StorageService.setSeriesExplicitlyWatched(
       'tt-unwatched-show',
       watched: true,
     );
@@ -274,9 +222,7 @@ void main() {
       contains('tt-unwatched-show'),
     );
     expect(
-      await EpisodeProgressStorage.getFinishedEpisodes(
-        seriesTitle: 'Unwatched Show',
-      ),
+      await StorageService.getFinishedEpisodes(seriesTitle: 'Unwatched Show'),
       isNotEmpty,
     );
 
@@ -288,13 +234,11 @@ void main() {
 
     expect(result.success, isTrue);
     expect(
-      await MovieProgressStorage.getExplicitlyWatchedSeriesIds(),
+      await StorageService.getExplicitlyWatchedSeriesIds(),
       isNot(contains('tt-unwatched-show')),
     );
     expect(
-      await EpisodeProgressStorage.getFinishedEpisodes(
-        seriesTitle: 'Unwatched Show',
-      ),
+      await StorageService.getFinishedEpisodes(seriesTitle: 'Unwatched Show'),
       isEmpty,
     );
     expect(
@@ -307,7 +251,7 @@ void main() {
     'Simkl calendar keeps future episode pending then clears at air time',
     () async {
       final now = DateTime.now();
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Calendar Show',
         season: 1,
         episode: 1,
@@ -335,8 +279,7 @@ void main() {
         ),
         contains('tt-calendar-show'),
       );
-      final revisionBefore =
-          LocalCompletionStorage.localCompletionRevision.value;
+      final revisionBefore = StorageService.localCompletionRevision.value;
       expect(
         await LocalSeriesCompletionService.instance.debugMergeCalendarItems(
           calendar(now.subtract(const Duration(minutes: 1))),
@@ -344,7 +287,7 @@ void main() {
         isNot(contains('tt-calendar-show')),
       );
       expect(
-        LocalCompletionStorage.localCompletionRevision.value,
+        StorageService.localCompletionRevision.value,
         greaterThan(revisionBefore),
       );
     },
@@ -352,7 +295,7 @@ void main() {
 
   test('specials do not block local series completion', () async {
     final now = DateTime.now();
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Special Show',
       season: 1,
       episode: 1,

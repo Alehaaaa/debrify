@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/stremio_addon.dart';
-import '../../services/analytics_service.dart';
 import '../../services/discover_prefs.dart';
 import '../../services/filtered_catalog_pager.dart';
 import '../../services/main_page_bridge.dart';
@@ -151,7 +150,6 @@ class _CatalogSeeAllScreenState extends State<CatalogSeeAllScreen> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('catalog_see_all');
     _type = widget.initialCatalog.type;
     _catalog = widget.initialCatalog;
     _searchQuery = widget.query?.trim() ?? '';
@@ -355,9 +353,6 @@ class _CatalogSeeAllScreenState extends State<CatalogSeeAllScreen> {
     if (_randomBusy || _loadingInitial || _items.isEmpty) return;
     final play = widget.onQuickPlay;
     if (play == null) return;
-    AnalyticsService.trackInBackground('discover_random_play', {
-      'source': 'catalog',
-    });
     final token = _reqToken;
     setState(() => _randomBusy = true);
     StremioMeta? pick;

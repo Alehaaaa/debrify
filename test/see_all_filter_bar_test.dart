@@ -1,4 +1,8 @@
 import 'package:debrify/widgets/see_all/see_all_filter_bar.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,17 +16,24 @@ void main() {
     required bool quiet,
     required double width,
     bool isTelevision = false,
+    AppTheme? appearance,
   }) {
     return MaterialApp(
-      home: Scaffold(
-        body: Align(
-          alignment: Alignment.topLeft,
-          child: SizedBox(
-            width: width,
-            child: SeeAllFilterBar(
-              isTelevision: isTelevision,
-              quiet: quiet,
-              buildChips: () => const [Text('chip-source'), Text('chip-genre')],
+      home: AppThemeScope(
+        theme: appearance ?? AppThemes.legacy,
+        child: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: width,
+              child: SeeAllFilterBar(
+                isTelevision: isTelevision,
+                quiet: quiet,
+                buildChips: () => const [
+                  Text('chip-source'),
+                  Text('chip-genre'),
+                ],
+              ),
             ),
           ),
         ),
@@ -82,5 +93,36 @@ void main() {
 
     expect(find.text('Filters'), findsNothing);
     expect(find.text('chip-source'), findsOneWidget);
+  });
+
+  testWidgets('narrow Discover filters reopen with frosted sheet chrome', (
+    tester,
+  ) async {
+    final frosted = PremiumLooks.glass.build();
+    await tester.pumpWidget(
+      host(quiet: false, width: 400, appearance: frosted),
+    );
+    for (var i = 0; i < 2; i++) {
+      await tester.tap(find.text('Filters'));
+      await tester.pumpAndSettle();
+      final sheet = tester.widget<BottomSheet>(find.byType(BottomSheet));
+      expect(sheet.backgroundColor, GlassChrome.fill(frosted, raised: true));
+      final shape = sheet.shape! as RoundedRectangleBorder;
+      expect(shape.side.color, GlassChrome.edge(frosted));
+      expect(find.text('chip-source'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.close_rounded));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+    }
+
+    await tester.pumpWidget(
+      host(quiet: false, width: 400, appearance: AppThemes.legacy),
+    );
+    await tester.tap(find.text('Filters'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<BottomSheet>(find.byType(BottomSheet)).backgroundColor,
+      AppThemes.legacy.seeAll.panel,
+    );
   });
 }

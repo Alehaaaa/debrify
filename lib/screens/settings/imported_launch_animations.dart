@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:debrify/services/storage/launch_ident_storage.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -10,11 +10,14 @@ import '../../services/cache_scratch_cleanup.dart';
 
 import '../../services/launch_animation/launch_animation_library.dart';
 import '../../services/launch_animation/launch_package.dart';
+import '../../services/storage_service.dart';
 import '../../services/remote_control/remote_control_state.dart';
 import '../../widgets/remote/remote_control_screen.dart';
 import '../../widgets/remote/remote_pairing_dialog.dart';
 import '../../services/profiles/profile_runtime.dart';
 import '../../theme/app_looks.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/launch/imported_launch_player.dart';
 import 'widgets/settings_widgets.dart';
@@ -81,9 +84,9 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
   }
 
   Future<void> _import() => _run(() async {
-    FilePickerResult? result;
+    PickedFiles? result;
     try {
-      result = await FilePicker.platform.pickFiles(
+      result = await FilePick.pickFiles(
         type: FileType.any,
         allowMultiple: false,
         withData: false,
@@ -121,9 +124,14 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
             ? pair.portrait.id
             : pair.landscape.id;
       } else if (package.animations.length > 1) {
+        final app = AppThemeScope.of(context);
         final choice = await showDialog<String>(
           context: context,
           builder: (context) => SimpleDialog(
+            backgroundColor: GlassChrome.enabled(app)
+                ? GlassChrome.fill(app, raised: true)
+                : null,
+            shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
             title: const Text('Choose an animation'),
             children: [
               for (final animation in package.animations)
@@ -155,6 +163,30 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
     await _load();
   }
 
+  Future<void> _showCraftGuide() => showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Craft a launch animation'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Create an original logo reveal in After Effects, Cavalry, Figma with a Lottie exporter, or another Lottie-capable motion tool.\n\n'
+          '• Use a 16:9 canvas for TVs and landscape screens. Add a 9:16 animation to the same .lottie package for phones.\n'
+          '• Keep it at 5 seconds or less and the final frame fully settled so Nextup can hold it while Home loads.\n'
+          '• Export as a dotLottie (.lottie) file under 10 MiB. Prefer vector shapes, embedded fonts or outlined text, and modest effects for smooth TV playback.\n'
+          '• Keep the canvas transparent if you want to use Nextup’s selectable backdrops.\n'
+          '• Use artwork and motion you own or have permission to distribute. A reference can guide timing and feel, but do not copy its logo or animation frames.\n\n'
+          'Then choose Import .lottie file below. Nextup validates it and lets you preview both orientations before selecting it.',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Got it'),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => SettingsSection(
     title: 'Imported animations',
@@ -169,6 +201,12 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
             if (!_busy) unawaited(_import());
           },
         ),
+      SettingsTile(
+        icon: Icons.design_services_outlined,
+        title: 'How to craft an animation',
+        subtitle: 'Canvas, timing, export and licensing tips',
+        onTap: _showCraftGuide,
+      ),
       if (PlatformUtil.isTelevision)
         const Padding(
           padding: EdgeInsets.all(16),
@@ -185,9 +223,14 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
           subtitle:
               'Preserves the damaged index. You will need to import your animation files again.',
           onTap: () => _run(() async {
+            final app = AppThemeScope.of(context);
             final confirmed = await showDialog<bool>(
               context: context,
               builder: (context) => AlertDialog(
+                backgroundColor: GlassChrome.enabled(app)
+                    ? GlassChrome.fill(app, raised: true)
+                    : null,
+                shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
                 title: const Text('Reset animation library?'),
                 content: const Text(
                   'Installed animations will need to be imported again. Your built-in animations are unaffected.',
@@ -209,7 +252,7 @@ class _ImportedLaunchAnimationsState extends State<ImportedLaunchAnimations> {
         ),
       for (final entry in _entries)
         SettingsTile(
-          icon: LaunchIdentStorage.importedLaunchAnimationCached == entry.id
+          icon: StorageService.importedLaunchAnimationCached == entry.id
               ? Icons.check_circle
               : Icons.animation,
           title: entry.name,
@@ -314,37 +357,36 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
                 ],
               ),
               const SizedBox(height: 16),
-              const Text('Background'),
+              const Text('Backdrop'),
               Wrap(
                 spacing: 10,
+                runSpacing: 10,
                 children: [
-                  for (final color in const [
-                    0xff080b12,
-                    0xff000000,
-                    0xffffffff,
-                    0xff102438,
+                  for (final option in const [
+                    (0xff080b12, 'Blue Black'),
+                    (0xff000000, 'Black'),
+                    (0xffffffff, 'White'),
+                    (0xff102438, 'Deep Navy'),
+                    (0xff21152f, 'Dark Plum'),
+                    (0xff0d2924, 'Deep Teal'),
+                    (0xff282421, 'Warm Charcoal'),
+                    (0xff35171d, 'Oxblood'),
+                    (0xff17233d, 'Indigo Navy'),
+                    (0xff2d2412, 'Dark Bronze'),
                   ])
                     OutlinedButton(
-                      onPressed: () => setState(() => _background = color),
+                      onPressed: () => setState(() => _background = option.$1),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _background == color
+                            _background == option.$1
                                 ? Icons.check_circle
                                 : Icons.circle,
-                            color: Color(color),
+                            color: Color(option.$1),
                           ),
                           const SizedBox(width: 6),
-                          Text(
-                            color == 0xffffffff
-                                ? 'White'
-                                : color == 0xff000000
-                                ? 'Black'
-                                : color == 0xff080b12
-                                ? 'Midnight'
-                                : 'Navy',
-                          ),
+                          Text(option.$2),
                         ],
                       ),
                     ),
@@ -423,7 +465,7 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
       if (scope != ProfileRuntime.scope.value) {
         throw StateError('Profile changed. Select the animation again.');
       }
-      await LaunchIdentStorage.setImportedLaunchAnimation(widget.entry.id);
+      await StorageService.setImportedLaunchAnimation(widget.entry.id);
       if (mounted) {
         widget.onSelectionChanged();
         Navigator.pop(context);
@@ -440,9 +482,14 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
   }
 
   Future<void> _remove() async {
+    final app = AppThemeScope.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: Text('Remove ${widget.entry.name}?'),
         content: const Text(
           'This removes the animation from this device. Profiles using it will use their built-in animation.',
@@ -463,7 +510,7 @@ class _ImportedLaunchDetailState extends State<ImportedLaunchDetail> {
     setState(() => _saving = true);
     try {
       await LaunchAnimationLibrary.instance.delete(widget.entry.id);
-      await LaunchIdentStorage.clearImportedLaunchAnimationIf(widget.entry.id);
+      await StorageService.clearImportedLaunchAnimationIf(widget.entry.id);
       if (mounted) {
         widget.onSelectionChanged();
         Navigator.pop(context);

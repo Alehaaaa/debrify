@@ -84,8 +84,7 @@ class SourceEngineRef {
 ///
 /// Deliberately player-agnostic: it holds no channel/UI code, so the Flutter
 /// player's sources sheet can reuse it as-is. The search closures are built by
-/// `SourceSeriesFetcher.seriesFetcherFor` / `SourceMovieFetcher.movieFetcherFor`,
-/// which reuse
+/// `TorrentPlaybackService.seriesFetcherFor` / `movieFetcherFor`, which reuse
 /// the exact search + curation + filter-ladder chains the Quick Play flow runs.
 class SeriesSourceFetcher {
   /// Series flavor: pack/episode tabs, each independently fetchable.
@@ -174,8 +173,9 @@ class SeriesSourceFetcher {
         source.streamType != StreamType.directUrl ||
         positionMs < 30000 ||
         durationMs <= positionMs ||
-        durationMs - positionMs > 90000)
+        durationMs - positionMs > 90000) {
       return;
+    }
     final key = (
       season,
       episode,
@@ -260,7 +260,7 @@ class SeriesSourceFetcher {
       } catch (_) {
         return null; // Keep the stage retryable and allow the next stage.
       }
-    } else
+    } else {
       switch (mode) {
         case modePacks:
           result = await _searchPacks?.call(s, e);
@@ -274,6 +274,7 @@ class SeriesSourceFetcher {
         default:
           return null;
       }
+    }
     if (result == null) return null;
     if (mode == modePacks) {
       packsFetched = true;
@@ -305,8 +306,9 @@ class SeriesSourceFetcher {
   static bool visibleForEpisode(Torrent source, int? season, int? episode) {
     if (source.streamType == StreamType.torrent ||
         season == null ||
-        episode == null)
+        episode == null) {
       return true;
+    }
     final episodeIdentity = RegExp(
       r'^S(\d+)E(\d+)$',
       caseSensitive: false,

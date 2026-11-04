@@ -1297,7 +1297,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(replayed)) {
-              return _persistAmbientCapacityBlock(
+              return await _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: listing.deviceIds.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -1849,7 +1849,7 @@ final class WebDavSyncEngine
               ]),
             );
             if (!_ambientLibraryFits(mergedLibraryTarget)) {
-              return _persistAmbientCapacityBlock(
+              return await _persistAmbientCapacityBlock(
                 namespaceId: namespaceId,
                 peerCount: manifests.length,
                 deviceClockWarning: clockDecision.deviceClockWarning,
@@ -2897,7 +2897,7 @@ final class WebDavSyncEngine
       }
     }
     return _PeerProfileData(
-      hotDocuments: [if (hot != null) hot, ...collectionDocuments],
+      hotDocuments: [?hot, ...collectionDocuments],
       tombstoneDocuments: tombstone == null
           ? const <WebDavSyncTombstoneDocument>[]
           : <WebDavSyncTombstoneDocument>[tombstone],
@@ -3578,7 +3578,7 @@ final class WebDavSyncEngine
       for (final section in changed) section.reference.name: section.reference,
       ...retainedCollectionReferences,
       ...libraryReferences,
-      if (resourceReference != null) resourceReference.name: resourceReference,
+      ?resourceReference?.name: resourceReference!,
     };
     if (sections.isEmpty) {
       throw StateError('WebDAV sync refuses to publish an empty manifest');
@@ -4259,9 +4259,9 @@ final class WebDavSyncEngine
     }
   }
 
-  static void _ignoreDiagnostic(String _, Object? __) {}
+  static void _ignoreDiagnostic(String _, Object? _) {}
 
-  static void _ignoreAppliedKeys(String _, Set<String> __) {}
+  static void _ignoreAppliedKeys(String _, Set<String> _) {}
 
   static WebDavSyncPendingActiveProfileReason? _activeProfileDeferralReason(
     WebDavSyncProfileValue? value,

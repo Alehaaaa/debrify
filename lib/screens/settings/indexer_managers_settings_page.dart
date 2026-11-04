@@ -1,15 +1,15 @@
-import 'package:debrify/services/storage/torrent_provider_storage.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/indexer_manager_config.dart';
 import '../../services/indexer_manager_service.dart';
 import '../../services/profiles/profile_async_authorization.dart';
+import '../../services/storage_service.dart';
 import '../../services/torrent_service.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/tv_text_field.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../models/profiles/profile_policy.dart';
 
 /// Focused IconButtons get the accent outline + lit fill — the stock
@@ -45,7 +45,6 @@ class _IndexerManagersSettingsPageState
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('indexer_managers_settings');
     _loadConfigs();
   }
 
@@ -57,7 +56,7 @@ class _IndexerManagersSettingsPageState
   }
 
   Future<void> _loadConfigs() async {
-    final configs = await TorrentProviderStorage.getIndexerManagerConfigs(
+    final configs = await StorageService.getIndexerManagerConfigs(
       forSettings: true,
     );
     if (!mounted) return;
@@ -85,7 +84,7 @@ class _IndexerManagersSettingsPageState
     ProfileAsyncAuthorization? authorization,
   }) async {
     Future<List<IndexerManagerConfig>> save() =>
-        TorrentProviderStorage.setIndexerManagerConfigs(configs);
+        StorageService.setIndexerManagerConfigs(configs);
     final List<IndexerManagerConfig> saved;
     if (authorization == null) {
       saved = await save();
@@ -141,9 +140,14 @@ class _IndexerManagersSettingsPageState
       ProfileFeature.torrentSearch,
     );
     if (!mounted) return;
+    final app = AppThemeScope.of(context);
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : null,
+        shape: GlassChrome.enabled(app) ? GlassChrome.shape(app) : null,
         title: const Text('Delete Engine'),
         content: Text('Remove ${config.displayName} from torrent search?'),
         actions: [
@@ -610,7 +614,7 @@ class _IndexerManagerEditorDialogState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<IndexerManagerType>(
-                        value: _type,
+                        initialValue: _type,
                         // TV: seed DPAD focus on the first control (not a
                         // text field — that would pop the soft keyboard).
                         autofocus: PlatformUtil.isTelevision,
@@ -711,7 +715,7 @@ class _IndexerManagerEditorDialogState
                       ),
                       const SizedBox(height: 14),
                       DropdownButtonFormField<int>(
-                        value: _maxResults,
+                        initialValue: _maxResults,
                         decoration: const InputDecoration(
                           labelText: 'Max results',
                         ),

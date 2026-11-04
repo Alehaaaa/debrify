@@ -120,8 +120,9 @@ class TraktCalendarEntry {
     final airedYear = int.tryParse(dateStr.substring(0, 4));
     final airedMonth = int.tryParse(dateStr.substring(5, 7));
     final airedDay = int.tryParse(dateStr.substring(8, 10));
-    if (airedYear == null || airedMonth == null || airedDay == null)
+    if (airedYear == null || airedMonth == null || airedDay == null) {
       return null;
+    }
     final airedLocal = DateTime(airedYear, airedMonth, airedDay);
     final firstAiredUtc = airedLocal.toUtc();
 

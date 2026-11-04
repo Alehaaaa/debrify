@@ -1,14 +1,10 @@
 import 'dart:async';
-import 'package:debrify/services/storage/alldebrid_storage.dart';
-import 'package:debrify/services/storage/pikpak_storage.dart';
-import 'package:debrify/services/storage/premiumize_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/torbox_storage.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/platform_util.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter_sharing_intent/flutter_sharing_intent.dart';
 import 'package:flutter_sharing_intent/model/sharing_file.dart';
+import 'storage_service.dart';
 import 'profiles/desktop_single_instance.dart';
 import 'profiles/profile_lock_controller.dart';
 import 'profiles/profile_runtime.dart';
@@ -41,6 +37,9 @@ class DeepLinkService {
 
   // Callback function to handle Stremio addon URLs
   Future<void> Function(String manifestUrl)? onStremioAddonReceived;
+
+  /// Opens a catalog series at a particular episode from a Debrify URL.
+  Future<void> Function(Map<String, dynamic> episode)? onEpisodeLinkReceived;
 
   // Track recently processed links to avoid duplicates
   final Map<String, DateTime> _recentlyProcessedMagnets = {};
@@ -242,7 +241,8 @@ class DeepLinkService {
     if (!_profileMayDispatch ||
         (onMagnetLinkReceived == null &&
             onUrlShared == null &&
-            onStremioAddonReceived == null)) {
+            onStremioAddonReceived == null &&
+            onEpisodeLinkReceived == null)) {
       return;
     }
     if (ProfileRuntime.isProfileCommitted) {
@@ -269,6 +269,7 @@ class DeepLinkService {
         const <String>{
           'magnet',
           'stremio',
+          'debrify',
           'http',
           'https',
         }.contains(uri.scheme);
@@ -303,6 +304,8 @@ class DeepLinkService {
 
     if (uri.scheme == 'magnet') {
       _handleMagnetUri(uri);
+    } else if (uri.scheme == 'debrify' && uri.host == 'episode') {
+      _handleEpisodeUri(uri);
     } else if (uri.scheme == 'stremio') {
       _handleStremioUri(uri);
     } else if (uri.scheme == 'https' || uri.scheme == 'http') {
@@ -311,6 +314,28 @@ class DeepLinkService {
         _handleStremioManifestUrl(uri.toString());
       }
     }
+  }
+
+  void _handleEpisodeUri(Uri uri) {
+    final imdbId = uri.queryParameters['imdb']?.trim();
+    final season = int.tryParse(uri.queryParameters['season'] ?? '');
+    final episode = int.tryParse(uri.queryParameters['episode'] ?? '');
+    if (imdbId == null ||
+        !RegExp(r'^tt[0-9]{5,12}$', caseSensitive: false).hasMatch(imdbId) ||
+        season == null ||
+        episode == null ||
+        season < 0 ||
+        episode < 1) {
+      debugPrint('Ignoring malformed Nextup episode link');
+      return;
+    }
+    onEpisodeLinkReceived?.call(<String, dynamic>{
+      'imdbId': imdbId,
+      'type': 'series',
+      'season': season,
+      'episode': episode,
+      'title': uri.queryParameters['title']?.trim(),
+    });
   }
 
   /// Handle magnet URI
@@ -565,17 +590,17 @@ class DeepLinkService {
 
   /// Check which debrid services are configured
   static Future<ConfiguredServices> getConfiguredServices() async {
-    final rdKey = await RealDebridStorage.getApiKey();
-    final torboxKey = await TorboxStorage.getTorboxApiKey();
-    final premiumizeKey = await PremiumizeStorage.getPremiumizeApiKey();
-    final rdEnabled = await RealDebridStorage.getRealDebridIntegrationEnabled();
-    final torboxEnabled = await TorboxStorage.getTorboxIntegrationEnabled();
-    final pikpakEnabled = await PikpakStorage.getPikPakEnabled();
+    final rdKey = await StorageService.getApiKey();
+    final torboxKey = await StorageService.getTorboxApiKey();
+    final premiumizeKey = await StorageService.getPremiumizeApiKey();
+    final rdEnabled = await StorageService.getRealDebridIntegrationEnabled();
+    final torboxEnabled = await StorageService.getTorboxIntegrationEnabled();
+    final pikpakEnabled = await StorageService.getPikPakEnabled();
     final premiumizeEnabled =
-        await PremiumizeStorage.getPremiumizeIntegrationEnabled();
-    final allDebridKey = await AllDebridStorage.getAllDebridApiKey();
+        await StorageService.getPremiumizeIntegrationEnabled();
+    final allDebridKey = await StorageService.getAllDebridApiKey();
     final allDebridEnabled =
-        await AllDebridStorage.getAllDebridIntegrationEnabled();
+        await StorageService.getAllDebridIntegrationEnabled();
 
     final hasRealDebrid = rdKey != null && rdKey.isNotEmpty && rdEnabled;
     final hasTorbox =

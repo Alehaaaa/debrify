@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/widgets/playback_startup_view.dart';
-import 'support/lib_source.dart';
+import 'package:debrify/widgets/playback_startup_view.dart';
 
 void main() {
   test('startup shield remains opaque and noninteractive in PiP', () {
-    final source = libMember(
+    final source = File(
       'lib/screens/video_player_screen.dart',
-      'build',
-      owner: '_VideoPlayerScreenState',
-    );
+    ).readAsStringSync();
     final overlay = source.substring(
       source.indexOf('// Above the gesture layer: startup'),
       source.indexOf('// Controls overlay (shown only when ready)'),
@@ -23,17 +21,19 @@ void main() {
     expect(overlay, contains('child: inPip'));
     expect(
       overlay,
-      contains('? const AbsorbPointer(child: ColoredBox(color: Colors.black))'),
+      matches(
+        RegExp(
+          r'\? const AbsorbPointer\(\s*child: ColoredBox\(color: Colors\.black\),?\s*\)',
+        ),
+      ),
     );
     expect(overlay, contains(': PlaybackStartupView('));
   });
 
   test('non-startup transitions retain their overlay rendering site', () {
-    final source = libMember(
+    final source = File(
       'lib/screens/video_player_screen.dart',
-      'build',
-      owner: '_VideoPlayerScreenState',
-    );
+    ).readAsStringSync();
     expect(source, contains('if (_rainbowActive) _buildTransitionOverlay(),'));
   });
 
@@ -44,7 +44,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Focus(
-          onKeyEvent: (_, __) => KeyEventResult.handled,
+          onKeyEvent: (_, _) => KeyEventResult.handled,
           child: PlaybackStartupView(
             title: 'Arrival',
             details: 'Attempt 1',

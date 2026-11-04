@@ -5,10 +5,17 @@ import 'spotlight_board.dart';
 /// Weak keys keep this cache tied to the lifetime of the loaded metadata,
 /// rather than retaining every catalog visited during a long TV session.
 class SpotlightCatalogCardCache {
-  SpotlightCatalogCardCache({required this.wideArtwork, required this.onOpen});
+  SpotlightCatalogCardCache({
+    required this.wideArtwork,
+    required this.onOpen,
+    this.onOptions,
+  });
 
   final String? Function(StremioMeta) wideArtwork;
   final void Function(StremioMeta, StremioAddon) onOpen;
+
+  /// The card's hold / right-click menu, with the same provenance as [onOpen].
+  final void Function(StremioMeta, StremioAddon)? onOptions;
   final _cards =
       Expando<
         ({
@@ -45,6 +52,7 @@ class SpotlightCatalogCardCache {
       watchedContentType: item.type,
       // Capture provenance, never a row index that can change after inserts.
       onOpen: () => onOpen(item, addon),
+      onOptions: onOptions == null ? null : () => onOptions!(item, addon),
     );
     _cards[item] = (
       landscape: landscape,

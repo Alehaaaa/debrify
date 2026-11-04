@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../theme/app_surface.dart';
 import '../theme/widgets/glass_surface.dart';
 import '../utils/tv_keys.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// One action row in [showDebridActionSheet].
 class DebridActionItem {
@@ -48,6 +49,7 @@ Future<void> showDebridActionSheet(
   final isPhone = MediaQuery.of(context).size.width < 600;
   if (isPhone) {
     return showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       useSafeArea: true,

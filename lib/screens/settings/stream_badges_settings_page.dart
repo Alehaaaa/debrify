@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/stream_badge_rules.dart';
-import '../../services/analytics_service.dart';
 import '../../services/stream_badges_service.dart';
 import '../../services/stream_badge_matcher.dart';
 import '../../theme/app_theme_scope.dart';
@@ -42,7 +42,6 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('stream_badges_settings');
     unawaited(_load());
   }
 
@@ -100,7 +99,7 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
   }
 
   Future<void> _importFromFile() => _guarded(() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePick.pickFiles(
       type: FileType.any,
       allowMultiple: false,
       withData: true,
@@ -111,7 +110,7 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
     if (file.bytes != null) {
       bytes = file.bytes!;
     } else if (file.path != null) {
-      bytes = await file.xFile.readAsBytes();
+      bytes = await file.readAsBytes();
     } else {
       throw const FormatException('Could not read the selected file.');
     }
@@ -479,9 +478,9 @@ class _StreamBadgesSettingsPageState extends State<StreamBadgesSettingsPage> {
                 const SizedBox(height: 24),
                 ValueListenableBuilder<StreamBadgeMatcher>(
                   valueListenable: _service.matcher,
-                  builder: (_, matcher, __) => ValueListenableBuilder<bool>(
+                  builder: (_, matcher, _) => ValueListenableBuilder<bool>(
                     valueListenable: matcher.failure,
-                    builder: (_, failed, __) => failed
+                    builder: (_, failed, _) => failed
                         ? Padding(
                             padding: const EdgeInsets.only(bottom: 16),
                             child: Text(matcher.failureMessage),

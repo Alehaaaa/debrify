@@ -1,9 +1,48 @@
 import 'package:debrify/screens/settings/iptv_settings_two_pane.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('auto-refresh popup follows the selected appearance', (
+    tester,
+  ) async {
+    Widget host(AppTheme app) => AppThemeScope(
+      theme: app,
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => const IptvAutoRefreshDialog(intervalHours: 24),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    final glass = PremiumLooks.glass.build();
+    await tester.pumpWidget(host(glass));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SimpleDialog>(find.byType(SimpleDialog)).backgroundColor,
+      GlassChrome.fill(glass, raised: true),
+    );
+    await tester.pumpWidget(host(AppThemes.legacy));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<SimpleDialog>(find.byType(SimpleDialog)).backgroundColor,
+      isNull,
+    );
+  });
+
   testWidgets('wide settings exposes global refresh and returns DPAD to rail', (
     tester,
   ) async {

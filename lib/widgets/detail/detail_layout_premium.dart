@@ -1,11 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 import '../../models/stremio_addon.dart';
 import '../../services/debrify_image_cache.dart';
 import '../../services/imdb_parents_guide_service.dart';
+import '../../services/storage_service.dart';
 import '../../services/trakt/trakt_episode_model.dart';
 import '../episodes_panel.dart';
 import '../horizontal_mouse_wheel.dart';
@@ -15,6 +17,8 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
+import '../rotten_tomatoes_score.dart';
 
 /// The five showcase layouts developed after the original detail-page set.
 ///
@@ -734,7 +738,7 @@ class _DetailPremiumState extends State<DetailPremium> {
           ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: DetailPageStorage.parentsGuideStyleCached == 'compass'
+              maxWidth: StorageService.parentsGuideStyleCached == 'compass'
                   ? 900
                   : 620,
               maxHeight: 680,
@@ -824,6 +828,43 @@ class _DetailPremiumState extends State<DetailPremium> {
     child: child,
   );
 
+  /// Rotten Tomatoes + Metacritic beside the ★ rating, each mark drawn in
+  /// the star's colour with its figure in the rating's type.
+  Widget _omdbFacts() => OmdbRatingsBuilder(
+    imdbId: _m.item.effectiveImdbId,
+    builder: (context, r) {
+      if (r == null) return const SizedBox.shrink();
+      final style = _t.titleStyle(
+        size: 18,
+        weight: FontWeight.w800,
+        tracking: -.2,
+      );
+      Widget fact(Widget glyph, String value) => Padding(
+        padding: const EdgeInsets.only(left: 14),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            glyph,
+            const SizedBox(width: 6),
+            Text(value, style: style),
+          ],
+        ),
+      );
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (r.score != null)
+            fact(TomatoGlyph(size: 20, color: _t.rating), '${r.score}%'),
+          if (r.metacritic != null)
+            fact(
+              MetacriticGlyph(size: 20, color: _t.rating),
+              '${r.metacritic}',
+            ),
+        ],
+      );
+    },
+  );
+
   Widget _mosaicFactsTile() => _mosaicTile(
     child: DecoratedBox(
       decoration: BoxDecoration(color: _t.pane, gradient: _t.paneWash),
@@ -839,7 +880,7 @@ class _DetailPremiumState extends State<DetailPremium> {
               children: [
                 Icon(Icons.star_rounded, color: _t.rating, size: 22),
                 const SizedBox(width: 8),
-                if (compact)
+                if (compact) ...[
                   Text(
                     _m.rating == null ? '—' : _m.rating!.toStringAsFixed(1),
                     style: _t.titleStyle(
@@ -847,8 +888,9 @@ class _DetailPremiumState extends State<DetailPremium> {
                       weight: FontWeight.w800,
                       tracking: -.2,
                     ),
-                  )
-                else ...[
+                  ),
+                  _omdbFacts(),
+                ] else ...[
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -864,6 +906,7 @@ class _DetailPremiumState extends State<DetailPremium> {
                       Text('AT A GLANCE', style: _t.dataStyle(size: 8.5)),
                     ],
                   ),
+                  _omdbFacts(),
                   const SizedBox(width: 15),
                   Container(width: 1, height: 32, color: _t.hair),
                   const SizedBox(width: 15),
@@ -1006,7 +1049,7 @@ class _DetailPremiumState extends State<DetailPremium> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: view.episodes.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final episode = view.episodes[index];
                 return DetailEdgeTrap(
@@ -1055,7 +1098,7 @@ class _DetailPremiumState extends State<DetailPremium> {
           child: ListView.separated(
             controller: _list,
             itemCount: view.episodes.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: _t.hair),
+            separatorBuilder: (_, _) => Divider(height: 1, color: _t.hair),
             itemBuilder: (context, index) {
               final episode = view.episodes[index];
               final many = view.seasons.length > 1;
@@ -1119,7 +1162,9 @@ class _DetailPremiumState extends State<DetailPremium> {
       (s) => s.number == view.selectedSeasonNumber,
     );
     return DetailSeasonControl(
-      onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+      onOptions: view.seasonOptions == null
+          ? null
+          : () => view.seasonOptions!(view.selectedSeasonNumber),
       seasonNumber: view.selectedSeasonNumber,
       episodeCount: view.episodes.length,
       canPrev: index > 0,
@@ -1200,17 +1245,23 @@ class _DetailPremiumState extends State<DetailPremium> {
               scrollDirection: Axis.horizontal,
               padding: EdgeInsets.symmetric(horizontal: gutter),
               itemCount: recs.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) => DetailEdgeTrap(
                 trapLeft: index == 0,
                 trapRight: index == recs.length - 1,
                 trapUp: true,
                 onUp: _m.focus.focusEntry,
-                child: _PremiumRecCard(
-                  rec: recs[index],
-                  width: width,
-                  focusNode: _recNode(index),
+                child: HoldableTile(
                   onTap: () => _m.onRecommendationTap!(recs[index]),
+                  onHold: _m.onRecommendationOptions == null
+                      ? null
+                      : () => _m.onRecommendationOptions!(recs[index]),
+                  child: _PremiumRecCard(
+                    rec: recs[index],
+                    width: width,
+                    focusNode: _recNode(index),
+                    onTap: () => _m.onRecommendationTap!(recs[index]),
+                  ),
                 ),
               ),
             ),
@@ -1230,17 +1281,23 @@ class _DetailPremiumState extends State<DetailPremium> {
     return ListView.separated(
       controller: _list,
       itemCount: recs.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: _t.hair),
+      separatorBuilder: (_, _) => Divider(height: 1, color: _t.hair),
       itemBuilder: (context, index) => DetailEdgeTrap(
         trapLeft: true,
         trapUp: index == 0,
         trapDown: index == recs.length - 1,
         onLeft: _m.focus.focusEntry,
         onUp: _m.focus.focusEntry,
-        child: _PremiumRecRow(
-          rec: recs[index],
-          focusNode: _recNode(index),
+        child: HoldableTile(
           onTap: () => _m.onRecommendationTap!(recs[index]),
+          onHold: _m.onRecommendationOptions == null
+              ? null
+              : () => _m.onRecommendationOptions!(recs[index]),
+          child: _PremiumRecRow(
+            rec: recs[index],
+            focusNode: _recNode(index),
+            onTap: () => _m.onRecommendationTap!(recs[index]),
+          ),
         ),
       ),
     );
@@ -1481,6 +1538,7 @@ class _AccessibleEpisodeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
+    final app = AppThemeScope.of(context);
     return DetailEpisodeInteraction(
       focusNode: focusNode,
       gesture: DetailOptionsGesture.rightArrow,
@@ -1493,7 +1551,11 @@ class _AccessibleEpisodeRow extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
           decoration: BoxDecoration(
-            color: focused ? t.panel : null,
+            color: focused
+                ? (GlassChrome.enabled(app)
+                      ? GlassChrome.fill(app, raised: true)
+                      : t.panel)
+                : null,
             borderRadius: t.brRadius,
           ),
           child: Row(
@@ -1622,11 +1684,16 @@ class _PremiumRecRowState extends State<_PremiumRecRow> {
   @override
   Widget build(BuildContext context) {
     final t = DetailThemeScope.of(context);
+    final app = AppThemeScope.of(context);
     return DetailFocusRing(
       focused: _focused,
       radius: t.brRadius,
       child: Material(
-        color: _focused ? t.panel : Colors.transparent,
+        color: _focused
+            ? (GlassChrome.enabled(app)
+                  ? GlassChrome.fill(app, raised: true)
+                  : t.panel)
+            : Colors.transparent,
         borderRadius: t.brRadius,
         child: InkWell(
           focusNode: widget.focusNode,
@@ -1678,8 +1745,8 @@ class _Poster extends StatelessWidget {
       fit: BoxFit.cover,
       cacheManager: DebrifyImageCache.manager,
       memCacheWidth: cacheWidth,
-      placeholder: (_, __) => ColoredBox(color: t.placeholder),
-      errorWidget: (_, __, ___) => ColoredBox(color: t.placeholder),
+      placeholder: (_, _) => ColoredBox(color: t.placeholder),
+      errorWidget: (_, _, _) => ColoredBox(color: t.placeholder),
     );
   }
 }

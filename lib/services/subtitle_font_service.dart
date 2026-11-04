@@ -247,6 +247,65 @@ class SubtitleFontService {
     }
   }
 
+  /// Restores a synced font while preserving its portable ID, so profile
+  /// selections continue to point at the same face on every device.
+  Future<SubtitleFont?> restoreCustomFont({
+    required String id,
+    required String label,
+    required String fontFamily,
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    if (!RegExp(r'^custom_[A-Za-z0-9_-]{1,80}$').hasMatch(id) ||
+        label.isEmpty ||
+        label.length > 120 ||
+        fontFamily.isEmpty ||
+        fontFamily.length > 120) {
+      return null;
+    }
+    // The name comes from another device's file system; keep only a safe
+    // basename so any user-chosen font file name can still be restored.
+    final extension = fileName.toLowerCase().endsWith('.otf') ? 'otf' : 'ttf';
+    final base = fileName
+        .split(RegExp(r'[\\/]'))
+        .last
+        .replaceAll(RegExp(r'\.(ttf|otf)$', caseSensitive: false), '')
+        .replaceAll(RegExp(r'[^A-Za-z0-9_. -]'), '_');
+    var safeBase = base.replaceAll('.', '_').trim();
+    if (safeBase.isEmpty) safeBase = 'font';
+    if (safeBase.length > 80) safeBase = safeBase.substring(0, 80);
+    final safeFileName = '$safeBase.$extension';
+    await _ensurePrefs();
+    final existing = await getCustomFonts();
+    final found = existing.where((font) => font.id == id).firstOrNull;
+    if (found != null &&
+        found.path != null &&
+        await File(found.path!).exists()) {
+      return found;
+    }
+    final appDir = await AppStorage.documents();
+    final fontDir = Directory('${appDir.path}/$_customFontDir');
+    await fontDir.create(recursive: true);
+    final destination = File('${fontDir.path}/${id}_$safeFileName');
+    await destination.writeAsBytes(bytes, flush: true);
+    final restored = SubtitleFont(
+      id: id,
+      label: label,
+      fontFamily: fontFamily,
+      isCustom: true,
+      path: destination.path,
+    );
+    if (!await _loadCustomFont(restored)) {
+      if (await destination.exists()) await destination.delete();
+      return null;
+    }
+    await _saveCustomFonts([
+      ...existing.where((font) => font.id != id),
+      restored,
+    ]);
+    return restored;
+  }
+
   /// Remove a custom font by ID
   Future<void> removeCustomFont(String fontId) async {
     final customFonts = await getCustomFonts();

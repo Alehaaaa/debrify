@@ -3,18 +3,24 @@ import 'dart:io' show Platform;
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:debrify/services/storage/ambient_trailer_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/app_route_observer.dart';
 import '../services/main_page_bridge.dart';
+import '../services/storage_service.dart';
+import '../services/youtube_service.dart';
 import '../services/debrify_image_cache.dart';
 import '../utils/platform_util.dart';
 import '../utils/tv_keys.dart';
+import '../screens/video_player/widgets/glass_dock.dart'
+    show GlassCircleButton, GlassGhostButton, GlassSurface, GlassVariant;
+import '../screens/video_player/widgets/liquid_glass.dart'
+    show GlassBrightnessProbe, GlassBrightnessScope, GlassTokens;
 import 'trailer_engine.dart';
 import 'serialized_trailer_engine.dart';
+import 'video_output_lease.dart';
 import '../services/collection_focus_playback.dart';
 
 /// OTT-style "living backdrop": shows the static blurred [imageUrl] and, when
@@ -44,11 +50,35 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// high-res YouTube path. Null when [videoUrl] is already muxed.
   final String? audioUrl;
 
+  /// Single-file source used by the iOS platform-view ambient renderer.
+  final String? muxedVideoUrl;
+
   /// Master switch (the settings toggle). When false the trailer never loads.
   final bool enabled;
 
   /// Bring the trailer to the foreground (fullscreen, unmuted, controls).
   final bool foreground;
+
+  /// Out of view (the host scrolled past it): PAUSE the live player and keep
+  /// it — decoder, buffer and position — so clearing this resumes playback
+  /// in place instead of reopening the stream from the start. Nothing starts
+  /// while suspended.
+  final bool suspended;
+
+  /// Reels may prepare one paused native player ahead of the swipe. Engines
+  /// that require the single video-output lease retain a serialized fallback.
+  final bool prewarm;
+
+  /// Fullscreen reels need a full HD video output instead of the small
+  /// ambient backdrop canvas. Uses one serialized decoder.
+  final bool highResolutionVideo;
+
+  /// Reels are intentional video playback, not reduced-motion decoration.
+  final bool decorative;
+  final Duration fadeDuration;
+
+  @visibleForTesting
+  final bool? platformViewOverride;
 
   /// Fired when the user dismisses the fullscreen trailer (X / tap-scrim). The
   /// parent should flip [foreground] back to false.
@@ -71,6 +101,11 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// stall forever without erroring — event-driven failure alone would leave
   /// a serial ladder stuck on them. Null keeps the wait unbounded.
   final Duration? firstFrameTimeout;
+
+  /// Detects a stream frozen after its first frame without a platform error.
+  /// Opt in on foreground Reels; paused, suspended and covered players do not
+  /// accumulate stalled time. Null leaves ambient/live playback unaffected.
+  final Duration? playbackStallTimeout;
 
   /// Blur applied to the static image (the app's "one lit surface" wash).
   final double imageBlurSigma;
@@ -119,6 +154,28 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// discipline, URL-change restarts — applies unchanged.
   final bool live;
 
+  /// Pauses the decoder but leaves its last rendered frame visible. Used by
+  /// full-screen clips, where falling back to a poster on pause is jarring.
+  final bool freezeFrame;
+
+  /// Reels: this clip may share the decoder budget with exactly one other
+  /// paired clip (current + next), so the next reel can be opened and parked
+  /// while the visible one plays — on media_kit too, wherever a second video
+  /// output is safe ([VideoOutputLease.allowsPair]).
+  final bool pairedOutput;
+
+  /// Resume this clip at a saved position after its decoder was handed to
+  /// another reel. Null/zero starts normally.
+  final Duration? initialPosition;
+
+  /// Latest decoded playback position. Decorative callers can ignore it;
+  /// Reels use it to resume after a page or detail-screen handoff.
+  final ValueChanged<Duration>? onPlaybackPosition;
+
+  /// The first decoded frame is on screen. Reels use this as the portable
+  /// readiness signal for a current + next handoff.
+  final VoidCallback? onFirstFrameReady;
+
   /// Non-null for a muted collection tile: no intro skip, small texture, and
   /// playback only while this token owns ambient video.
   final Object? focusPreviewOwner;
@@ -132,20 +189,34 @@ class HeroTrailerBackdrop extends StatefulWidget {
   /// real platform decoder. Production callers always use the platform engine.
   @visibleForTesting
   final Future<TrailerEngine> Function()? engineFactory;
+
   /// Only decorative video artwork repeats. Finite trailers play once.
   final bool repeat;
+
+  /// Jump past the first seconds (a trailer's studio/rating card) when the
+  /// ambient loop starts and restarts. Off for footage that begins on the
+  /// scene itself — a Reel's clip.
+  final bool skipIntro;
 
   const HeroTrailerBackdrop({
     super.key,
     required this.imageUrl,
     required this.videoUrl,
     this.audioUrl,
+    this.muxedVideoUrl,
     required this.enabled,
     this.foreground = false,
+    this.suspended = false,
+    this.prewarm = false,
+    this.highResolutionVideo = false,
+    this.decorative = true,
+    this.fadeDuration = const Duration(milliseconds: 650),
+    this.platformViewOverride,
     this.onRequestClose,
     this.onPlayingChanged,
     this.onPlaybackFailed,
     this.firstFrameTimeout,
+    this.playbackStallTimeout,
     this.imageBlurSigma = 42,
     this.sharpStill = false,
     this.videoBlurSigma = 8,
@@ -153,10 +224,16 @@ class HeroTrailerBackdrop extends StatefulWidget {
     this.ambientVolume = _defaultAmbientVolume,
     this.heroTag,
     this.live = false,
+    this.freezeFrame = false,
+    this.pairedOutput = false,
+    this.initialPosition,
+    this.onPlaybackPosition,
+    this.onFirstFrameReady,
     this.focusPreviewOwner,
     this.httpHeaders,
     this.engineFactory,
     this.repeat = false,
+    this.skipIntro = true,
   });
 
   /// See [ambientVolume]. 70% — audible but under the UI, matching the Home
@@ -197,6 +274,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Arms when open() begins, cancelled by the first rendered frame or any
   /// teardown. See [HeroTrailerBackdrop.firstFrameTimeout].
   Timer? _firstFrameTimer;
+  Timer? _playbackStallTimer;
+  Duration _stalledFor = Duration.zero;
 
   /// Auto-hides the foreground chrome (pause/seek/mute) a few seconds after the
   /// last interaction; a click/tap brings it back.
@@ -215,6 +294,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Bumped by every teardown. An engine creation that is parked on the video
   /// output lease compares against it when the wait ends.
   int _engineGen = 0;
+  int? _creatingEngineGen;
 
   /// The app is backgrounded — don't start (or resume) playback until resume.
   bool _appPaused = false;
@@ -242,6 +322,23 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   bool _playing = true;
   bool _controlsVisible = true;
 
+  /// The fullscreen chrome follows the player's control style (Settings →
+  /// Player Controls): Glass gets the frosted chrome; Dock and Classic keep
+  /// the plain round buttons, since a trailer has none of their tools.
+  bool _glassChrome = true;
+
+  /// Frame brightness for the dynamic glass; samples only while the glass
+  /// chrome is on screen.
+  late final GlassBrightnessProbe _glassProbe = GlassBrightnessProbe(
+    capture: _captureFrame,
+  );
+
+  Future<Uint8List?> _captureFrame() async {
+    var engine = _engine;
+    if (engine is SerializedTrailerEngine) engine = engine.inner;
+    return engine is MediaKitTrailerEngine ? engine.screenshot() : null;
+  }
+
   /// Phone only: the user tapped the rotate button, forcing the device into
   /// landscape for a bigger trailer. Reset (and orientation restored) when the
   /// fullscreen trailer closes or the widget is disposed.
@@ -268,7 +365,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       CollectionFocusPlayback.allows(widget.focusPreviewOwner) &&
       widget.videoUrl != null &&
       widget.videoUrl!.isNotEmpty &&
-      !_reduceMotion &&
+      (!widget.decorative || !_reduceMotion) &&
       !_stoppedForExternalPlayback &&
       !_stoppedForContentPlayback;
 
@@ -277,6 +374,13 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// out onto a still-buffering (blurred-poster / black) surface — during the
   /// buffer window the parent falls back to launching the standalone player.
   bool get canPromote => _engine != null && _videoVisible;
+
+  /// Frames are up and the trailer is in view. A [HeroTrailerBackdrop.suspended]
+  /// trailer fades back to the still (a frozen frame of a compressed stream
+  /// reads as blocky, full-screen) while its player waits, paused, underneath.
+  bool get _showVideo =>
+      _videoVisible &&
+      (!widget.suspended || widget.foreground || widget.freezeFrame);
 
   /// TV (Android) gets the native ExoPlayer engine — libmpv stutters decoding
   /// the trailer on weak TV SoCs. By default (pref on) it renders in underlay
@@ -289,9 +393,23 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Asynchronous because media_kit must wait for the single video-output slot
   /// (see [VideoOutputLease]), while Android TV must first read the native
   /// activity's fixed underlay-mode snapshot. Exo itself takes no output lease.
+  bool get _usePlatformView =>
+      widget.platformViewOverride ??
+      (!kIsWeb &&
+          PlatformUtil.isIosMobile &&
+          (widget.muxedVideoUrl?.isNotEmpty ?? false));
+
+  String? get _playbackUrl =>
+      _usePlatformView ? widget.muxedVideoUrl : widget.videoUrl;
+
   Future<TrailerEngine> _createEngine() async {
     final factory = widget.engineFactory;
     if (factory != null) return await factory();
+    if (_usePlatformView) {
+      return PlatformViewTrailerEngine(
+        startPaused: widget.prewarm && widget.suspended,
+      );
+    }
     final useExo =
         !kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached;
     if (useExo) {
@@ -301,7 +419,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       // artificial trailer delay happened to hide this read; zero-delay starts
       // make the ordering explicit instead of racing a false default.
       final underlayAtLaunch =
-          await AmbientTrailerStorage.getTvTrailerUnderlayEnabledAtLaunch();
+          await StorageService.getTvTrailerUnderlayEnabledAtLaunch();
       return ExoTrailerEngine(
         maxHeight: widget.focusPreviewOwner != null ? 480 : _tvTrailerMaxHeight,
         underlay:
@@ -311,13 +429,22 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       );
     }
     return await MediaKitTrailerEngine.create(
-      reportPlaybackErrors: widget.focusPreviewOwner != null,
+      reportPlaybackErrors:
+          widget.focusPreviewOwner != null || !widget.decorative,
+      highResolution: widget.highResolutionVideo,
+      sharedOutput: widget.pairedOutput,
     );
   }
 
   @override
   void initState() {
     super.initState();
+    unawaited(GlassTokens.load());
+    StorageService.getPlayerDockStyle().then((style) {
+      if (mounted && (style == 'glass') != _glassChrome) {
+        setState(() => _glassChrome = style == 'glass');
+      }
+    });
     WidgetsBinding.instance.addObserver(this);
     CollectionFocusPlayback.owner.addListener(_onFocusPreviewChanged);
     MainPageBridge.addExternalPlayerLaunchListener(_onExternalPlayerLaunched);
@@ -356,17 +483,24 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   }
 
   @override
-  void didUpdateWidget(covariant HeroTrailerBackdrop old) {
-    super.didUpdateWidget(old);
+  void didUpdateWidget(covariant HeroTrailerBackdrop oldWidget) {
+    super.didUpdateWidget(oldWidget);
 
     final urlChanged =
-        widget.videoUrl != old.videoUrl || widget.audioUrl != old.audioUrl;
-    if (urlChanged || (!old.enabled && widget.enabled)) _completed = false;
-    if (urlChanged || widget.enabled != old.enabled) {
+        widget.videoUrl != oldWidget.videoUrl ||
+        widget.audioUrl != oldWidget.audioUrl ||
+        widget.muxedVideoUrl != oldWidget.muxedVideoUrl;
+    if (urlChanged || (!oldWidget.enabled && widget.enabled)) {
+      _completed = false;
+    }
+    if (urlChanged || widget.enabled != oldWidget.enabled) {
       if (!_canPlay) {
         _teardownPlayer();
-      } else if (urlChanged && _engine != null) {
-        // The URL changed under a live player — restart on the new media.
+      } else if (urlChanged &&
+          (_engine != null || _creatingEngineGen != null)) {
+        // A pending factory also owns the old URL. Invalidate that creation
+        // before scheduling the replacement, or the new start gets discarded
+        // while waiting for the obsolete factory to complete.
         _teardownPlayer();
         _scheduleStart();
       } else if (_engine == null) {
@@ -374,15 +508,39 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     }
 
+    // Scrolled out of view / back: pause and resume the SAME player.
+    if (widget.suspended != oldWidget.suspended) {
+      if (widget.suspended) {
+        _startTimer?.cancel();
+        _startTimer = null;
+        _engine?.pause();
+      } else if (_engine != null) {
+        _applyVolume(foreground: widget.foreground);
+        if (!_pausedByUser && !_covered && !_appPaused) _engine!.play();
+      } else if (_canPlay && !_covered && !_appPaused) {
+        _scheduleStart();
+      }
+    }
+
+    // Unlike a backgrounded ambient trailer, a paused full-screen clip should
+    // remain on its last frame instead of revealing the poster underneath.
+    if (widget.freezeFrame != oldWidget.freezeFrame && _engine != null) {
+      if (widget.freezeFrame) {
+        _engine!.pause();
+      } else if (!widget.suspended && !_covered && !_appPaused) {
+        _engine!.play();
+      }
+    }
+
     // Ambient volume retarget (the Home hero's takeover swell) — applied to
     // the live engine without any restart. No-op while foregrounded (full
     // volume) or user-muted; _applyVolume handles both.
-    if (widget.ambientVolume != old.ambientVolume && _engine != null) {
+    if (widget.ambientVolume != oldWidget.ambientVolume && _engine != null) {
       _applyVolume(foreground: widget.foreground);
     }
 
     // Foreground promotion / demotion.
-    if (widget.foreground != old.foreground) {
+    if (widget.foreground != oldWidget.foreground) {
       if (widget.foreground && _engine != null) {
         _enterForeground();
       } else if (widget.foreground) {
@@ -429,13 +587,22 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       // backgrounded — trailer audio would play over other apps. The resume
       // handler reschedules.
       if (!mounted || !_canPlay || _covered || _appPaused) return;
+      // A Reels page may ask us to decode the next clip while it is suspended
+      // beneath an in-progress swipe. Open it and pause on the first frame;
+      // Single-output engines start only when active. A queued offscreen
+      // prewarm could otherwise win the released lease ahead of the newly
+      // selected reel and hold that lease indefinitely while paused.
+      if (!_mayStartPlayer) return;
       _initPlayer();
     });
   }
 
   Future<void> _initPlayer() async {
-    if (_engine != null) return;
-    final url = widget.videoUrl;
+    if (_engine != null || _creatingEngineGen != null || !_mayStartPlayer) {
+      return;
+    }
+    final usePlatformView = _usePlatformView;
+    final url = _playbackUrl;
     if (url == null || url.isEmpty) return;
 
     // Creation can now WAIT (for the video-output slot), so everything that
@@ -443,21 +610,31 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // on the far side of it. `_teardownPlayer` bumps the generation, which is
     // what tells an in-flight creation that its reason has gone.
     final gen = ++_engineGen;
+    _creatingEngineGen = gen;
     TrailerEngine? created;
     try {
-      created = await SerializedTrailerEngine.create(
-        _createEngine,
-        () =>
-            mounted &&
-            gen == _engineGen &&
-            !_covered &&
-            !_appPaused &&
-            _canPlay,
-      );
+      // AVPlayer and the Android-TV native Exo path can keep a bounded current
+      // + next pair alive. Other engines retain single-decoder serialization.
+      if (widget.prewarm && _supportsConcurrentPrewarm) {
+        created = await _createEngine();
+      } else {
+        created = await SerializedTrailerEngine.create(
+          _createEngine,
+          () =>
+              mounted &&
+              gen == _engineGen &&
+              !_covered &&
+              !_appPaused &&
+              _canPlay &&
+              _mayStartPlayer,
+        );
+      }
     } catch (_) {
+      if (_creatingEngineGen == gen) _creatingEngineGen = null;
       if (mounted && gen == _engineGen) _notifyPlaybackFailed();
       return;
     }
+    if (_creatingEngineGen == gen) _creatingEngineGen = null;
     final engine = created;
     if (engine == null) return;
     if (!mounted ||
@@ -466,7 +643,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         _covered ||
         _appPaused ||
         !_canPlay ||
-        widget.videoUrl != url) {
+        !_mayStartPlayer ||
+        _playbackUrl != url) {
       // Nothing else knows this engine exists, so nothing else will dispose it
       // — and its lease would be stranded.
       unawaited(engine.dispose());
@@ -482,15 +660,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // Stall watchdog: no rendered frame within the window = a dead-but-silent
     // stream. Only genuine stalls fire — the timer is cancelled by the first
     // frame and by every teardown path.
-    final timeout = widget.firstFrameTimeout;
-    if (timeout != null) {
-      _firstFrameTimer?.cancel();
-      _firstFrameTimer = Timer(timeout, () {
-        if (!mounted || _engine != engine || _videoVisible) return;
-        _teardownPlayer();
-        _notifyPlaybackFailed();
-      });
-    }
+    _armFirstFrameTimeout(engine);
 
     // Subscribe synchronously, before any await, so a teardown landing in the
     // await window below cancels these subscriptions instead of orphaning them.
@@ -504,25 +674,93 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // frame has actually RENDERED — `playing` flips true the moment open()
     // starts, long before frames exist, which would kill the loading spinner
     // early and crossfade onto a black/buffering surface.
-    engine.firstFrameRendered.then((_) {
-      if (!mounted || _engine != engine || _videoVisible) return;
-      _firstFrameTimer?.cancel();
-      _firstFrameTimer = null;
-      // Jump past the intro/rating card so the ambient loop shows footage.
-      // Skip only when the clip is comfortably longer than the cut (or its
-      // duration isn't known yet — trailers are minutes long, so assume it is).
-      final dur = _duration;
-      final longEnough =
-          dur == Duration.zero || dur > const Duration(seconds: 8);
-      if (widget.focusPreviewOwner == null &&
-          !widget.live &&
-          !widget.foreground &&
-          longEnough) {
-        engine.seek(_introSkip);
-      }
-      setState(() => _videoVisible = true);
-      _syncPlayingNotification();
-    });
+    unawaited(
+      engine.firstFrameRendered
+          .then((_) async {
+            if (!mounted || _engine != engine || _videoVisible) return;
+            if (widget.prewarm && widget.suspended) {
+              // Exo open() completes at prepare(), before a frame exists. Let it
+              // preroll silently, then retain the decoded frame and buffer. A swipe
+              // that takes ownership during pause must win over this stale command.
+              await engine.pause();
+              if (!mounted || _engine != engine) return;
+              if (!widget.suspended &&
+                  !_covered &&
+                  !_appPaused &&
+                  !_pausedByUser) {
+                _applyVolume(foreground: widget.foreground);
+                await engine.play();
+                if (!mounted || _engine != engine) return;
+              }
+            }
+            // Resume a reel before applying the decorative trailer intro skip.
+            final resumeAt = widget.initialPosition;
+            if (resumeAt != null && resumeAt > Duration.zero) {
+              // Keep the poster covering the player until the initial seek has
+              // completed: revealing the original frame flashes unrelated footage.
+              await engine.seek(resumeAt);
+              if (!mounted || _engine != engine) return;
+              _position = resumeAt;
+            }
+            // Jump past the intro/rating card so the ambient loop shows footage.
+            // Skip only when the clip is comfortably longer than the cut (or its
+            // duration isn't known yet — trailers are minutes long, so assume it is).
+            final dur = _duration;
+            final longEnough =
+                dur == Duration.zero || dur > const Duration(seconds: 8);
+            if ((resumeAt == null || resumeAt <= Duration.zero) &&
+                widget.skipIntro &&
+                widget.focusPreviewOwner == null &&
+                !widget.live &&
+                !widget.foreground &&
+                longEnough) {
+              await engine.seek(_introSkip);
+              if (!mounted || _engine != engine) return;
+            }
+            // The startup watchdog covers the entire path to a *usable*
+            // frame, including a slow or hung initial seek/resume.
+            _firstFrameTimer?.cancel();
+            _firstFrameTimer = null;
+            setState(() => _videoVisible = true);
+            _stalledFor = Duration.zero;
+            if (widget.playbackStallTimeout != null) {
+              const interval = Duration(seconds: 5);
+              _playbackStallTimer?.cancel();
+              _playbackStallTimer = Timer.periodic(interval, (_) {
+                if (!mounted || _engine != engine || !_videoVisible) return;
+                // A decoder can report `playing: false` while rebuffering.
+                // That is precisely the silent stall we must recover from;
+                // only explicit pause/visibility intent suspends this clock.
+                if (_covered ||
+                    _appPaused ||
+                    _pausedByUser ||
+                    widget.freezeFrame ||
+                    widget.suspended ||
+                    (_duration > Duration.zero &&
+                        _lastPos >= _duration - const Duration(seconds: 1))) {
+                  _stalledFor = Duration.zero;
+                  return;
+                }
+                _stalledFor += interval;
+                if (_stalledFor >= widget.playbackStallTimeout!) {
+                  _teardownPlayer();
+                  _notifyPlaybackFailed();
+                }
+              });
+            }
+            widget.onFirstFrameReady?.call();
+            _syncPlayingNotification();
+          })
+          .catchError((Object error, StackTrace stack) {
+            // Platform decoder initialization and seek can fail asynchronously,
+            // independently of the player's error stream. Treat it as a failed
+            // clip so the feed can retry or skip without an unhandled future.
+            if (mounted && _engine == engine) {
+              _teardownPlayer();
+              _notifyPlaybackFailed();
+            }
+          }),
+    );
     // Fatal playback error (dead/expired stream), including mid-play after the
     // trailer was already showing or promoted to fullscreen → tear down so we
     // drop back to the poster (and, if foregrounded, back the user out) rather
@@ -534,9 +772,15 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     });
     _posSub = engine.positionStream.listen((p) {
+      if (!mounted || _engine != engine) return;
+      if (p > _lastPos + const Duration(milliseconds: 250)) {
+        _stalledFor = Duration.zero;
+      }
       // Loop restart (position wrapped back to the start) → skip the intro
       // again. Ambient only: never fight a manual scrub or foreground seek.
-      if (widget.repeat && widget.focusPreviewOwner == null &&
+      if (widget.repeat &&
+          widget.skipIntro &&
+          widget.focusPreviewOwner == null &&
           !widget.live &&
           !widget.foreground &&
           !_scrubbing &&
@@ -545,6 +789,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         engine.seek(_introSkip);
       }
       _lastPos = p;
+      widget.onPlaybackPosition?.call(p);
       _finishIfEnded();
       // Don't snap the thumb back to stale positions mid-drag. And only
       // REBUILD for it when the seek bar is actually on screen (foreground):
@@ -580,13 +825,25 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         // YouTube rarely serves a muxed stream anymore, so [url] is usually
         // video-only — mux the separate audio track in for sound (the same
         // path the main player uses for high-res YouTube).
-        audioUrl: widget.audioUrl,
-        volume: _userMuted ? 0 : widget.ambientVolume,
+        audioUrl: usePlatformView ? null : widget.audioUrl,
+        volume: _userMuted || (widget.prewarm && widget.suspended)
+            ? 0
+            : widget.ambientVolume,
         loop: widget.repeat && !widget.live,
         httpHeaders: widget.httpHeaders,
       );
       if (_engine != engine) return;
-      if (widget.foreground) _applyVolume(foreground: true);
+      _applyVolume(foreground: widget.foreground);
+      // Suspended while the stream was opening: open() plays immediately.
+      if (_covered ||
+          _appPaused ||
+          (widget.suspended && (!widget.prewarm || _videoVisible))) {
+        await engine.pause();
+      } else if (!widget.suspended && usePlatformView) {
+        // The prepared controller opens paused, including when a swipe lands
+        // during initialize(). Resume only if this reel still owns playback.
+        await engine.play();
+      }
     } catch (_) {
       // Bot-blocked / dead stream → stay on the static poster. Guarded: a
       // STALE engine's error (e.g. its open() aborting after a URL switch
@@ -598,13 +855,30 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     }
   }
 
+  bool get _supportsConcurrentPrewarm =>
+      _usePlatformView ||
+      (!kIsWeb && Platform.isAndroid && PlatformUtil.isAndroidTvCached) ||
+      (widget.pairedOutput && VideoOutputLease.allowsPair);
+
+  bool get _mayStartPlayer =>
+      !widget.suspended || (widget.prewarm && _supportsConcurrentPrewarm);
+
   /// See [HeroTrailerBackdrop.onPlaybackFailed]. Post-frame so a failure
   /// landing inside a parent build can't re-enter setState mid-build.
   void _notifyPlaybackFailed() {
+    YoutubeService.invalidateStreamUrl(widget.videoUrl);
+    YoutubeService.invalidateStreamUrl(widget.muxedVideoUrl);
     final cb = widget.onPlaybackFailed;
-    if (cb == null) return;
+    if (cb == null && (!widget.foreground || widget.onRequestClose == null)) {
+      return;
+    }
+    final generation = _engineGen;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) cb();
+      // The old URL can fail immediately before a new Reel takes this state.
+      // Its queued callback must not fail the replacement player.
+      if (!mounted || generation != _engineGen) return;
+      if (widget.foreground) widget.onRequestClose?.call();
+      cb?.call();
     });
   }
 
@@ -613,10 +887,14 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // an engine still waiting on the video-output lease is not yet in
     // `_engine`, and this is the only thing that will tell it to stand down.
     _engineGen++;
+    _creatingEngineGen = null;
     _startTimer?.cancel();
     _startTimer = null;
     _firstFrameTimer?.cancel();
     _firstFrameTimer = null;
+    _playbackStallTimer?.cancel();
+    _playbackStallTimer = null;
+    _stalledFor = Duration.zero;
     _playingSub?.cancel();
     _playingSub = null;
     _posSub?.cancel();
@@ -650,14 +928,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     _syncPlayingNotification();
     // Nothing to dispose / rescue if no player existed.
     if (engine == null) return;
-    // If the stream died while foregrounded, the page content is faded out and
-    // input-blocked with no controls left to paint — ask the parent to back out
-    // so the user isn't stranded on a frozen surface.
-    if (widget.foreground) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => widget.onRequestClose?.call(),
-      );
-    }
+    // This is also used for intentional URL replacement, visibility changes
+    // and decoder handoff. Only a real playback failure should close a
+    // foreground route; _notifyPlaybackFailed owns that guarded callback.
     // Dispose only after this frame's rebuild has dropped the Video/Texture,
     // so it never renders against a disposed controller — except when no
     // frames are coming (see _disposeEngineSoon).
@@ -673,6 +946,24 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// still-parked engines on pause. Engine dispose is idempotent, so the
   /// original post-frame callback firing later is a harmless no-op.
   final List<TrailerEngine> _pendingDispose = [];
+
+  void _armFirstFrameTimeout(TrailerEngine engine) {
+    _firstFrameTimer?.cancel();
+    _firstFrameTimer = null;
+    final timeout = widget.firstFrameTimeout;
+    if (timeout == null || _appPaused || _videoVisible) return;
+    _firstFrameTimer = Timer(timeout, () {
+      if (!mounted ||
+          _engine != engine ||
+          _videoVisible ||
+          _appPaused ||
+          _covered) {
+        return;
+      }
+      _teardownPlayer();
+      _notifyPlaybackFailed();
+    });
+  }
 
   void _disposeEngineSoon(TrailerEngine engine) {
     if (_appPaused) {
@@ -697,21 +988,33 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   // ── Foreground promotion ────────────────────────────────────────────────────
 
   void _enterForeground() {
-    // Every promotion starts audible (the user tapped Trailer to watch it) and
-    // with chrome shown (it auto-hides shortly after).
-    setState(() => _userMuted = false);
+    // Every promotion starts audible (the user tapped the trailer to watch it).
+    // Off TV it starts CLEAN: the tap that promoted it was a request for the
+    // picture, so the HUD waits for a second tap (the tap surface below
+    // reveals it). TV keeps the brief reveal — a remote user has no other cue
+    // that OK now controls playback.
+    _controlsTimer?.cancel();
+    setState(() {
+      _userMuted = false;
+      _controlsVisible = false;
+    });
     _pausedByUser = false;
-    _showControlsTemporarily();
+    if (PlatformUtil.isTelevision) _showControlsTemporarily();
     _fg.forward();
     _applyVolume(foreground: true);
     _engine?.play();
   }
 
   void _finishIfEnded() {
-    if (_completed || widget.live || widget.repeat ||
-        !_videoVisible || _duration <= Duration.zero ||
+    if (_completed ||
+        widget.live ||
+        widget.repeat ||
+        !_videoVisible ||
+        _duration <= Duration.zero ||
         (_playing && _lastPos < _duration) ||
-        _lastPos < _duration - const Duration(milliseconds: 250)) return;
+        _lastPos < _duration - const Duration(milliseconds: 250)) {
+      return;
+    }
     _completed = true;
     _teardownPlayer();
     if (widget.foreground) {
@@ -732,7 +1035,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     // Respect an explicit pause: if the user paused in the player, the ambient
     // backdrop stays paused too (re-tapping Trailer re-promotes and resumes).
     // Only auto-resume the ambient loop when it wasn't paused on purpose.
-    if (!_pausedByUser) _engine?.play();
+    if (!_pausedByUser && !widget.suspended) _engine?.play();
     _syncPlayingNotification();
   }
 
@@ -750,7 +1053,9 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
   /// Muted → 0; foreground → full; ambient → deliberately low.
   void _applyVolume({required bool foreground}) {
     _engine?.setVolume(
-      _userMuted ? 0 : (foreground ? _foregroundVolume : widget.ambientVolume),
+      _userMuted || (widget.prewarm && widget.suspended && !foreground)
+          ? 0
+          : (foreground ? _foregroundVolume : widget.ambientVolume),
     );
   }
 
@@ -854,7 +1159,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     if (!_canPlay || _appPaused) return;
     if (_engine != null) {
       // Respect an explicit user pause of the foreground trailer.
-      if (!_pausedByUser) _engine!.play();
+      if (!_pausedByUser && !widget.suspended) _engine!.play();
     } else {
       _scheduleStart();
     }
@@ -866,7 +1171,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       _appPaused = false;
       if (_covered) return;
       if (_engine != null) {
-        if (!_pausedByUser) _engine!.play();
+        if (!_videoVisible) _armFirstFrameTimeout(_engine!);
+        if (!_pausedByUser && !widget.suspended) _engine!.play();
       } else if (mounted && _canPlay) {
         // The start timer may have fired (and skipped) while backgrounded —
         // give the trailer another dwell-delayed start now.
@@ -874,6 +1180,10 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
       }
     } else {
       _appPaused = true;
+      // Background time is not a decoder stall. The pending first frame gets
+      // a fresh playback window after resume, preserving the existing engine.
+      _firstFrameTimer?.cancel();
+      _firstFrameTimer = null;
       // Release the hardware decoder on TV so the native fullscreen player can
       // claim it (see [_releaseDecoderWhenHidden]); pause/resume elsewhere.
       if (_releaseDecoderWhenHidden || widget.focusPreviewOwner != null) {
@@ -890,6 +1200,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   @override
   void dispose() {
+    _glassProbe.dispose();
     appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     CollectionFocusPlayback.owner.removeListener(_onFocusPreviewChanged);
@@ -899,6 +1210,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     MainPageBridge.removePlayerLaunchListener(_onContentPlayerLaunching);
     _startTimer?.cancel();
     _firstFrameTimer?.cancel();
+    _playbackStallTimer?.cancel();
     _controlsTimer?.cancel();
     _playingSub?.cancel();
     _posSub?.cancel();
@@ -929,7 +1241,7 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
           ? HeroTrailerBackdrop._sharpStillWidth
           : (widget.imageBlurSigma <= 0 ? 96 : 480),
       filterQuality: FilterQuality.medium,
-      errorWidget: (_, __, ___) => const SizedBox.shrink(),
+      errorWidget: (_, _, _) => const SizedBox.shrink(),
     );
     if (widget.sharpStill || widget.imageBlurSigma <= 0) return image;
     return ImageFiltered(
@@ -952,9 +1264,17 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
 
   @override
   Widget build(BuildContext context) {
+    _glassProbe.setActive(
+      _glassChrome && widget.foreground && _controlsVisible && _engine != null,
+    );
     final engine = _engine;
     final t = _fg.value; // 0 ambient → 1 foreground
-    final videoBlur = lerpDouble(widget.videoBlurSigma, 0, t)!;
+    // Do not animate a full-screen ImageFilter over the live video. Each
+    // intermediate sigma re-rasterizes the texture and can flash while the
+    // detail page is fading away. The decoder stays mounted; promotion simply
+    // drops its ambient blur once, while [_fg] continues to animate the page
+    // chrome and foreground controls around it.
+    final videoBlur = widget.foreground ? 0.0 : widget.videoBlurSigma;
     final underlay = engine?.rendersUnderlay ?? false;
 
     return Stack(
@@ -989,8 +1309,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
                   // Underlay crossfade: the video can't fade in (it isn't
                   // Flutter pixels), so the poster fades OUT over the
                   // already-running surface behind it.
-                  opacity: _videoVisible ? 0 : 1,
-                  duration: const Duration(milliseconds: 650),
+                  opacity: _showVideo ? 0 : 1,
+                  duration: widget.fadeDuration,
                   curve: Curves.easeOut,
                   child: _withHero(_buildStaticBackdrop()),
                 )
@@ -1003,8 +1323,8 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
         // would re-parent the live Video widget and flash the texture.
         if (engine != null && !underlay)
           AnimatedOpacity(
-            opacity: _videoVisible ? 1 : 0,
-            duration: const Duration(milliseconds: 650),
+            opacity: _showVideo ? 1 : 0,
+            duration: widget.fadeDuration,
             curve: Curves.easeOut,
             child: widget.videoBlurSigma <= 0
                 ? engine.buildVideo(fit: BoxFit.cover)
@@ -1056,6 +1376,20 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     return KeyEventResult.ignored;
   }
 
+  void _seekBy(int seconds) {
+    var target = _position + Duration(seconds: seconds);
+    if (target < Duration.zero) target = Duration.zero;
+    if (_duration > Duration.zero && target > _duration) target = _duration;
+    setState(() => _position = target);
+    _engine?.seek(target);
+    _showControlsTemporarily();
+  }
+
+  /// Downward travel (px) of a swipe that started near the center of the
+  /// fullscreen trailer; null when no such swipe is in progress.
+  double? _dismissDrag;
+  static const double _dismissDistance = 120;
+
   Widget _buildForegroundControls(double t) {
     final interactive = t > 0.98;
     return Opacity(
@@ -1070,95 +1404,155 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
             children: [
               // Tap/click surface: reveal the chrome (re-arming the auto-hide),
               // or hide it immediately if it's already up.
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  if (_controlsVisible) {
-                    _controlsTimer?.cancel();
-                    setState(() => _controlsVisible = false);
-                  } else {
-                    _showControlsTemporarily();
-                  }
-                },
-                child: const SizedBox.expand(),
+              //
+              // Swipe down from the middle of the picture closes the trailer,
+              // the gesture every fullscreen player on a phone answers to.
+              // Only drags that START in the central region count, so the
+              // edges stay free for the system's own swipes.
+              LayoutBuilder(
+                builder: (context, constraints) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    if (_controlsVisible) {
+                      _controlsTimer?.cancel();
+                      setState(() => _controlsVisible = false);
+                    } else {
+                      _showControlsTemporarily();
+                    }
+                  },
+                  onVerticalDragStart: (details) {
+                    final p = details.localPosition;
+                    final w = constraints.maxWidth;
+                    final h = constraints.maxHeight;
+                    _dismissDrag =
+                        p.dx > w * 0.2 &&
+                            p.dx < w * 0.8 &&
+                            p.dy > h * 0.2 &&
+                            p.dy < h * 0.8
+                        ? 0
+                        : null;
+                  },
+                  onVerticalDragUpdate: (details) {
+                    final drag = _dismissDrag;
+                    if (drag == null) return;
+                    setState(() => _dismissDrag = drag + details.delta.dy);
+                  },
+                  onVerticalDragEnd: (details) {
+                    final drag = _dismissDrag;
+                    if (drag == null) return;
+                    final velocity = details.primaryVelocity ?? 0;
+                    setState(() => _dismissDrag = null);
+                    if (drag > _dismissDistance ||
+                        (drag > 24 && velocity > 700)) {
+                      HapticFeedback.lightImpact();
+                      widget.onRequestClose?.call();
+                    }
+                  },
+                  onVerticalDragCancel: () {
+                    if (_dismissDrag != null) {
+                      setState(() => _dismissDrag = null);
+                    }
+                  },
+                  // Follows the finger down as a darkening veil, so the
+                  // gesture reads as "pulling the trailer away" before it
+                  // commits.
+                  child: ColoredBox(
+                    color: Colors.black.withValues(
+                      alpha: ((_dismissDrag ?? 0) / (_dismissDistance * 2))
+                          .clamp(0.0, 0.5),
+                    ),
+                    child: const SizedBox.expand(),
+                  ),
+                ),
               ),
-              // Bottom scrim so controls stay legible over bright frames.
-              if (_controlsVisible)
-                const Positioned.fill(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.center,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black87],
-                      ),
+              if (_controlsVisible && _glassChrome)
+                Positioned.fill(
+                  child: GlassBrightnessScope(
+                    brightness: _glassProbe.brightness,
+                    child: BackdropGroup(
+                      child: Stack(children: _glassChromeLayer()),
                     ),
                   ),
                 ),
-              // Close (top-right). Hides with the rest of the chrome — a click
-              // brings it back, and hardware/browser Back always exits (PopScope).
-              if (_controlsVisible)
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: _CircleControl(
-                        icon: Icons.close_rounded,
-                        tooltip: 'Close trailer',
-                        onTap: () => widget.onRequestClose?.call(),
+              if (!_glassChrome) ...[
+                // Bottom scrim so controls stay legible over bright frames.
+                if (_controlsVisible)
+                  const Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.center,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black87],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              // Center play/pause.
-              if (_controlsVisible)
-                Center(
-                  child: _CircleControl(
-                    icon: _playing
-                        ? Icons.pause_rounded
-                        : Icons.play_arrow_rounded,
-                    tooltip: _playing ? 'Pause' : 'Play',
-                    large: true,
-                    onTap: _togglePlay,
+                // Close (top-right). Hides with the rest of the chrome — a click
+                // brings it back, and hardware/browser Back always exits (PopScope).
+                if (_controlsVisible)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: _CircleControl(
+                          icon: Icons.close_rounded,
+                          tooltip: 'Close trailer',
+                          onTap: () => widget.onRequestClose?.call(),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              // Bottom bar: seek + mute.
-              if (_controlsVisible)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
-                      child: Row(
-                        children: [
-                          Expanded(child: _buildSeekBar()),
-                          _CircleControl(
-                            icon: _userMuted
-                                ? Icons.volume_off_rounded
-                                : Icons.volume_up_rounded,
-                            tooltip: _userMuted ? 'Unmute' : 'Mute',
-                            onTap: _toggleMute,
-                          ),
-                          // Phone only: rotate the device for a full-width view.
-                          if (_isPhone)
+                // Center play/pause.
+                if (_controlsVisible)
+                  Center(
+                    child: _CircleControl(
+                      icon: _playing
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                      tooltip: _playing ? 'Pause' : 'Play',
+                      large: true,
+                      onTap: _togglePlay,
+                    ),
+                  ),
+                // Bottom bar: seek + mute.
+                if (_controlsVisible)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                        child: Row(
+                          children: [
+                            Expanded(child: _buildSeekBar()),
                             _CircleControl(
-                              icon: _forcedLandscape
-                                  ? Icons.screen_lock_rotation_rounded
-                                  : Icons.screen_rotation_rounded,
-                              tooltip: _forcedLandscape
-                                  ? 'Portrait'
-                                  : 'Rotate to fullscreen',
-                              onTap: _toggleOrientation,
+                              icon: _userMuted
+                                  ? Icons.volume_off_rounded
+                                  : Icons.volume_up_rounded,
+                              tooltip: _userMuted ? 'Unmute' : 'Mute',
+                              onTap: _toggleMute,
                             ),
-                        ],
+                            // Phone only: rotate the device for a full-width view.
+                            if (_isPhone)
+                              _CircleControl(
+                                icon: _forcedLandscape
+                                    ? Icons.screen_lock_rotation_rounded
+                                    : Icons.screen_rotation_rounded,
+                                tooltip: _forcedLandscape
+                                    ? 'Portrait'
+                                    : 'Rotate to fullscreen',
+                                onTap: _toggleOrientation,
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+              ],
             ],
           ),
         ),
@@ -1166,19 +1560,143 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
     );
   }
 
-  Widget _buildSeekBar() {
+  /// The Glass player's chrome for the fullscreen trailer: frosted close,
+  /// −10 / play / +10 in the middle, one frosted panel with the scrubber.
+  List<Widget> _glassChromeLayer() {
+    final compact = MediaQuery.sizeOf(context).shortestSide < 500;
+    return [
+      const Positioned.fill(
+        child: IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.center,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x00000000), Color(0x8C000000)],
+              ),
+            ),
+          ),
+        ),
+      ),
+      Positioned(
+        top: 0,
+        right: 0,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: GlassCircleButton(
+              variant: GlassVariant.translucent,
+              icon: Icons.close_rounded,
+              tooltip: 'Close trailer',
+              size: 42,
+              onPressed: () => widget.onRequestClose?.call(),
+            ),
+          ),
+        ),
+      ),
+      Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GlassCircleButton(
+              icon: Icons.replay_10_rounded,
+              tooltip: 'Back 10 seconds',
+              size: compact ? 50 : 58,
+              onPressed: () => _seekBy(-10),
+            ),
+            SizedBox(width: compact ? 36 : 56),
+            GlassCircleButton(
+              icon: _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              tooltip: _playing ? 'Pause' : 'Play',
+              size: compact ? 68 : 80,
+              iconScale: 0.5,
+              strong: true,
+              onPressed: _togglePlay,
+            ),
+            SizedBox(width: compact ? 36 : 56),
+            GlassCircleButton(
+              icon: Icons.forward_10_rounded,
+              tooltip: 'Forward 10 seconds',
+              size: compact ? 50 : 58,
+              onPressed: () => _seekBy(10),
+            ),
+          ],
+        ),
+      ),
+      Positioned(
+        left: 0,
+        right: 0,
+        bottom: 0,
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              compact ? 12 : 24,
+              0,
+              compact ? 12 : 24,
+              compact ? 10 : 18,
+            ),
+            child: Center(
+              heightFactor: 1,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 960),
+                child: GlassSurface(
+                  variant: GlassVariant.dynamic,
+                  radius: BorderRadius.circular(
+                    compact
+                        ? GlassTokens.current.radiusPanelCompact
+                        : GlassTokens.current.radiusPanel,
+                  ),
+                  padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 2, 6, 2),
+                  child: Row(
+                    children: [
+                      Expanded(child: _buildSeekBar(glass: true)),
+                      GlassGhostButton(
+                        icon: _userMuted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
+                        tooltip: _userMuted ? 'Unmute' : 'Mute',
+                        onPressed: _toggleMute,
+                      ),
+                      if (_isPhone)
+                        GlassGhostButton(
+                          icon: _forcedLandscape
+                              ? Icons.screen_lock_rotation_rounded
+                              : Icons.screen_rotation_rounded,
+                          tooltip: _forcedLandscape
+                              ? 'Portrait'
+                              : 'Rotate to fullscreen',
+                          onPressed: _toggleOrientation,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildSeekBar({bool glass = false}) {
     final durMs = _duration.inMilliseconds;
     final posMs = _position.inMilliseconds.clamp(0, durMs == 0 ? 1 : durMs);
     final value = durMs == 0 ? 0.0 : posMs / durMs;
     return Row(
       children: [
-        Text(_fmt(_position), style: _timeStyle),
+        Text(_fmt(_position), style: glass ? _glassTimeStyle : _timeStyle),
         Expanded(
           child: SliderTheme(
             data: SliderTheme.of(context).copyWith(
               trackHeight: 3,
               overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
               thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+              // Glass: the player's white-on-frost scrubber.
+              activeTrackColor: glass ? Colors.white : null,
+              inactiveTrackColor: glass ? const Color(0x40FFFFFF) : null,
+              thumbColor: glass ? Colors.white : null,
+              overlayColor: glass ? const Color(0x1FFFFFFF) : null,
             ),
             child: Slider(
               value: value.clamp(0.0, 1.0),
@@ -1208,10 +1726,17 @@ class HeroTrailerBackdropState extends State<HeroTrailerBackdrop>
             ),
           ),
         ),
-        Text(_fmt(_duration), style: _timeStyle),
+        Text(_fmt(_duration), style: glass ? _glassTimeStyle : _timeStyle),
       ],
     );
   }
+
+  static const TextStyle _glassTimeStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 12.5,
+    fontWeight: FontWeight.w500,
+    fontFeatures: [FontFeature.tabularFigures()],
+  );
 
   static const TextStyle _timeStyle = TextStyle(
     color: Colors.white70,

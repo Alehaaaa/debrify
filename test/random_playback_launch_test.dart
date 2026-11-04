@@ -1,7 +1,6 @@
-import 'package:debrify/features/sources/presentation/legacy_playback/source_player_args.dart';
 import 'package:debrify/models/advanced_search_selection.dart';
-import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
+import 'package:debrify/services/stremio_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -49,7 +48,7 @@ void main() {
   });
 
   test('ordinary playback leaves continuous shuffle off', () {
-    final args = SourcePlayerArgs.playerArgsForTesting(
+    final args = TorrentPlaybackService.playerArgsForTesting(
       const PlaybackMeta.catalog(contentType: 'series'),
     );
     expect(args.initialContinuousShuffle, isFalse);
@@ -58,7 +57,7 @@ void main() {
   });
 
   test('continuous choice survives launch copies and Flutter construction', () {
-    final args = SourcePlayerArgs.playerArgsForTesting(
+    final args = TorrentPlaybackService.playerArgsForTesting(
       const PlaybackMeta.catalog(
         contentType: 'series',
         initialContinuousShuffle: true,

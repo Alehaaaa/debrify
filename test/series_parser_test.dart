@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import '../lib/utils/series_parser.dart';
+import 'package:debrify/utils/series_parser.dart';
 
 void main() {
   group('SeriesParser Tests', () {

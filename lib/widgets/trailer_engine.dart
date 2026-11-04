@@ -1,12 +1,15 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import '../utils/media_kit_init.dart';
 import '../utils/platform_util.dart';
 import 'video_output_lease.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart' as mk;
 import 'package:media_kit_video/media_kit_video.dart' as mkv;
+import 'package:video_player/video_player.dart' as vp;
 
 /// A pluggable trailer playback engine behind `HeroTrailerBackdrop`.
 ///
@@ -74,6 +77,192 @@ abstract class TrailerEngine {
   Widget buildVideo({required BoxFit fit, bool revealed = true});
 }
 
+/// Flutter's maintained platform-view player, used for iOS ambient video.
+/// Unlike a Flutter Texture, the platform view's AVPlayer layer does not make
+/// the whole Flutter scene re-rasterise for each decoded frame.
+class PlatformViewTrailerEngine implements TrailerEngine {
+  PlatformViewTrailerEngine({this.startPaused = false})
+    : _wantsPlay = !startPaused;
+
+  final bool startPaused;
+  bool _wantsPlay;
+  bool _ready = false;
+  double _wantedVolume = 0;
+
+  @override
+  bool get rendersUnderlay => false;
+
+  vp.VideoPlayerController? _controller;
+  final _playing = StreamController<bool>.broadcast();
+  final _position = StreamController<Duration>.broadcast();
+  final _duration = StreamController<Duration>.broadcast();
+  final _errors = StreamController<void>.broadcast();
+  final _firstFrame = Completer<void>();
+  final _firstProgress = Completer<void>();
+  bool _disposed = false;
+  bool _detached = false;
+  bool _lastPlaying = false;
+  bool _errorReported = false;
+  Future<void>? _disposal;
+
+  @override
+  Stream<bool> get playingStream => _playing.stream;
+  @override
+  Stream<Duration> get positionStream => _position.stream;
+  @override
+  Stream<Duration> get durationStream => _duration.stream;
+  @override
+  Stream<void> get errorStream => _errors.stream;
+  @override
+  Future<void> get firstFrameRendered => _firstFrame.future;
+
+  void _onValue() {
+    final value = _controller?.value;
+    if (_disposed || _detached || value == null) return;
+    if (value.hasError) {
+      // The video_player value listener can fire repeatedly with the same
+      // fatal error. A single failure belongs to a single player instance.
+      if (!_errorReported) {
+        _errorReported = true;
+        _errors.add(null);
+      }
+      return;
+    }
+    if (!value.isInitialized) return;
+    if (!_firstProgress.isCompleted &&
+        value.position > Duration.zero &&
+        !value.isBuffering) {
+      _firstProgress.complete();
+    }
+    // Initialization means metadata is available, not that a frame is up.
+    // Prepared reels report readiness only after their muted preroll parks.
+    if (_ready && _firstProgress.isCompleted && !_firstFrame.isCompleted) {
+      _firstFrame.complete();
+    }
+    if (_lastPlaying != value.isPlaying) {
+      _lastPlaying = value.isPlaying;
+      _playing.add(value.isPlaying);
+    }
+    _position.add(value.position);
+    _duration.add(value.duration);
+  }
+
+  @override
+  Future<void> open({
+    required String videoUrl,
+    String? audioUrl,
+    required double volume,
+    required bool loop,
+    Map<String, String>? httpHeaders,
+  }) async {
+    // This engine is deliberately fed a muxed source. A separate audio stream
+    // would reintroduce a second native audio session behind an ambient view.
+    final controller = vp.VideoPlayerController.networkUrl(
+      Uri.parse(videoUrl),
+      httpHeaders: httpHeaders ?? const {},
+      videoPlayerOptions: vp.VideoPlayerOptions(mixWithOthers: true),
+      viewType: vp.VideoViewType.platformView,
+    );
+    _wantedVolume = volume;
+    _controller = controller;
+    controller.addListener(_onValue);
+    await controller.initialize();
+    if (_disposed || _detached) return;
+    await controller.setLooping(loop);
+    if (_disposed || _detached) return;
+    if (startPaused) {
+      // initialize() only prepares metadata. Preroll the next reel silently
+      // until video advances, then park at its opening frame with the buffer
+      // retained. Queued controls cannot unmute it during this preparation.
+      await controller.setVolume(0);
+      if (_disposed || _detached) return;
+      await controller.play();
+      await _firstProgress.future.timeout(const Duration(seconds: 8));
+      if (_disposed || _detached) return;
+      await controller.pause();
+      if (_disposed || _detached) return;
+    }
+    _ready = true;
+    await setVolume(_wantedVolume);
+    if (_disposed || _detached) return;
+    if (_wantsPlay) await controller.play();
+    // Do not rewind the buffered opening frame: it adds another seek and can
+    // overwrite a swipe's resume command while open() is still finishing.
+    _onValue();
+  }
+
+  @override
+  Future<void> setVolume(double volume) async {
+    _wantedVolume = volume;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.setVolume((volume / 100).clamp(0.0, 1.0));
+  }
+
+  @override
+  Future<void> seek(Duration position) async {
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.seekTo(position);
+  }
+
+  @override
+  Future<void> play() async {
+    _wantsPlay = true;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.play();
+  }
+
+  @override
+  Future<void> pause() async {
+    _wantsPlay = false;
+    if (!_ready || _disposed || _detached) return;
+    await _controller?.pause();
+  }
+
+  @override
+  void detach() => _detached = true;
+  @override
+  Future<void> dispose() {
+    if (_disposed) return _disposal ?? Future<void>.value();
+    _disposed = true;
+    return _disposal ??= _disposeResources();
+  }
+
+  Future<void> _disposeResources() async {
+    final controller = _controller;
+    _controller = null;
+    try {
+      if (controller != null) {
+        controller.removeListener(_onValue);
+        await controller.dispose();
+      }
+    } finally {
+      await _playing.close();
+      await _position.close();
+      await _duration.close();
+      await _errors.close();
+    }
+  }
+
+  @override
+  Widget buildVideo({required BoxFit fit, bool revealed = true}) {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      return const SizedBox.expand();
+    }
+    final size = controller.value.size;
+    return ClipRect(
+      child: FittedBox(
+        fit: fit,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: vp.VideoPlayer(controller),
+        ),
+      ),
+    );
+  }
+}
+
 /// libmpv-backed engine (the original path). Used off-TV.
 class MediaKitTrailerEngine implements TrailerEngine {
   /// Takes the single video-output slot, then builds the engine.
@@ -81,31 +270,114 @@ class MediaKitTrailerEngine implements TrailerEngine {
   /// Asynchronous because `VideoController`'s constructor IS the output
   /// creation, so the wait has to happen before construction rather than
   /// inside it. See [VideoOutputLease] for why a second one aborts the process.
-  static Future<MediaKitTrailerEngine> create({bool reportPlaybackErrors = false}) async {
-    final lease = await VideoOutputLease.acquire(debugLabel: 'trailer');
+  static Future<MediaKitTrailerEngine> create({
+    bool reportPlaybackErrors = false,
+    bool highResolution = false,
+    bool sharedOutput = false,
+  }) async {
+    final lease = await VideoOutputLease.acquire(
+      debugLabel: 'trailer',
+      shared: sharedOutput,
+    );
+    mk.Player? player;
     try {
-      return MediaKitTrailerEngine._(lease, reportPlaybackErrors);
+      MediaKitInit.ensureInitialized();
+      player = mk.Player();
+      return MediaKitTrailerEngine._(
+        lease,
+        reportPlaybackErrors,
+        highResolution,
+        player,
+      );
     } catch (_) {
-      // A throw here would strand the slot forever, and nothing else knows the
-      // handle exists yet.
-      lease.release();
+      // VideoController can throw after mk.Player allocated its native player.
+      // Dispose it before releasing the output lease to prevent the next Reel
+      // from racing a leaked native decoder during failed initialization.
+      try {
+        await player?.dispose();
+      } catch (_) {
+        // Preserve the constructor failure; the lease is still released.
+      } finally {
+        lease.release();
+      }
       rethrow;
     }
   }
 
-  MediaKitTrailerEngine._(this._lease, this._reportPlaybackErrors) {
-    // Idempotent; the main player also initializes it, but guard in case the
-    // trailer is the first media_kit surface in this session.
-    MediaKitInit.ensureInitialized();
-    _player = mk.Player();
-    _controller = mkv.VideoController(_player);
+  MediaKitTrailerEngine._(
+    this._lease,
+    this._reportPlaybackErrors,
+    bool highResolution,
+    this._player,
+  ) {
+    // iOS routes each frame through three OpenGL-backed Flutter pixel buffers.
+    // A background trailer needs a 16:9 ambient canvas, not a source-sized
+    // 1440p upload every frame. This keeps playback live while scrolling.
+    _controller = mkv.VideoController(
+      _player,
+      configuration: PlatformUtil.isIosMobile
+          ? highResolution
+                ? const mkv.VideoControllerConfiguration(
+                    width: 1920,
+                    height: 1080,
+                  )
+                : const mkv.VideoControllerConfiguration(
+                    width: 960,
+                    height: 540,
+                  )
+          : const mkv.VideoControllerConfiguration(),
+    );
   }
 
   final VideoOutputLeaseHandle _lease;
   final bool _reportPlaybackErrors;
-  late final mk.Player _player;
+  final mk.Player _player;
+
+  /// One encoded frame for the glass chrome's brightness sampling.
+  Future<Uint8List?> screenshot() => _player.screenshot(format: 'image/jpeg');
   late final mkv.VideoController _controller;
   bool _disposed = false;
+
+  /// iOS: a muted trailer must not claim the device's audio. mpv's iOS audio
+  /// output activates AVAudioSession with the PLAYBACK category as soon as an
+  /// audio track is selected — at volume 0 too — which pauses other apps'
+  /// music and podcasts. While muted the engine therefore selects NO audio
+  /// track (`aid=no`), so no audio output (and no session) ever starts; the
+  /// track comes back when the user unmutes.
+  static bool get _releaseAudioWhenMuted =>
+      !kIsWeb && Platform.isIOS && !PlatformUtil.isTvOS;
+
+  /// Whether audio is currently deselected for [_releaseAudioWhenMuted].
+  bool _audioReleased = false;
+
+  /// The separate YouTube audio stream, muxed in lazily: only once the
+  /// trailer is audible (adding it would select it and start the output).
+  String? _audioUrl;
+  bool _audioUrlAdded = false;
+
+  Future<void> _setAid(String value) async {
+    final native = _player.platform;
+    if (native is mk.NativePlayer) await native.setProperty('aid', value);
+  }
+
+  /// Selects or deselects audio for the given [volume] (iOS only).
+  Future<void> _syncAudioForVolume(double volume) async {
+    if (!_releaseAudioWhenMuted || _disposed) return;
+    final mute = volume <= 0;
+    if (mute == _audioReleased) return;
+    _audioReleased = mute;
+    if (mute) {
+      await _setAid('no');
+      return;
+    }
+    final audioUrl = _audioUrl;
+    if (audioUrl != null && !_audioUrlAdded) {
+      _audioUrlAdded = true;
+      await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
+    } else {
+      await _setAid('auto');
+    }
+  }
 
   @override
   bool get rendersUnderlay => false;
@@ -136,6 +408,16 @@ class MediaKitTrailerEngine implements TrailerEngine {
   }) async {
     // Re-check [_disposed] after every await: a detach (URL switch, toggle off)
     // can land mid-sequence, and media_kit throws on use-after-dispose.
+    _audioUrl = (audioUrl != null && audioUrl.isNotEmpty) ? audioUrl : null;
+    final startMuted = _releaseAudioWhenMuted && volume <= 0;
+    if (startMuted) {
+      // Before loadfile: mpv picks tracks while the file loads, and an
+      // audio output started even briefly would already have taken the
+      // session.
+      _audioReleased = true;
+      await _setAid('no');
+      if (_disposed) return;
+    }
     await _player.setVolume(volume);
     if (_disposed) return;
     await _player.setPlaylistMode(
@@ -147,14 +429,26 @@ class MediaKitTrailerEngine implements TrailerEngine {
       play: true,
     );
     if (_disposed) return;
-    if (audioUrl != null && audioUrl.isNotEmpty) {
-      await _player.setAudioTrack(mk.AudioTrack.uri(audioUrl));
+    if (_audioReleased) {
+      // Belt and braces: keep audio deselected for the loaded file.
+      await _setAid('no');
+      return;
+    }
+    if (_audioUrl != null) {
+      _audioUrlAdded = true;
+      await _player.setAudioTrack(mk.AudioTrack.uri(_audioUrl!));
     }
   }
 
   @override
   Future<void> setVolume(double volume) async {
-    if (!_disposed) await _player.setVolume(volume);
+    if (_disposed) return;
+    // Unmute: select audio BEFORE raising the volume; mute: drop the level
+    // first, then release the output.
+    if (volume > 0) await _syncAudioForVolume(volume);
+    if (_disposed) return;
+    await _player.setVolume(volume);
+    if (volume <= 0) await _syncAudioForVolume(volume);
   }
 
   @override
@@ -190,20 +484,19 @@ class MediaKitTrailerEngine implements TrailerEngine {
   }
 
   @override
-  Widget buildVideo({required BoxFit fit, bool revealed = true}) =>
-      mkv.Video(
-        controller: _controller,
-        controls: null,
-        fit: fit,
-        // The package default is FilterQuality.low — bilinear. A portrait
-        // hero cover-crops a 1080p stream ~1.5× up, and low sampling is
-        // visibly soft at that scale; medium adds mipmaps for nearly free on
-        // phone/desktop GPUs. TV keeps the default: the tvOS hero renders
-        // 1:1-ish, and TV paint paths stay untouched on principle.
-        filterQuality: PlatformUtil.isTelevision
-            ? FilterQuality.low
-            : FilterQuality.medium,
-      );
+  Widget buildVideo({required BoxFit fit, bool revealed = true}) => mkv.Video(
+    controller: _controller,
+    controls: null,
+    fit: fit,
+    // The package default is FilterQuality.low — bilinear. A portrait
+    // hero cover-crops a 1080p stream ~1.5× up, and low sampling is
+    // visibly soft at that scale; medium adds mipmaps for nearly free on
+    // phone/desktop GPUs. TV keeps the default: the tvOS hero renders
+    // 1:1-ish, and TV paint paths stay untouched on principle.
+    filterQuality: PlatformUtil.isTelevision
+        ? FilterQuality.low
+        : FilterQuality.medium,
+  );
 }
 
 /// Immutable render state for the Exo texture (id + intrinsic video size).
@@ -241,10 +534,15 @@ class ExoTrailerEngine implements TrailerEngine {
 
   int? _textureId;
   bool _disposed = false;
-  /// Native release happens once. The Exo path takes no video-output lease —
-  /// it has its own decoder discipline and a different failure mode — so this
-  /// stays a plain guard rather than joining a shared disposal future.
-  bool _released = false;
+  // A page can lose visibility while Android is still creating the player.
+  // Keep its last playback intent until the native id is available.
+  bool _wantsPlay = true;
+
+  /// A background pause and a post-frame teardown can dispose concurrently.
+  /// Both callers must await the same native release before another decoder is
+  /// opened, including when the platform channel reports an error.
+  Future<void>? _disposal;
+  Future<void>? _opening;
   bool _polling = false;
   Timer? _pollTimer;
 
@@ -274,6 +572,20 @@ class ExoTrailerEngine implements TrailerEngine {
     required double volume,
     required bool loop,
     Map<String, String>? httpHeaders,
+  }) => _opening = _open(
+    videoUrl: videoUrl,
+    audioUrl: audioUrl,
+    volume: volume,
+    loop: loop,
+    httpHeaders: httpHeaders,
+  );
+
+  Future<void> _open({
+    required String videoUrl,
+    String? audioUrl,
+    required double volume,
+    required bool loop,
+    Map<String, String>? httpHeaders,
   }) async {
     final id = await _TvTrailerChannel.instance.create(
       videoUrl: videoUrl,
@@ -294,7 +606,13 @@ class ExoTrailerEngine implements TrailerEngine {
     _textureId = id;
     _render.value = _ExoRender(id, _render.value.width, _render.value.height);
     _TvTrailerChannel.instance.register(id, this);
-    _startPolling();
+    if (_wantsPlay) {
+      _startPolling();
+    } else {
+      // Native create starts the clip. Respect a pause requested during create
+      // before this player can become an invisible background decoder.
+      await _TvTrailerChannel.instance.pause(id);
+    }
   }
 
   void _startPolling() {
@@ -372,6 +690,7 @@ class ExoTrailerEngine implements TrailerEngine {
 
   @override
   Future<void> play() async {
+    _wantsPlay = true;
     final id = _textureId;
     if (_disposed || id == null) return;
     _startPolling(); // resume position updates
@@ -380,6 +699,7 @@ class ExoTrailerEngine implements TrailerEngine {
 
   @override
   Future<void> pause() async {
+    _wantsPlay = false;
     final id = _textureId;
     if (_disposed || id == null) return;
     // Stop the 250ms getPosition round-trips while paused/covered/backgrounded —
@@ -396,21 +716,34 @@ class ExoTrailerEngine implements TrailerEngine {
   }
 
   @override
-  Future<void> dispose() async {
+  Future<void> dispose() {
     _disposed = true;
     _pollTimer?.cancel();
-    if (_released) return;
-    _released = true;
-    final id = _textureId;
-    if (id != null) {
-      _TvTrailerChannel.instance.unregister(id);
-      await _TvTrailerChannel.instance.disposePlayer(id);
+    return _disposal ??= _disposeResources();
+  }
+
+  Future<void> _disposeResources() async {
+    try {
+      // Native create may still be allocating a codec while this widget was
+      // removed. Its stale-result branch disposes the orphan; join that work
+      // before completing teardown and admitting another player.
+      try {
+        await _opening;
+      } catch (_) {
+        // A failed create owns no registered texture to release here.
+      }
+      final id = _textureId;
+      if (id != null) {
+        _TvTrailerChannel.instance.unregister(id);
+        await _TvTrailerChannel.instance.disposePlayer(id);
+      }
+    } finally {
+      await _playingCtl.close();
+      await _positionCtl.close();
+      await _durationCtl.close();
+      await _errorCtl.close();
+      _render.dispose();
     }
-    await _playingCtl.close();
-    await _positionCtl.close();
-    await _durationCtl.close();
-    await _errorCtl.close();
-    _render.dispose();
   }
 
   @override
@@ -553,7 +886,13 @@ class _TvTrailerChannel {
 
   final Map<int, ExoTrailerEngine> _engines = {};
   // Events that arrive before their engine registers (race guard) are buffered.
+  // Native codec callbacks can also arrive *after* release. Bound unmatched
+  // events so repeated fast swipes cannot accumulate abandoned texture IDs.
+  static const int _maxPendingTextures = 8;
+  static const int _maxPendingEvents = 8;
   final Map<int, List<MethodCall>> _pending = {};
+  final Set<int> _retired = <int>{};
+  static const int _maxRetiredTextures = 64;
 
   Future<int> create({
     required String videoUrl,
@@ -577,6 +916,7 @@ class _TvTrailerChannel {
   }
 
   void register(int id, ExoTrailerEngine engine) {
+    _retired.remove(id);
     _engines[id] = engine;
     final buffered = _pending.remove(id);
     if (buffered != null) {
@@ -589,6 +929,10 @@ class _TvTrailerChannel {
   void unregister(int id) {
     _engines.remove(id);
     _pending.remove(id);
+    _retired.add(id);
+    if (_retired.length > _maxRetiredTextures) {
+      _retired.remove(_retired.first);
+    }
   }
 
   // Control calls are fire-and-forget and can land after the native handler is
@@ -648,7 +992,24 @@ class _TvTrailerChannel {
     if (id == null) return null;
     final engine = _engines[id];
     if (engine == null) {
-      (_pending[id] ??= []).add(call);
+      if (_retired.contains(id)) return null;
+      if (!_pending.containsKey(id) && _pending.length >= _maxPendingTextures) {
+        _pending.remove(_pending.keys.first);
+      }
+      final queue = _pending.putIfAbsent(id, () => <MethodCall>[]);
+      // The first-frame signal is not repeatable. Keep it when trimming
+      // pre-registration noise, or the poster may remain visible forever.
+      if (call.method == 'firstFrame' &&
+          queue.any((event) => event.method == 'firstFrame')) {
+        return null;
+      }
+      if (queue.length >= _maxPendingEvents) {
+        final removable = queue.indexWhere(
+          (event) => event.method != 'firstFrame',
+        );
+        queue.removeAt(removable < 0 ? 0 : removable);
+      }
+      queue.add(call);
     } else {
       engine.handleEvent(call.method, args);
     }

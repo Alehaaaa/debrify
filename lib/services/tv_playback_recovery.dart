@@ -2,20 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/playback_recovery_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
-import 'package:debrify/services/storage/video_resume_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'diagnostic_log.dart';
 import 'profiles/profile_runtime.dart';
 import 'profiles/profile_scope.dart';
+import 'storage_service.dart';
 import 'webdav_sync/webdav_sync_tombstones.dart';
 
 /// Restores the two pieces of state lost when Android reclaims MainActivity
@@ -171,7 +164,7 @@ class TvPlaybackRecovery {
     final episodeCompletion =
         checkpoint.contentType != 'single' &&
         checkpoint.shouldPersistCompletion;
-    if (await PlaybackRecoveryStorage.hasNewerPlaybackRecoveryIntent(
+    if (await StorageService.hasNewerPlaybackRecoveryIntent(
       seriesTitle: checkpoint.contentType == 'single'
           ? null
           : checkpoint.seriesTitle ?? checkpoint.title,
@@ -218,7 +211,7 @@ class TvPlaybackRecovery {
     final resumeId = checkpoint.resumeId ?? checkpoint.title;
     final videoState = resumeId == null || resumeId.isEmpty
         ? null
-        : await VideoProgressStorage.getVideoPlaybackState(
+        : await StorageService.getVideoPlaybackState(
             videoTitle: resumeId,
             contentIdentity: checkpoint.imdbId,
             includeFinished: true,
@@ -236,7 +229,7 @@ class TvPlaybackRecovery {
             season == null ||
             episode == null
         ? null
-        : await SeriesProgressStorage.getSeriesPlaybackState(
+        : await StorageService.getSeriesPlaybackState(
             seriesTitle: seriesTitle,
             imdbId: checkpoint.imdbId,
             season: season,
@@ -254,18 +247,17 @@ class TvPlaybackRecovery {
       final season = checkpoint.season;
       final episode = checkpoint.episode;
       if (seriesTitle != null && season != null && episode != null) {
-        final finished =
-            await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
-              seriesTitle: seriesTitle,
-              imdbId: checkpoint.imdbId,
-            );
+        final finished = await StorageService.getMergedFinishedEpisodes(
+          seriesTitle: seriesTitle,
+          imdbId: checkpoint.imdbId,
+        );
         // A watched marker and a rewatch bookmark are independent. A proven
         // return (or an already-admitted retry) can restore the position while
         // saveSeriesPlaybackState leaves the watched marker intact.
         if (!(finished[season.toString()]?.contains(episode) ?? false) ||
             sameProcessReturn ||
             retrying) {
-          final existing = await SeriesProgressStorage.getSeriesPlaybackState(
+          final existing = await StorageService.getSeriesPlaybackState(
             seriesTitle: seriesTitle,
             imdbId: checkpoint.imdbId,
             season: season,
@@ -276,7 +268,7 @@ class TvPlaybackRecovery {
             sameProcessReturn: sameProcessReturn,
             retrying: retrying,
           )) {
-            await SeriesProgressStorage.saveSeriesPlaybackState(
+            await StorageService.saveSeriesPlaybackState(
               seriesTitle: seriesTitle,
               season: season,
               episode: episode,
@@ -295,7 +287,7 @@ class TvPlaybackRecovery {
     } else if (checkpoint.contentType == 'collection' &&
         checkpoint.seriesTitle != null) {
       final episode = checkpoint.itemIndex + 1;
-      final existing = await SeriesProgressStorage.getSeriesPlaybackState(
+      final existing = await StorageService.getSeriesPlaybackState(
         seriesTitle: checkpoint.seriesTitle!,
         imdbId: checkpoint.imdbId,
         season: 0,
@@ -306,7 +298,7 @@ class TvPlaybackRecovery {
         sameProcessReturn: sameProcessReturn,
         retrying: retrying,
       )) {
-        await SeriesProgressStorage.saveSeriesPlaybackState(
+        await StorageService.saveSeriesPlaybackState(
           seriesTitle: checkpoint.seriesTitle!,
           season: 0,
           episode: episode,
@@ -330,7 +322,7 @@ class TvPlaybackRecovery {
       final movieFinished =
           checkpoint.contentType == 'single' &&
           checkpoint.imdbId != null &&
-          await MovieProgressStorage.isMovieFinished(checkpoint.imdbId!);
+          await StorageService.isMovieFinished(checkpoint.imdbId!);
       // Mirror the normal native-progress path: a proven return below the
       // configured local threshold is an active rewatch, not stale progress.
       // A cold retry may finish an already-admitted rewatch. Remove the watched
@@ -348,7 +340,7 @@ class TvPlaybackRecovery {
             sameProcessReturn: sameProcessReturn,
             retrying: retrying,
           )) {
-        await VideoProgressStorage.saveVideoPlaybackState(
+        await StorageService.saveVideoPlaybackState(
           videoTitle: resumeId,
           videoUrl: url,
           positionMs: position,
@@ -363,14 +355,14 @@ class TvPlaybackRecovery {
       }
 
       if (checkpoint.contentType == 'single') {
-        final resume = await VideoResumeStorage.getVideoResume(resumeId);
+        final resume = await StorageService.getVideoResume(resumeId);
         if ((!movieFinished || rewatch) &&
             checkpoint.shouldApply(
               resume,
               sameProcessReturn: sameProcessReturn,
               retrying: retrying,
             )) {
-          await VideoResumeStorage.upsertVideoResume(resumeId, {
+          await StorageService.upsertVideoResume(resumeId, {
             'positionMs': position,
             'durationMs': duration,
             'speed': checkpoint.speed,
@@ -381,7 +373,7 @@ class TvPlaybackRecovery {
         }
       }
       if (rewatch) {
-        await MovieProgressStorage.unmarkMovieAsFinished(checkpoint.imdbId!);
+        await StorageService.unmarkMovieAsFinished(checkpoint.imdbId!);
         changed = true;
       }
     }
@@ -396,13 +388,12 @@ class TvPlaybackRecovery {
       if (seriesTitle == null || season == null || episode == null) {
         return false;
       }
-      final finished =
-          await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
-            seriesTitle: seriesTitle,
-            imdbId: checkpoint.imdbId,
-          );
+      final finished = await StorageService.getMergedFinishedEpisodes(
+        seriesTitle: seriesTitle,
+        imdbId: checkpoint.imdbId,
+      );
       if (finished[season.toString()]?.contains(episode) ?? false) return false;
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: seriesTitle,
         season: season,
         episode: episode,
@@ -414,14 +405,14 @@ class TvPlaybackRecovery {
     if (checkpoint.contentType == 'collection') {
       final seriesTitle = checkpoint.seriesTitle;
       if (seriesTitle == null) return false;
-      if (await EpisodeProgressStorage.isEpisodeFinished(
+      if (await StorageService.isEpisodeFinished(
         seriesTitle: seriesTitle,
         season: 0,
         episode: checkpoint.itemIndex + 1,
       )) {
         return false;
       }
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: seriesTitle,
         season: 0,
         episode: checkpoint.itemIndex + 1,
@@ -441,9 +432,9 @@ class TvPlaybackRecovery {
     // intent. A failed DB delete must remain retryable against the old state.
     final resumeId = checkpoint.resumeId ?? checkpoint.title;
     if (resumeId != null && resumeId.isNotEmpty) {
-      await VideoResumeStorage.removeVideoResume(resumeId);
+      await StorageService.removeVideoResume(resumeId);
     }
-    await MovieProgressStorage.markMovieAsFinished(imdbId);
+    await StorageService.markMovieAsFinished(imdbId);
     return true;
   }
 

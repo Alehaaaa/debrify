@@ -8,6 +8,10 @@ import 'package:debrify/services/profiles/profile_lock_controller.dart';
 import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
+import 'package:debrify/theme/app_theme.dart';
+import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -76,12 +80,44 @@ void main() {
   Future<void> pumpHub(
     WidgetTester tester, {
     Size size = const Size(900, 1400),
+    AppTheme? appearance,
   }) async {
     await tester.binding.setSurfaceSize(size);
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const MaterialApp(home: ProfilesSettingsPage()));
+    final app = const MaterialApp(home: ProfilesSettingsPage());
+    await tester.pumpWidget(
+      appearance == null ? app : AppThemeScope(theme: appearance, child: app),
+    );
     await settle(tester);
   }
+
+  testWidgets('profile actions reopen with the active Settings appearance', (
+    tester,
+  ) async {
+    final classic = PremiumLooks.field.build();
+    await pumpHub(tester, appearance: classic);
+    await tester.tap(find.text('Maya'));
+    await settle(tester);
+    var dialogContext = tester.element(find.byType(SimpleDialog));
+    expect(
+      Theme.of(dialogContext).dialogTheme.backgroundColor,
+      classic.settings.panel2,
+    );
+    await tester.binding.handlePopRoute();
+    await settle(tester);
+
+    final frosted = PremiumLooks.glass.build();
+    await pumpHub(tester, appearance: frosted);
+    await tester.tap(find.text('Maya'));
+    await settle(tester);
+    dialogContext = tester.element(find.byType(SimpleDialog));
+    final theme = Theme.of(dialogContext).dialogTheme;
+    expect(theme.backgroundColor, GlassChrome.fill(frosted, raised: true));
+    expect(
+      (theme.shape! as RoundedRectangleBorder).side.color,
+      GlassChrome.edge(frosted),
+    );
+  });
 
   testWidgets('level one separates the active identity and other profiles', (
     tester,

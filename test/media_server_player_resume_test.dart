@@ -1,19 +1,13 @@
 import 'dart:io';
 
 import 'package:debrify/screens/video_player_screen.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
-import 'package:debrify/services/storage/video_progress_storage.dart';
-import 'package:debrify/services/storage/video_resume_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/video_player_launcher.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'support/lib_source.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:debrify/services/debrify_tv_database.dart';
 import 'package:debrify/services/iptv_media_store.dart';
-
-const _vp = 'lib/features/video_player/presentation/legacy_video_player';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -44,7 +38,7 @@ void main() {
   ]) {
     final isolated = id != null && !id.startsWith('tt');
     test('Flutter final resume fallback respects $id', () async {
-      await VideoResumeStorage.upsertVideoResume('same-stream', {
+      await StorageService.upsertVideoResume('same-stream', {
         'positionMs': 45000,
         'durationMs': 100000,
         'speed': 1.5,
@@ -71,7 +65,7 @@ void main() {
         url: 'https://server/episode',
         title: 'Same episode',
       );
-      await VideoProgressStorage.saveVideoPlaybackState(
+      await StorageService.saveVideoPlaybackState(
         videoTitle: VideoPlayerLauncher.resumeIdForEntry(entry),
         videoUrl: entry.url,
         positionMs: 45000,
@@ -91,7 +85,7 @@ void main() {
         await VideoPlayerLauncher.debugNativeResumePositions(args, [entry]),
         [isolated ? 0 : 45000],
       );
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Show',
         season: 1,
         episode: 1,
@@ -107,32 +101,17 @@ void main() {
   }
 
   test('Flutter load path uses the guarded final selection', () {
-    final source = libMember(
-      '$_vp/vp_resume_restore.dart',
-      'maybeRestoreResume',
-      owner: 'VpResumeRestore',
-    );
-    final start = source.indexOf('final state = locallyFinishedMovie');
-    expect(start, isNonNegative);
-    final end = source.indexOf('if (state != null)', start);
-    expect(end, greaterThan(start));
-    final selection = source.substring(start, end);
-    expect(selection, contains('_host.readLocalResume('));
-    expect(selection, contains('contentId: _host.effectiveContentImdbId'));
-    expect(selection, contains('enhanced: _host.getEnhancedPlaybackState'));
-    final facade = File(
+    final source = File(
       'lib/screens/video_player_screen.dart',
     ).readAsStringSync();
-    final from = facade.indexOf('class _VpResumeRestoreHostAdapter');
-    expect(from, isNonNegative);
-    final to = facade.indexOf('class ', from + 6);
-    expect(to, greaterThan(from));
-    final adapter = facade.substring(from, to);
-    expect(adapter, contains('=> VideoPlayerScreen.readLocalResume('));
-    expect(adapter, contains('contentId: contentId'));
-    expect(adapter, contains('resumeKey: resumeKey'));
-    expect(adapter, contains('enhanced: enhanced'));
-    expect(adapter, isNot(contains('enhanced()')));
-    expect(selection, isNot(contains('VideoResumeStorage.getVideoResume')));
+    final start = source.indexOf('final state = locallyFinishedMovie');
+    final selection = source.substring(
+      start,
+      source.indexOf('if (state != null)', start),
+    );
+    expect(selection, contains('VideoPlayerScreen.readLocalResume('));
+    expect(selection, contains('contentId: _effectiveContentImdbId'));
+    expect(selection, contains('enhanced: _getEnhancedPlaybackState'));
+    expect(selection, isNot(contains('StorageService.getVideoResume')));
   });
 }

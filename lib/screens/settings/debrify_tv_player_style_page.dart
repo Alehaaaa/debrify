@@ -1,7 +1,5 @@
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -83,7 +81,6 @@ class _DebrifyTvPlayerStylePageState extends State<DebrifyTvPlayerStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('debrify_tv_player_style_settings');
     _load();
   }
 
@@ -94,7 +91,7 @@ class _DebrifyTvPlayerStylePageState extends State<DebrifyTvPlayerStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await DebrifyTvStorage.getDebrifyTvPlayerStyle();
+    final style = await StorageService.getDebrifyTvPlayerStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -115,7 +112,7 @@ class _DebrifyTvPlayerStylePageState extends State<DebrifyTvPlayerStylePage> {
   Future<void> _select(String value) async {
     if (value == _style) return;
     setState(() => _style = value);
-    await DebrifyTvStorage.setDebrifyTvPlayerStyle(value);
+    await StorageService.setDebrifyTvPlayerStyle(value);
   }
 
   @override

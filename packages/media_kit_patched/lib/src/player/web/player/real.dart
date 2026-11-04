@@ -1,8 +1,8 @@
-/// This file is a part of media_kit (https://github.com/media-kit/media-kit).
-///
-/// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
-/// All rights reserved.
-/// Use of this source code is governed by MIT license that can be found in the LICENSE file.
+// This file is a part of media_kit (https://github.com/media-kit/media-kit).
+//
+// Copyright © 2021 & onwards, Hitesh Kumar Saini <saini123hitesh@gmail.com>.
+// All rights reserved.
+// Use of this source code is governed by MIT license that can be found in the LICENSE file.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
@@ -1309,7 +1309,7 @@ class WebPlayer extends PlatformPlayer {
           var array = JSArray();
           final blobParts = [track.id];
           for (var i = 0; i < blobParts.length; i++) {
-            array.add(blobParts[i].toJS);
+            array[i] = blobParts[i].toJS;
           }
           // Create object URL from subtitle data using modern web API.
           final blob = web.Blob(array as JSArray<web.BlobPart>);

@@ -17,10 +17,7 @@ import 'package:debrify/services/profiles/profile_registry.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/pikpak_api_service.dart';
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
-import 'package:debrify/services/storage/pikpak_storage.dart';
-import 'package:debrify/services/storage/torrent_provider_storage.dart';
-import 'package:debrify/services/storage/webdav_server_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/screens/settings/provider_settings_page.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -351,7 +348,7 @@ void main() {
           ],
         ),
       );
-      await PikpakStorage.setPikPakEnabled(true);
+      await StorageService.setPikPakEnabled(true);
 
       final presence = await ProfileCredentialFacade.isConfigured(
         'pikpak_email',
@@ -359,15 +356,15 @@ void main() {
 
       expect(presence.pending, isTrue);
       expect(presence.configured, isFalse);
-      expect(await PikpakStorage.hasPikPakCredential(), isFalse);
-      expect(await PikpakStorage.getPikPakEnabled(), isFalse);
+      expect(await StorageService.hasPikPakCredential(), isFalse);
+      expect(await StorageService.getPikPakEnabled(), isFalse);
     },
   );
 
   test('PikPak selection requires authentication and a ready secret', () async {
-    await PikpakStorage.setPikPakEmail('ready@example.test');
-    await PikpakStorage.setPikPakAccessToken('access-token');
-    await PikpakStorage.setPikPakRefreshToken('refresh-token');
+    await StorageService.setPikPakEmail('ready@example.test');
+    await StorageService.setPikPakAccessToken('access-token');
+    await StorageService.setPikPakRefreshToken('refresh-token');
     final authenticated = await PikPakApiService.instance.isAuthenticated();
     final readyPresence = await ProfileCredentialFacade.isConfigured(
       'pikpak_email',
@@ -393,11 +390,11 @@ void main() {
 
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
-    await PikpakStorage.setPikPakEmail('restored@example.test');
+    await StorageService.setPikPakEmail('restored@example.test');
     final restoredAuthentication = await PikPakApiService.instance
         .isAuthenticated();
 
-    expect(await PikpakStorage.getPikPakEmail(), 'restored@example.test');
+    expect(await StorageService.getPikPakEmail(), 'restored@example.test');
     expect(restoredAuthentication, isFalse);
     expect(
       pikPakProviderIsSelectable(
@@ -412,7 +409,7 @@ void main() {
   test(
     'confirmed IPTV collection removal revokes borrower grants atomically',
     () async {
-      await IptvPlaylistStorage.setIptvPlaylists(<IptvPlaylist>[
+      await StorageService.setIptvPlaylists(<IptvPlaylist>[
         IptvPlaylist(
           id: 'shared-iptv',
           name: 'Shared IPTV',
@@ -420,9 +417,7 @@ void main() {
           addedAt: DateTime.utc(2026, 8, 26),
         ),
       ]);
-      final stored = await IptvPlaylistStorage.getIptvPlaylists(
-        forSettings: true,
-      );
+      final stored = await StorageService.getIptvPlaylists(forSettings: true);
       final resourceId = stored.single.connectionResourceId!;
       final service = ConnectionResourceService(
         registry: registry,
@@ -436,7 +431,7 @@ void main() {
       );
 
       await expectLater(
-        IptvPlaylistStorage.setIptvPlaylistsAndReload(
+        StorageService.setIptvPlaylistsAndReload(
           const <IptvPlaylist>[],
           forSettings: true,
         ),
@@ -451,7 +446,7 @@ void main() {
       expect(await registry.getResource(resourceId), isNotNull);
       expect(await registry.getGrant(memberId, resourceId), isNotNull);
 
-      final remaining = await IptvPlaylistStorage.setIptvPlaylistsAndReload(
+      final remaining = await StorageService.setIptvPlaylistsAndReload(
         const <IptvPlaylist>[],
         forSettings: true,
         revokeBorrowers: true,
@@ -768,10 +763,8 @@ void main() {
       url: 'https://iptv.invalid/existing.m3u',
       addedAt: DateTime.utc(2026, 8, 1),
     );
-    await IptvPlaylistStorage.setIptvPlaylists(<IptvPlaylist>[existing]);
-    final migrated = await IptvPlaylistStorage.getIptvPlaylists(
-      forSettings: false,
-    );
+    await StorageService.setIptvPlaylists(<IptvPlaylist>[existing]);
+    final migrated = await StorageService.getIptvPlaylists(forSettings: false);
     expect(migrated.single.connectionResourceId, isNotNull);
     final existingResourceId = migrated.single.connectionResourceId;
     final existingResourceRevision = migrated.single.connectionResourceRevision;
@@ -784,7 +777,7 @@ void main() {
       url: 'https://iptv.invalid/new.m3u',
       addedAt: DateTime.utc(2026, 8, 14),
     );
-    final canonical = await IptvPlaylistStorage.setIptvPlaylistsAndReload(
+    final canonical = await StorageService.setIptvPlaylistsAndReload(
       <IptvPlaylist>[addition, ...migrated],
       forSettings: false,
     );
@@ -813,7 +806,7 @@ void main() {
   });
 
   test('WebDAV save selects and returns its canonical connection', () async {
-    final saved = await WebdavServerStorage.upsertWebDavServer(
+    final saved = await StorageService.upsertWebDavServer(
       const WebDavConfig(
         id: 'editor-temporary-id',
         name: 'Media DAV',
@@ -825,7 +818,7 @@ void main() {
 
     expect(saved.id, saved.connectionResourceId);
     expect(saved.connectionResourceRevision, isNotNull);
-    expect(await WebdavServerStorage.getSelectedWebDavServerId(), saved.id);
+    expect(await StorageService.getSelectedWebDavServerId(), saved.id);
     await ProfileCollectionResourceFacade.authorizeExecution(
       resourceId: saved.connectionResourceId,
       resourceRevision: saved.connectionResourceRevision,
@@ -835,7 +828,7 @@ void main() {
       feature: ProfileFeature.cloud,
     );
 
-    final edited = await WebdavServerStorage.upsertWebDavServer(
+    final edited = await StorageService.upsertWebDavServer(
       WebDavConfig(
         id: saved.id,
         name: 'Media DAV edited',
@@ -850,15 +843,15 @@ void main() {
       greaterThan(saved.connectionResourceRevision!),
     );
 
-    await WebdavServerStorage.deleteWebDavServer(edited.id);
-    expect(await WebdavServerStorage.getWebDavServers(), isEmpty);
-    expect(await WebdavServerStorage.getSelectedWebDavServerId(), isNull);
+    await StorageService.deleteWebDavServer(edited.id);
+    expect(await StorageService.getWebDavServers(), isEmpty);
+    expect(await StorageService.getSelectedWebDavServerId(), isNull);
   });
 
   test(
     'WebDAV migration reads use backupRestore independently of cloud',
     () async {
-      final saved = await WebdavServerStorage.upsertWebDavServer(
+      final saved = await StorageService.upsertWebDavServer(
         const WebDavConfig(
           id: 'migration-dav',
           name: 'Migration DAV',
@@ -890,24 +883,24 @@ void main() {
       );
 
       await expectLater(
-        WebdavServerStorage.getWebDavServers(forSettings: false),
+        StorageService.getWebDavServers(forSettings: false),
         throwsA(isA<ResourceAuthorizationException>()),
       );
-      final migrationServers = await WebdavServerStorage.getWebDavServers(
+      final migrationServers = await StorageService.getWebDavServers(
         forSettings: false,
         feature: ProfileFeature.backupRestore,
       );
       expect(migrationServers, hasLength(1));
       expect(migrationServers.single.password, 'migration-password');
       expect(
-        (await WebdavServerStorage.getSelectedWebDavServer(
+        (await StorageService.getSelectedWebDavServer(
           forSettings: false,
           feature: ProfileFeature.backupRestore,
         ))?.connectionResourceId,
         saved.connectionResourceId,
       );
 
-      final createdForMigration = await WebdavServerStorage.upsertWebDavServer(
+      final createdForMigration = await StorageService.upsertWebDavServer(
         const WebDavConfig(
           id: 'new-migration-dav',
           name: 'New migration destination',
@@ -920,19 +913,19 @@ void main() {
       expect(createdForMigration.connectionResourceId, isNotNull);
       expect(createdForMigration.password, 'new-password');
       expect(
-        await WebdavServerStorage.getWebDavServers(
+        await StorageService.getWebDavServers(
           forSettings: false,
           feature: ProfileFeature.backupRestore,
         ),
         hasLength(2),
       );
 
-      await WebdavServerStorage.deleteWebDavServer(
+      await StorageService.deleteWebDavServer(
         createdForMigration.id,
         feature: ProfileFeature.backupRestore,
       );
       expect(
-        await WebdavServerStorage.getWebDavServers(
+        await StorageService.getWebDavServers(
           forSettings: false,
           feature: ProfileFeature.backupRestore,
         ),
@@ -944,7 +937,7 @@ void main() {
   test(
     'a shared WebDAV connection does not block unrelated mutations',
     () async {
-      final shared = await WebdavServerStorage.upsertWebDavServer(
+      final shared = await StorageService.upsertWebDavServer(
         const WebDavConfig(
           id: 'shared-editor-id',
           name: 'Shared DAV',
@@ -960,7 +953,7 @@ void main() {
         permissions: const <ResourcePermission>{ResourcePermission.use},
       );
 
-      final unrelated = await WebdavServerStorage.upsertWebDavServer(
+      final unrelated = await StorageService.upsertWebDavServer(
         const WebDavConfig(
           id: 'unrelated-editor-id',
           name: 'Private DAV',
@@ -969,10 +962,10 @@ void main() {
           password: 'private-password',
         ),
       );
-      expect(await WebdavServerStorage.getWebDavServers(), hasLength(2));
+      expect(await StorageService.getWebDavServers(), hasLength(2));
 
-      await WebdavServerStorage.deleteWebDavServer(unrelated.id);
-      final remaining = await WebdavServerStorage.getWebDavServers();
+      await StorageService.deleteWebDavServer(unrelated.id);
+      final remaining = await StorageService.getWebDavServers();
       expect(remaining, hasLength(1));
       expect(
         remaining.single.connectionResourceId,
@@ -984,10 +977,10 @@ void main() {
       );
 
       await expectLater(
-        WebdavServerStorage.deleteWebDavServer(shared.id),
+        StorageService.deleteWebDavServer(shared.id),
         throwsA(isA<StateError>()),
       );
-      expect(await WebdavServerStorage.getWebDavServers(), hasLength(1));
+      expect(await StorageService.getWebDavServers(), hasLength(1));
     },
   );
 
@@ -1053,14 +1046,14 @@ void main() {
       baseUrl: 'https://prowlarr.invalid',
       apiKey: 'sentinel-key',
     );
-    final created = (await TorrentProviderStorage.setIndexerManagerConfigs(
+    final created = (await StorageService.setIndexerManagerConfigs(
       const <IndexerManagerConfig>[input],
     )).single;
     expect(created.id, created.connectionResourceId);
     expect(created.connectionResourceRevision, isNotNull);
 
     final updated = created.copyWith(maxResults: 100);
-    final canonical = (await TorrentProviderStorage.setIndexerManagerConfigs(
+    final canonical = (await StorageService.setIndexerManagerConfigs(
       <IndexerManagerConfig>[updated],
     )).single;
     expect(canonical.connectionResourceId, created.connectionResourceId);
@@ -1099,9 +1092,7 @@ void main() {
       },
     );
 
-    final playlists = await IptvPlaylistStorage.getIptvPlaylists(
-      forSettings: false,
-    );
+    final playlists = await StorageService.getIptvPlaylists(forSettings: false);
     final panel = playlists.singleWhere((p) => p.name == 'Panel');
     expect(panel.url, '');
     expect(panel.serverUrl, 'https://panel.invalid:8080');
@@ -1124,9 +1115,7 @@ void main() {
       },
     );
 
-    final playlists = await IptvPlaylistStorage.getIptvPlaylists(
-      forSettings: false,
-    );
+    final playlists = await StorageService.getIptvPlaylists(forSettings: false);
     final imported = playlists.singleWhere((p) => p.name == 'From file');
     expect(imported.url, '');
     expect(imported.isLocalFile, isTrue);
@@ -1147,7 +1136,7 @@ void main() {
     );
 
     await expectLater(
-      IptvPlaylistStorage.getIptvPlaylists(forSettings: false),
+      StorageService.getIptvPlaylists(forSettings: false),
       throwsA(isA<TypeError>()),
     );
   });

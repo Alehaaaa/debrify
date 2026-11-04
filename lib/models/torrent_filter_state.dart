@@ -16,6 +16,11 @@ enum QualityTier { ultraHd, fullHd, hd, sd }
 /// name-based limitation the language facet already carries.
 enum DynamicRange { sdr, hdr }
 
+/// A release's video codec, as read off its name (x265/HEVC, x264/AVC, AV1).
+/// A name that names no codec matches no codec facet, like an untagged
+/// language does.
+enum VideoCodec { av1, hevc, avc }
+
 enum RipSourceCategory { web, bluRay, hdrip, dvdrip, cam, other }
 
 enum AudioLanguage {
@@ -80,6 +85,7 @@ class TorrentFilterState {
   final Set<AudioLanguage> languages;
   final Set<SizeBucket> sizes;
   final Set<DynamicRange> dynamicRanges;
+  final Set<VideoCodec> codecs;
 
   TorrentFilterState({
     Set<QualityTier> qualities = const <QualityTier>{},
@@ -87,25 +93,29 @@ class TorrentFilterState {
     Set<AudioLanguage> languages = const <AudioLanguage>{},
     Set<SizeBucket> sizes = const <SizeBucket>{},
     Set<DynamicRange> dynamicRanges = const <DynamicRange>{},
+    Set<VideoCodec> codecs = const <VideoCodec>{},
   })  : qualities = _freeze(qualities),
         ripSources = _freeze(ripSources),
         languages = _freeze(languages),
         sizes = _freeze(sizes),
-        dynamicRanges = _freeze(dynamicRanges);
+        dynamicRanges = _freeze(dynamicRanges),
+        codecs = _freeze(codecs);
 
   const TorrentFilterState.empty()
       : qualities = const <QualityTier>{},
         ripSources = const <RipSourceCategory>{},
         languages = const <AudioLanguage>{},
         sizes = const <SizeBucket>{},
-        dynamicRanges = const <DynamicRange>{};
+        dynamicRanges = const <DynamicRange>{},
+        codecs = const <VideoCodec>{};
 
   bool get isEmpty =>
       qualities.isEmpty &&
       ripSources.isEmpty &&
       languages.isEmpty &&
       sizes.isEmpty &&
-      dynamicRanges.isEmpty;
+      dynamicRanges.isEmpty &&
+      codecs.isEmpty;
 
   TorrentFilterState copyWith({
     Set<QualityTier>? qualities,
@@ -113,6 +123,7 @@ class TorrentFilterState {
     Set<AudioLanguage>? languages,
     Set<SizeBucket>? sizes,
     Set<DynamicRange>? dynamicRanges,
+    Set<VideoCodec>? codecs,
   }) {
     return TorrentFilterState(
       qualities: qualities ?? this.qualities,
@@ -120,6 +131,7 @@ class TorrentFilterState {
       languages: languages ?? this.languages,
       sizes: sizes ?? this.sizes,
       dynamicRanges: dynamicRanges ?? this.dynamicRanges,
+      codecs: codecs ?? this.codecs,
     );
   }
 
@@ -131,7 +143,8 @@ class TorrentFilterState {
         setEquals(other.ripSources, ripSources) &&
         setEquals(other.languages, languages) &&
         setEquals(other.sizes, sizes) &&
-        setEquals(other.dynamicRanges, dynamicRanges);
+        setEquals(other.dynamicRanges, dynamicRanges) &&
+        setEquals(other.codecs, codecs);
   }
 
   @override
@@ -143,6 +156,7 @@ class TorrentFilterState {
     Object.hashAll(
       dynamicRanges.toList()..sort((a, b) => a.index - b.index),
     ),
+    Object.hashAll(codecs.toList()..sort((a, b) => a.index - b.index)),
   );
 }
 

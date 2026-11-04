@@ -12,6 +12,7 @@ import 'detail_identity.dart';
 import 'detail_model.dart';
 import 'detail_style.dart';
 import 'theme/detail_theme.dart';
+import '../hold_feedback.dart';
 
 /// **Dossier** — a fixed identity card on the left that never scrolls, and the
 /// whole right side given to the episode list.
@@ -194,9 +195,9 @@ class _DetailDossierState extends State<DetailDossier> {
                         fit: BoxFit.cover,
                         cacheManager: DebrifyImageCache.manager,
                         memCacheWidth: 240,
-                        placeholder: (_, __) =>
+                        placeholder: (_, _) =>
                             ColoredBox(color: _t.placeholder),
-                        errorWidget: (_, __, ___) =>
+                        errorWidget: (_, _, _) =>
                             ColoredBox(color: _t.placeholder),
                       ),
                     ),
@@ -264,8 +265,8 @@ class _DetailDossierState extends State<DetailDossier> {
                 child: ListView.separated(
                   controller: _identityCastScroll,
                   scrollDirection: Axis.horizontal,
-                  itemCount: cast.length.clamp(0, 8),
-                  separatorBuilder: (_, __) => const SizedBox(width: 11),
+                  itemCount: cast.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 11),
                   itemBuilder: (context, i) => _CastChip(member: cast[i]),
                 ),
               ),
@@ -323,7 +324,9 @@ class _DetailDossierState extends State<DetailDossier> {
             child: Row(
               children: [
                 DetailSeasonControl(
-                  onOptions: view.seasonOptions == null ? null : () => view.seasonOptions!(view.selectedSeasonNumber),
+                  onOptions: view.seasonOptions == null
+                      ? null
+                      : () => view.seasonOptions!(view.selectedSeasonNumber),
                   seasonNumber: view.selectedSeasonNumber,
                   episodeCount: episodes.length,
                   canPrev: idx > 0,
@@ -351,7 +354,7 @@ class _DetailDossierState extends State<DetailDossier> {
             controller: _listScroll,
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 20),
             itemCount: episodes.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
+            separatorBuilder: (_, _) => const SizedBox(height: 6),
             itemBuilder: (context, i) {
               final e = episodes[i];
               return DetailEdgeTrap(
@@ -411,8 +414,8 @@ class _DetailDossierState extends State<DetailDossier> {
               child: ListView.separated(
                 controller: _referenceCastScroll,
                 scrollDirection: Axis.horizontal,
-                itemCount: cast.length.clamp(0, 12),
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemCount: cast.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, i) => _CastChip(member: cast[i]),
               ),
             ),
@@ -457,10 +460,16 @@ class _DetailDossierState extends State<DetailDossier> {
                 controller: _referenceRecScroll,
                 scrollDirection: Axis.horizontal,
                 itemCount: recs.length.clamp(0, 12),
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, i) => _RecPoster(
-                  rec: recs[i],
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
+                itemBuilder: (context, i) => HoldableTile(
                   onTap: () => m.onRecommendationTap!(recs[i]),
+                  onHold: m.onRecommendationOptions == null
+                      ? null
+                      : () => m.onRecommendationOptions!(recs[i]),
+                  child: _RecPoster(
+                    rec: recs[i],
+                    onTap: () => m.onRecommendationTap!(recs[i]),
+                  ),
                 ),
               ),
             ),
@@ -604,8 +613,8 @@ class _CastChip extends StatelessWidget {
                       fit: BoxFit.cover,
                       cacheManager: DebrifyImageCache.manager,
                       memCacheWidth: 150,
-                      placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                      errorWidget: (_, __, ___) =>
+                      placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                      errorWidget: (_, _, _) =>
                           ColoredBox(color: t.placeholder),
                     )
                   : ColoredBox(color: t.placeholder),
@@ -659,8 +668,8 @@ class _RecPosterState extends State<_RecPoster> {
                     fit: BoxFit.cover,
                     cacheManager: DebrifyImageCache.manager,
                     memCacheWidth: 300,
-                    placeholder: (_, __) => ColoredBox(color: t.placeholder),
-                    errorWidget: (_, __, ___) =>
+                    placeholder: (_, _) => ColoredBox(color: t.placeholder),
+                    errorWidget: (_, _, _) =>
                         ColoredBox(color: t.placeholder),
                   )
                 : ColoredBox(color: t.placeholder),

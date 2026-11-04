@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:debrify/features/sources/presentation/legacy_playback/source_binding_actions.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/source_player_launch.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/models/torrent.dart';
 import 'package:debrify/services/series_source_service.dart';
@@ -169,7 +167,7 @@ void main() {
       streamKey: 'profile',
     );
     await SeriesSourceService.setSources(imdbId, [canonical]);
-    final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+    final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
       'rd',
       const PlaybackMeta(
         imdbId: imdbId,
@@ -203,7 +201,7 @@ void main() {
       boundAt: 1,
     );
     await SeriesSourceService.setSources(imdbId, [canonical]);
-    final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+    final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
       'rd',
       const PlaybackMeta(
         imdbId: imdbId,
@@ -232,7 +230,7 @@ void main() {
   test('same catalog id from different origins keeps separate pins', () async {
     const id = 'tt1000093';
     for (final origin in ['origin-A', 'origin-B']) {
-      final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+      final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
         'rd',
         PlaybackMeta(
           imdbId: id,
@@ -352,7 +350,7 @@ void main() {
       index: 5,
     );
 
-    final pinned = await SourceBindingActions.bindDirectSource(
+    final pinned = await TorrentPlaybackService.bindDirectSource(
       context,
       torrent,
       imdbId: 'tt7654321',
@@ -392,7 +390,7 @@ void main() {
         key: 'movie-switched',
         index: 2,
       );
-      final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+      final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
         'rd',
         const PlaybackMeta(imdbId: imdbId, contentType: 'movie'),
       );
@@ -448,7 +446,7 @@ void main() {
         key: 'series-switched',
         index: 3,
       );
-      final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+      final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
         'rd',
         const PlaybackMeta(
           imdbId: imdbId,
@@ -479,7 +477,7 @@ void main() {
       key: '',
       index: 0,
     );
-    final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+    final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
       'rd',
       const PlaybackMeta(imdbId: imdbId, contentType: 'movie'),
     );

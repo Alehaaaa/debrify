@@ -5,7 +5,7 @@ import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/reels_feed.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'reels_fixture.dart' show FakeTmdb;
+import 'reels_test.dart' show FakeTmdb;
 
 void main() {
   setUp(ReelsFeed.resetSession);

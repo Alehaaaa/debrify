@@ -2189,7 +2189,7 @@ class IptvMediaStore {
       if (row['content_type'] != null)
         'contentType': row['content_type'] as String,
       if (row['duration'] != null) 'duration': (row['duration'] as num).toInt(),
-      if (headers != null) 'httpHeaders': headers,
+      'httpHeaders': ?headers,
       'addedAt': (row['added_at'] as num?)?.toInt() ?? 0,
     };
   }
@@ -2206,7 +2206,7 @@ class IptvMediaStore {
       'logoUrl': row['logo_url'] ?? '',
       'group': row['channel_group'] ?? '',
       'playlistId': row['playlist_id'] ?? '',
-      if (headers != null) 'httpHeaders': headers,
+      'httpHeaders': ?headers,
       if (seriesId is String && seriesId.isNotEmpty) 'seriesId': seriesId,
       if (seriesName is String && seriesName.isNotEmpty)
         'seriesName': seriesName,

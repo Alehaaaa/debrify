@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
-import 'package:debrify/services/storage/ambient_trailer_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -11,14 +11,15 @@ import '../models/profiles/user_profile.dart';
 import '../utils/platform_util.dart';
 import '../utils/tvos_device.dart';
 import 'main_page_bridge.dart';
+import 'storage_service.dart';
 import 'stremio_service.dart';
 import 'youtube_service.dart';
+import 'relay_clip_file.dart';
 import 'profiles/profile_bootstrap.dart';
 import 'profiles/profile_lock_controller.dart';
 import 'profiles/profile_runtime.dart';
 import 'profiles/profile_preferences.dart';
 import '../models/profiles/profile_policy.dart';
-import 'package:debrify/models/ambient_trailer_surface.dart';
 
 /// Publishes the Apple TV Home Screen's Top Shelf reel.
 ///
@@ -218,8 +219,8 @@ class TvosTopShelfService {
     bool includeAudio;
     try {
       final preferences = await Future.wait<Object>([
-        AmbientTrailerStorage.getHomeHeroTrailerEnabled(),
-        AmbientTrailerStorage.getAmbientTrailerAudioEnabled(
+        StorageService.getHomeHeroTrailerEnabled(),
+        StorageService.getAmbientTrailerAudioEnabled(
           AmbientTrailerSurface.homeHero,
         ),
       ]);
@@ -257,6 +258,7 @@ class TvosTopShelfService {
       if (imdbId == null || meta == null) continue;
       attempted++;
 
+      File? relayClip;
       try {
         var youtubeId = _validYoutubeId(meta.trailerYtId);
         if (youtubeId == null) {
@@ -269,13 +271,41 @@ class TvosTopShelfService {
         }
         if (youtubeId == null) continue;
 
-        final streams = await YoutubeService.resolveStreams(
+        var streams = await YoutubeService.resolvePreviewStreams(
           youtubeId,
           maxHeightOverride: _previewHeight,
         );
         if (generation != _publishGeneration) return;
-        final videoUrl = streams?.playUrl;
+        var videoUrl = streams?.playUrl;
         if (videoUrl == null || videoUrl.isEmpty) continue;
+        if (streams!.isRelay) {
+          // AVFoundation exports the preview and can't open a relay tunnel
+          // over HTTP (no byte ranges), so hand it a local copy of the part
+          // the preview uses.
+          final clip = File(
+            '${Directory.systemTemp.path}/topshelf-relay-$youtubeId-'
+            '${DateTime.now().microsecondsSinceEpoch}.mp4',
+          );
+          relayClip = clip;
+          final saved = await RelayClipFile.download(
+            Uri.parse(videoUrl),
+            clip,
+            maxDuration: const Duration(seconds: _previewDurationSeconds + 2),
+          );
+          if (generation != _publishGeneration) return;
+          if (saved) {
+            videoUrl = clip.uri.toString();
+          } else {
+            YoutubeService.markRelayFailed(youtubeId);
+            streams = await YoutubeService.resolvePreviewStreams(
+              youtubeId,
+              maxHeightOverride: _previewHeight,
+            );
+            if (generation != _publishGeneration) return;
+            videoUrl = streams?.playUrl;
+            if (videoUrl == null || videoUrl.isEmpty) continue;
+          }
+        }
 
         final arguments = <String, dynamic>{
           'cacheKey':
@@ -283,7 +313,7 @@ class TvosTopShelfService {
               '${_previewHeight}p-${_previewDurationSeconds}s-'
               '${includeAudio ? 'audio' : 'silent'}',
           'videoURL': videoUrl,
-          if (streams?.audioUrl case final audioUrl?) 'audioURL': audioUrl,
+          'audioURL': ?streams?.audioUrl,
           'includeAudio': includeAudio,
           'maxDurationSeconds': _previewDurationSeconds,
         };
@@ -301,6 +331,13 @@ class TvosTopShelfService {
         // One unavailable/restricted trailer must not prevent later titles in
         // the reel from receiving previews.
         debugPrint('Top Shelf: preview unavailable');
+      } finally {
+        // The exported preview lives in the app group; the source copy is
+        // no longer needed once the native exporter returns.
+        final clip = relayClip;
+        if (clip != null) {
+          unawaited(clip.delete().then<void>((_) {}, onError: (Object _) {}));
+        }
       }
     }
   }
@@ -377,18 +414,16 @@ class TvosTopShelfService {
         'type': _normalizedType(meta.type),
         'title': meta.name.trim(),
         'imageURL': image,
-        if (poster != null) 'posterURL': poster,
-        if (_firstNonEmpty(meta.description) case final description?)
-          'summary': description,
-        if (_firstNonEmpty(meta.year) case final year?) 'year': year,
+        'posterURL': ?poster,
+        'summary': ?_firstNonEmpty(meta.description),
+        'year': ?_firstNonEmpty(meta.year),
         if (meta.imdbRating case final rating?
             when rating.isFinite && rating > 0)
           'rating': rating,
         if (meta.genres?.where((genre) => genre.trim().isNotEmpty).toList()
             case final genres? when genres.isNotEmpty)
           'genres': genres.take(3).toList(),
-        if (_runtimeMinutes(meta.runtime) case final minutes?)
-          'runtimeMinutes': minutes,
+        'runtimeMinutes': ?_runtimeMinutes(meta.runtime),
       });
       if (items.length == 8) break;
     }

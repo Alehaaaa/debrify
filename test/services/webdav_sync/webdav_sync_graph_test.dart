@@ -281,6 +281,29 @@ void main() {
   });
 
   test(
+    'portable preference export includes Spotlight animation settings',
+    () async {
+      final scope = ProfileScope(
+        profileId: 'local-profile',
+        dataGeneration: 1,
+        sessionEpoch: 1,
+      );
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        scope.preferenceKey('home_animations_enabled'): true,
+        scope.preferenceKey('home_animation_style'): 'moonlit_ocean',
+      });
+
+      final exported = await ProfilePackageService.exportPortablePreferences(
+        scope,
+        includeCredentialEngineSettings: false,
+      );
+
+      expect(exported['home_animations_enabled'], isTrue);
+      expect(exported['home_animation_style'], 'moonlit_ocean');
+    },
+  );
+
+  test(
     'bootstrap database digest ignores preferences but detects DB bytes',
     () async {
       final preferencesA = await PortableProfilePackage.buildSection(

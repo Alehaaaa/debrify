@@ -1,5 +1,5 @@
 import 'package:debrify/models/torrent.dart';
-import 'package:debrify/services/storage/torrent_search_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:debrify/screens/video_player/widgets/source_sheet.dart';
 import 'package:debrify/services/series_source_fetcher.dart';
@@ -310,7 +310,7 @@ void main() {
           description: 'Movie name\n💾 12 GB\nEnglish',
         ));
         await tester.runAsync(
-          () => TorrentSearchStorage.setUseAddonTextFormatting(true),
+          () => StorageService.setUseAddonTextFormatting(true),
         );
         try {
           await tester.pumpWidget(
@@ -339,7 +339,7 @@ void main() {
           expect(tester.takeException(), isNull);
         } finally {
           await tester.runAsync(
-            () => TorrentSearchStorage.setUseAddonTextFormatting(false),
+            () => StorageService.setUseAddonTextFormatting(false),
           );
         }
       },
@@ -445,7 +445,7 @@ void main() {
       listEngines: () async => const [
         SourceEngineRef('engine_a', 'Engine A', 'engine_a'),
       ],
-      fetchEngine: (engineId, _, __) async {
+      fetchEngine: (engineId, _, _) async {
         fetchedEngine = engineId;
         return [_source(name: 'Engine result', source: 'engine_a')];
       },
@@ -476,7 +476,7 @@ void main() {
       listEngines: () async => const [
         SourceEngineRef('engine_a', 'Engine A', 'engine_a'),
       ],
-      fetchEngine: (engineId, _, __) async {
+      fetchEngine: (engineId, _, _) async {
         attempts++;
         if (attempts == 1) return null;
         return [_source(name: 'Retried result', source: engineId)];
@@ -509,8 +509,8 @@ void main() {
       listEngines: () async => const [
         SourceEngineRef('engine_a', 'Engine A', 'engine_a'),
       ],
-      fetchAddonEpisodes: (_, __, ___) async => const [],
-      fetchEngine: (_, __, ___) async => const [],
+      fetchAddonEpisodes: (_, _, _) async => const [],
+      fetchEngine: (_, _, _) async => const [],
     );
 
     await tester.pumpWidget(_Host(initial: const [], fetcher: fetcher));
@@ -527,8 +527,8 @@ void main() {
       searchMovie: () async => const [],
       listAddons: () async => const [SourceAddonRef('comet', 'Comet')],
       listEngines: () async => throw Exception('engine listing failed'),
-      fetchAddonEpisodes: (_, __, ___) async => const [],
-      fetchEngine: (_, __, ___) async => const [],
+      fetchAddonEpisodes: (_, _, _) async => const [],
+      fetchEngine: (_, _, _) async => const [],
     );
 
     await tester.pumpWidget(_Host(initial: const [], fetcher: fetcher));

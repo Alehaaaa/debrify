@@ -6,8 +6,7 @@ import 'package:flutter/material.dart';
 class DebridLoadingOverlay {
   DebridLoadingOverlay._();
 
-  /// Show the loading overlay and return ownership of its exact route.
-  /// Existing callers may ignore the handle and retain their dismissal pairing.
+  /// Show the loading overlay.
   ///
   /// When [suppressVisual] is true the route is still pushed and dismissed
   /// exactly as normal (so every existing dismiss/pop call site keeps
@@ -15,7 +14,7 @@ class DebridLoadingOverlay {
   /// Used during movie Quick Play, where the caller already shows its own
   /// continuous loading mask underneath and a second visible overlay would
   /// be jarring.
-  static DebridLoadingHandle show(
+  static void show(
     BuildContext context, {
     required String provider,
     required String torrentName,
@@ -23,8 +22,8 @@ class DebridLoadingOverlay {
     IconData icon = Icons.cloud_download_rounded,
     bool suppressVisual = false,
   }) {
-    final navigator = Navigator.of(context, rootNavigator: true);
-    final route = RawDialogRoute<void>(
+    showGeneralDialog(
+      context: context,
       barrierDismissible: false,
       barrierColor: suppressVisual
           ? Colors.transparent
@@ -32,7 +31,7 @@ class DebridLoadingOverlay {
       transitionDuration: suppressVisual
           ? Duration.zero
           : const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => suppressVisual
+      pageBuilder: (_, _, _) => suppressVisual
           // Invisible, but Back must NOT pop this route: the caller's
           // explicit Navigator.pop() pairing depends on it still being on
           // top. Back is a safe no-op during the short resolve window.
@@ -49,11 +48,12 @@ class DebridLoadingOverlay {
           parent: animation,
           curve: Curves.easeOutCubic,
         );
-        return FadeTransition(opacity: curved, child: child);
+        return FadeTransition(
+          opacity: curved,
+          child: child,
+        );
       },
     );
-    navigator.push(route);
-    return DebridLoadingHandle._(navigator, route);
   }
 
   /// Dismiss the overlay.
@@ -81,7 +81,7 @@ class DebridLoadingOverlay {
       barrierDismissible: false,
       barrierColor: Colors.black.withValues(alpha: 0.7),
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => _PikPakLoadingContent(
+      pageBuilder: (_, _, _) => _PikPakLoadingContent(
         torrentName: torrentName,
         progress: progress,
         showTimeoutOptions: showTimeoutOptions,
@@ -103,12 +103,12 @@ class DebridLoadingOverlay {
   }
 
   /// Provider-specific helpers
-  static DebridLoadingHandle showRealDebrid(
+  static void showRealDebrid(
     BuildContext context,
     String torrentName, {
     bool suppressVisual = false,
   }) {
-    return show(
+    show(
       context,
       provider: 'Real-Debrid',
       torrentName: torrentName,
@@ -118,12 +118,12 @@ class DebridLoadingOverlay {
     );
   }
 
-  static DebridLoadingHandle showTorbox(
+  static void showTorbox(
     BuildContext context,
     String torrentName, {
     bool suppressVisual = false,
   }) {
-    return show(
+    show(
       context,
       provider: 'Torbox',
       torrentName: torrentName,
@@ -133,12 +133,12 @@ class DebridLoadingOverlay {
     );
   }
 
-  static DebridLoadingHandle showPremiumize(
+  static void showPremiumize(
     BuildContext context,
     String torrentName, {
     bool suppressVisual = false,
   }) {
-    return show(
+    show(
       context,
       provider: 'Premiumize',
       torrentName: torrentName,
@@ -148,12 +148,12 @@ class DebridLoadingOverlay {
     );
   }
 
-  static DebridLoadingHandle showAllDebrid(
+  static void showAllDebrid(
     BuildContext context,
     String torrentName, {
     bool suppressVisual = false,
   }) {
-    return show(
+    show(
       context,
       provider: 'AllDebrid',
       torrentName: torrentName,
@@ -161,27 +161,6 @@ class DebridLoadingOverlay {
       icon: Icons.all_inclusive_rounded,
       suppressVisual: suppressVisual,
     );
-  }
-}
-
-/// Owns one loader route, even if the launching view or top route changes.
-class DebridLoadingHandle {
-  final NavigatorState _navigator;
-  final RawDialogRoute<void> _route;
-  bool _dismissed = false;
-
-  DebridLoadingHandle._(this._navigator, this._route);
-
-  void dismiss() {
-    if (_dismissed) return;
-    _dismissed = true;
-    if (!_navigator.mounted) return;
-    if (_route.isCurrent) {
-      // Keep the existing exit animation when the loader is still topmost.
-      _navigator.pop();
-    } else if (_route.isActive) {
-      _navigator.removeRoute(_route);
-    }
   }
 }
 

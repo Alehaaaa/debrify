@@ -1,7 +1,6 @@
-import 'package:debrify/services/storage/torbox_storage.dart';
 import 'package:flutter/material.dart';
+import '../../services/storage_service.dart';
 import '../../services/torbox_account_service.dart';
-import '../../services/analytics_service.dart';
 import '../../widgets/torbox_account_status_widget.dart';
 import '../../services/main_page_bridge.dart';
 import '../../utils/platform_util.dart';
@@ -35,17 +34,16 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('torbox_settings');
     _load();
   }
 
   Future<void> _load() async {
-    final configured = await TorboxStorage.hasTorboxCredential();
-    final cachePref = await TorboxStorage.getTorboxCacheCheckEnabled();
+    final configured = await StorageService.hasTorboxCredential();
+    final cachePref = await StorageService.getTorboxCacheCheckEnabled();
     final integrationEnabled =
-        await TorboxStorage.getTorboxIntegrationEnabled();
-    final hiddenFromNav = await TorboxStorage.getTorboxHiddenFromNav();
-    final postAction = await TorboxStorage.getTorboxPostTorrentAction();
+        await StorageService.getTorboxIntegrationEnabled();
+    final hiddenFromNav = await StorageService.getTorboxHiddenFromNav();
+    final postAction = await StorageService.getTorboxPostTorrentAction();
     setState(() {
       _savedApiKey = configured ? '' : null;
       _checkCacheBeforeSearch = cachePref;
@@ -136,7 +134,13 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
       // focus back on it. Not the TextField — that pops the soft keyboard.
       _refocusOnTv(_saveButtonFocusNode);
       debugPrint('TorboxSettingsPage: Validation failed for provided key.');
-      _snack('Invalid API key. Please check and try again.', err: true);
+      // Timeouts/5xx during today's TorBox outage must not be presented as a
+      // definite invalid API key or prompt users to replace working secrets.
+      _snack(
+        TorboxAccountService.lastValidationError ??
+            'Could not verify Torbox right now. Please try again.',
+        err: true,
+      );
       return;
     }
 
@@ -151,13 +155,12 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
       await _updateCacheCheck(true);
     }
     if (hideNavOnSave && !_hiddenFromNav) {
-      await TorboxStorage.setTorboxHiddenFromNav(true);
+      await StorageService.setTorboxHiddenFromNav(true);
       if (mounted) {
         setState(() => _hiddenFromNav = true);
       }
     }
     debugPrint('TorboxSettingsPage: API key saved successfully.');
-    AnalyticsService.integrationConnected('torbox', {'surface': 'settings'});
     _snack('Torbox connected successfully');
     MainPageBridge.notifyIntegrationChanged();
   }
@@ -165,7 +168,7 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
   Future<void> _deleteKey() async {
     debugPrint('TorboxSettingsPage: Deleting stored API key.');
     try {
-      await TorboxStorage.deleteTorboxApiKey();
+      await StorageService.deleteTorboxApiKey();
     } catch (_) {
       _snack(
         'This connection is shared. Revoke or transfer profile access before disconnecting.',
@@ -175,7 +178,7 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
     }
     TorboxAccountService.clearUserInfo();
     // Clear the hidden from nav flag on logout
-    await TorboxStorage.clearTorboxHiddenFromNav();
+    await StorageService.clearTorboxHiddenFromNav();
     _snack('Logged out successfully', err: false);
     MainPageBridge.notifyIntegrationChanged();
     // Pop back to settings page with logout flag for TV navigation
@@ -186,12 +189,12 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
 
   Future<void> _updateCacheCheck(bool value) async {
     setState(() => _checkCacheBeforeSearch = value);
-    await TorboxStorage.setTorboxCacheCheckEnabled(value);
+    await StorageService.setTorboxCacheCheckEnabled(value);
   }
 
   Future<void> _savePostAction(String action) async {
     setState(() => _postTorrentAction = action);
-    await TorboxStorage.saveTorboxPostTorrentAction(action);
+    await StorageService.saveTorboxPostTorrentAction(action);
     _snack('Preference saved');
   }
 
@@ -202,7 +205,7 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
         _isEditing = false;
       }
     });
-    await TorboxStorage.setTorboxIntegrationEnabled(value);
+    await StorageService.setTorboxIntegrationEnabled(value);
     MainPageBridge.notifyIntegrationChanged();
     if (!mounted) return;
     if (value && _savedApiKey != null) {
@@ -263,7 +266,7 @@ class _TorboxSettingsPageState extends State<TorboxSettingsPage> {
       }
 
       // Enable hiding
-      await TorboxStorage.setTorboxHiddenFromNav(true);
+      await StorageService.setTorboxHiddenFromNav(true);
       setState(() {
         _hiddenFromNav = true;
       });

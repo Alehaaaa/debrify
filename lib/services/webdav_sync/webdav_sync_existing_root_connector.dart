@@ -164,7 +164,7 @@ final class WebDavSyncExistingRootConnector {
           authorization: currentAuthorization,
         ),
       );
-      if (published == null) return _awaitingBinding(bindingId);
+      if (published == null) return await _awaitingBinding(bindingId);
       state = await _stateRepository.load(snapshot.namespace.id);
       final report = await _retryPreferenceFence(
         () => _engine.runCycle(
@@ -183,7 +183,7 @@ final class WebDavSyncExistingRootConnector {
           allowPreActivation: true,
         ),
       );
-      if (report == null) return _awaitingBinding(bindingId);
+      if (report == null) return await _awaitingBinding(bindingId);
       if (report.disposition != WebDavSyncCycleDisposition.completed) {
         throw StateError('WebDAV sync could not complete its first merge');
       }

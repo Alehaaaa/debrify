@@ -1,13 +1,12 @@
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/iptv_appearance_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:debrify/screens/settings/detail_theme_page.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/profiles/profile_appearance_preferences.dart';
 import 'package:debrify/theme/app_looks.dart';
+import 'package:debrify/theme/app_theme_adapter.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_controller.dart';
 
@@ -15,6 +14,9 @@ import 'package:debrify/theme/app_theme_controller.dart';
 /// about what it can reach and what happens when two writers meet.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // These contracts exercise preference writes, not downloaded typography.
+  // Building the themes must not start network font loads in a widget test.
+  AppThemeAdapter.debugUseTestTypography = true;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
@@ -22,9 +24,11 @@ void main() {
   });
 
   group('the bundles are well-formed', () {
-    test('every setting a Look can change stays outside automatic sync', () {
+    test('every setting a Look can change travels with automatic sync', () {
+      // A profile should look the same on every device, so nothing a Look
+      // sets may be on the device-local list.
       for (final key in LookKeys.all) {
-        expect(ProfileAppearancePreferences.keys, contains(key.id));
+        expect(ProfileAppearancePreferences.keys, isNot(contains(key.id)));
       }
     });
 
@@ -95,7 +99,7 @@ void main() {
 
         // A manual change to ONE key the Look names — exactly what a user does
         // by opening a picker afterwards.
-        await DetailPageStorage.setDetailPageStyle('stage');
+        await StorageService.setDetailPageStyle('stage');
         expect(
           AppLooks.active()?.id,
           isNot('classic'),
@@ -107,7 +111,7 @@ void main() {
 
   group('applying', () {
     test('sets every key it names, and only those', () async {
-      await IptvAppearanceStorage.setIptvStyle('edition');
+      await StorageService.setIptvStyle('edition');
       final classic = AppLooks.all.firstWhere((l) => l.id == 'classic');
       expect(
         classic.values.containsKey('iptv_style'),
@@ -116,9 +120,9 @@ void main() {
       );
 
       await LookApplier.apply(classic);
-      expect(DetailPageStorage.detailPageStyleCached, 'classic');
+      expect(StorageService.detailPageStyleCached, 'classic');
       expect(
-        IptvAppearanceStorage.iptvStyleCached,
+        StorageService.iptvStyleCached,
         'edition',
         reason: 'a Look must leave alone what it does not name',
       );
@@ -142,10 +146,10 @@ void main() {
         // means the Look is the newer intent, so it must win. (The generation
         // snapshot is taken when the apply STARTS, which is what expresses
         // this.)
-        await IptvAppearanceStorage.setIptvStyle('edition');
+        await StorageService.setIptvStyle('edition');
         final console = AppLooks.all.firstWhere((l) => l.id == 'console');
         await LookApplier.apply(console);
-        expect(IptvAppearanceStorage.iptvStyleCached, 'console');
+        expect(StorageService.iptvStyleCached, 'console');
       },
     );
 
@@ -159,17 +163,17 @@ void main() {
         // walking the bundle — `iptv_style` sits fifth in the map, so the note
         // lands before the applier reaches it.
         final future = LookApplier.apply(console);
-        await IptvAppearanceStorage.setIptvStyle('edition');
+        await StorageService.setIptvStyle('edition');
         LookApplier.noteExternalWrite('iptv_style');
         await future;
 
         expect(
-          IptvAppearanceStorage.iptvStyleCached,
+          StorageService.iptvStyleCached,
           'edition',
           reason: 'a deliberate choice made during the apply must survive it',
         );
         // …and the rest of the bundle still landed.
-        expect(DetailPageStorage.detailPageStyleCached, 'console');
+        expect(StorageService.detailPageStyleCached, 'console');
       },
     );
 
@@ -198,11 +202,11 @@ void main() {
 
         await LookApplier.apply(spotlight);
         expect(AppLooks.active()?.id, 'spotlight');
-        expect(DebrifyTvStorage.debrifyTvStyleCached, 'spotlight');
+        expect(StorageService.debrifyTvStyleCached, 'spotlight');
 
         await LookApplier.apply(classic);
         expect(AppLooks.active()?.id, 'classic');
-        expect(DebrifyTvStorage.debrifyTvStyleCached, 'grid');
+        expect(StorageService.debrifyTvStyleCached, 'grid');
       },
     );
   });

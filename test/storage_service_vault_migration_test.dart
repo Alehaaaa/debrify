@@ -1,10 +1,8 @@
 import 'dart:convert';
 
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/webdav_server_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:debrify/services/secret_vault.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Verifies the lazy plaintext→ciphertext migration for real credential keys:
@@ -20,13 +18,13 @@ void main() {
   test('standalone key: plaintext read once, then sealed at rest', () async {
     SharedPreferences.setMockInitialValues(
         {'real_debrid_api_key': 'legacyRdKey40charsAAAAAAAAAAAAAAAAAAAAAA'});
-    expect(await RealDebridStorage.getApiKey(),
+    expect(await StorageService.getApiKey(),
         'legacyRdKey40charsAAAAAAAAAAAAAAAAAAAAAA');
     final prefs = await SharedPreferences.getInstance();
     final stored = prefs.getString('real_debrid_api_key')!;
     expect(stored, startsWith(SecretVault.prefix));
     // Still readable after the rewrite.
-    expect(await RealDebridStorage.getApiKey(),
+    expect(await StorageService.getApiKey(),
         'legacyRdKey40charsAAAAAAAAAAAAAAAAAAAAAA');
   });
 
@@ -45,7 +43,7 @@ void main() {
       'iptv_playlists': [legacy],
     });
 
-    final playlists = await IptvPlaylistStorage.getIptvPlaylists();
+    final playlists = await StorageService.getIptvPlaylists();
     expect(playlists, hasLength(1));
     expect(playlists.first.username, 'u1');
     expect(playlists.first.password, 'p1');
@@ -61,7 +59,7 @@ void main() {
     expect(stored['content'], startsWith('#EXTM3U'));
 
     // Round-trips through the sealed form.
-    final again = await IptvPlaylistStorage.getIptvPlaylists();
+    final again = await StorageService.getIptvPlaylists();
     expect(again.single.password, 'p1');
   });
 
@@ -77,25 +75,25 @@ void main() {
     ]);
     SharedPreferences.setMockInitialValues({'webdav_servers_v1': legacy});
 
-    final servers = await WebdavServerStorage.getWebDavServers();
+    final servers = await StorageService.getWebDavServers();
     expect(servers, hasLength(1));
     expect(servers.first.password, 'hunter2');
 
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString('webdav_servers_v1'),
         startsWith(SecretVault.prefix));
-    expect((await WebdavServerStorage.getWebDavServers()).single.password,
+    expect((await StorageService.getWebDavServers()).single.password,
         'hunter2');
   });
 
   test('device-ID change turns credentials into clean signed-out', () async {
     SharedPreferences.setMockInitialValues({});
-    await RealDebridStorage.saveApiKey('boundKey');
-    expect(await RealDebridStorage.getApiKey(), 'boundKey');
+    await StorageService.saveApiKey('boundKey');
+    expect(await StorageService.getApiKey(), 'boundKey');
     SecretVault.debugReset(deviceIdOverride: 'a-different-device');
-    expect(await RealDebridStorage.getApiKey(), isNull);
+    expect(await StorageService.getApiKey(), isNull);
     // A fresh save under the new device works.
-    await RealDebridStorage.saveApiKey('newKey');
-    expect(await RealDebridStorage.getApiKey(), 'newKey');
+    await StorageService.saveApiKey('newKey');
+    expect(await StorageService.getApiKey(), 'newKey');
   });
 }

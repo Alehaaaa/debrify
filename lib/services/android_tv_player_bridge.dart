@@ -1,8 +1,3 @@
-import 'package:debrify/services/storage/iptv_audio_storage.dart';
-import 'package:debrify/services/storage/iptv_favorites_storage.dart';
-import 'package:debrify/services/storage/iptv_history_storage.dart';
-import 'package:debrify/services/storage/iptv_last_channel_storage.dart';
-import 'package:debrify/services/storage/player_network_storage.dart';
 import 'adjacent_episode_resolver.dart';
 import 'stream_badges_service.dart';
 import 'stream_badge_matcher.dart';
@@ -21,9 +16,9 @@ import '../models/iptv_playlist.dart';
 import '../utils/stream_badge_appearance.dart';
 import '../utils/movie_parser.dart';
 import '../utils/series_parser.dart';
-import 'analytics_service.dart';
 import 'episode_info_service.dart';
 import 'iptv_epg_service.dart';
+import 'storage_service.dart';
 import 'movie_metadata_service.dart';
 import 'next_episode_service.dart';
 import 'stremio_iptv_service.dart';
@@ -60,17 +55,12 @@ typedef MovieMetadataProvider =
 /// letting a stuck platform preference write poison later playback sessions.
 @visibleForTesting
 class StremioSourcePersistenceSession {
-  StremioSourcePersistenceSession(
-    this.id, {
-    this.waitTimeout = timeout,
-    void Function()? onRetired,
-  }) : _onRetired = onRetired;
+  StremioSourcePersistenceSession(this.id, {this.waitTimeout = timeout});
 
   static const timeout = Duration(seconds: 5);
   final Duration waitTimeout;
 
   final int id;
-  void Function()? _onRetired;
   Future<void> _tail = Future<void>.value();
   bool _accepting = true;
 
@@ -89,11 +79,14 @@ class StremioSourcePersistenceSession {
       }
     });
     _tail = queued;
-    return queued.timeout(waitTimeout, onTimeout: () {
-      debugPrint(
-        'AndroidTvPlayerBridge: source persistence timed out (session=$id)',
-      );
-    });
+    return queued.timeout(
+      waitTimeout,
+      onTimeout: () {
+        debugPrint(
+          'AndroidTvPlayerBridge: source persistence timed out (session=$id)',
+        );
+      },
+    );
   }
 
   Future<void> closeAndDrain() async {
@@ -105,20 +98,11 @@ class StremioSourcePersistenceSession {
         'AndroidTvPlayerBridge: source persistence drain timed out '
         '(session=$id)',
       );
-    } finally {
-      _releaseOwner();
     }
   }
 
   void retire() {
     _accepting = false;
-    _releaseOwner();
-  }
-
-  void _releaseOwner() {
-    final release = _onRetired;
-    _onRetired = null;
-    release?.call();
   }
 }
 
@@ -156,7 +140,7 @@ class AndroidTvPlayerBridge {
   static Future<List<Map<String, dynamic>>?> Function(int)?
   _sourcePlaylistResolver;
   static Future<List<Map<String, dynamic>>?> Function(int)?
-      _startupSourcePlaylistResolver;
+  _startupSourcePlaylistResolver;
   static Future<void> Function(int)? _stremioSourceCommitter;
   static PlaybackFinishedCallback? _startupSourcesExhaustedCallback;
   static Future<void> Function(int, String)? _startupSourceFailedCallback;
@@ -231,11 +215,6 @@ class AndroidTvPlayerBridge {
   // Prevents stale metadata from previous sessions being sent to new sessions
   static String? _currentSessionId;
 
-  // Throttle for analytics playback heartbeats fed from the native TV player's
-  // high-frequency progress pings (fires every ~5s). We only forward one
-  // heartbeat per [AnalyticsService.heartbeatInterval] so the analytics session
-  // stays alive without flooding events.
-  static DateTime? _lastPlaybackHeartbeat;
   static Future<void> _subtitleAppearanceSaveQueue = Future<void>.value();
 
   static Future<void> _saveSubtitleAppearance(
@@ -290,28 +269,6 @@ class AndroidTvPlayerBridge {
     _subtitleAppearanceSaveQueue = operation.catchError((_) {});
     await operation;
   }
-
-  static void _maybeSendPlaybackHeartbeat(String player) {
-    final now = DateTime.now();
-    final last = _lastPlaybackHeartbeat;
-    if (last != null &&
-        now.difference(last) < AnalyticsService.heartbeatInterval) {
-      return;
-    }
-    _lastPlaybackHeartbeat = now;
-    AnalyticsService.playbackHeartbeat(player);
-  }
-
-  // Deprecated: use _streamNextProvider
-  static StreamNextProvider? get _torboxNextProvider => _streamNextProvider;
-  static set _torboxNextProvider(StreamNextProvider? provider) =>
-      _streamNextProvider = provider;
-
-  // Deprecated: use _playbackFinishedCallback
-  static PlaybackFinishedCallback? get _torboxFinishedCallback =>
-      _playbackFinishedCallback;
-  static set _torboxFinishedCallback(PlaybackFinishedCallback? callback) =>
-      _playbackFinishedCallback = callback;
 
   /// Get custom font info for Android TV player
   static Future<Map<String, String?>> _getCustomFontInfo() async {
@@ -425,11 +382,6 @@ class AndroidTvPlayerBridge {
               message: e.toString(),
             );
           }
-        case 'analyticsHeartbeat':
-          // Dedicated keep-alive ping from the Java (Torbox/Real-Debrid/stream)
-          // TV player, which has no periodic progress channel of its own.
-          AnalyticsService.playbackHeartbeat('torbox_tv');
-          return null;
         case 'saveIptvSeriesAudio':
           // The native TV player captured the user's audio-language pick for an
           // Xtream series — persist it under the same per-series key the phone/
@@ -442,7 +394,7 @@ class AndroidTvPlayerBridge {
                 key.isNotEmpty &&
                 lang != null &&
                 lang.isNotEmpty) {
-              await IptvAudioStorage.setIptvSeriesAudioLanguage(key, lang);
+              await StorageService.setIptvSeriesAudioLanguage(key, lang);
             }
           }
           return null;
@@ -460,8 +412,6 @@ class AndroidTvPlayerBridge {
         case 'torboxPlaybackFinished':
         case 'realDebridPlaybackFinished':
         case 'streamPlaybackFinished':
-          _lastPlaybackHeartbeat =
-              null; // reset so the next watch isn't throttled
           final finished = _playbackFinishedCallback;
           _streamNextProvider = null;
           _channelSwitchProvider = null;
@@ -508,15 +458,6 @@ class AndroidTvPlayerBridge {
           }
           return true;
         case 'torrentPlaybackProgress':
-          // Keep the analytics session alive during native TV playback (the
-          // Flutter UI is backgrounded, so this progress ping is our activity
-          // signal). The native player pings even while paused, so gate on the
-          // isPlaying flag to match the Dart/Java players; throttled so we emit
-          // at most one heartbeat per interval.
-          if (call.arguments is Map &&
-              (call.arguments as Map)['isPlaying'] == true) {
-            _maybeSendPlaybackHeartbeat('android_tv');
-          }
           final args = call.arguments;
           final session = _progressSession;
           if (session == null || args is! Map) return false;
@@ -654,7 +595,9 @@ class AndroidTvPlayerBridge {
             'AndroidTvPlayerBridge: requestSourcePlaylistResolve received - args: ${call.arguments}',
           );
           final playlistRequest = call.arguments;
-          final playlistResolver = playlistRequest is Map && playlistRequest['automaticRecovery'] == true
+          final playlistResolver =
+              playlistRequest is Map &&
+                  playlistRequest['automaticRecovery'] == true
               ? _startupSourcePlaylistResolver ?? _sourcePlaylistResolver
               : _sourcePlaylistResolver;
           if (playlistResolver == null) {
@@ -726,12 +669,19 @@ class AndroidTvPlayerBridge {
         case 'startupSourceFailed':
           final failure = call.arguments;
           final failureSession = _sourcePersistenceSession;
-          if (failure is! Map || failureSession == null ||
-              failure['sourcePersistenceSessionId'] != failureSession.id) return null;
+          if (failure is! Map ||
+              failureSession == null ||
+              failure['sourcePersistenceSessionId'] != failureSession.id) {
+            return null;
+          }
           final failureCallback = _startupSourceFailedCallback;
           final failedIndex = failure['sourceIndex'];
           final failureReason = failure['reason'];
-          if (failureCallback == null || failedIndex is! int || failureReason is! String) return null;
+          if (failureCallback == null ||
+              failedIndex is! int ||
+              failureReason is! String) {
+            return null;
+          }
           // Enqueue synchronously on the same session as commits: a successful
           // candidate must never read the saved list before this removal ends.
           _startupFailureDrain = failureSession.enqueue(
@@ -903,8 +853,6 @@ class AndroidTvPlayerBridge {
             );
             return null;
           }
-          _lastPlaybackHeartbeat =
-              null; // reset so the next watch isn't throttled
           final finishedProgress = _progressSession;
           _progressDrain = finishedProgress?.closeAndDrain() ?? _progressDrain;
           final finishedDrain = _progressDrain;
@@ -963,7 +911,8 @@ class AndroidTvPlayerBridge {
           // Clear the old session before recovery can launch a replacement
           // player and begin receiving its own next-episode requests.
           _quickPlayNextEpisodeResult = null;
-          if (startupExhausted && finishedArgs['startupRecoveryConsumed'] != true &&
+          if (startupExhausted &&
+              finishedArgs['startupRecoveryConsumed'] != true &&
               recoverFromStartupExhaustion != null) {
             try {
               await recoverFromStartupExhaustion();
@@ -1033,8 +982,7 @@ class AndroidTvPlayerBridge {
             final raw = epgArgs['channelUrl'];
             if (raw is String) epgChannelUrl = raw;
             includeSchedule = epgArgs['includeSchedule'] == true;
-            includeCatchupMetadata =
-                epgArgs['includeCatchupMetadata'] == true;
+            includeCatchupMetadata = epgArgs['includeCatchupMetadata'] == true;
             archiveDisabled = epgArgs['archiveDisabled'] == true;
             archiveDurationDays = (epgArgs['archiveDurationDays'] as num?)
                 ?.toInt();
@@ -1121,14 +1069,21 @@ class AndroidTvPlayerBridge {
                 else if (args['archiveEnabled'] == true)
                   'tv_archive': '1',
                 if (args['archiveDurationDays'] is num)
-                  'tv_archive_duration':
-                      (args['archiveDurationDays'] as num).toInt().toString(),
+                  'tv_archive_duration': (args['archiveDurationDays'] as num)
+                      .toInt()
+                      .toString(),
               },
             );
             if (programme == null ||
                 !(args['startOver'] == true
-                    ? IptvEpgService.isStartOverAvailable(replayChannel, programme)
-                    : IptvEpgService.isCatchupAvailable(replayChannel, programme))) {
+                    ? IptvEpgService.isStartOverAvailable(
+                        replayChannel,
+                        programme,
+                      )
+                    : IptvEpgService.isCatchupAvailable(
+                        replayChannel,
+                        programme,
+                      ))) {
               return null;
             }
             final url = await IptvEpgService.instance.catchupUrl(
@@ -1147,7 +1102,7 @@ class AndroidTvPlayerBridge {
             }
             final startOver = args['startOver'] == true;
             if (!startOver) {
-              await IptvHistoryStorage.recordIptvWatch(
+              await StorageService.recordIptvWatch(
                 url,
                 channelName: programme.title,
                 logoUrl: args['logoUrl'] as String?,
@@ -1158,7 +1113,7 @@ class AndroidTvPlayerBridge {
             }
             final resumePositions = startOver
                 ? const <String, int>{}
-                : await IptvHistoryStorage.getIptvResumePositions([url]);
+                : await StorageService.getIptvResumePositions([url]);
             return <String, dynamic>{
               'url': url,
               'title': programme.title,
@@ -1182,7 +1137,7 @@ class AndroidTvPlayerBridge {
               }
             });
           }
-          await IptvHistoryStorage.recordIptvWatch(
+          await StorageService.recordIptvWatch(
             url,
             channelName: watchArgs['name'] as String?,
             logoUrl: watchArgs['logoUrl'] as String?,
@@ -1206,7 +1161,7 @@ class AndroidTvPlayerBridge {
           final url = liveArgs['url'] as String?;
           final name = liveArgs['name'] as String?;
           if (url == null || url.isEmpty || name == null) return false;
-          await IptvLastChannelStorage.setIptvLastLiveChannel(
+          await StorageService.setIptvLastLiveChannel(
             url,
             name: name,
             playlistId: liveArgs['sourceId'] as String?,
@@ -1222,7 +1177,7 @@ class AndroidTvPlayerBridge {
           final url = favoriteArgs['url'] as String?;
           final isFavorite = favoriteArgs['isFavorite'] == true;
           if (url == null || url.isEmpty) return false;
-          await IptvFavoritesStorage.setIptvChannelFavorited(
+          await StorageService.setIptvChannelFavorited(
             url,
             isFavorite,
             channelName: favoriteArgs['name'] as String?,
@@ -1242,7 +1197,7 @@ class AndroidTvPlayerBridge {
           final listId = listArgs['listId'] as String?;
           if (url == null || url.isEmpty) return false;
           if (listId == null || listId.isEmpty) return false;
-          await IptvFavoritesStorage.setIptvChannelInList(
+          await StorageService.setIptvChannelInList(
             listId,
             url,
             listArgs['inList'] == true,
@@ -1265,7 +1220,7 @@ class AndroidTvPlayerBridge {
               ? membershipArgs['url'] as String?
               : null;
           if (url == null || url.isEmpty) return <String>[];
-          return (await IptvFavoritesStorage.getIptvListsForChannel(url)).toList();
+          return (await StorageService.getIptvListsForChannel(url)).toList();
         case 'reportIptvStreamResult':
           // Feedback from the native serial ladder: cache the URL that
           // actually played, or drop the stale candidate list when every
@@ -1540,7 +1495,7 @@ class AndroidTvPlayerBridge {
                 return {
                   'kind': 'movie',
                   'title': meta?.title ?? parsed.title,
-                  if (year != null) 'year': year,
+                  'year': ?year,
                   if (meta?.poster != null) 'poster': meta!.poster,
                   'badges': badges,
                 };
@@ -1821,10 +1776,6 @@ class AndroidTvPlayerBridge {
     _iptvBrowseProvider = null;
   }
 
-  /// Lets host tests drive [launchTorrentPlayback]; production reads Platform.
-  @visibleForTesting
-  static bool? debugLaunchOnAndroid;
-
   static Future<bool> launchTorrentPlayback({
     required Map<String, dynamic> payload,
     AndroidTvProgressCallback? onProgress,
@@ -1863,50 +1814,29 @@ class AndroidTvPlayerBridge {
     StremioTvNextProvider? onRequestStremioTvNext,
     Future<Map<String, dynamic>?> Function(Map<String, dynamic>)?
     onRequestIptvBrowse,
-    void Function() Function()? retainSourceSession,
-    ProfileSessionOwner? sourceOwner,
-    bool Function()? canContinue,
   }) async {
-    if (!(debugLaunchOnAndroid ?? Platform.isAndroid)) {
+    if (!Platform.isAndroid) {
       return false;
     }
     if (payload.isEmpty) {
       return false;
     }
 
-    bool active() =>
-        (canContinue?.call() ?? true) &&
-        (sourceOwner == null ||
-            sourceOwner == ProfileSessionMemory.captureOwner());
-    void checkCurrent() {
-      if (!active()) {
-        throw StateError('Native playback launch retired');
-      }
-    }
-
-    if (!active()) return false;
-    final launchScope = sourceOwner?.scope ?? ProfileRuntime.scope.value;
+    final launchScope = ProfileRuntime.scope.value;
 
     final sessionId = await TvPlaybackRecovery.allocateSessionId();
-    if (!active()) return false;
     await _progressDrain;
-    if (!active()) return false;
     await _progressSession?.closeAndDrain();
-    if (!active()) return false;
     await _sourcePersistenceSession?.closeAndDrain();
-    if (!active()) return false;
     final oldLockOwner = _nativePlaybackLockOwner;
     if (oldLockOwner != null) {
       _endNativePlayback(oldLockOwner);
     }
     final lockOwner = _beginNativePlayback();
     _nativePlaybackLockOwner = lockOwner;
-    final persistenceSession = StremioSourcePersistenceSession(
-      sessionId,
-      onRetired: retainSourceSession?.call(),
-    );
+    final persistenceSession = StremioSourcePersistenceSession(sessionId);
     _sourcePersistenceSession = persistenceSession;
-    final profileOwner = sourceOwner ?? ProfileSessionMemory.captureOwner();
+    final profileOwner = ProfileSessionMemory.captureOwner();
     final progressSession =
         onProgress == null && onCommitPlaybackProgressSource == null
         ? null
@@ -1953,7 +1883,6 @@ class AndroidTvPlayerBridge {
     try {
       // Get custom font info for Android TV player
       final fontInfo = await _getCustomFontInfo();
-      checkCurrent();
 
       // Add font info to payload
       final payloadWithFont = Map<String, dynamic>.from(payload);
@@ -1963,7 +1892,7 @@ class AndroidTvPlayerBridge {
       // continuing the same unlocked profile rather than cold-starting into
       // an unguarded profile session.
       if (ProfileRuntime.isProfileCommitted) {
-        final scope = launchScope ?? ProfileRuntime.capture();
+        final scope = ProfileRuntime.capture();
         payloadWithFont['playbackOwnerProfileId'] = scope.profileId;
         payloadWithFont['playbackOwnerDataGeneration'] = scope.dataGeneration;
       }
@@ -1977,10 +1906,8 @@ class AndroidTvPlayerBridge {
       // 'standard' = stock configuration untouched. A prefs failure must not
       // block a launch — tuning is strictly optional.
       try {
-        final patience = await PlayerNetworkStorage.getNetworkConnectPatience();
-        checkCurrent();
-        final buffer = await PlayerNetworkStorage.getNetworkBufferSize();
-        checkCurrent();
+        final patience = await StorageService.getNetworkConnectPatience();
+        final buffer = await StorageService.getNetworkBufferSize();
         if (patience != 'standard') {
           payloadWithFont['networkPatience'] = patience;
         }
@@ -1989,32 +1916,25 @@ class AndroidTvPlayerBridge {
         }
         // Android TV IPTV decoder preference ('auto' = platform order
         // untouched, so it is only sent when the user picked otherwise).
-        final iptvDecoder = await PlayerNetworkStorage.getIptvDecoderMode();
-        checkCurrent();
+        final iptvDecoder = await StorageService.getIptvDecoderMode();
         if (iptvDecoder != 'auto') {
           payloadWithFont['iptvDecoder'] = iptvDecoder;
         }
       } catch (e) {
-        // A retired launch is not a tuning failure; let it stop the launch.
-        if (!active()) rethrow;
         debugPrint('AndroidTvPlayerBridge: network tuning read failed: $e');
       }
 
-      checkCurrent();
       final bool? launched = await NativeProfileProjection.withPlayerLaunch(
         launchScope,
-        () {
-          checkCurrent();
-          return _channel.invokeMethod<bool>('launchTorrentPlayback', {
-            'payload': payloadWithFont,
-            if (launchScope != null)
-              'nativePlayerProfile': {
-                'profileId': launchScope.profileId,
-                'dataGeneration': launchScope.dataGeneration,
-                'sessionEpoch': launchScope.sessionEpoch,
-              },
-          });
-        },
+        () => _channel.invokeMethod<bool>('launchTorrentPlayback', {
+          'payload': payloadWithFont,
+          if (launchScope != null)
+            'nativePlayerProfile': {
+              'profileId': launchScope.profileId,
+              'dataGeneration': launchScope.dataGeneration,
+              'sessionEpoch': launchScope.sessionEpoch,
+            },
+        }),
       );
       if (launched == true) {
         return true;
@@ -2136,7 +2056,7 @@ class AndroidTvPlayerBridge {
         'updateEpisodeMetadata',
         {
           'updates': metadataUpdates,
-          if (imdbId != null) 'imdbId': imdbId,
+          'imdbId': ?imdbId,
           if (guideEpisodes != null && guideEpisodes.isNotEmpty)
             'guideEpisodes': guideEpisodes,
           // TVMaze's official show title, for the native OTT dock's

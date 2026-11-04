@@ -1,7 +1,5 @@
-import 'package:debrify/services/storage/iptv_appearance_storage.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
@@ -83,7 +81,6 @@ class _PlayerGuideStylePageState extends State<PlayerGuideStylePage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('player_guide_style_settings');
     _load();
   }
 
@@ -94,7 +91,7 @@ class _PlayerGuideStylePageState extends State<PlayerGuideStylePage> {
   }
 
   Future<void> _load() async {
-    final style = await IptvAppearanceStorage.getIptvPlayerGuideStyle();
+    final style = await StorageService.getIptvPlayerGuideStyle();
     if (!mounted) return;
     setState(() {
       _style = style;
@@ -115,7 +112,7 @@ class _PlayerGuideStylePageState extends State<PlayerGuideStylePage> {
   Future<void> _select(String value) async {
     if (value == _style) return;
     setState(() => _style = value);
-    await IptvAppearanceStorage.setIptvPlayerGuideStyle(value);
+    await StorageService.setIptvPlayerGuideStyle(value);
   }
 
   @override

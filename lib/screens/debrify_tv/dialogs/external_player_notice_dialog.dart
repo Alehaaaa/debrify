@@ -1,7 +1,7 @@
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../services/storage_service.dart';
 import '../../../theme/app_theme_scope.dart';
 import '../../../utils/platform_util.dart';
 import '../../../utils/tv_keys.dart';
@@ -24,7 +24,7 @@ class ExternalPlayerNoticeDialog extends StatefulWidget {
   /// Returns true immediately — without showing anything — once the notice has
   /// been dismissed forever.
   static Future<bool> confirm(BuildContext context) async {
-    if (await DebrifyTvStorage.getDebrifyTvExternalNoticeDismissed()) {
+    if (await StorageService.getDebrifyTvExternalNoticeDismissed()) {
       return true;
     }
     if (!context.mounted) return false;
@@ -48,7 +48,7 @@ class _ExternalPlayerNoticeDialogState
 
   Future<void> _proceed() async {
     if (_dontShowAgain) {
-      await DebrifyTvStorage.setDebrifyTvExternalNoticeDismissed(true);
+      await StorageService.setDebrifyTvExternalNoticeDismissed(true);
     }
     if (mounted) Navigator.of(context).pop(true);
   }

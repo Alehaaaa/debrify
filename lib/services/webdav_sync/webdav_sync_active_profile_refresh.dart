@@ -1,14 +1,3 @@
-import 'package:debrify/services/storage/debrify_tv_storage.dart';
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/discover_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
-import 'package:debrify/services/storage/iptv_appearance_storage.dart';
-import 'package:debrify/services/storage/launch_ident_storage.dart';
-import 'package:debrify/services/storage/local_completion_storage.dart';
-import 'package:debrify/services/storage/player_settings_storage.dart';
-import 'package:debrify/services/storage/sidebar_storage.dart';
-import 'package:debrify/services/storage/tv_display_storage.dart';
-import 'package:debrify/services/storage/ui_feedback_storage.dart';
 import '../../theme/app_theme_controller.dart';
 import '../discover_prefs.dart';
 import '../hide_watched_prefs.dart';
@@ -17,6 +6,7 @@ import '../engine/local_engine_storage.dart';
 import '../main_page_bridge.dart';
 import '../metadata_preferences_service.dart';
 import '../play_loader_style.dart';
+import '../storage_service.dart';
 import '../stream_badges_service.dart';
 import '../stremio_service.dart';
 import '../text_brightness.dart';
@@ -60,44 +50,42 @@ final class DefaultWebDavSyncActiveProfileRefresher
       });
     }
 
-    await warmIf('tv_keyboard_enabled', TvDisplayStorage.getTvKeyboardEnabled);
-    await warmIf('tv_home_style', HomeAppearanceStorage.getTvHomeStyle);
-    await warmIf('debrify_tv_style', DebrifyTvStorage.getDebrifyTvStyle);
-    await warmIf('detail_page_style', DetailPageStorage.getDetailPageStyle);
+    await warmIf('tv_keyboard_enabled', StorageService.getTvKeyboardEnabled);
+    await warmIf('tv_home_style', StorageService.getTvHomeStyle);
+    await warmIf('debrify_tv_style', StorageService.getDebrifyTvStyle);
+    await warmIf('detail_page_style', StorageService.getDetailPageStyle);
     if (changedKeys.any(
-      DetailPageStorage.detailPageSectionPreferenceKeys.contains,
+      StorageService.detailPageSectionPreferenceKeys.contains,
     )) {
-      await guarded(DetailPageStorage.getDetailPageSectionVisibility);
+      await guarded(StorageService.getDetailPageSectionVisibility);
     }
-    await warmIf('detail_theme', DetailPageStorage.getDetailTheme);
-    await warmIf('parents_guide_style', DetailPageStorage.getParentsGuideStyle);
-    await warmIf('iptv_style', IptvAppearanceStorage.getIptvStyle);
-    await warmIf('discover_layout', DiscoverStorage.getDiscoverLayout);
-    await warmIf('launch_animation', LaunchIdentStorage.getLaunchAnimation);
-    await warmIf(
-      'launch_ident_palette',
-      LaunchIdentStorage.getLaunchIdentPalette,
-    );
-    await warmIf('tv_sidebar_style', SidebarStorage.getTvSidebarStyle);
+    await warmIf('detail_theme', StorageService.getDetailTheme);
+    await warmIf('parents_guide_style', StorageService.getParentsGuideStyle);
+    await warmIf('iptv_style', StorageService.getIptvStyle);
+    await warmIf('discover_layout', StorageService.getDiscoverLayout);
+    await warmIf('launch_animation', StorageService.getLaunchAnimation);
+    await warmIf('launch_ident_palette', StorageService.getLaunchIdentPalette);
+    await warmIf('tv_sidebar_style', StorageService.getTvSidebarStyle);
     await warmIf(
       'desktop_sidebar_style',
-      SidebarStorage.getDesktopSidebarStyle,
+      StorageService.getDesktopSidebarStyle,
     );
     await warmIf(
       'sidebar_configuration_v1',
-      SidebarStorage.getSidebarConfiguration,
+      StorageService.getSidebarConfiguration,
     );
     await warmIf(
       'player_start_portrait',
-      PlayerSettingsStorage.getPlayerStartPortrait,
+      StorageService.getPlayerStartPortrait,
     );
-    await warmIf('ui_sounds', UiFeedbackStorage.getUiSounds);
-    await warmIf('ui_haptics', UiFeedbackStorage.getUiHaptics);
+    await warmIf('ui_sounds', StorageService.getUiSounds);
+    await warmIf('ui_haptics', StorageService.getUiHaptics);
 
     if (changedKeys.contains('text_brightness')) {
       await guarded(TextBrightnessController.warm);
     }
     if (changedKeys.contains('app_theme') ||
+        changedKeys.contains('app_structure') ||
         changedKeys.contains('theme_overrides')) {
       await guarded(AppThemeController.warm);
     }
@@ -154,7 +142,7 @@ final class DefaultWebDavSyncActiveProfileRefresher
 
     if (changedKeys.any(_affectsLocalCompletion)) {
       authorizationBarrier();
-      LocalCompletionStorage.localCompletionRevision.value++;
+      StorageService.localCompletionRevision.value++;
       authorizationBarrier();
     }
     if (changedKeys.contains(WebDavSyncHotMerge.playlistPreference) ||

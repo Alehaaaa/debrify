@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:debrify/models/trakt/trakt_calendar_entry.dart';
 import 'package:debrify/services/trakt/trakt_calendar_service.dart';
@@ -15,9 +17,37 @@ void main() {
       service.invalidate();
 
       await service.getChunk(DateTime(2026, 4, 13));
-      expect(fetcher.callCount, 2,
-          reason: 'cache should be empty after invalidate');
+      expect(
+        fetcher.callCount,
+        2,
+        reason: 'cache should be empty after invalidate',
+      );
     });
+
+    test(
+      'a fetch completing after invalidation cannot cache another profile',
+      () async {
+        final pending = Completer<List<TraktCalendarEntry>>();
+        var calls = 0;
+        final service = TraktCalendarService.forTesting(
+          fetcher: (_, _) {
+            calls++;
+            return calls == 1
+                ? pending.future
+                : Future.value([_fakeEntry(day: 15)]);
+          },
+        );
+        final month = DateTime(2026, 4, 13);
+        final obsolete = service.getChunk(month);
+        service.invalidate();
+        pending.complete([_fakeEntry(day: 14)]);
+        await obsolete;
+
+        final fresh = await service.getChunk(month);
+        expect(calls, 2);
+        expect(fresh.single.showTitle, 'Show 15');
+      },
+    );
   });
 
   group('TraktCalendarService.getRange', () {
@@ -32,10 +62,7 @@ void main() {
     test('single chunk covers requested range', () async {
       final start = DateTime(2026, 4, 13); // Monday
       final end = DateTime(2026, 4, 20);
-      fetcher.entries = [
-        _fakeEntry(day: 14),
-        _fakeEntry(day: 17),
-      ];
+      fetcher.entries = [_fakeEntry(day: 14), _fakeEntry(day: 17)];
 
       final result = await service.getRange(start, end);
 
@@ -113,6 +140,45 @@ void main() {
       await service.getRange(start, end);
 
       expect(fetcher.callCount, 1);
+    });
+
+    test('concurrent months share one pending chunk request', () async {
+      final pending = Completer<List<TraktCalendarEntry>>();
+      var calls = 0;
+      final service = TraktCalendarService.forTesting(
+        fetcher: (_, _) {
+          calls++;
+          return pending.future;
+        },
+      );
+      final monday = DateTime(2026, 4, 13);
+      final first = service.getChunk(monday);
+      final second = service.getChunk(monday.add(const Duration(days: 2)));
+      expect(calls, 1);
+      pending.complete([_fakeEntry(day: 15)]);
+      expect(await first, await second);
+    });
+
+    test('forced refresh wins if the older request completes last', () async {
+      final old = Completer<List<TraktCalendarEntry>>();
+      final fresh = Completer<List<TraktCalendarEntry>>();
+      var calls = 0;
+      final service = TraktCalendarService.forTesting(
+        fetcher: (_, _) {
+          return ++calls == 1 ? old.future : fresh.future;
+        },
+      );
+      final start = DateTime(2026, 4, 13);
+      final first = service.getChunk(start);
+      final refresh = service.getChunk(start, force: true);
+      fresh.complete([_fakeEntry(day: 15)]);
+      await refresh;
+      old.complete([_fakeEntry(day: 14)]);
+      await first;
+
+      final cached = await service.getChunk(start);
+      expect(calls, 2);
+      expect(cached.single.showTitle, 'Show 15');
     });
   });
 

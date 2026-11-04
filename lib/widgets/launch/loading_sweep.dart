@@ -47,7 +47,7 @@ class LoadingSweepPainter extends CustomPainter {
     _trackPaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
-      ..color = const Color(0xFFE9EDFF).withValues(alpha: 0.12);
+      ..color = colors.last.withValues(alpha: 0.14);
 
     // The gradient spans the WHOLE circle even though only `_arcSweep` of it
     // is drawn. Confining it to [0, _arcSweep] would leave the round start cap
@@ -63,10 +63,13 @@ class LoadingSweepPainter extends CustomPainter {
         startAngle: 0,
         endAngle: _fullTurn,
         colors: [
-          colors.first.withValues(alpha: 0),
-          colors.first,
-          colors.last,
+          // Tail in the palette's secondary, head in its accent — the accent
+          // is the sweep's LEADING stop (see IdentPalette.accent), so it is
+          // what the eye follows round the ring.
           colors.last.withValues(alpha: 0),
+          colors.last,
+          colors.first,
+          colors.first.withValues(alpha: 0),
         ],
         stops: const [0.0, head * 0.62, head, 1.0],
       ).createShader(_box);
@@ -75,7 +78,11 @@ class LoadingSweepPainter extends CustomPainter {
     // as a moving light rather than a rotating shape. Deliberately whiter and
     // narrower than the stroke: at the arc's own colour and half-width it
     // would sit exactly under the round cap and be invisible.
-    _headPaint = Paint()..color = const Color(0xFFFFFFFF).withValues(alpha: 0.85);
+    // Tinted from the accent rather than pure white, so a themed palette's
+    // tip still reads as that palette's colour.
+    _headPaint = Paint()
+      ..color = Color.lerp(colors.first, const Color(0xFFFFFFFF), 0.55)!
+          .withValues(alpha: 0.9);
   }
 
   @override

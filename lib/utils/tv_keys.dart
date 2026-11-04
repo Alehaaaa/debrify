@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/gestures.dart' show kLongPressTimeout;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -29,6 +30,11 @@ bool isActivateKey(LogicalKeyboardKey key) =>
 /// space through ActivateIntent, so keyboard users keep it.
 bool isActivateOrSpaceKey(LogicalKeyboardKey key) =>
     isActivateKey(key) || key == LogicalKeyboardKey.space;
+
+/// How long every hold in the app takes — a held OK on TV, a long-press on
+/// touch. The platform standard (Flutter's [kLongPressTimeout], iOS's default
+/// `minimumPressDuration`, Android's long-press timeout): 500ms.
+const Duration kHoldDuration = kLongPressTimeout;
 
 /// "Press OK to do the thing, HOLD OK for its menu" — as a key state machine,
 /// because on a remote it cannot be anything else.
@@ -65,9 +71,14 @@ class TvHoldOk {
   TvHoldOk({
     required this.onTap,
     required this.onHold,
-    this.dwell = const Duration(milliseconds: 600),
+    this.dwell = kHoldDuration,
     this.haptic = true,
+    this.canHold,
   });
+
+  /// Read at key-down: false makes this press a plain tap (OK opens on
+  /// release, nothing arms) — for a card whose hold action comes and goes.
+  final bool Function()? canHold;
 
   /// A plain press, fired on key-up when the press was short.
   final VoidCallback onTap;
@@ -95,7 +106,7 @@ class TvHoldOk {
       _sawDown = true;
       _fired = false;
       _timer?.cancel();
-      _timer = Timer(dwell, _fire);
+      _timer = (canHold?.call() ?? true) ? Timer(dwell, _fire) : null;
       return KeyEventResult.handled;
     }
     if (event is KeyRepeatEvent) {

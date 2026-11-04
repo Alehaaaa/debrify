@@ -887,7 +887,9 @@ class _FullscreenButtonState extends State<_FullscreenButton>
   @override
   Widget build(BuildContext context) {
     return GlassGhostButton(
-      icon: _full ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+      icon: _full
+          ? Icons.fullscreen_exit_rounded
+          : Icons.fullscreen_rounded,
       tooltip: _full ? 'Exit full screen' : 'Full screen',
       onPressed: widget.onPressed,
     );

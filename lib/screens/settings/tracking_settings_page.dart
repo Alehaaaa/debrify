@@ -1,13 +1,15 @@
-import 'package:debrify/services/storage/tracking_source_storage.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/tracking_source.dart';
-import '../../services/analytics_service.dart';
+import '../../services/continue_watching_sync_service.dart';
 import '../../services/hide_watched_prefs.dart';
 import '../../services/main_page_bridge.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import '../../services/simkl/simkl_service.dart';
+import '../../services/storage_service.dart';
 import '../../services/trakt/trakt_service.dart';
+import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -25,52 +27,54 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
   Set<TrackingSource> _ticks = Set<TrackingSource>.of(TrackingSource.values);
   Set<TrackingSource> _connected = {};
   bool _hideWatched = HideWatchedPrefs.enabled;
+  bool _syncAllContinueWatching = false;
   int _selectedSection = 0;
 
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tracking_settings');
     _load();
   }
 
   Future<void> _load() async {
     final values = await Future.wait<Object>([
-      TrackingSourceStorage.getTrackingScrobbleTargets(),
-      TrackingSourceStorage.getWatchProgressSource(),
-      TrackingSourceStorage.getHomeTickSources(),
+      StorageService.getTrackingScrobbleTargets(),
+      StorageService.getSyncAllContinueWatching(),
+      StorageService.getWatchProgressSource(),
+      StorageService.getHomeTickSources(),
       TraktService.instance.isAuthenticated(),
       SimklService.instance.isAuthenticated(),
       MdblistService.instance.isAuthenticated(),
-      TrackingSourceStorage.takeTrackingProgressFallbackNotice(),
+      StorageService.takeTrackingProgressFallbackNotice(),
       HideWatchedPrefs.read(),
     ]);
     if (!mounted) return;
     final connected = <TrackingSource>{
-      if (values[3] as bool) TrackingSource.trakt,
-      if (values[4] as bool) TrackingSource.simkl,
-      if (values[5] as bool) TrackingSource.mdblist,
+      if (values[4] as bool) TrackingSource.trakt,
+      if (values[5] as bool) TrackingSource.simkl,
+      if (values[6] as bool) TrackingSource.mdblist,
     };
-    var progress = values[1] as WatchProgressSource;
+    var progress = values[2] as WatchProgressSource;
     final dedicated = _trackingSourceForProgress(progress);
     var fellBack = false;
     if (dedicated != null &&
         dedicated != TrackingSource.local &&
         !connected.contains(dedicated)) {
       progress = WatchProgressSource.smart;
-      await TrackingSourceStorage.setWatchProgressSource(progress);
+      await StorageService.setWatchProgressSource(progress);
       fellBack = true;
     }
     if (!mounted) return;
     setState(() {
       _scrobble = Set<TrackingSource>.of(values[0] as Set<TrackingSource>);
       _progress = progress;
-      _ticks = Set<TrackingSource>.of(values[2] as Set<TrackingSource>);
+      _ticks = Set<TrackingSource>.of(values[3] as Set<TrackingSource>);
       _connected = connected;
-      _hideWatched = values[7] as bool;
+      _syncAllContinueWatching = values[1] as bool;
+      _hideWatched = values[8] as bool;
       _loading = false;
     });
-    if (fellBack || values[6] as bool) {
+    if (fellBack || values[7] as bool) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -113,14 +117,48 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     enabled ? next.add(source) : next.remove(source);
     next.add(TrackingSource.local);
     setState(() => _scrobble = next);
-    await TrackingSourceStorage.setTrackingScrobbleTargets(next);
+    await StorageService.setTrackingScrobbleTargets(next);
     MainPageBridge.notifyIntegrationChanged();
+  }
+
+  Future<void> _setSyncAllContinueWatching(bool enabled) async {
+    setState(() => _syncAllContinueWatching = enabled);
+    await StorageService.setSyncAllContinueWatching(enabled);
+    MainPageBridge.notifyIntegrationChanged();
+    if (!enabled || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Syncing all watch history, Continue Watching and watchlists…',
+        ),
+      ),
+    );
+    try {
+      final result = await ContinueWatchingSyncService.matchAll();
+      MainPageBridge.notifyIntegrationChanged();
+      if (!mounted || !_syncAllContinueWatching) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(result.summary)));
+    } catch (_) {
+      if (!mounted || !_syncAllContinueWatching) return;
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Sync interrupted. Pending watch history will retry on the next refresh.',
+            ),
+          ),
+        );
+    }
   }
 
   Future<void> _setProgress(WatchProgressSource? source) async {
     if (source == null) return;
     setState(() => _progress = source);
-    await TrackingSourceStorage.setWatchProgressSource(source);
+    await StorageService.setWatchProgressSource(source);
     MainPageBridge.notifyHomeSettingsChanged();
     MainPageBridge.notifyIntegrationChanged();
   }
@@ -129,7 +167,7 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     final next = Set<TrackingSource>.of(_ticks);
     enabled ? next.add(source) : next.remove(source);
     setState(() => _ticks = next);
-    await TrackingSourceStorage.setHomeTickSources(next);
+    await StorageService.setHomeTickSources(next);
     MainPageBridge.notifyHomeSettingsChanged();
   }
 
@@ -145,6 +183,15 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
     blurb:
         'Which services record what you watch. Nextup always keeps its own progress.',
     children: [
+      SettingsToggleTile(
+        icon: Icons.sync_rounded,
+        title: 'Sync everywhere',
+        subtitle: _syncAllContinueWatching
+            ? 'Keeps watched items, Continue Watching, and watchlists matched in Nextup and every connected tracker'
+            : 'Keep watch history, progress, and watchlists separate',
+        value: _syncAllContinueWatching,
+        onChanged: _setSyncAllContinueWatching,
+      ),
       for (final source in TrackingSource.values)
         CheckboxListTile(
           value: _scrobble.contains(source),
@@ -179,9 +226,25 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: DropdownButtonFormField<WatchProgressSource>(
           initialValue: _progress,
-          decoration: const InputDecoration(
+          dropdownColor: GlassChrome.enabled(AppThemeScope.of(context))
+              ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+              : null,
+          borderRadius: GlassChrome.enabled(AppThemeScope.of(context))
+              ? BorderRadius.circular(16)
+              : null,
+          decoration: InputDecoration(
             labelText: 'Progress source',
-            border: OutlineInputBorder(),
+            filled: GlassChrome.enabled(AppThemeScope.of(context)),
+            fillColor: GlassChrome.enabled(AppThemeScope.of(context))
+                ? GlassChrome.field(AppThemeScope.of(context))
+                : null,
+            border: OutlineInputBorder(
+              borderSide: GlassChrome.enabled(AppThemeScope.of(context))
+                  ? BorderSide(
+                      color: GlassChrome.edge(AppThemeScope.of(context)),
+                    )
+                  : const BorderSide(),
+            ),
           ),
           items: [
             for (final source in WatchProgressSource.values)
@@ -312,6 +375,17 @@ class _TrackingSettingsPageState extends State<TrackingSettingsPage> {
               child: ListTile(
                 autofocus: index == 0,
                 selected: index == _selectedSection,
+                shape: GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.shape(
+                        AppThemeScope.of(context),
+                        radius: 12,
+                        active: index == _selectedSection,
+                      )
+                    : null,
+                selectedTileColor:
+                    GlassChrome.enabled(AppThemeScope.of(context))
+                    ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+                    : null,
                 leading: Icon(icons[index]),
                 title: Text(labels[index]),
                 trailing: const Icon(Icons.chevron_right_rounded),

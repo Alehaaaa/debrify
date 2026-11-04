@@ -3,13 +3,17 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:debrify/models/stremio_addon.dart';
-import 'package:debrify/services/storage/launch_ident_storage.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/widgets/launch/launch_ident.dart';
 
 import 'package:debrify/services/launch_animation/launch_animation_library.dart';
 import 'package:debrify/services/main_page_bridge.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
+import 'package:debrify/services/storage_service.dart';
+import 'package:debrify/services/startup_connection.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:debrify/utils/app_storage.dart';
 import 'package:debrify/utils/platform_util.dart';
 import 'package:debrify/widgets/app_initializer.dart';
@@ -67,12 +71,20 @@ void main() {
       'failure',
       'lateInit',
       'builtIn',
+      'offline',
     ]) {
       final ready = ['ready', 'lateInit', 'builtIn'].contains(mode);
       testWidgets('imported startup completes its flow (TV=$tv, mode=$mode)', (
         tester,
       ) async {
         disableRuntimeFonts();
+        StartupConnection.reset();
+        StartupConnection.connectivityOverride = () async => [
+          mode == 'offline' ? ConnectivityResult.none : ConnectivityResult.wifi,
+        ];
+        StartupConnection.clientOverride = () =>
+            MockClient((_) async => http.Response('', 200));
+        addTearDown(StartupConnection.reset);
         final manifest = Completer<StremioAddon>();
         final previousFetcher = StremioService.instance.debugManifestFetcher;
         var manifestRequested = false;
@@ -117,11 +129,11 @@ void main() {
             '${root.path}/source.lottie',
           ).writeAsBytes(await imagePairBytes(mode == 'lateInit' ? 30 : 150));
           final entry = await LaunchAnimationLibrary.instance.install(source);
-          await LaunchIdentStorage.setImportedLaunchAnimation(entry.id);
+          await StorageService.setImportedLaunchAnimation(entry.id);
           if (mode == 'builtIn') {
-            await LaunchIdentStorage.setLaunchAnimation('trace');
+            await StorageService.setLaunchAnimation('trace');
           }
-          await LaunchIdentStorage.getLaunchAnimation();
+          await StorageService.getLaunchAnimation();
         });
         addTearDown(() async {
           await root.delete(recursive: true);
@@ -151,7 +163,7 @@ void main() {
           );
           await tester.pump();
         }
-        expect(homeMounts, 0);
+        if (mode != 'offline') expect(homeMounts, 0);
         final imported = mode == 'builtIn'
             ? null
             : tester
@@ -183,7 +195,7 @@ void main() {
           if (mode == 'builtIn') {
             expect(find.byType(ImportedLaunchPlayer), findsNothing);
             final duration = launchIdentFor(
-              LaunchIdentStorage.launchAnimationCached,
+              StorageService.launchAnimationCached,
             ).revealDuration;
             await tester.pump(duration - const Duration(milliseconds: 100));
             expect(find.byKey(const Key('home')), findsNothing);
@@ -200,7 +212,8 @@ void main() {
                   .value,
               1,
             );
-            expect(find.byKey(const Key('home')), findsNothing);
+            // Catalog seeding can still be pending after the shell is usable.
+            expect(find.byKey(const Key('home')), findsOneWidget);
             manifest.completeError(StateError('offline during initialization'));
             await tester.runAsync(
               () => Future<void>.delayed(const Duration(milliseconds: 50)),
@@ -213,6 +226,19 @@ void main() {
           await tester.pump(const Duration(seconds: 1));
           expect(find.byType(ImportedLaunchPlayer), findsNothing);
           expect(tester.takeException(), isNull);
+          expectAssetsReleased();
+          await tester.pumpWidget(const SizedBox());
+          return;
+        }
+        if (mode == 'offline') {
+          // Offline bypasses both a long imported ident and Home readiness.
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 300));
+          await tester.pump(const Duration(seconds: 1));
+          await tester.pump(const Duration(seconds: 1));
+          expect(find.byKey(const Key('home')), findsOneWidget);
+          expect(find.byType(ImportedLaunchPlayer), findsNothing);
+          expect(MainPageBridge.homeBoardReady.value, isFalse);
           expectAssetsReleased();
           await tester.pumpWidget(const SizedBox());
           return;
@@ -273,9 +299,9 @@ void main() {
           expect(find.byType(ImportedLaunchPlayer), findsOneWidget);
         }
         if (mode == 'slow') {
-          await tester.pump(const Duration(seconds: 9));
+          await tester.pump(Duration(milliseconds: tv ? 1900 : 700));
           expect(find.byType(ImportedLaunchPlayer), findsOneWidget);
-          await tester.pump(const Duration(seconds: 1));
+          await tester.pump(const Duration(milliseconds: 200));
         }
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(seconds: 1));

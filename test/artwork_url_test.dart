@@ -19,6 +19,21 @@ void main() {
       );
     });
 
+    test('upgrades MetaHub small shelf art too', () {
+      expect(
+        highQualityArtworkUrl(
+          'https://images.metahub.space/poster/small/tt123/img',
+        ),
+        'https://images.metahub.space/poster/large/tt123/img',
+      );
+      expect(
+        highQualityArtworkUrl(
+          'https://images.metahub.space/background/small/tt123/img',
+        ),
+        'https://images.metahub.space/background/large/tt123/img',
+      );
+    });
+
     test('leaves other providers and already-large art alone', () {
       expect(
         highQualityArtworkUrl('https://image.tmdb.org/t/p/w500/poster.jpg'),

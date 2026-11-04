@@ -13,7 +13,7 @@ class FailedSavedSource {
     required Future<void> Function() removePin,
     Future<void> Function()? removeCache,
   }) async {
-    for (final operation in [removePin, if (removeCache != null) removeCache]) {
+    for (final operation in [removePin, ?removeCache]) {
       try {
         await operation();
       } catch (error) {

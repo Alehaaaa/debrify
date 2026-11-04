@@ -410,6 +410,16 @@ class ProfileDataGenerationManager {
     String key,
     Object? value,
   ) async {
+    // SharedPreferences exposes platform string arrays as an untyped List on
+    // some platforms (notably iOS). Normalize a valid list before staging it:
+    // a copied generation must accept the same preference representation that
+    // a live generation can read.
+    if (value is List) {
+      if (value.any((item) => item is! String)) {
+        throw FormatException('Unsupported preference value for $key');
+      }
+      value = value.cast<String>().toList(growable: false);
+    }
     if (!ProfilePreferenceBudget.admits(prefs, key, value)) {
       throw StateError(
         "The restored profile exceeds this device's preference storage capacity.",

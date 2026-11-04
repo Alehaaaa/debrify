@@ -25,6 +25,28 @@ HomeCollectionSection collection() => HomeCollectionSection(
 );
 
 void main() {
+  testWidgets('reordering loaded catalogs republishes without new arrivals', (
+    tester,
+  ) async {
+    final publications = <List<String>>[];
+    final progress = HomeLoadProgress(
+      isCurrent: () => true,
+      rowId: (row) => row.catalog.id,
+      onPublish: (rows, _) =>
+          publications.add([for (final row in rows) row.catalog.id]),
+    );
+    addTearDown(progress.dispose);
+    progress.catalogOrder(['a', 'b']);
+    progress.catalog(catalog('a'));
+    progress.catalog(catalog('b'));
+    await tester.pump(const Duration(milliseconds: 32));
+    expect(publications.last, ['a', 'b']);
+
+    progress.catalogOrder(['b', 'a']);
+    await tester.pump(const Duration(milliseconds: 32));
+    expect(publications.last, ['b', 'a']);
+  });
+
   test('late list replacement preserves paged catalogs without duplicates', () {
     final paged = catalog('paged')..nextSkip = 300;
     const choice = TraktListChoice.builtin(TraktSeeAllList.watchlist);

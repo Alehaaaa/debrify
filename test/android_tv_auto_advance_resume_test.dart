@@ -12,16 +12,13 @@ String _between(String source, String start, String end) {
 
 void main() {
   final nativePlayer = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvPlaybackStartController.kt',
+    'android/app/src/main/kotlin/com/debrify/app/tv/AndroidTvTorrentPlayerActivity.kt',
   ).readAsStringSync();
 
   test('native TV auto-advance ignores every saved resume position', () {
-    final start = 'fun playItem(';
-    expect(nativePlayer.indexOf(start), isNonNegative);
-    expect(nativePlayer.indexOf(start), nativePlayer.lastIndexOf(start));
     final playItem = _between(
       nativePlayer,
-      start,
+      'private fun playItem(',
       'private fun resolveAndPlay(',
     );
 
@@ -33,23 +30,21 @@ void main() {
     );
     expect(
       playItem,
-      contains('if (autoAdvance || suppressTrakt || suppressResume) 0.0'),
+      contains(
+        'if (autoAdvance || suppressTrakt || suppressResume) 0.0',
+      ),
     );
   });
 
-  final upNextController = File(
-    'android/app/src/main/kotlin/com/debrify/app/tv/TvUpNextController.kt',
-  ).readAsStringSync();
-
   test('native TV Up Next countdown is treated as an auto-advance', () {
     final triggerUpNext = _between(
-      upNextController,
-      'fun triggerUpNext()',
-      'fun dismissUpNext()',
+      nativePlayer,
+      'private fun triggerUpNext()',
+      'private fun dismissUpNext()',
     );
 
-    final autoAdvance = triggerUpNext.indexOf('host.isAutoAdvancing = true');
-    final play = triggerUpNext.indexOf('host.playItem(target)');
+    final autoAdvance = triggerUpNext.indexOf('isAutoAdvancing = true');
+    final play = triggerUpNext.indexOf('playItem(target)');
     expect(autoAdvance, isNonNegative);
     expect(play, greaterThan(autoAdvance));
   });

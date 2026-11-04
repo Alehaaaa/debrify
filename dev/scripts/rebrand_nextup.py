@@ -28,11 +28,6 @@ def replace_dart_literal(match: re.Match[str]) -> str:
 
 
 def update(path: Path, transform) -> bool:
-    # Upstream refactors can remove or relocate optional presentation files.
-    # Keep this script usable across those revisions instead of requiring the
-    # fork to restore obsolete paths just to apply its presentation branding.
-    if not path.is_file():
-        return False
     original = path.read_bytes()
     # Preserve CRLF and original encodings by working on UTF-8 bytes decoded
     # without universal-newline conversion.
@@ -60,15 +55,13 @@ def main() -> None:
         "ios/Flutter/Release.xcconfig": [('= Debrify', '= Nextup')],
         "tvos/Flutter/Debug.xcconfig": [('DEBRIFY_APP_DISPLAY_NAME = Debrify', 'DEBRIFY_APP_DISPLAY_NAME = Nextup')],
         "tvos/Flutter/Release.xcconfig": [('DEBRIFY_APP_DISPLAY_NAME = Debrify', 'DEBRIFY_APP_DISPLAY_NAME = Nextup')],
-        # Keep the debrify:// protocol stable for existing links and peers.
-        "ios/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to')],
+        "ios/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to'), ('<string>debrify</string>', '<string>Nextup</string>')],
         "macos/Runner/Info.plist": [('Debrify connects to', 'Nextup connects to')],
         "macos/Runner/Configs/AppInfo.xcconfig": [
             ('DEBRIFY_PRODUCT_NAME = debrify', 'DEBRIFY_PRODUCT_NAME = Nextup'),
             ('DEBRIFY_APP_DISPLAY_NAME = $(PRODUCT_NAME)', 'DEBRIFY_APP_DISPLAY_NAME = Nextup'),
         ],
-        # CFBundleDisplayName is branded through xcconfig; the literal here is
-        # the stable debrify:// URL scheme and must not be renamed.
+        "tvos/Runner/Info.plist": [('<string>debrify</string>', '<string>Nextup</string>')],
         "tvos/TopShelf/Info.plist": [('Debrify Top Shelf', 'Nextup Top Shelf')],
         "web/index.html": [('content="debrify"', 'content="Nextup"'), ('<title>debrify</title>', '<title>Nextup</title>')],
         "web/manifest.json": [('"debrify"', '"Nextup"')],

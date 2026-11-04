@@ -1,16 +1,15 @@
 import 'dart:async';
 
-import 'package:debrify/services/storage/tracking_source_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../services/analytics_service.dart';
 import '../../services/main_page_bridge.dart';
+import '../../services/storage_service.dart';
 import '../../services/trakt/trakt_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 
 class TraktSettingsPage extends StatefulWidget {
   const TraktSettingsPage({super.key});
@@ -43,7 +42,6 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('trakt_settings');
     _loadSettings();
   }
 
@@ -155,10 +153,6 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
         _username = username;
         _resetDeviceCodeState();
       });
-      AnalyticsService.integrationConnected('trakt', {
-        'surface': 'settings',
-        'method': 'device_code',
-      });
       MainPageBridge.notifyIntegrationChanged();
       // Device-code card (and its Cancel) just left the tree — refocus.
       _focusOnTv(_primaryButtonFocus);
@@ -242,8 +236,7 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
       _username = null;
     });
     MainPageBridge.notifyIntegrationChanged();
-    final fellBack =
-        await TrackingSourceStorage.takeTrackingProgressFallbackNotice();
+    final fellBack = await StorageService.takeTrackingProgressFallbackNotice();
     if (!mounted) return;
     _showSnackBar(
       fellBack
@@ -430,11 +423,13 @@ class _TraktSettingsPageState extends State<TraktSettingsPage> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: t.panel2,
-            borderRadius: app.shape.br(12),
-            border: Border.all(color: t.line),
-          ),
+          decoration: GlassChrome.enabled(app)
+              ? GlassChrome.decoration(app, radius: app.shape.br(12))
+              : BoxDecoration(
+                  color: t.panel2,
+                  borderRadius: app.shape.br(12),
+                  border: Border.all(color: t.line),
+                ),
           child: Column(
             children: [
               Text(

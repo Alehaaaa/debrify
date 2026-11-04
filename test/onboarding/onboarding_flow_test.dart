@@ -8,7 +8,7 @@ import 'package:debrify/services/mdblist/mdblist_service.dart';
 import 'package:debrify/services/profiles/device_key_provider.dart';
 import 'package:debrify/services/profiles/profile_bootstrap.dart';
 import 'package:debrify/services/profiles/profile_restore_coordinator.dart';
-import 'package:debrify/services/storage/provider_credential_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/webdav_protocol_client.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_activation.dart';
 import 'package:debrify/services/webdav_sync/webdav_sync_binding_store.dart';
@@ -90,7 +90,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(result, isFalse);
-      expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+      expect(await StorageService.isInitialSetupComplete(), isTrue);
     },
   );
 
@@ -119,7 +119,7 @@ void main() {
                     InitialSetupFlow(
                       isTelevisionOverride: false,
                       engineManager: engines,
-                      engineImportOverride: (_, __) async => true,
+                      engineImportOverride: (_, _) async => true,
                     ),
                   ),
                 ),
@@ -148,7 +148,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result, isTrue);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+    expect(await StorageService.isInitialSetupComplete(), isTrue);
   });
 
   testWidgets('backup restore only completes onboarding after success', (
@@ -204,7 +204,7 @@ void main() {
     expect(restoreCalls, 1);
     expect(result, isNull);
     expect(find.text('Restore from a backup'), findsOneWidget);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isFalse);
+    expect(await StorageService.isInitialSetupComplete(), isFalse);
 
     restoreSucceeds = true;
     await tester.tap(find.text('Restore from a backup'));
@@ -212,78 +212,80 @@ void main() {
     expect(restoreCalls, 2);
     expect(handoffCalls, 0);
     expect(result, isTrue);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+    expect(await StorageService.isInitialSetupComplete(), isTrue);
   });
 
-  testWidgets('device-graph restore clears setup before handing off authority', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues(<String, Object>{});
-    await tester.binding.setSurfaceSize(const Size(800, 700));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    final report = ProfileGraphRestoreReport(
-      profilesImported: 2,
-      resourcesImported: 1,
-      grantsImported: 1,
-      bindingsImported: 0,
-      pinResetsRequired: 0,
-      importedProfileIds: const <String>[
-        'profile-imported-admin',
-        'profile-imported-member',
-      ],
-    );
-    var handoffCalls = 0;
-    bool? result;
+  testWidgets(
+    'device-graph restore clears setup before handing off authority',
+    (tester) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      await tester.binding.setSurfaceSize(const Size(800, 700));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final report = ProfileGraphRestoreReport(
+        profilesImported: 2,
+        resourcesImported: 1,
+        grantsImported: 1,
+        bindingsImported: 0,
+        pinResetsRequired: 0,
+        importedProfileIds: const <String>[
+          'profile-imported-admin',
+          'profile-imported-member',
+        ],
+      );
+      var handoffCalls = 0;
+      bool? result;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => FilledButton(
-            onPressed: () async {
-              result = await Navigator.of(context).push<bool>(
-                MaterialPageRoute(
-                  builder: (_) => OnboardingTheme.scope(
-                    InitialSetupFlow(
-                      isTelevisionOverride: false,
-                      engineManager: FakeRemoteEngineManager(
-                        const <RemoteEngineInfo>[],
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => FilledButton(
+              onPressed: () async {
+                result = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(
+                    builder: (_) => OnboardingTheme.scope(
+                      InitialSetupFlow(
+                        isTelevisionOverride: false,
+                        engineManager: FakeRemoteEngineManager(
+                          const <RemoteEngineInfo>[],
+                        ),
+                        backupRestoreOverride: () async =>
+                            ProfileBackupRestoreResult.deviceGraph(
+                              authorizingProfileId:
+                                  ProfileBootstrap.freshAdminId,
+                              graphReport: report,
+                            ),
+                        backupHandoffOverride: (receivedReport) async {
+                          handoffCalls++;
+                          expect(receivedReport, same(report));
+                          expect(
+                            await StorageService.isInitialSetupComplete(),
+                            isTrue,
+                            reason:
+                                'the bootstrap session must clear onboarding '
+                                'before switching profiles',
+                          );
+                        },
                       ),
-                      backupRestoreOverride: () async =>
-                          ProfileBackupRestoreResult.deviceGraph(
-                            authorizingProfileId: ProfileBootstrap.freshAdminId,
-                            graphReport: report,
-                          ),
-                      backupHandoffOverride: (receivedReport) async {
-                        handoffCalls++;
-                        expect(receivedReport, same(report));
-                        expect(
-                          await ProviderCredentialStorage.isInitialSetupComplete(),
-                          isTrue,
-                          reason:
-                              'the bootstrap session must clear onboarding '
-                              'before switching profiles',
-                        );
-                      },
                     ),
                   ),
-                ),
-              );
-            },
-            child: const Text('Open'),
+                );
+              },
+              child: const Text('Open'),
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('Open'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Restore from a backup'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Restore from a backup'));
+      await tester.pumpAndSettle();
 
-    expect(handoffCalls, 1);
-    expect(result, isTrue);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
-  });
+      expect(handoffCalls, 1);
+      expect(result, isTrue);
+      expect(await StorageService.isInitialSetupComplete(), isTrue);
+    },
+  );
 
   testWidgets('cancelled WebDAV login leaves unrelated staging untouched', (
     tester,
@@ -319,7 +321,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => null,
+      login: (_, _) async => null,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -359,7 +361,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -400,7 +402,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -414,7 +416,7 @@ void main() {
     );
     expect(find.text('Log in with WebDAV'), findsOneWidget);
     expect(result.value, isNull);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isFalse);
+    expect(await StorageService.isInitialSetupComplete(), isFalse);
     expect((await store.load()).bindings, isEmpty);
   });
 
@@ -442,7 +444,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -454,7 +456,7 @@ void main() {
     );
     expect(find.text('Log in with WebDAV'), findsOneWidget);
     expect(result.value, isNull);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isFalse);
+    expect(await StorageService.isInitialSetupComplete(), isFalse);
     expect((await store.load()).bindings, isEmpty);
   });
 
@@ -483,7 +485,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -498,7 +500,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(result.value, isTrue);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+    expect(await StorageService.isInitialSetupComplete(), isTrue);
     expect((await store.load()).activeBinding?.completeOnboarding, isFalse);
   });
 
@@ -541,7 +543,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -606,7 +608,7 @@ void main() {
       tester,
       controller: controller,
       result: result,
-      login: (_, __) async => _webDavCredentials,
+      login: (_, _) async => _webDavCredentials,
     );
 
     await tester.tap(find.text('Log in with WebDAV'));
@@ -628,7 +630,7 @@ void main() {
     }
 
     expect(result.value, isTrue);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+    expect(await StorageService.isInitialSetupComplete(), isTrue);
   });
 
   testWidgets('Back cancels an in-flight engine import transition', (
@@ -650,7 +652,7 @@ void main() {
                 displayName: 'Alpha',
               ),
             ]),
-            engineImportOverride: (_, __) => importResult.future,
+            engineImportOverride: (_, _) => importResult.future,
           ),
         ),
       ),
@@ -734,7 +736,7 @@ void main() {
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
     expect(result, isFalse);
-    expect(await ProviderCredentialStorage.isInitialSetupComplete(), isTrue);
+    expect(await StorageService.isInitialSetupComplete(), isTrue);
   });
 }
 
@@ -975,7 +977,7 @@ final class _PostHandoffActivation implements WebDavSyncActivationController {
     String bindingId, {
     required bool replacementConfirmed,
   }) async {
-    await ProviderCredentialStorage.setInitialSetupComplete(true);
+    await StorageService.setInitialSetupComplete(true);
     throw WebDavSyncPostHandoffException(StateError('warmup failed'));
   }
 

@@ -1,5 +1,5 @@
 import 'package:debrify/services/engine/remote_engine_manager.dart';
-import 'package:debrify/services/storage/tv_display_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/utils/platform_util.dart';
 import 'package:debrify/widgets/initial_setup_flow.dart';
 import 'package:debrify/widgets/onboarding/onboarding_models.dart';
@@ -16,7 +16,7 @@ void main() {
 
   setUp(() {
     PlatformUtil.debugSetAndroidTvCached(true);
-    TvDisplayStorage.tvKeyboardEnabledCached = true;
+    StorageService.tvKeyboardEnabledCached = true;
   });
 
   tearDown(() => PlatformUtil.debugSetAndroidTvCached(null));
@@ -40,7 +40,7 @@ void main() {
             InitialSetupFlow(
               isTelevisionOverride: true,
               engineManager: engines,
-              validationOverride: (_, __, ___) async => true,
+              validationOverride: (_, _, _) async => true,
             ),
           ),
         ),
@@ -103,7 +103,7 @@ void main() {
               engineManager: FakeRemoteEngineManager(
                 const <RemoteEngineInfo>[],
               ),
-              validationOverride: (_, __, ___) async => true,
+              validationOverride: (_, _, _) async => true,
             ),
           ),
         ),

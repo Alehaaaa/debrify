@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:debrify/services/storage/iptv_favorites_storage.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/iptv_playlist.dart' show IptvChannel;
 import '../../services/iptv_media_store.dart' show IptvListMeta;
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/manual_order_list.dart';
 import 'widgets/settings_widgets.dart';
@@ -38,7 +38,7 @@ class _IptvChannelOrderPageState extends State<IptvChannelOrderPage> {
   }
 
   Future<void> _load() async {
-    final lists = await IptvFavoritesStorage.getIptvLists();
+    final lists = await StorageService.getIptvLists();
     if (!mounted) return;
     setState(() {
       _lists = lists;
@@ -52,7 +52,7 @@ class _IptvChannelOrderPageState extends State<IptvChannelOrderPage> {
   }
 
   Future<void> _openList(IptvListMeta list) async {
-    final stored = await IptvFavoritesStorage.getIptvListChannels(list.id);
+    final stored = await StorageService.getIptvListChannels(list.id);
     if (!mounted) return;
     final items = <_OrderItem>[
       for (final entry in stored.entries)
@@ -67,10 +67,9 @@ class _IptvChannelOrderPageState extends State<IptvChannelOrderPage> {
         title: list.name,
         description: 'This order is used on the IPTV page and Home.',
         items: items,
-        onSave: (ordered) => IptvFavoritesStorage.reorderIptvListChannels(
-          list.id,
-          [for (final item in ordered) item.channel.url],
-        ),
+        onSave: (ordered) => StorageService.reorderIptvListChannels(list.id, [
+          for (final item in ordered) item.channel.url,
+        ]),
       ),
     );
   }
@@ -87,7 +86,7 @@ class _IptvChannelOrderPageState extends State<IptvChannelOrderPage> {
       group: group.isEmpty ? null : group,
       duration: (metadata['duration'] as num?)?.toInt() ?? -1,
       contentType: metadata['contentType'] as String?,
-      httpHeaders: IptvFavoritesStorage.iptvFavoriteHeaders(metadata),
+      httpHeaders: StorageService.iptvFavoriteHeaders(metadata),
     );
   }
 

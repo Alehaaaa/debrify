@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'package:debrify/services/storage/torrent_search_storage.dart';
 import '../../../services/source_selection_diagnostics.dart';
 
 import 'package:flutter/material.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../../models/torrent.dart';
+import '../../../services/storage_service.dart';
 import '../../../services/series_source_fetcher.dart';
 import '../../../services/stream_badges_service.dart';
 import '../../../utils/platform_util.dart';
@@ -65,8 +65,8 @@ class _SourceSheetState extends State<SourceSheet> {
   bool _addonLogos = false;
 
   Future<void> _loadTextMode() async {
-    final value = await TorrentSearchStorage.getUseAddonTextFormatting();
-    final logos = await TorrentSearchStorage.getShowAddonLogos();
+    final value = await StorageService.getUseAddonTextFormatting();
+    final logos = await StorageService.getShowAddonLogos();
     if (mounted) setState(() { _addonText = value; _addonLogos = logos; });
   }
   static const _glass = Color(0xFF101012);
@@ -382,7 +382,7 @@ class _SourceSheetState extends State<SourceSheet> {
           );
           return;
         }
-        if (!_sourceScrollController.hasClients || targetIndex == null) return;
+        if (!_sourceScrollController.hasClients) return;
         // Source cards have variable heights (addon text and badges). Walk
         // until the lazy target mounts, then align its actual geometry.
         final firstMounted = _visibleEntries.indexWhere(
@@ -1103,7 +1103,7 @@ class _SourceRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ValueListenableBuilder(
     valueListenable: StreamBadgesService.instance.matcher,
-    builder: (_, matcher, __) => _buildRow(!matcher.isEmpty),
+    builder: (_, matcher, _) => _buildRow(!matcher.isEmpty),
   );
 
   Widget _buildRow(bool customBadgesConfigured) {

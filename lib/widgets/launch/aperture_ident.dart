@@ -76,7 +76,7 @@ class _AperturePainter extends CustomPainter {
     _g = _u * 2.9;
     _r = sqrt(w * w + h * h);
     _mark = identPlayPath(_g);
-    _bevel = identPlayPath(_g * 0.55);
+    _bevel = identMarkSheen(_g);
     _markRect = Rect.fromCenter(
         center: Offset.zero, width: _g * 0.86, height: _g * 0.86);
     _markShader = const LinearGradient(

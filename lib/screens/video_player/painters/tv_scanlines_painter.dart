@@ -17,7 +17,11 @@ class TvScanlinesPatternPainter extends CustomPainter {
 
     // Draw lines every 4 pixels with animated offset
     for (double y = oscillation; y < size.height + 40; y += 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        paint,
+      );
     }
   }
 

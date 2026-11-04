@@ -1,7 +1,6 @@
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/theme_storage.dart';
 import 'package:flutter/material.dart';
 
+import '../services/storage_service.dart';
 import '../services/text_brightness.dart';
 import 'dart:async';
 
@@ -67,6 +66,11 @@ class AppThemeController extends ChangeNotifier {
   String _structureId = '';
   String get structureId => _structureId;
 
+  /// The FORM on screen (Appearance → Form): `legacy` (Classic) or a premium
+  /// spec id. With none picked, a premium palette keeps its own form and
+  /// every other palette is Classic — exactly how each rendered before form
+  /// and palette were split. The Classic palette is hand-built and always
+  /// Classic.
   /// The structure the CORE takes, or null to keep the palette's own —
   /// Classic form, or a premium palette wearing its own form.
   String? get formCoreId {
@@ -74,11 +78,6 @@ class AppThemeController extends ChangeNotifier {
     return s == AppThemes.legacyId || s == _id ? null : s;
   }
 
-  /// The FORM on screen (Appearance → Form): `legacy` (Classic) or a premium
-  /// spec id. With none picked, a premium palette keeps its own form and
-  /// every other palette is Classic — exactly how each rendered before form
-  /// and palette were split. The Classic palette is hand-built and always
-  /// Classic.
   String get effectiveStructureId {
     if (isLegacy) return AppThemes.legacyId;
     if (_structureId.isNotEmpty &&
@@ -125,13 +124,13 @@ class AppThemeController extends ChangeNotifier {
   /// the notify costs the startup path nothing.
   static Future<void> warm() async {
     try {
-      instance._id = await ThemeStorage.getAppTheme();
-      instance._structureId = await ThemeStorage.getAppStructure();
+      instance._id = await StorageService.getAppTheme();
+      instance._structureId = await StorageService.getAppStructure();
       // Decoded here rather than on every recompute: a malformed value costs
       // one parse at startup and degrades to none, and the running app never
       // touches storage to answer "what did the user change".
       instance._overrides =
-          ThemeOverrides.decode(await ThemeStorage.getThemeOverrides());
+          ThemeOverrides.decode(await StorageService.getThemeOverrides());
       // Notify LAST, after both inputs have landed: TextBrightnessController
       // warms first and can already have driven a recompute against the
       // outgoing profile's id, so this is what supersedes it.
@@ -152,7 +151,7 @@ class AppThemeController extends ChangeNotifier {
   /// mirror last was, and the picker UI says so.
   Future<void> select(String id) async {
     final normalized =
-        (id == AppThemes.legacyId || DetailPageStorage.kDetailThemes.contains(id))
+        (id == AppThemes.legacyId || StorageService.kDetailThemes.contains(id))
         ? id
         : AppThemes.legacyId;
     // NOT `normalized == _id` alone. `select` also writes the `detail_theme`
@@ -160,13 +159,13 @@ class AppThemeController extends ChangeNotifier {
     // Details Theme by hand, apply it again — the app theme already matches,
     // this returns, and the mirror is never repaired. Compare BOTH.
     final mirrorOk = normalized == AppThemes.legacyId ||
-        DetailPageStorage.detailThemeCached == normalized;
+        StorageService.detailThemeCached == normalized;
     if (normalized == _id && mirrorOk) {
       // Nothing to recompute or publish — but re-picking the ACTIVE theme
       // (e.g. applying the Classic Look on a legacy app) is still an
       // explicit choice, and the defaults-generation migration reads an
       // absent `app_theme` key as "never chosen". Persist it quietly.
-      unawaited(ThemeStorage.setAppTheme(normalized).catchError((_) {}));
+      unawaited(StorageService.setAppTheme(normalized).catchError((_) {}));
       return;
     }
     _id = normalized;
@@ -177,20 +176,20 @@ class AppThemeController extends ChangeNotifier {
       // with no later notification. A failed write then costs stickiness
       // across restart, never on-screen state (setDetailTheme re-assigns the
       // same value when it completes).
-      DetailPageStorage.detailThemeCached = normalized;
+      StorageService.detailThemeCached = normalized;
     }
     _recompute();
     final seq = ++_persistSeq;
     try {
       if (normalized != AppThemes.legacyId) {
-        await DetailPageStorage.setDetailTheme(normalized);
+        await StorageService.setDetailTheme(normalized);
         // Superseded mid-flight: the newer select owns the final state, and
         // writing app_theme now could land AFTER its writes. Our detail write
         // is harmless — the newer call's own detail write was issued later
         // and the preference channel is FIFO, so it wins the key.
         if (seq != _persistSeq) return;
       }
-      await ThemeStorage.setAppTheme(normalized);
+      await StorageService.setAppTheme(normalized);
     } catch (e) {
       debugPrint('AppThemeController: persist failed: $e');
     }
@@ -202,19 +201,18 @@ class AppThemeController extends ChangeNotifier {
   /// separating the two.
   Future<void> selectStructure(String id) async {
     final normalized =
-        (id == AppThemes.legacyId ||
-            DetailPageStorage.kDetailThemes.contains(id))
+        (id == AppThemes.legacyId || StorageService.kDetailThemes.contains(id))
         ? id
         : '';
     if (normalized == _structureId) {
-      unawaited(ThemeStorage.setAppStructure(normalized).catchError((_) {}));
+      unawaited(StorageService.setAppStructure(normalized).catchError((_) {}));
       return;
     }
     _structureId = normalized;
-    ThemeStorage.appStructureCached = normalized;
+    StorageService.appStructureCached = normalized;
     _recompute();
     try {
-      await ThemeStorage.setAppStructure(normalized);
+      await StorageService.setAppStructure(normalized);
     } catch (e) {
       debugPrint('AppThemeController: structure persist failed: $e');
     }
@@ -257,7 +255,7 @@ class AppThemeController extends ChangeNotifier {
     // mid-select made select bail after writing `detail_theme` and never write
     // `app_theme`, leaving the two disagreeing after a restart.
     try {
-      await ThemeStorage.setThemeOverrides(value.encode());
+      await StorageService.setThemeOverrides(value.encode());
     } catch (e) {
       debugPrint('AppThemeController: override persist failed: $e');
     }
@@ -275,6 +273,7 @@ class AppThemeController extends ChangeNotifier {
       // Via the per-preset cache, NOT a fresh build — under legacy the root
       // theme and every boundary's frozen theme are the same object.
       _themeData = legacyThemeData;
+      StorageService.appAccentArgb = _theme.settings.accent.toARGB32();
       return;
     }
     // Preset first, then derivation: subprofile tones (settings.dim etc.) are
@@ -326,5 +325,6 @@ class AppThemeController extends ChangeNotifier {
     }
     _theme = _theme.withForm(structure);
     _themeData = AppThemeAdapter.themed(_theme, preset);
+    StorageService.appAccentArgb = _theme.settings.accent.toARGB32();
   }
 }

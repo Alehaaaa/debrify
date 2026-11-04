@@ -199,7 +199,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
   /// construction: plain focusable ListTiles in a dialog, first one
   /// autofocused, nothing trailing inside a focused row's rect.
   Future<void> _profileActions(UserProfile profile) async {
-    final action = await showDialog<String>(
+    final action = await showSettingsDialog<String>(
       context: context,
       builder: (dialogContext) => SimpleDialog(
         title: Text(profile.name),
@@ -275,7 +275,7 @@ class _ProfilesSettingsPageState extends State<ProfilesSettingsPage> {
       ProfileBootstrap.registry,
     );
     if (!mounted) return;
-    await showDialog<void>(
+    await showSettingsDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Profile diagnostics'),
@@ -614,7 +614,7 @@ class _ProfileRosterTileState extends State<_ProfileRosterTile> {
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
     final t = app.settings;
-    final spotlight = app.id == 'spotlight';
+    final spotlight = app.formId == 'spotlight';
     final lit = _focusNode.hasFocus || _hovered;
     final inverse =
         spotlight && lit && app.focus.expression == FocusExpression.parallax;

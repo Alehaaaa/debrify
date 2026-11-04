@@ -65,7 +65,9 @@ class FocusExpressionBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    final corners = artwork ? app.shape.brImg(radius) : app.shape.br(radius);
+    final corners = artwork
+        ? app.shape.brImg(radius)
+        : app.shape.br(radius);
     final tv = PlatformUtil.isTelevision;
     final f = app.focus;
     final motion = AppMotion.of(context);
@@ -82,8 +84,7 @@ class FocusExpressionBox extends StatelessWidget {
     // [inverted], which is the only thing that knows which of its children are
     // ink; without it the expression degrades to the ring, which is a cursor
     // that always works rather than one that silently does nothing.
-    final replacesSurface =
-        f.expression == FocusExpression.flood ||
+    final replacesSurface = f.expression == FocusExpression.flood ||
         f.expression == FocusExpression.invert;
     final expression = replacesSurface && inverted == null
         ? FocusExpression.ring

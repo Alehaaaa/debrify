@@ -1,13 +1,84 @@
+import 'dart:convert';
+
 import '../../models/media_identity.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../models/advanced_search_selection.dart';
 import '../../models/stremio_addon.dart';
-import '../../models/simkl_continue_watching_item.dart';
 import 'simkl_item_transformer.dart';
 import 'simkl_service.dart';
+import '../storage_service.dart';
 
-export '../../models/simkl_continue_watching_item.dart';
+/// One Simkl "continue watching" entry: a paused movie, the paused episode of a
+/// show, OR an "up next" entry (the next unwatched episode of a show you're
+/// watching but haven't paused). Wraps a [StremioMeta] (for row rendering) plus
+/// the resume detail the CW row needs. Parallel to TraktContinueWatchingItem;
+/// deliberately not shared (Simkl stays independent of Trakt — see
+/// [SimklService]'s class doc).
+class SimklContinueWatchingItem {
+  final StremioMeta meta;
+
+  /// Paused progress, 0–100 (Simkl's scale). In (0,100) for a paused entry;
+  /// NULL for an "up next" entry (the next episode hasn't been started, so
+  /// there's no resume position and the card shows no progress bar).
+  final double? progress;
+
+  /// Season/episode — of the paused episode, or the next-to-watch episode for
+  /// an up-next entry (null for movies).
+  final int? season;
+  final int? episode;
+
+  /// Recency epoch ms for newest-first ordering: `paused_at` for a paused entry,
+  /// `last_watched_at` for an up-next entry (null if unparseable/absent).
+  final int? pausedAtMs;
+
+  final bool isMovie;
+
+  /// True when this is an "up next" series entry (no paused session — derived
+  /// from the show's `next_to_watch`). Used to keep the explicit
+  /// "Remove from Continue Watching" action off it (nothing to delete).
+  final bool isUpNext;
+
+  const SimklContinueWatchingItem({
+    required this.meta,
+    required this.progress,
+    required this.season,
+    required this.episode,
+    required this.pausedAtMs,
+    required this.isMovie,
+    this.isUpNext = false,
+  });
+
+  String get id => meta.progressId ?? meta.id;
+  bool get isSeries => !isMovie;
+
+  Map<String, dynamic> toCacheJson() => {
+    'meta': meta.toJson(),
+    if (progress != null) 'progress': progress,
+    if (season != null) 'season': season,
+    if (episode != null) 'episode': episode,
+    if (pausedAtMs != null) 'paused_at_ms': pausedAtMs,
+    'is_movie': isMovie,
+    'is_up_next': isUpNext,
+  };
+
+  static SimklContinueWatchingItem? fromCacheJson(Object? raw) {
+    if (raw is! Map<String, dynamic>) return null;
+    final metaRaw = raw['meta'];
+    if (metaRaw is! Map<String, dynamic>) return null;
+    final meta = StremioMeta.fromJson(metaRaw);
+    if (meta.id.isEmpty) return null;
+    return SimklContinueWatchingItem(
+      meta: meta,
+      progress: (raw['progress'] as num?)?.toDouble(),
+      season: raw['season'] as int?,
+      episode: raw['episode'] as int?,
+      pausedAtMs: raw['paused_at_ms'] as int?,
+      isMovie: raw['is_movie'] == true,
+      isUpNext: raw['is_up_next'] == true,
+    );
+  }
+}
 
 /// Builds the Simkl "Continue Watching" rows from the account-wide paused
 /// playback sessions (`/sync/playback/{episodes,movies}`) that the scrobble
@@ -19,6 +90,43 @@ class SimklContinueWatchingService {
   SimklContinueWatchingService._();
   static final SimklContinueWatchingService instance =
       SimklContinueWatchingService._();
+
+  Future<
+    ({
+      List<SimklContinueWatchingItem> movies,
+      List<SimklContinueWatchingItem> shows,
+    })?
+  >
+  readCachedItems() async {
+    try {
+      final raw = await StorageService.getSimklContinueWatchingCache();
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      List<SimklContinueWatchingItem> readList(String key) {
+        final values = decoded[key];
+        if (values is! List<dynamic>) return const [];
+        return values
+            .map(SimklContinueWatchingItem.fromCacheJson)
+            .whereType<SimklContinueWatchingItem>()
+            .toList(growable: false);
+      }
+
+      return (movies: readList('movies'), shows: readList('shows'));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedItems({
+    required List<SimklContinueWatchingItem> movies,
+    required List<SimklContinueWatchingItem> shows,
+  }) => StorageService.setSimklContinueWatchingCache(
+    jsonEncode({
+      'movies': movies.map((item) => item.toCacheJson()).toList(),
+      'shows': shows.map((item) => item.toCacheJson()).toList(),
+    }),
+  );
 
   /// Fetch the paused movies + shows, each newest-first. Returns:
   ///  - empty lists when DISCONNECTED (authoritative — the caller clears rows);
@@ -87,8 +195,20 @@ class SimklContinueWatchingService {
 
   /// A ready-to-play selection for a CW item — carries the Simkl resume percent
   /// and the paused season/episode so [_playSelection] resumes exactly there.
-  AdvancedSearchSelection selectionForItem(SimklContinueWatchingItem item) =>
-      item.selection;
+  AdvancedSearchSelection selectionForItem(SimklContinueWatchingItem item) {
+    return AdvancedSearchSelection(
+      imdbId: item.id,
+      isSeries: item.isSeries,
+      title: item.meta.name,
+      year: item.meta.year,
+      season: item.season,
+      episode: item.episode,
+      contentType: item.meta.type,
+      posterUrl: item.meta.poster,
+      simklProgressPercent: item.progress,
+      simklSource: true,
+    );
+  }
 
   // ── Parsing ────────────────────────────────────────────────────────────────
 

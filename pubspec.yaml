@@ -14,7 +14,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.10.1-alpha.1+57
+version: 0.10.0-beta.1+56
 
 environment:
   sdk: ^3.8.1
@@ -31,52 +31,47 @@ dependencies:
 
   # Runtime Siri Remote tuning. The tvOS engine supplies the native input
   # plugin; this package exposes its thresholds to Dart and is inert elsewhere.
-  flutter_tvos: 1.1.2
+  flutter_tvos: ^1.1.3
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^2.0.0
   http: ^1.1.0
-  pug_flutter: ^0.0.3
-  intl: ^0.19.0
+  intl: ^0.20.3
   shared_preferences: ^2.2.2
   url_launcher: ^6.2.5
-  android_intent_plus: ^5.0.2
+  android_intent_plus: ^6.1.0
   background_downloader: ^9.2.3
   flutter_markdown: ^0.7.4
-  permission_handler: ^11.3.1
+  permission_handler: ^13.0.2
   path_provider: ^2.1.4
   path: ^1.9.0
   archive: ^4.0.7
-  lottie: 3.5.1
+  lottie: ^3.6.1
   yaml: ^3.1.3
   xml: ^6.5.0
   sqflite: ^2.3.3
   sqflite_common_ffi: ^2.3.3
   ffi: ^2.1.4
-  sqlite3: ^2.4.0
-  sqlite3_flutter_libs: ^0.5.24
-  file_picker: ^10.2.3
-  saf_stream: ^0.12.0
-  # SMB2/3 client for copying recordings to a NAS: BSD-3 Dart wrapper over the
-  # LGPL-2.1 libsmb2 (dynamically linked; notice in THIRD_PARTY_NOTICES.md).
-  # Used on Android/desktop only (smbUploadSupported). iOS bundles the library
-  # unused; it declares no tvOS platform, so tvOS builds omit it.
-  dart_smb2: ^0.1.3
-  connectivity_plus: ^6.0.3
-  window_manager: ^0.3.8
-  app_links: ^6.3.2
+  sqlite3: ^3.5.2
+  sqlite3_flutter_libs: ^0.6.0+eol
+  file_picker: ^13.1.0
+  saf_stream: ^4.0.2
+  connectivity_plus: ^7.3.1
+  window_manager: ^0.5.2
+  app_links: ^7.2.1
   crypto: ^3.0.3
   # Pure-Dart AEAD/KDF/ECDH (AesGcm, Hkdf, Argon2id, X25519) for the
   # credential vault, encrypted backups, and remote-control session crypto.
   # No native code, so it works on tvOS without a federated sibling.
   cryptography: ^2.7.0
-  # Promoted from transitive (pug_flutter) to direct: SecretVault derives its
-  # master key from per-platform hardware identifiers. No tvOS implementation —
+  # SecretVault derives its master key from per-platform hardware identifiers.
+  # No tvOS implementation —
   # guard with PlatformUtil.isTvOS before touching it (see secret_vault.dart).
-  device_info_plus: ^12.4.0
+  device_info_plus: ^13.2.0
   flutter_sharing_intent: ^2.0.4
   collection: ^1.19.1
+  file: ^7.0.1
   synchronized: ^3.4.0
 
 
@@ -89,6 +84,8 @@ dependencies:
   
   # media_kit for advanced track APIs
   media_kit: ^1.1.11
+  # Linux media controls (MPRIS) for the in-app player.
+  dbus: ^0.7.10
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.5
   
@@ -101,7 +98,7 @@ dependencies:
   flutter_cache_manager: ^3.4.1
 
   # App version info
-  package_info_plus: ^8.0.0
+  package_info_plus: ^10.2.1
 
   # Premium UI and animations
   # 8.x required from Flutter 3.44: 6.x keys a `const` map by FontWeight,
@@ -133,8 +130,8 @@ dependencies:
   connectivity_plus_tvos: ^0.0.2
   # device_info_plus_tvos is ABSENT for the same reason as package_info: it
   # wants device_info_plus_platform_interface ^8.1.0 while the plugin ships
-  # ^7.x. We never call device_info directly (it arrives via pug_flutter), so
-  # nothing of ours depends on it working.
+  # ^7.x. SecretVault guards every device_info call with PlatformUtil.isTvOS,
+  # so nothing of ours depends on it working there.
   #
   # package_info_plus_tvos is deliberately ABSENT: it requires
   # package_info_plus_platform_interface ^4.1.0, which NO published
@@ -152,7 +149,6 @@ dependencies:
   provider: ^6.1.2
   youtube_explode_dart: ^3.1.0
   visibility_detector: ^0.4.0+2
-  flutter_riverpod: ^3.4.3
 
 # media_kit is vendored under packages/media_kit_patched for Apple TV support:
 # an already-resolved NativeLibrary initialization guard, safe NativeCallable
@@ -191,11 +187,11 @@ dependency_overrides:
     path: packages/path_provider_tvos_patched
 
 dev_dependencies:
-  url_launcher_platform_interface: 2.3.2
-  fake_async: ^1.3.3
-  file: ^7.0.1
   flutter_test:
     sdk: flutter
+  android_file_picker: ^2.0.0
+  clock: ^1.1.2
+  fake_async: ^1.3.3
   path_provider_platform_interface: ^2.1.2
   shared_preferences_platform_interface: ^2.4.1
 
@@ -204,9 +200,10 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.1
 
+  sqflite_common: any
 flutter_launcher_icons:
   # Home-screen icons are rendered by tool/generate_app_icons.py from
   # assets/icon/{background,foreground}.png; prefer that script, which also
@@ -260,7 +257,6 @@ flutter:
     - assets/images/webdav_sync_guide_qr.png
     - assets/images/profile_avatars/
     - assets/splash_logo.png
-    - assets/config/app_remote_config.json
     - assets/config/engines/
     - assets/design/glass_tokens.json
 

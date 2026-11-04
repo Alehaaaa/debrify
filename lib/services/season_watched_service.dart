@@ -1,5 +1,3 @@
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
 import '../models/tracking_source.dart';
 import '../models/custom_series_identity.dart';
 import 'profiles/profile_runtime.dart';
@@ -7,6 +5,7 @@ import 'trakt/trakt_service.dart';
 import 'simkl/simkl_service.dart';
 import 'mdblist/mdblist_service.dart';
 import 'mdblist/mdblist_models.dart';
+import 'storage_service.dart';
 import 'episode_tracker_snapshot_revision.dart';
 
 /// Panel-owned retry intent, isolated by title, season and provider.
@@ -33,14 +32,17 @@ class SeasonWatchedService {
     Iterable<int> episodes,
     TrackingSource provider,
   ) async {
-    if (CustomSeriesIdentity.isCustom(imdbId) && provider != TrackingSource.local) return null;
+    if (CustomSeriesIdentity.isCustom(imdbId) &&
+        provider != TrackingSource.local) {
+      return null;
+    }
     final numbers = episodes.toSet();
     if (numbers.isEmpty) return null;
     try {
       Set<String>? inventory;
       switch (provider) {
         case TrackingSource.local:
-          final local = await EpisodeProgressStorage.getFinishedEpisodesByImdbId(
+          final local = await StorageService.getFinishedEpisodesByImdbId(
             imdbId: imdbId,
             seriesTitle: title,
           );
@@ -83,7 +85,10 @@ class SeasonWatchedService {
     bool watched = true,
     MdblistService? mdblistService,
   }) {
-    if (CustomSeriesIdentity.isCustom(imdbId) && provider != TrackingSource.local) return Future.value(0);
+    if (CustomSeriesIdentity.isCustom(imdbId) &&
+        provider != TrackingSource.local) {
+      return Future.value(0);
+    }
     final numbers = episodes.toSet().toList()..sort();
     Future<int> run() async {
       Set<String> alreadyWatched = {};
@@ -109,8 +114,8 @@ class SeasonWatchedService {
               continue;
             }
             final write = watched
-                ? EpisodeCompletionStorage.markEpisodeAsFinished
-                : EpisodeCompletionStorage.unmarkEpisodeAsFinished;
+                ? StorageService.markEpisodeAsFinished
+                : StorageService.unmarkEpisodeAsFinished;
             await write(
               seriesTitle: seriesTitle,
               imdbId: imdbId,
@@ -141,7 +146,7 @@ class SeasonWatchedService {
               await (watched
                   ? (mdblistService ?? MdblistService.instance).markWatched
                   : (mdblistService ?? MdblistService.instance).markUnwatched)(
-                MdblistMediaIds.forContent(imdbId),
+                MdblistMediaIds(imdb: imdbId),
                 'episode',
                 season: season,
                 episode: episode,

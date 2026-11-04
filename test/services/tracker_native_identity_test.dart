@@ -9,8 +9,7 @@ import 'package:debrify/services/mdblist/mdblist_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/services/secret_vault.dart';
-import 'package:debrify/services/storage/tracking_source_storage.dart';
-import 'package:debrify/services/storage/trakt_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/trakt/trakt_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -39,12 +38,12 @@ void main() {
     SecretVault.debugReset(deviceIdOverride: 'native-trackers-test');
     EpisodeTrackerSnapshotRevision.resetForTesting();
     trakt.resetProfileScope();
-    await TraktStorage.setTraktSession(
+    await StorageService.setTraktSession(
       accessToken: 'test-access',
       refreshToken: 'test-refresh',
       expiryMs: 9000000000000,
     );
-    await TrackingSourceStorage.setTrackingScrobbleTargets({
+    await StorageService.setTrackingScrobbleTargets({
       TrackingSource.local,
       TrackingSource.trakt,
       TrackingSource.mdblist,
@@ -249,9 +248,7 @@ void main() {
   });
 
   test('disabled Trakt does not even resolve a Simkl identity', () async {
-    await TrackingSourceStorage.setTrackingScrobbleTargets({
-      TrackingSource.local,
-    });
+    await StorageService.setTrackingScrobbleTargets({TrackingSource.local});
     await http.runWithClient(() async {
       expect(
         await trakt.scrobbleStop('simkl:990010', 95, season: 4, episode: 6),

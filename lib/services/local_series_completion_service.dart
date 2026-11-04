@@ -1,10 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:debrify/services/storage/continue_watching_storage.dart';
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
-import 'package:debrify/services/storage/local_completion_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:synchronized/synchronized.dart';
@@ -14,6 +10,7 @@ import '../models/custom_series_identity.dart';
 import 'profiles/profile_preferences.dart';
 import 'profiles/profile_runtime.dart';
 import 'profiles/profile_scope.dart';
+import 'storage_service.dart';
 import 'trakt/trakt_episode_model.dart';
 
 /// Profile-scoped, derived "caught up" state for locally watched series.
@@ -24,7 +21,7 @@ import 'trakt/trakt_episode_model.dart';
 /// add newly announced episodes without polling every title individually.
 class LocalSeriesCompletionService {
   LocalSeriesCompletionService._() {
-    LocalCompletionStorage.localCompletionRevision.addListener(_onWatchedRevision);
+    StorageService.localCompletionRevision.addListener(_onWatchedRevision);
   }
 
   static final LocalSeriesCompletionService instance =
@@ -55,7 +52,7 @@ class LocalSeriesCompletionService {
           await _writeState(state);
           // Derived changes happen after the original playback notification;
           // publish again only once the shelf/badge state is authoritative.
-          LocalCompletionStorage.localCompletionRevision.value++;
+          StorageService.localCompletionRevision.value++;
         }
         _scheduleNextRelease(state);
         return _caughtUpIds(state);
@@ -71,7 +68,7 @@ class LocalSeriesCompletionService {
       final state = await _readState();
       return state[id]?['title']?.toString();
     });
-    await EpisodeCompletionStorage.unmarkSeriesAsFinished(id, seriesTitle: title);
+    await StorageService.unmarkSeriesAsFinished(id, seriesTitle: title);
     // Await the re-derivation so a completed badge cannot survive past the
     // watched action's own Future even if the revision listener is delayed.
     await caughtUpIds();
@@ -84,9 +81,7 @@ class LocalSeriesCompletionService {
     required String imdbId,
     required String seriesTitle,
     required List<TraktSeason> seasons,
-    bool Function()? canCommit,
   }) {
-    if (canCommit != null && !canCommit()) return Future.value();
     final recordScope =
         ProfileRuntime.isInitialized && ProfileRuntime.isProfileCommitted
         ? ProfileRuntime.capture()
@@ -141,11 +136,10 @@ class LocalSeriesCompletionService {
         if (_isCurrentScope(recordScope)) _scheduleNextRelease(state);
         return;
       }
-      await _writeState(state, canCommit: canCommit);
-      if (canCommit != null && !canCommit()) return;
+      await _writeState(state);
       if (_isCurrentScope(recordScope)) {
         _scheduleNextRelease(state);
-        LocalCompletionStorage.localCompletionRevision.value++;
+        StorageService.localCompletionRevision.value++;
       }
     });
     return recordScope == null
@@ -157,9 +151,7 @@ class LocalSeriesCompletionService {
     required String imdbId,
     required String seriesTitle,
     required List<Map<String, dynamic>> videos,
-    bool Function()? canCommit,
   }) {
-    if (canCommit != null && !canCommit()) return Future.value();
     final bySeason = <int, List<TraktEpisode>>{};
     for (final video in videos) {
       final season = (video['season'] as num?)?.toInt();
@@ -183,7 +175,6 @@ class LocalSeriesCompletionService {
     return recordEpisodeInventory(
       imdbId: imdbId,
       seriesTitle: seriesTitle,
-      canCommit: canCommit,
       seasons: [
         for (final entry in bySeason.entries)
           TraktSeason(
@@ -207,19 +198,19 @@ class LocalSeriesCompletionService {
     if (knownState.isEmpty) return <String>{};
     final prefs = await ProfilePreferences.instance();
     final checkedAt =
-        prefs.getInt(LocalCompletionStorage.localSeriesCalendarCheckedAtKey) ?? 0;
+        prefs.getInt(StorageService.localSeriesCalendarCheckedAtKey) ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
     if (_calendarRefreshing || now - checkedAt < _calendarTtl.inMilliseconds) {
       return caughtUpIds();
     }
     final attemptedAt =
-        prefs.getInt(LocalCompletionStorage.localSeriesCalendarAttemptedAtKey) ?? 0;
+        prefs.getInt(StorageService.localSeriesCalendarAttemptedAtKey) ?? 0;
     if (now - attemptedAt < _calendarFailureBackoff.inMilliseconds) {
       return caughtUpIds();
     }
     _calendarRefreshing = true;
     try {
-      await prefs.setInt(LocalCompletionStorage.localSeriesCalendarAttemptedAtKey, now);
+      await prefs.setInt(StorageService.localSeriesCalendarAttemptedAtKey, now);
       final calendarItems = <dynamic>[];
       var allFeedsSucceeded = true;
       final urls = _calendarFeedUrls(
@@ -253,7 +244,7 @@ class LocalSeriesCompletionService {
       // A partial monthly failure must remain retryable; successful items are
       // still merged so an available new episode is reflected immediately.
       if (allFeedsSucceeded) {
-        await prefs.setInt(LocalCompletionStorage.localSeriesCalendarCheckedAtKey, now);
+        await prefs.setInt(StorageService.localSeriesCalendarCheckedAtKey, now);
       }
       return caughtUp;
     } catch (error) {
@@ -324,7 +315,7 @@ class LocalSeriesCompletionService {
 
   Future<bool> _recalculateAll(Map<String, Map<String, dynamic>> state) async {
     var changed = false;
-    final finishedIndex = await EpisodeProgressStorage.getFinishedSeriesEpisodeIndex();
+    final finishedIndex = await StorageService.getFinishedSeriesEpisodeIndex();
     for (final entry in state.entries) {
       if (await _recalculateRecord(
         entry.key,
@@ -345,7 +336,7 @@ class LocalSeriesCompletionService {
     final title = record['title']?.toString() ?? '';
     if (title.isEmpty) return false;
     final finished = finishedIndex == null
-        ? await EpisodeProgressStorage.getFinishedEpisodesByImdbId(
+        ? await StorageService.getFinishedEpisodesByImdbId(
             imdbId: imdbId,
             seriesTitle: title,
           )
@@ -367,15 +358,15 @@ class LocalSeriesCompletionService {
     if (wasCaughtUp == caughtUp) return false;
     record['caughtUp'] = caughtUp;
     if (caughtUp) {
-      final items = await ContinueWatchingStorage.getContinueWatchingItems();
+      final items = await StorageService.getContinueWatchingItems();
       final match = items.where((item) {
         return item['imdbId']?.toString().trim().toLowerCase() == imdbId;
       }).firstOrNull;
       if (match != null) record['continueWatching'] = match;
-      await ContinueWatchingStorage.removeContinueWatchingItem(imdbId);
+      await StorageService.removeContinueWatchingItem(imdbId);
     } else if (wasCaughtUp && record['continueWatching'] is Map) {
       final item = Map<String, dynamic>.from(record['continueWatching'] as Map);
-      await ContinueWatchingStorage.saveContinueWatchingItem(
+      await StorageService.saveContinueWatchingItem(
         imdbId: imdbId,
         title: item['title']?.toString() ?? title,
         contentType: 'series',
@@ -463,7 +454,7 @@ class LocalSeriesCompletionService {
     if (changed) await _writeState(state);
     if (completionChanged &&
         (notifyScope == null || _isCurrentScope(notifyScope))) {
-      LocalCompletionStorage.localCompletionRevision.value++;
+      StorageService.localCompletionRevision.value++;
     }
     _scheduleNextRelease(state);
     return _caughtUpIds(state);
@@ -508,7 +499,7 @@ class LocalSeriesCompletionService {
 
   Future<Map<String, Map<String, dynamic>>> _readState() async {
     final prefs = await ProfilePreferences.instance();
-    final raw = prefs.getString(LocalCompletionStorage.localSeriesCompletionStateKey);
+    final raw = prefs.getString(StorageService.localSeriesCompletionStateKey);
     if (raw == null || raw.isEmpty) return {};
     try {
       final decoded = jsonDecode(raw);
@@ -523,28 +514,11 @@ class LocalSeriesCompletionService {
     }
   }
 
-  Future<void> _writeState(
-    Map<String, Map<String, dynamic>> state, {
-    bool Function()? canCommit,
-  }) async {
+  Future<void> _writeState(Map<String, Map<String, dynamic>> state) async {
     final prefs = await ProfilePreferences.instance();
-    Future<void> write() async {
-      if (canCommit != null && !canCommit()) return;
-      await prefs.setString(
-        LocalCompletionStorage.localSeriesCompletionStateKey,
-        jsonEncode(state),
-      );
-    }
-    if (canCommit == null) {
-      await write();
-    } else {
-      // Check interactive ownership after waiting for the preference barrier.
-      // The outer writer prevents an exclusive snapshot from entering between
-      // this check and the nested preference commit; the setter marks mutation.
-      await ProfilePreferences.synchronizeExternalMutation(
-        write,
-        marksMutation: false,
-      );
-    }
+    await prefs.setString(
+      StorageService.localSeriesCompletionStateKey,
+      jsonEncode(state),
+    );
   }
 }

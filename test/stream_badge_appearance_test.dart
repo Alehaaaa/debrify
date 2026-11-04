@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -7,11 +8,46 @@ import 'package:debrify/widgets/stream_badge_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 StreamBadgeRule rule(Map<String, Object?> values) =>
     StreamBadgeRule.fromJson({'name': '4K', 'pattern': '4k', ...values})!;
 
+/// CachedNetworkImage opens its disk cache on first build; tests have no
+/// path_provider plugin, so point it at a scratch directory.
+class _FakePathProvider extends PathProviderPlatform {
+  _FakePathProvider(this.root);
+  final String root;
+
+  String _dir(String name) {
+    final dir = Directory('$root/$name');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir.path;
+  }
+
+  @override
+  Future<String?> getTemporaryPath() async => _dir('tmp');
+
+  @override
+  Future<String?> getApplicationSupportPath() async => _dir('support');
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => _dir('documents');
+
+  @override
+  Future<String?> getApplicationCachePath() async => _dir('cache');
+}
+
 void main() {
+  late Directory scratch;
+  setUpAll(() {
+    scratch = Directory.systemTemp.createTempSync('badge_appearance');
+    PathProviderPlatform.instance = _FakePathProvider(scratch.path);
+  });
+  tearDownAll(() {
+    if (scratch.existsSync()) scratch.deleteSync(recursive: true);
+  });
+
   test('preset styles and contrast-safe labels reach native TV unchanged', () {
     for (final style in ['filled', 'outlined', 'filled and bordered']) {
       final r = rule({

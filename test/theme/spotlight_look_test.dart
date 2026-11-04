@@ -1,12 +1,9 @@
-import 'package:debrify/services/storage/detail_page_storage.dart';
-import 'package:debrify/services/storage/home_appearance_storage.dart';
-import 'package:debrify/services/storage/sidebar_storage.dart';
-import 'package:debrify/services/storage/theme_storage.dart';
 import 'package:debrify/theme/app_focus.dart';
 import 'package:debrify/theme/app_looks.dart';
 import 'package:debrify/theme/app_motion.dart';
 import 'package:debrify/theme/app_theme_controller.dart';
 import 'package:debrify/theme/premium_looks.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,13 +47,13 @@ void main() {
     final look = AppLooks.all.firstWhere((l) => l.id == 'spotlight');
     await LookApplier.apply(look);
 
-    expect(ThemeStorage.appThemeCached, 'spotlight');
-    expect(DetailPageStorage.detailPageStyleCached, 'showcase');
-    expect(HomeAppearanceStorage.tvHomeStyleCached, 'spotlight');
-    expect(SidebarStorage.tvSidebarStyleCached, 'pill');
+    expect(StorageService.appThemeCached, 'spotlight');
+    expect(StorageService.detailPageStyleCached, 'showcase');
+    expect(StorageService.tvHomeStyleCached, 'spotlight');
+    expect(StorageService.tvSidebarStyleCached, 'pill');
     // The controller owns this one; the Look must not name it, and must still
     // end up with it correct.
-    expect(DetailPageStorage.detailThemeCached, 'spotlight');
+    expect(StorageService.detailThemeCached, 'spotlight');
   });
 
   test('re-applying repairs a hand-changed Details Theme', () async {
@@ -67,23 +64,23 @@ void main() {
     // else.
     final look = AppLooks.all.firstWhere((l) => l.id == 'spotlight');
     await LookApplier.apply(look);
-    expect(DetailPageStorage.detailThemeCached, 'spotlight');
+    expect(StorageService.detailThemeCached, 'spotlight');
 
-    await DetailPageStorage.setDetailTheme('noir');
+    await StorageService.setDetailTheme('noir');
     expect(look.isActive, isFalse,
         reason: 'a hand-changed mirror must read as Custom, not as active');
 
     LookApplier.debugResetGenerations();
     await LookApplier.apply(look);
-    expect(DetailPageStorage.detailThemeCached, 'spotlight');
+    expect(StorageService.detailThemeCached, 'spotlight');
     expect(look.isActive, isTrue);
   });
 
   test('a manual layout change afterwards sticks', () async {
     final look = AppLooks.all.firstWhere((l) => l.id == 'spotlight');
     await LookApplier.apply(look);
-    await HomeAppearanceStorage.setTvHomeStyle('canvas');
-    expect(HomeAppearanceStorage.tvHomeStyleCached, 'canvas');
+    await StorageService.setTvHomeStyle('canvas');
+    expect(StorageService.tvHomeStyleCached, 'canvas');
     expect(look.isActive, isFalse);
   });
 

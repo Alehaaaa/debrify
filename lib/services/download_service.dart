@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/torbox_storage.dart';
 import 'package:path/path.dart' as path;
 import 'debrid_service.dart';
 import 'torbox_service.dart';
@@ -13,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import '../utils/app_storage.dart';
 import '../utils/streamed_file_copy.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'storage_service.dart';
 import 'android_native_downloader.dart';
 import 'android_download_history.dart';
 import 'package:flutter/material.dart';
@@ -25,8 +24,9 @@ import 'profiles/profile_preferences.dart';
 import 'profiles/profile_bootstrap.dart';
 import 'profiles/profile_credential_facade.dart';
 import 'profiles/profile_runtime.dart';
+import '../models/downloaded_media.dart';
 import 'package:synchronized/synchronized.dart';
-import 'package:debrify/services/storage/device_storage.dart';
+import '../theme/app_motion.dart' show kMenuSheetAnimation;
 
 class DownloadEntry {
   final Task task;
@@ -111,14 +111,111 @@ class DownloadService {
   }
 
   bool _started = false;
-  bool _initializing = false;
+  Future<void>? _initialization;
+  Future<void>? _libraryInitialization;
   bool _profileViewAttached = true;
   bool _profileViewWasStarted = false;
   bool _profileSwitchInProgress = false;
   StreamSubscription<Map<String, dynamic>>? _androidEventsSub;
+  StreamSubscription<TaskUpdate>? _pluginUpdatesSub;
+  int _pluginObserverGeneration = 0;
+  int _profileViewGeneration = 0;
   bool _batteryCheckShown = false;
   ConnectivityResult _net = ConnectivityResult.wifi; // default optimistic
   StreamSubscription<List<ConnectivityResult>>? _netSub;
+
+  /// Transfer observations belong to this process-wide service, not to a
+  /// screen or an individual initialization attempt. A native/plugin failure
+  /// after subscription registration can make initialize() retry.
+  void _observePluginUpdates(Stream<TaskUpdate> updates) {
+    if (_pluginUpdatesSub != null) return;
+    final observerGeneration = ++_pluginObserverGeneration;
+    _pluginUpdatesSub = updates.listen((update) async {
+      if (!_profileViewAttached || !_ownsPluginTask(update.task)) return;
+      final viewGeneration = _profileViewGeneration;
+      final authorized = await _pluginAuthorizationValid(update.task);
+      // StreamSubscription.cancel() doesn't cancel callbacks already inside an
+      // await. A detached observer or switched profile cannot publish its old
+      // task into a newly attached profile's download UI.
+      if (observerGeneration != _pluginObserverGeneration ||
+          viewGeneration != _profileViewGeneration ||
+          !_profileViewAttached ||
+          !_ownsPluginTask(update.task)) {
+        return;
+      }
+      if (!authorized) {
+        try {
+          await FileDownloader().cancel(update.task);
+        } catch (_) {}
+        await DeviceJobStore.markTerminal(
+          backend: 'backgroundDownloader',
+          externalJobId: update.task.taskId,
+        );
+        return;
+      }
+      switch (update) {
+        case TaskProgressUpdate():
+          _progressController.add(update);
+        case TaskStatusUpdate():
+          _statusController.add(update);
+          if (update.status == TaskStatus.canceled) {
+            try {
+              await FileDownloader().database.deleteRecordWithId(
+                update.task.taskId,
+              );
+            } catch (_) {}
+            unawaited(
+              DeviceJobStore.markTerminal(
+                backend: 'backgroundDownloader',
+                externalJobId: update.task.taskId,
+              ),
+            );
+          }
+          if (update.status == TaskStatus.failed) {
+            final recId = _resolveRecordIdForTaskId(update.task.taskId);
+            unawaited(() async {
+              final retried = await _handlePikPakFailedRetry(recId);
+              if (retried) {
+                try {
+                  await FileDownloader().database.deleteRecordWithId(
+                    update.task.taskId,
+                  );
+                } catch (_) {}
+              }
+              _reevaluateQueue();
+            }());
+          } else if (update.status == TaskStatus.complete ||
+              update.status == TaskStatus.canceled ||
+              update.status == TaskStatus.paused) {
+            if (update.status == TaskStatus.complete) {
+              final owner = _pluginOwner(update.task);
+              unawaited(() async {
+                await DeviceJobStore.markTerminal(
+                  backend: 'backgroundDownloader',
+                  externalJobId: update.task.taskId,
+                );
+                if (ProfileRuntime.isProfileCommitted && owner != null) {
+                  await _registerPluginArtifact(update.task, owner);
+                }
+              }());
+            }
+            _reevaluateQueue();
+          }
+      }
+    });
+  }
+
+  @visibleForTesting
+  void debugObservePluginUpdates(Stream<TaskUpdate> updates) =>
+      _observePluginUpdates(updates);
+
+  @visibleForTesting
+  Future<void> debugDetachPluginUpdates() async {
+    _pluginObserverGeneration++;
+    final subscription = _pluginUpdatesSub;
+    _pluginUpdatesSub = null;
+    await subscription?.cancel();
+  }
 
   ConnectivityResult _computeEffectiveNet(List<ConnectivityResult> results) {
     if (results.isEmpty) return ConnectivityResult.none;
@@ -190,12 +287,9 @@ class DownloadService {
   }) => jsonEncode(<String, Object?>{
     'schema': 1,
     'ownerProfileId': _activeOwnerProfileId,
-    if (authorizationRevision != null)
-      'profileAuthorizationRevision': authorizationRevision,
-    if (connectionResourceId != null)
-      'connectionResourceId': connectionResourceId,
-    if (resourceAuthorizationRevision != null)
-      'resourceAuthorizationRevision': resourceAuthorizationRevision,
+    'profileAuthorizationRevision': ?authorizationRevision,
+    'connectionResourceId': ?connectionResourceId,
+    'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
   });
 
   String? _pluginOwner(Task task) {
@@ -315,6 +409,50 @@ class DownloadService {
       result[entry.key] = DownloadRecordDetails.fromMap(entry.key, entry.value);
     }
     return result;
+  }
+
+  /// Returns a completed local media file linked to this exact catalog target.
+  /// Records without the media identity are intentionally ignored: filename
+  /// guesses can launch the wrong episode.
+  Future<String?> completedMediaPath({
+    required String imdbId,
+    required String contentType,
+    int? season,
+    int? episode,
+  }) async {
+    await initializeLibrary();
+    for (final record in _records.values) {
+      if (record['state'] != 'complete') continue;
+      final raw = record['meta'];
+      if (raw is! String) continue;
+      try {
+        final media = DownloadedMedia.fromMetadata(raw);
+        if (media == null ||
+            media.id != imdbId ||
+            media.type != contentType ||
+            media.season != season ||
+            media.episode != episode) {
+          continue;
+        }
+        final path = record['destPath']?.toString();
+        if (path != null && await File(path).exists()) return path;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// Folders finished downloads are saved into, so the library can be built
+  /// from what is actually on disk. Empty on Android, where files are handed
+  /// to MediaStore / the user's SAF folder and aren't listable by path.
+  Future<List<String>> libraryFolders() async {
+    if (Platform.isAndroid) return const [];
+    try {
+      // A library scan is read-only. Resolving its expected location must not
+      // leave an empty Debrify folder in Downloads before the first download.
+      return [await _appDownloadsSubdir(create: false)];
+    } catch (_) {
+      return const [];
+    }
   }
 
   bool isPausedQueuedTask(String taskId) => _pausedPending.containsKey(taskId);
@@ -544,35 +682,34 @@ class DownloadService {
       final path = await _recordsFilePath();
       final raw = await File(path).readAsString();
       final data = await _decodeRecords(raw);
-      if (data is Map<String, dynamic>) {
-        final all = data.map(
-          (k, v) => MapEntry(k, (v as Map).cast<String, dynamic>()),
+
+      final all = data.map(
+        (k, v) => MapEntry(k, (v as Map).cast<String, dynamic>()),
+      );
+      if (ProfileRuntime.isProfileCommitted) {
+        final owner = _activeOwnerProfileId;
+        _records = Map<String, Map<String, dynamic>>.fromEntries(
+          all.entries.where((entry) {
+            final storedOwner = entry.value['ownerProfileId']?.toString();
+            return (storedOwner ?? 'legacy-admin-v1') == owner;
+          }),
         );
-        if (ProfileRuntime.isProfileCommitted) {
-          final owner = _activeOwnerProfileId;
-          _records = Map<String, Map<String, dynamic>>.fromEntries(
-            all.entries.where((entry) {
-              final storedOwner = entry.value['ownerProfileId']?.toString();
-              return (storedOwner ?? 'legacy-admin-v1') == owner;
-            }),
-          );
-          var sanitized = false;
-          for (final record in _records.values) {
-            final rawMeta = record['meta'];
-            if (rawMeta is! String || rawMeta.isEmpty) continue;
-            try {
-              final decoded = jsonDecode(rawMeta);
-              if (decoded is Map<String, dynamic> &&
-                  decoded.remove('apiKey') != null) {
-                record['meta'] = jsonEncode(decoded);
-                sanitized = true;
-              }
-            } catch (_) {}
-          }
-          if (sanitized) await _saveRecords();
-        } else {
-          _records = all;
+        var sanitized = false;
+        for (final record in _records.values) {
+          final rawMeta = record['meta'];
+          if (rawMeta is! String || rawMeta.isEmpty) continue;
+          try {
+            final decoded = jsonDecode(rawMeta);
+            if (decoded is Map<String, dynamic> &&
+                decoded.remove('apiKey') != null) {
+              record['meta'] = jsonEncode(decoded);
+              sanitized = true;
+            }
+          } catch (_) {}
         }
+        if (sanitized) await _saveRecords();
+      } else {
+        _records = all;
       }
     } catch (_) {
       _records = {};
@@ -834,6 +971,7 @@ class DownloadService {
   /// Unlike the ordinary profile-facing clear, this intentionally cancels
   /// and removes every owner's plugin/native execution record.
   Future<void> clearDeviceStateForReset() async {
+    _profileViewGeneration++;
     _profileViewAttached = false;
     final downloader = FileDownloader();
     final records = await downloader.database.allRecords();
@@ -1247,7 +1385,7 @@ class DownloadService {
   Future<bool> _ensureBatteryExemptions(BuildContext? context) async {
     if (!Platform.isAndroid) return true;
     // Respect saved preference first
-    final saved = await DeviceStorage.getBatteryOptimizationStatus();
+    final saved = await StorageService.getBatteryOptimizationStatus();
     if (saved == 'granted') return true;
     if (saved == 'never') return true; // user opted out
 
@@ -1256,10 +1394,11 @@ class DownloadService {
     try {
       bool proceed = true;
       String choice = 'denied';
-      if (context != null) {
+      if (context != null && context.mounted) {
         bool dontAskAgain = false;
         proceed =
             await showModalBottomSheet<bool>(
+              sheetAnimationStyle: kMenuSheetAnimation,
               context: context,
               isScrollControlled: true,
               backgroundColor: const Color(0xFF0B1220),
@@ -1453,7 +1592,7 @@ class DownloadService {
             false;
       }
       if (!proceed) {
-        await DeviceStorage.setBatteryOptimizationStatus(choice);
+        await StorageService.setBatteryOptimizationStatus(choice);
         return true; // do not block downloads
       }
 
@@ -1461,11 +1600,11 @@ class DownloadService {
       final ok =
           await AndroidNativeDownloader.requestIgnoreBatteryOptimizationsForApp();
       if (ok) {
-        await DeviceStorage.setBatteryOptimizationStatus('granted');
+        await StorageService.setBatteryOptimizationStatus('granted');
         return true;
       } else {
-        await DeviceStorage.setBatteryOptimizationStatus('denied');
-        if (context != null) {
+        await StorageService.setBatteryOptimizationStatus('denied');
+        if (context != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
@@ -1481,10 +1620,34 @@ class DownloadService {
     }
   }
 
-  Future<void> initialize() async {
-    if (_started) return;
-    if (_initializing) return;
-    _initializing = true;
+  /// Local-only preparation, safe in airplane mode and while resuming tasks
+  /// waits on a slow provider. Library scans and local playback use this path.
+  Future<void> initializeLibrary() {
+    return _libraryInitialization ??= _initializeLibrary().catchError((
+      Object error,
+    ) {
+      _libraryInitialization = null;
+      throw error;
+    });
+  }
+
+  Future<void> _initializeLibrary() async {
+    if (Platform.isAndroid) await AndroidDownloadHistory.instance.initialize();
+    await _loadRecords();
+    await _importLegacyQueuesOnce();
+    await _restorePaused();
+    await _restorePending();
+  }
+
+  Future<void> initialize() {
+    if (_started) return Future<void>.value();
+    return _initialization ??= _initialize().whenComplete(() {
+      _initialization = null;
+    });
+  }
+
+  Future<void> _initialize() async {
+    await initializeLibrary();
 
     await _ensureNotificationPermission();
     // Track connectivity for transient handling and auto-resume
@@ -1522,7 +1685,9 @@ class DownloadService {
 
     if (Platform.isAndroid) {
       await AndroidDownloadHistory.instance.initialize();
-      _androidEventsSub = AndroidNativeDownloader.events.listen((event) async {
+      _androidEventsSub ??= AndroidNativeDownloader.events.listen((
+        event,
+      ) async {
         if (!_profileViewAttached) return;
         final eventOwner = event['ownerProfileId']?.toString();
         if (ProfileRuntime.isProfileCommitted &&
@@ -1728,80 +1893,13 @@ class DownloadService {
         progressBar: true,
       );
 
-      FileDownloader().updates.listen((update) async {
-        if (!_profileViewAttached || !_ownsPluginTask(update.task)) return;
-        if (!await _pluginAuthorizationValid(update.task)) {
-          try {
-            await FileDownloader().cancel(update.task);
-          } catch (_) {}
-          await DeviceJobStore.markTerminal(
-            backend: 'backgroundDownloader',
-            externalJobId: update.task.taskId,
-          );
-          return;
-        }
-        switch (update) {
-          case TaskProgressUpdate():
-            _progressController.add(update);
-          case TaskStatusUpdate():
-            _statusController.add(update);
-            if (update.status == TaskStatus.canceled) {
-              try {
-                await FileDownloader().database.deleteRecordWithId(
-                  update.task.taskId,
-                );
-              } catch (_) {}
-              unawaited(
-                DeviceJobStore.markTerminal(
-                  backend: 'backgroundDownloader',
-                  externalJobId: update.task.taskId,
-                ),
-              );
-            }
-            if (update.status == TaskStatus.failed) {
-              // Try PikPak cold storage retry before giving up
-              final recId = _resolveRecordIdForTaskId(update.task.taskId);
-              unawaited(() async {
-                final retried = await _handlePikPakFailedRetry(recId);
-                if (retried) {
-                  // Clean up the failed task record from plugin
-                  try {
-                    await FileDownloader().database.deleteRecordWithId(
-                      update.task.taskId,
-                    );
-                  } catch (_) {}
-                }
-                _reevaluateQueue();
-              }());
-            } else if (update.status == TaskStatus.complete ||
-                update.status == TaskStatus.canceled ||
-                update.status == TaskStatus.paused) {
-              if (update.status == TaskStatus.complete) {
-                final owner = _pluginOwner(update.task);
-                unawaited(() async {
-                  await DeviceJobStore.markTerminal(
-                    backend: 'backgroundDownloader',
-                    externalJobId: update.task.taskId,
-                  );
-                  if (ProfileRuntime.isProfileCommitted && owner != null) {
-                    await _registerPluginArtifact(update.task, owner);
-                  }
-                }());
-              }
-              _reevaluateQueue();
-            }
-        }
-      });
+      _observePluginUpdates(FileDownloader().updates);
       await FileDownloader().trackTasks();
       await _captureLegacyPluginAuthorities();
       await FileDownloader().resumeFromBackground();
     }
 
-    // Restore any pending queue persisted from a previous run
-    await _loadRecords();
-    await _importLegacyQueuesOnce();
-    await _restorePaused();
-    await _restorePending();
+    // The local queue was loaded before any platform/network work above.
     debugPrint('DL INIT: loaded records count=${_records.length}');
     // On non-Android: try to resume tasks on startup
     if (!Platform.isAndroid) {
@@ -1998,7 +2096,6 @@ class DownloadService {
       }
     }
     _started = true;
-    _initializing = false;
     // Kick the scheduler once at startup in case capacity is free
     unawaited(_reevaluateQueue());
   }
@@ -2117,6 +2214,7 @@ class DownloadService {
     String url,
     String? providedFileName,
     String? torrentName,
+    String? metadata,
   ) async {
     // Determine file name: provided > last path segment
     String filename = (providedFileName?.trim().isNotEmpty ?? false)
@@ -2127,9 +2225,27 @@ class DownloadService {
 
     filename = _sanitizeName(filename);
 
-    // Use torrent name for folder if provided, otherwise use base name of file
+    // Catalog-linked downloads get a stable, human-friendly library layout.
+    // The original torrent name remains in the durable queue record and is
+    // never discarded merely because the file is named more nicely.
+    final media = DownloadedMedia.fromMetadata(metadata);
     String folder;
-    if (torrentName != null && torrentName.trim().isNotEmpty) {
+    if (media != null) {
+      final title = _sanitizeName(media.title);
+      if (media.type == 'series') {
+        final season = media.season == null
+            ? 'Season 00'
+            : 'Season ${media.season!.toString().padLeft(2, '0')}';
+        folder = path.join('Shows', title, season);
+      } else {
+        folder = path.join(
+          'Movies',
+          _sanitizeName(
+            '${media.title}${media.year == null ? '' : ' (${media.year})'}',
+          ),
+        );
+      }
+    } else if (torrentName != null && torrentName.trim().isNotEmpty) {
       folder = _sanitizeName(torrentName.trim());
     } else {
       // Make a folder from base name (without extension)
@@ -2164,17 +2280,8 @@ class DownloadService {
     String? credentialKey,
     String? connectionResourceId,
     int? resourceAuthorizationRevision,
-    bool Function()? canContinue,
   }) async {
-    void ensureCurrent() {
-      if (canContinue?.call() == false) {
-        throw StateError('Download request has ended');
-      }
-    }
-
-    ensureCurrent();
     await initialize();
-    ensureCurrent();
     final authorization = await DeviceJobStore.authorize(
       ProfileFeature.downloads,
     );
@@ -2230,7 +2337,7 @@ class DownloadService {
     String? treeUri;
     if (Platform.isAndroid) {
       try {
-        final saved = await DeviceStorage.getDownloadTreeUri();
+        final saved = await StorageService.getDownloadTreeUri();
         if (saved != null && saved.isNotEmpty) {
           if (await _validateTreeUriCached(saved)) {
             treeUri = saved;
@@ -2240,12 +2347,12 @@ class DownloadService {
             debugPrint(
               'DL: custom download folder grant lost; falling back to default',
             );
-            await DeviceStorage.clearDownloadTreeUri();
+            await StorageService.clearDownloadTreeUri();
           }
         }
       } catch (_) {}
     }
-    final String displayName =
+    var displayName =
         providedName ??
         (() {
           try {
@@ -2257,6 +2364,10 @@ class DownloadService {
             return 'file';
           }
         })();
+    displayName = _libraryFileName(
+      DownloadedMedia.fromMetadata(meta),
+      displayName,
+    );
 
     // Directory prompts and platform checks above can outlive the initiating
     // profile session. Never publish its queue entry into a later session.
@@ -2276,8 +2387,6 @@ class DownloadService {
       }
     }
 
-    // Publication accepts the job; later view closure must not cancel it.
-    ensureCurrent();
     final queuedTask = DownloadTask(
       taskId: queuedId,
       url: url,
@@ -2317,13 +2426,11 @@ class DownloadService {
       if (authorization != null)
         'profileAuthorizationRevision':
             authorization.profileAuthorizationRevision,
-      if (connectionResourceId != null)
-        'connectionResourceId': connectionResourceId,
-      if (resourceAuthorizationRevision != null)
-        'resourceAuthorizationRevision': resourceAuthorizationRevision,
-      if (destPath != null) 'destPath': destPath,
-      if (relativeSubDir != null) 'relativeSubDir': relativeSubDir,
-      if (treeUri != null) 'treeUri': treeUri,
+      'connectionResourceId': ?connectionResourceId,
+      'resourceAuthorizationRevision': ?resourceAuthorizationRevision,
+      'destPath': ?destPath,
+      'relativeSubDir': ?relativeSubDir,
+      'treeUri': ?treeUri,
     });
 
     // Add to in-memory pending queue (prevent duplicates by contentKey)
@@ -2335,7 +2442,7 @@ class DownloadService {
       wifiOnly: wifiOnly,
       retries: retries,
       meta: meta,
-      context: context,
+      context: context?.mounted == true ? context : null,
       torrentName: torrentName,
       contentKey: contentKey,
       destPath: destPath,
@@ -2381,6 +2488,21 @@ class DownloadService {
     );
   }
 
+  static String _libraryFileName(DownloadedMedia? media, String fallback) {
+    if (media == null) return fallback;
+    final extension = path.extension(fallback);
+    final title = _sanitizeName(media.title);
+    if (media.type == 'series' &&
+        media.season != null &&
+        media.episode != null) {
+      return '$title - S${media.season!.toString().padLeft(2, '0')}E${media.episode!.toString().padLeft(2, '0')}$extension';
+    }
+    if (media.type == 'movie') {
+      return '${_sanitizeName('${media.title}${media.year == null ? '' : ' (${media.year})'}')}$extension';
+    }
+    return fallback;
+  }
+
   Future<void> pause(Task task) async {
     // A queued item (not yet started) has no native task — pausing it means
     // parking it in the paused queue, or it would start anyway moments later.
@@ -2423,7 +2545,7 @@ class DownloadService {
     }
     _canceledDuringStart.remove(task.taskId);
     // Enforce concurrency: if at capacity, queue the resume
-    final int maxParallel = await DeviceStorage.getMaxParallelDownloads();
+    final int maxParallel = await StorageService.getMaxParallelDownloads();
     int runningCount;
     if (Platform.isAndroid) {
       final list = AndroidDownloadHistory.instance.all();
@@ -2806,7 +2928,7 @@ class DownloadService {
       );
       for (final directory in <Directory>[
         Directory('/storage/emulated/0/Download/Debrify'),
-        if (external != null) external,
+        ?external,
       ]) {
         try {
           return await _placeGeneratedFile(
@@ -2838,13 +2960,13 @@ class DownloadService {
     String? treeUri;
     String? treeName;
     {
-      final savedTreeUri = await DeviceStorage.getDownloadTreeUri();
+      final savedTreeUri = await StorageService.getDownloadTreeUri();
       if (savedTreeUri != null && savedTreeUri.isNotEmpty) {
         if (await _validateTreeUriCached(savedTreeUri)) {
           treeUri = savedTreeUri;
-          treeName = await DeviceStorage.getDownloadTreeDisplayName();
+          treeName = await StorageService.getDownloadTreeDisplayName();
         } else {
-          await DeviceStorage.clearDownloadTreeUri();
+          await StorageService.clearDownloadTreeUri();
         }
       }
 
@@ -2953,7 +3075,7 @@ class DownloadService {
     throw StateError('Could not allocate a unique generated download name');
   }
 
-  Future<String> _appDownloadsSubdir() async {
+  Future<String> _appDownloadsSubdir({bool create = true}) async {
     // User-chosen download folder (Windows/Linux). Mirrors the Android SAF
     // semantics: the custom root is used as-is (no forced 'Nextup' segment —
     // the user picked the exact folder) and per-item subfolders nest inside
@@ -2964,7 +3086,7 @@ class DownloadService {
     // for when the folder comes back.
     if (Platform.isWindows || Platform.isLinux) {
       try {
-        final saved = await DeviceStorage.getDownloadDirPath();
+        final saved = await StorageService.getDownloadDirPath();
         if (saved != null && saved.isNotEmpty) {
           if (await _validateDownloadDirCached(saved)) {
             return saved;
@@ -2984,7 +3106,7 @@ class DownloadService {
           final Directory appDownloadsDir = Directory(
             path.join(downloadsDir.path, 'Debrify'),
           );
-          if (!await appDownloadsDir.exists()) {
+          if (create && !await appDownloadsDir.exists()) {
             await appDownloadsDir.create(recursive: true);
           }
           return appDownloadsDir.path;
@@ -2997,7 +3119,7 @@ class DownloadService {
     // Fallback: Use a stable, app-specific downloads directory under Documents
     final Directory docs = await AppStorage.documents();
     final Directory dlDir = Directory(path.join(docs.path, 'downloads'));
-    if (!await dlDir.exists()) {
+    if (create && !await dlDir.exists()) {
       await dlDir.create(recursive: true);
     }
     return dlDir.path;
@@ -3133,7 +3255,7 @@ class DownloadService {
       }
 
       if (meta['torboxWebDownload'] == true) {
-        final apiKey = (await TorboxStorage.getTorboxApiKey()) ?? '';
+        final apiKey = (await StorageService.getTorboxApiKey()) ?? '';
         final webDownloadId = meta['torboxWebDownloadId'] as int?;
         final fileId = meta['torboxFileId'] as int?;
         if (apiKey.isEmpty) return null;
@@ -3158,7 +3280,7 @@ class DownloadService {
         return null;
       }
       if (meta['torboxDownload'] == true) {
-        final apiKey = (await TorboxStorage.getTorboxApiKey()) ?? '';
+        final apiKey = (await StorageService.getTorboxApiKey()) ?? '';
         final torrentId = meta['torboxTorrentId'] as int?;
         final fileId = meta['torboxFileId'] as int?;
         if (apiKey.isEmpty) return null;
@@ -3182,7 +3304,7 @@ class DownloadService {
 
       // RealDebrid
       final restricted = (meta['restrictedLink'] ?? '').toString();
-      final apiKey = (await RealDebridStorage.getApiKey()) ?? '';
+      final apiKey = (await StorageService.getApiKey()) ?? '';
       if (restricted.isEmpty || apiKey.isEmpty) return null;
       final fresh = await DebridService.unrestrictLink(apiKey, restricted);
       final freshUrl = (fresh['download'] ?? '').toString();
@@ -3473,6 +3595,11 @@ class DownloadService {
         ownerProfileId: _activeOwnerProfileId,
         presentExternalJobIds: byId.keys,
       );
+      // Native tasks are device-wide; settle every profile's vanished jobs.
+      await DeviceJobStore.reconcileBackendForAllOwners(
+        backend: 'androidNativeDownload',
+        liveExternalJobIds: byId.keys,
+      );
     }
 
     // 2) History entries claiming active work that native doesn't know about
@@ -3559,6 +3686,16 @@ class DownloadService {
         ownerProfileId: _activeOwnerProfileId,
         presentExternalJobIds: present,
       );
+      // The plugin database is device-wide: settle other profiles' jobs that
+      // it no longer runs, so they cannot block deleting those profiles.
+      final live = <String>[
+        for (final record in await FileDownloader().database.allRecords())
+          if (!record.status.isFinalState) record.task.taskId,
+      ];
+      await DeviceJobStore.reconcileBackendForAllOwners(
+        backend: 'backgroundDownloader',
+        liveExternalJobIds: live,
+      );
     }
   }
 
@@ -3587,7 +3724,7 @@ class DownloadService {
     }
     _reevaluating = true;
     // Determine capacity
-    final int maxParallel = await DeviceStorage.getMaxParallelDownloads();
+    final int maxParallel = await StorageService.getMaxParallelDownloads();
 
     int runningCount = 0;
     if (Platform.isAndroid) {
@@ -3754,7 +3891,7 @@ class DownloadService {
 
               if (isTorboxWebDownload) {
                 // Torbox web download path
-                final apiKey = await TorboxStorage.getTorboxApiKey();
+                final apiKey = await StorageService.getTorboxApiKey();
                 final webDownloadId = meta['torboxWebDownloadId'] as int?;
                 final fileId = meta['torboxFileId'] as int?;
                 final isZip = meta['torboxZip'] == true;
@@ -3810,7 +3947,7 @@ class DownloadService {
                 }
               } else if (isTorbox) {
                 // Torbox torrent download path
-                final apiKey = await TorboxStorage.getTorboxApiKey();
+                final apiKey = await StorageService.getTorboxApiKey();
                 final torrentId = meta['torboxTorrentId'] as int?;
                 final fileId = meta['torboxFileId'] as int?;
                 final isZip = meta['torboxZip'] == true;
@@ -3861,7 +3998,7 @@ class DownloadService {
               } else {
                 // RealDebrid download path (existing logic)
                 final restrictedLink = (meta['restrictedLink'] ?? '') as String;
-                final apiKey = (await RealDebridStorage.getApiKey()) ?? '';
+                final apiKey = (await StorageService.getApiKey()) ?? '';
 
                 debugPrint('DL META: debrid link metadata present');
 
@@ -3940,10 +4077,11 @@ class DownloadService {
           if (finalFileName.isNotEmpty) {
             name = finalFileName;
           } else {
-            final (_dir, fn) = await _smartLocationFor(
+            final (dir, fn) = await _smartLocationFor(
               finalUrl,
               null,
               p.torrentName,
+              p.meta,
             );
             name = fn;
           }
@@ -4056,6 +4194,7 @@ class DownloadService {
               finalUrl,
               finalFileName,
               p.torrentName,
+              p.meta,
             );
             final sanitizedRelativeDir =
                 p.relativeSubDir != null && p.relativeSubDir!.trim().isNotEmpty
@@ -4265,7 +4404,7 @@ class DownloadService {
 
               if (isTorboxWebDownload) {
                 // Torbox web download retry path
-                final apiKey = await TorboxStorage.getTorboxApiKey();
+                final apiKey = await StorageService.getTorboxApiKey();
                 final webDownloadId = meta['torboxWebDownloadId'] as int?;
                 final fileId = meta['torboxFileId'] as int?;
                 final isZip = meta['torboxZip'] == true;
@@ -4323,7 +4462,7 @@ class DownloadService {
                 }
               } else if (isTorbox) {
                 // Torbox torrent retry path
-                final apiKey = await TorboxStorage.getTorboxApiKey();
+                final apiKey = await StorageService.getTorboxApiKey();
                 final torrentId = meta['torboxTorrentId'] as int?;
                 final fileId = meta['torboxFileId'] as int?;
                 final isZip = meta['torboxZip'] == true;
@@ -4380,7 +4519,7 @@ class DownloadService {
               } else {
                 // RealDebrid retry path (existing logic)
                 final restricted = (meta['restrictedLink'] ?? '') as String;
-                final apiKey = (await RealDebridStorage.getApiKey()) ?? '';
+                final apiKey = (await StorageService.getApiKey()) ?? '';
                 if (restricted.isNotEmpty && apiKey.isNotEmpty) {
                   final fresh = await DebridService.unrestrictLink(
                     apiKey,
@@ -4473,9 +4612,13 @@ class DownloadService {
   /// Detaches only the active profile's process-local projection. Platform
   /// workers and plugin tasks continue running under their immutable owner.
   Future<void> prepareProfileSwitch() async {
-    _profileViewWasStarted = _started;
+    _profileViewGeneration++;
+    _profileViewWasStarted = _started || _libraryInitialization != null;
     _profileSwitchInProgress = true;
-    if (!_started) return;
+    final local = _libraryInitialization;
+    if (local != null) await local;
+    _libraryInitialization = null;
+    if (!_profileViewWasStarted) return;
     _profileViewAttached = false;
     while (_reevaluating) {
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -4500,6 +4643,7 @@ class DownloadService {
   /// captured scope. This does not register a second plugin/native listener.
   Future<void> activateProfileView() async {
     if (!_profileSwitchInProgress || !_profileViewWasStarted) return;
+    _profileViewGeneration++;
     _profileViewAttached = false;
     _pending.clear();
     _pendingById.clear();
@@ -4514,6 +4658,7 @@ class DownloadService {
     await _loadRecords();
     await _restorePaused();
     await _restorePending();
+    _libraryInitialization = Future<void>.value();
     if (Platform.isAndroid) {
       await _reconcileWithNative();
     } else {
@@ -4620,7 +4765,7 @@ class _PendingRequest {
   final BuildContext? context;
   final String? torrentName;
   final String contentKey;
-  bool canceled;
+  bool canceled = false;
   String? destPath;
   final String? relativeSubDir;
   final String? treeUri;
@@ -4643,7 +4788,6 @@ class _PendingRequest {
     required this.context,
     required this.torrentName,
     required this.contentKey,
-    this.canceled = false,
     this.destPath,
     this.relativeSubDir,
     this.treeUri,

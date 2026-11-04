@@ -17,6 +17,22 @@ enum TraktSeeAllList {
   anticipated,
 }
 
+/// Canonical presentation order for Trakt's optional Home rows. Keep this
+/// separate from the enum because Discover's list selector retains its own
+/// semantic order; Home promotes the public Trending chart ahead of personal
+/// recommendations.
+const kTraktHomeRowOrder = <TraktSeeAllList>[
+  TraktSeeAllList.continueWatching,
+  TraktSeeAllList.watchlist,
+  TraktSeeAllList.history,
+  TraktSeeAllList.collection,
+  TraktSeeAllList.ratings,
+  TraktSeeAllList.trending,
+  TraktSeeAllList.recommendations,
+  TraktSeeAllList.popular,
+  TraktSeeAllList.anticipated,
+];
+
 extension TraktSeeAllListX on TraktSeeAllList {
   String get label {
     switch (this) {

@@ -1,4 +1,4 @@
-import 'package:debrify/services/storage/player_network_storage.dart';
+import '../../../services/storage_service.dart';
 
 /// User-selected network presets for the Debrify (mpv) player — the escape
 /// hatch for slow/unstable stream origins (Plex-backed addons, remote
@@ -14,12 +14,12 @@ import 'package:debrify/services/storage/player_network_storage.dart';
 /// knob cover the real cases.
 ///
 /// Scope: VOD playback in both players. The Debrify (mpv) player consumes
-/// [mpvProperties]/[vodLavfOptions] in `VpMediaOpen.openMedia`; the native Android TV
+/// [mpvProperties]/[vodLavfOptions] in `_openMedia`; the native Android TV
 /// player receives the raw preset strings via the launch payload
 /// (`networkPatience`/`networkBuffer`, injected in AndroidTvPlayerBridge)
 /// and maps them to data-source timeouts + a DefaultLoadControl itself.
 /// Live IPTV keeps its own tuned pipeline on both sides (ffmpeg-reconnect
-/// flags / resilience ladder) — see the liveStream branch in `VpMediaOpen.openMedia`
+/// flags / resilience ladder) — see the liveStream branch in `_openMedia`
 /// and the `isIptvMode` guards in AndroidTvTorrentPlayerActivity.
 /// Deliberately excluded: Magic TV's Torbox/RealDebrid launches route to
 /// TorboxTvPlayerActivity, which keeps stock timeouts — the card copy's
@@ -57,8 +57,8 @@ class NetworkTuning {
   bool get isStandard => patience == standard && buffer == standard;
 
   static Future<NetworkTuning> load() async => NetworkTuning(
-        patience: await PlayerNetworkStorage.getNetworkConnectPatience(),
-        buffer: await PlayerNetworkStorage.getNetworkBufferSize(),
+        patience: await StorageService.getNetworkConnectPatience(),
+        buffer: await StorageService.getNetworkBufferSize(),
       );
 
   /// mpv properties for a (non-live) open. Empty at Standard — the caller

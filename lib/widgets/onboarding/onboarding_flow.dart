@@ -1,12 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:debrify/services/storage/alldebrid_storage.dart';
-import 'package:debrify/services/storage/pikpak_storage.dart';
-import 'package:debrify/services/storage/premiumize_storage.dart';
-import 'package:debrify/services/storage/provider_credential_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/torbox_storage.dart';
 import '../webdav_sync/webdav_foreground_sync.dart';
 
 import 'package:flutter/foundation.dart';
@@ -17,7 +11,6 @@ import '../../screens/settings/profile_backup_flows.dart';
 import '../../screens/webdav_sync/webdav_sync_login_screen.dart';
 import '../../services/account_service.dart';
 import '../../services/alldebrid_account_service.dart';
-import '../../services/analytics_service.dart';
 import '../../services/engine/config_loader.dart';
 import '../../services/engine/engine_registry.dart';
 import '../../services/engine/local_engine_storage.dart';
@@ -30,6 +23,7 @@ import '../../services/profiles/profile_restore_coordinator.dart';
 import '../../services/remote_control/remote_command_router.dart';
 import '../../services/remote_control/remote_constants.dart';
 import '../../services/remote_control/remote_control_state.dart';
+import '../../services/storage_service.dart';
 import '../../services/torbox_account_service.dart';
 import '../../services/webdav_sync/webdav_sync_connect_controller.dart';
 import '../../services/webdav_sync/webdav_sync_models.dart';
@@ -50,7 +44,6 @@ import 'steps/services_step.dart';
 import 'steps/trackers_step.dart';
 import '../../services/mdblist/mdblist_service.dart';
 import 'tv_keyboard_slot.dart';
-import 'package:debrify/services/storage/remote_control_storage.dart';
 
 typedef OnboardingValidationOverride =
     Future<bool> Function(
@@ -113,9 +106,9 @@ class InitialSetupFlow extends StatefulWidget {
               reverseTransitionDuration: isTelevision
                   ? Duration.zero
                   : const Duration(milliseconds: 180),
-              pageBuilder: (_, __, ___) =>
+              pageBuilder: (_, _, _) =>
                   OnboardingTheme.scope(const InitialSetupFlow()),
-              transitionsBuilder: (_, animation, __, child) => isTelevision
+              transitionsBuilder: (_, animation, _, child) => isTelevision
                   ? child
                   : FadeTransition(opacity: animation, child: child),
             ),
@@ -542,7 +535,6 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     final title = integrationMeta[type]!.title;
     if (!_connectedServices.contains(title)) _connectedServices.add(title);
     _hasConfigured = true;
-    AnalyticsService.integrationConnected(type.name, {'surface': 'onboarding'});
     MainPageBridge.notifyIntegrationChanged();
 
     if (type == IntegrationType.pikpak) await _offerPikPakRestriction();
@@ -573,20 +565,20 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
 
   Future<bool> _loginPikPak(String email, String password) async {
     final success = await PikPakApiService.instance.login(email, password);
-    if (success) await PikpakStorage.setPikPakEnabled(true);
+    if (success) await StorageService.setPikPakEnabled(true);
     return success;
   }
 
   Future<void> _hideProviderFromNavigation(IntegrationType type) async {
     switch (type) {
       case IntegrationType.realDebrid:
-        await RealDebridStorage.setRealDebridHiddenFromNav(true);
+        await StorageService.setRealDebridHiddenFromNav(true);
       case IntegrationType.torbox:
-        await TorboxStorage.setTorboxHiddenFromNav(true);
+        await StorageService.setTorboxHiddenFromNav(true);
       case IntegrationType.premiumize:
-        await PremiumizeStorage.setPremiumizeHiddenFromNav(true);
+        await StorageService.setPremiumizeHiddenFromNav(true);
       case IntegrationType.allDebrid:
-        await AllDebridStorage.setAllDebridHiddenFromNav(true);
+        await StorageService.setAllDebridHiddenFromNav(true);
       case IntegrationType.pikpak:
         return;
     }
@@ -619,7 +611,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
       builder: (_) => const PikPakFolderPickerDialog(),
     );
     if (result == null) return;
-    await PikpakStorage.setPikPakRestrictedFolder(
+    await StorageService.setPikPakRestrictedFolder(
       result['folderId'] as String?,
       result['folderName'] as String?,
     );
@@ -844,7 +836,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     _transition(OnboardStep.importing);
     _attachImportListeners();
     try {
-      var name = await RemoteControlStorage.getRemoteTvDeviceName();
+      var name = await StorageService.getRemoteTvDeviceName();
       name ??= await PlatformUtil.getDeviceName();
       name ??= _isTelevision ? 'Nextup TV' : 'This device';
       if (!mounted ||
@@ -975,7 +967,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
     MainPageBridge.queuePostSetupSnackBar(
       'Setup skipped. Connect services any time in Settings › Services.',
     );
-    await ProviderCredentialStorage.setInitialSetupComplete(true);
+    await StorageService.setInitialSetupComplete(true);
     if (!mounted) return;
     Navigator.of(context).pop(false);
   }
@@ -983,7 +975,7 @@ class _InitialSetupFlowState extends State<InitialSetupFlow> {
   Future<void> _finish({Future<void> Function()? afterSetupComplete}) async {
     if (_finishing) return;
     _finishing = true;
-    await ProviderCredentialStorage.setInitialSetupComplete(true);
+    await StorageService.setInitialSetupComplete(true);
     await afterSetupComplete?.call();
     if (!mounted) return;
     Navigator.of(context).pop(_hasConfigured);

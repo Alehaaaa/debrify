@@ -12,6 +12,7 @@ import 'profile_cleanup_ledger.dart';
 import 'profile_data_generation.dart';
 import 'profile_registry.dart';
 import 'profile_scope.dart';
+import 'profile_storage_paths.dart';
 
 /// Serializes avatar publication and records its filesystem intent durably.
 ///
@@ -156,7 +157,7 @@ class ProfileAvatarMutation {
   /// copy inside the now-visible generation unless the avatar intent recovery
   /// removes it explicitly.
   static Future<void> _deleteRestoreStaging(String profileId) async {
-    final documents = await AppStorage.documents();
+    final documents = await ProfileStoragePaths.profileDataRoot();
     final generations = Directory(
       p.join(documents.path, 'profiles', profileId, 'g'),
     );

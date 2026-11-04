@@ -1,12 +1,7 @@
 import 'dart:convert';
 
 import 'package:debrify/services/local_playback_resume_resolver.dart';
-import 'package:debrify/services/storage/completion_migration_storage.dart';
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_progress_storage.dart';
-import 'package:debrify/services/storage/episode_resume_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -18,7 +13,7 @@ void main() {
   });
 
   test('IMDb lookup merges every legacy series-title record', () async {
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Show Release Title A',
       season: 1,
       episode: 1,
@@ -26,7 +21,7 @@ void main() {
       durationMs: 10000,
       imdbId: 'tt-legacy-show',
     );
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Alternate Show Title B',
       season: 1,
       episode: 2,
@@ -35,10 +30,9 @@ void main() {
       imdbId: 'tt-legacy-show',
     );
 
-    final progress =
-        await MergedEpisodeProgressStorage.getEpisodeProgressByImdbId(
-          'tt-legacy-show',
-        );
+    final progress = await StorageService.getEpisodeProgressByImdbId(
+      'tt-legacy-show',
+    );
 
     expect(progress.keys, containsAll(<String>['1_1', '1_2']));
     expect(progress['1_1']?['positionMs'], 1000);
@@ -46,7 +40,7 @@ void main() {
   });
 
   test('IMDb lookup keeps the newest duplicate episode state', () async {
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Old Release Title',
       season: 2,
       episode: 3,
@@ -55,7 +49,7 @@ void main() {
       imdbId: 'tt-duplicate-show',
     );
     await Future<void>.delayed(const Duration(milliseconds: 2));
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'New Release Title',
       season: 2,
       episode: 3,
@@ -64,10 +58,9 @@ void main() {
       imdbId: 'tt-duplicate-show',
     );
 
-    final progress =
-        await MergedEpisodeProgressStorage.getEpisodeProgressByImdbId(
-          'tt-duplicate-show',
-        );
+    final progress = await StorageService.getEpisodeProgressByImdbId(
+      'tt-duplicate-show',
+    );
 
     expect(progress['2_3']?['positionMs'], 7000);
   });
@@ -75,7 +68,7 @@ void main() {
   test(
     'merged lookup spans release titles and lets newer current title win',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Release Pack Name',
         season: 1,
         episode: 1,
@@ -84,7 +77,7 @@ void main() {
         imdbId: 'tt-merged-show',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2));
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Catalog Show Name',
         season: 1,
         episode: 1,
@@ -92,7 +85,7 @@ void main() {
         durationMs: 10000,
         imdbId: 'tt-merged-show',
       );
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Release Pack Name',
         season: 1,
         episode: 2,
@@ -101,11 +94,10 @@ void main() {
         imdbId: 'tt-merged-show',
       );
 
-      final progress =
-          await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
-            seriesTitle: 'Catalog Show Name',
-            imdbId: 'TT-MERGED-SHOW',
-          );
+      final progress = await StorageService.getMergedEpisodeProgress(
+        seriesTitle: 'Catalog Show Name',
+        imdbId: 'TT-MERGED-SHOW',
+      );
 
       expect(progress['1_1']?['positionMs'], 6000);
       expect(progress['1_2']?['positionMs'], 3000);
@@ -115,7 +107,7 @@ void main() {
   test(
     'merged lookup lets a newer release alias beat older current title',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Catalog Show Name',
         season: 1,
         episode: 1,
@@ -124,7 +116,7 @@ void main() {
         imdbId: 'tt-newer-alias',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2));
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'New Release Pack',
         season: 1,
         episode: 1,
@@ -133,11 +125,10 @@ void main() {
         imdbId: 'tt-newer-alias',
       );
 
-      final progress =
-          await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
-            seriesTitle: 'Catalog Show Name',
-            imdbId: 'tt-newer-alias',
-          );
+      final progress = await StorageService.getMergedEpisodeProgress(
+        seriesTitle: 'Catalog Show Name',
+        imdbId: 'tt-newer-alias',
+      );
 
       expect(progress['1_1']?['positionMs'], 8000);
     },
@@ -146,7 +137,7 @@ void main() {
   test(
     'resume policy keeps generic exact-first and makes catalog IMDb-first',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Current Source Pack',
         season: 2,
         episode: 4,
@@ -157,7 +148,7 @@ void main() {
         imdbId: 'tt-policy-show',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2));
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Newer Source Pack',
         season: 2,
         episode: 4,
@@ -192,7 +183,7 @@ void main() {
   test(
     'catalog episode resume never crosses season/episode coordinates',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Source A',
         season: 1,
         episode: 1,
@@ -201,7 +192,7 @@ void main() {
         imdbId: 'tt-episode-isolation',
       );
       await Future<void>.delayed(const Duration(milliseconds: 2));
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Source B',
         season: 1,
         episode: 2,
@@ -228,7 +219,7 @@ void main() {
       Map<String, dynamic> episode(int position, {int? updatedAt}) => {
         'positionMs': position,
         'durationMs': 10000,
-        if (updatedAt != null) 'updatedAt': updatedAt,
+        'updatedAt': ?updatedAt,
       };
 
       Map<String, dynamic> series(
@@ -254,11 +245,10 @@ void main() {
         }),
       });
 
-      final progress =
-          await MergedEpisodeProgressStorage.getMergedEpisodeProgress(
-            seriesTitle: 'Catalog Show',
-            imdbId: 'tt-equal-progress',
-          );
+      final progress = await StorageService.getMergedEpisodeProgress(
+        seriesTitle: 'Catalog Show',
+        imdbId: 'tt-equal-progress',
+      );
 
       expect(progress['1_1']?['positionMs'], 3000);
       expect(progress['1_2']?['positionMs'], 2000);
@@ -266,24 +256,23 @@ void main() {
   );
 
   test('merged finished lookup unions alternate release titles', () async {
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Season One Release',
       season: 1,
       episode: 4,
       imdbId: 'tt-finished-show',
     );
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Catalog Show Name',
       season: 2,
       episode: 1,
       imdbId: 'tt-finished-show',
     );
 
-    final finished =
-        await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
-          seriesTitle: 'Catalog Show Name',
-          imdbId: 'tt-finished-show',
-        );
+    final finished = await StorageService.getMergedFinishedEpisodes(
+      seriesTitle: 'Catalog Show Name',
+      imdbId: 'tt-finished-show',
+    );
 
     expect(finished['1'], contains(4));
     expect(finished['2'], contains(1));
@@ -294,7 +283,7 @@ void main() {
   // "last played" forever — and each repeat of the cycle re-stamped it fresher,
   // so the obvious user fix made it stickier.
   test('unwatching a watched episode leaves no last-played ghost', () async {
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Ghost Show',
       season: 7,
       episode: 13,
@@ -302,13 +291,13 @@ void main() {
       durationMs: 1000,
       imdbId: 'tt-ghost-show',
     );
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Ghost Show',
       season: 7,
       episode: 13,
       imdbId: 'tt-ghost-show',
     );
-    await EpisodeCompletionStorage.unmarkEpisodeAsFinished(
+    await StorageService.unmarkEpisodeAsFinished(
       seriesTitle: 'Ghost Show',
       season: 7,
       episode: 13,
@@ -316,13 +305,11 @@ void main() {
     );
 
     expect(
-      await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId('tt-ghost-show'),
+      await StorageService.getLastPlayedEpisodeByImdbId('tt-ghost-show'),
       isNull,
     );
     expect(
-      await EpisodeResumeStorage.getLastPlayedEpisode(
-        seriesTitle: 'Ghost Show',
-      ),
+      await StorageService.getLastPlayedEpisode(seriesTitle: 'Ghost Show'),
       isNull,
     );
   });
@@ -331,7 +318,7 @@ void main() {
   // (including one that arrived over a phone→TV transfer): the row is the most
   // recently updated, so until it is purged it outranks real progress.
   test('the ghost purge lets real progress win last-played again', () async {
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Legacy Ghost Show',
       season: 1,
       episode: 2,
@@ -341,7 +328,7 @@ void main() {
     );
     await Future<void>.delayed(const Duration(milliseconds: 2));
     // Newer, but carries no offset — exactly the shape the old unwatch left.
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Legacy Ghost Show',
       season: 7,
       episode: 13,
@@ -350,21 +337,21 @@ void main() {
       imdbId: 'tt-legacy-ghost',
     );
     expect(
-      (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+      (await StorageService.getLastPlayedEpisodeByImdbId(
         'tt-legacy-ghost',
       ))?['episode'],
       13,
     );
 
-    await CompletionMigrationStorage.purgeUnwatchedResumeGhosts();
+    await StorageService.purgeUnwatchedResumeGhosts();
 
-    final byId = await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+    final byId = await StorageService.getLastPlayedEpisodeByImdbId(
       'tt-legacy-ghost',
     );
     expect(byId?['season'], 1);
     expect(byId?['episode'], 2);
 
-    final byTitle = await EpisodeResumeStorage.getLastPlayedEpisode(
+    final byTitle = await StorageService.getLastPlayedEpisode(
       seriesTitle: 'Legacy Ghost Show',
     );
     expect(byTitle?['season'], 1);
@@ -375,14 +362,14 @@ void main() {
   // survive the purge — it is how "watched, so advance to the next episode"
   // reaches the reconciler.
   test('the ghost purge keeps mark-only watched episodes', () async {
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Mark Only Show',
       season: 3,
       episode: 5,
       imdbId: 'tt-mark-only',
     );
     // A watched episode that WAS played: position == duration, not a ghost.
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Mark Only Show',
       season: 3,
       episode: 6,
@@ -390,23 +377,22 @@ void main() {
       durationMs: 1000,
       imdbId: 'tt-mark-only',
     );
-    await EpisodeCompletionStorage.markEpisodeAsFinished(
+    await StorageService.markEpisodeAsFinished(
       seriesTitle: 'Mark Only Show',
       season: 3,
       episode: 6,
       imdbId: 'tt-mark-only',
     );
 
-    await CompletionMigrationStorage.purgeUnwatchedResumeGhosts();
+    await StorageService.purgeUnwatchedResumeGhosts();
 
-    final finished =
-        await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
-          seriesTitle: 'Mark Only Show',
-          imdbId: 'tt-mark-only',
-        );
+    final finished = await StorageService.getMergedFinishedEpisodes(
+      seriesTitle: 'Mark Only Show',
+      imdbId: 'tt-mark-only',
+    );
     expect(finished['3'], containsAll(<int>[5, 6]));
 
-    final last = await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+    final last = await StorageService.getLastPlayedEpisodeByImdbId(
       'tt-mark-only',
     );
     expect(last?['season'], 3);
@@ -423,7 +409,7 @@ void main() {
       'some_other_setting': true,
     };
 
-    CompletionMigrationStorage.rearmGhostPurgeForImportedPlayback(overlay);
+    StorageService.rearmGhostPurgeForImportedPlayback(overlay);
 
     expect(overlay['resume_ghost_purge_generation'], 0);
   });
@@ -434,7 +420,7 @@ void main() {
       'resume_ghost_purge_generation': 1,
     };
 
-    CompletionMigrationStorage.rearmGhostPurgeForImportedPlayback(overlay);
+    StorageService.rearmGhostPurgeForImportedPlayback(overlay);
 
     expect(overlay['resume_ghost_purge_generation'], 1);
   });
@@ -442,7 +428,7 @@ void main() {
   test('an overlay without playback state does not re-arm the purge', () async {
     final overlay = <String, Object?>{'some_other_setting': true};
 
-    CompletionMigrationStorage.rearmGhostPurgeForImportedPlayback(overlay);
+    StorageService.rearmGhostPurgeForImportedPlayback(overlay);
 
     expect(overlay.containsKey('resume_ghost_purge_generation'), isFalse);
   });
@@ -451,9 +437,9 @@ void main() {
   // what a freshly-opened episode writes, and permanently ignoring that shape
   // would make a pack reopen the previous, already-watched episode.
   test('the ghost purge runs once and spares later fresh opens', () async {
-    await CompletionMigrationStorage.purgeUnwatchedResumeGhosts();
+    await StorageService.purgeUnwatchedResumeGhosts();
 
-    await SeriesProgressStorage.saveSeriesPlaybackState(
+    await StorageService.saveSeriesPlaybackState(
       seriesTitle: 'Fresh Open Show',
       season: 2,
       episode: 4,
@@ -461,9 +447,9 @@ void main() {
       durationMs: 1000,
       imdbId: 'tt-fresh-open',
     );
-    await CompletionMigrationStorage.purgeUnwatchedResumeGhosts();
+    await StorageService.purgeUnwatchedResumeGhosts();
 
-    final last = await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+    final last = await StorageService.getLastPlayedEpisodeByImdbId(
       'tt-fresh-open',
     );
     expect(last?['season'], 2);
@@ -473,7 +459,7 @@ void main() {
   test(
     'IMDb-aware unmark clears every completed alias and preserves partials',
     () async {
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Completed Release Alias',
         season: 1,
         episode: 4,
@@ -481,13 +467,13 @@ void main() {
         durationMs: 1000,
         imdbId: 'tt-alias-unmark',
       );
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Completed Release Alias',
         season: 1,
         episode: 4,
         imdbId: 'tt-alias-unmark',
       );
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Dummy Release Alias',
         season: 1,
         episode: 4,
@@ -495,14 +481,14 @@ void main() {
       );
       // The current catalog title can predate IMDb persistence. Stable-id
       // unmarking must still include it, but must retain its genuine partial.
-      await SeriesProgressStorage.saveSeriesPlaybackState(
+      await StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Current Catalog Title',
         season: 1,
         episode: 4,
         positionMs: 400,
         durationMs: 1000,
       );
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Unrelated Show',
         season: 1,
         episode: 4,
@@ -510,7 +496,7 @@ void main() {
       );
 
       expect(
-        await EpisodeProgressStorage.isEpisodeFinished(
+        await StorageService.isEpisodeFinished(
           seriesTitle: 'Current Catalog Title',
           season: 1,
           episode: 4,
@@ -519,7 +505,7 @@ void main() {
         isTrue,
       );
 
-      await EpisodeCompletionStorage.unmarkEpisodeAsFinished(
+      await StorageService.unmarkEpisodeAsFinished(
         seriesTitle: 'Current Catalog Title',
         season: 1,
         episode: 4,
@@ -527,7 +513,7 @@ void main() {
       );
 
       expect(
-        await EpisodeProgressStorage.isEpisodeFinished(
+        await StorageService.isEpisodeFinished(
           seriesTitle: 'Current Catalog Title',
           season: 1,
           episode: 4,
@@ -539,22 +525,22 @@ void main() {
       // not finished" row carrying a fresh updatedAt, which then won
       // `getLastPlayedEpisode*` and pinned Continue Watching to the episode the
       // user had just unwatched. Same treatment as the dummy alias below.
-      final completedAlias = await EpisodeProgressStorage.getEpisodeProgress(
+      final completedAlias = await StorageService.getEpisodeProgress(
         seriesTitle: 'Completed Release Alias',
       );
       expect(completedAlias, isNot(contains('1_4')));
 
-      final dummyAlias = await EpisodeProgressStorage.getEpisodeProgress(
+      final dummyAlias = await StorageService.getEpisodeProgress(
         seriesTitle: 'Dummy Release Alias',
       );
       expect(dummyAlias, isNot(contains('1_4')));
 
-      final currentTitle = await EpisodeProgressStorage.getEpisodeProgress(
+      final currentTitle = await StorageService.getEpisodeProgress(
         seriesTitle: 'Current Catalog Title',
       );
       expect(currentTitle['1_4']?['positionMs'], 400);
       expect(
-        await EpisodeProgressStorage.isEpisodeFinished(
+        await StorageService.isEpisodeFinished(
           seriesTitle: 'Unrelated Show',
           season: 1,
           episode: 4,

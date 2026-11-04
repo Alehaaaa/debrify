@@ -1,36 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:debrify/features/sources/application/source_candidate_ranking.dart';
-import 'package:debrify/features/sources/application/source_iptv_availability.dart';
-import 'package:debrify/features/sources/application/source_probing.dart';
-import 'package:debrify/features/sources/data/iptv_quick_play_search.dart';
-import 'package:debrify/features/sources/data/recovery_source_resolution.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/source_binding_actions.dart';
-import 'package:debrify/features/sources/presentation/legacy_playback/source_player_launch.dart';
 import 'package:debrify/models/advanced_search_selection.dart';
 import 'package:debrify/models/iptv_playlist.dart';
-import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/models/torrent.dart';
+import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/services/iptv_catalog_db.dart';
 import 'package:debrify/services/iptv_catalog_key.dart';
-import 'package:debrify/services/iptv_catalog_refresh_service.dart';
 import 'package:debrify/services/iptv_source_search.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/secret_vault.dart';
 import 'package:debrify/services/series_source_fetcher.dart';
 import 'package:debrify/services/series_source_service.dart';
 import 'package:debrify/services/source_priority.dart';
-import 'package:debrify/services/storage/iptv_playlist_storage.dart';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
-import 'package:debrify/services/storage/subtitle_settings_storage.dart';
-import 'package:debrify/services/storage/torrent_provider_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,9 +52,6 @@ void main() {
     await IptvCatalogDb.open();
   });
   tearDown(() async {
-    // A search can leave its catalog refresh running in the background; let
-    // it finish before this test's database is closed and deleted.
-    await IptvCatalogRefreshService.instance.debugSettle();
     IptvCatalogDb.debugClose();
     IptvCatalogDb.debugDirectoryOverride = null;
     ProfileRuntime.debugReset();
@@ -80,7 +66,7 @@ void main() {
 
   test('automatic IPTV discovery defers all Xtream episode lookups', () async {
     expect(
-      SourceIptvAvailability.iptvQuickPlaySearchTimeout,
+      TorrentPlaybackService.iptvQuickPlaySearchTimeout,
       const Duration(minutes: 1),
     );
     ingest('series', [
@@ -96,7 +82,7 @@ void main() {
     await http.runWithClient(
       () async {
         final watch = Stopwatch()..start();
-        final result = await IptvQuickPlaySearch.searchIptvForQuickPlay(
+        final result = await TorrentPlaybackService.searchIptvForQuickPlay(
           'tt2',
           'Show',
           '2011',
@@ -112,10 +98,13 @@ void main() {
         expect(result, hasLength(2));
         expect(result.every(IptvSourceSearch.isDeferredXtreamSeries), isTrue);
         expect(
-          result.every(SourceCandidateRanking.isAutoPlayableCandidate),
+          result.every(TorrentPlaybackService.isAutoPlayableCandidate),
           isTrue,
         );
-        expect(SourceProbing.selectDirect(result, null).$1, same(result.first));
+        expect(
+          TorrentPlaybackService.selectDirect(result, null).$1,
+          same(result.first),
+        );
         expect(watch.elapsed, lessThan(const Duration(seconds: 1)));
         expect(requests, 0);
       },
@@ -147,7 +136,7 @@ void main() {
     'unavailable movies stay visible with automatic preparation guidance',
     () async {
       expect(
-        await IptvPlaylistStorage.getIptvPlaylists(forSettings: false),
+        await StorageService.getIptvPlaylists(forSettings: false),
         hasLength(1),
       );
       final result = await IptvSourceSearch.search(movie);
@@ -234,7 +223,7 @@ void main() {
   test(
     'catalog respects the Playback audio language with safe fallbacks',
     () async {
-      await SubtitleSettingsStorage.setDefaultAudioLanguage('de');
+      await StorageService.setDefaultAudioLanguage('de');
       ingest('vod', [
         IptvChannel(
           name: 'FR - Dune (2021)',
@@ -372,7 +361,7 @@ void main() {
       ]);
       final rules = QuickPlayRules.debrifyDefault(isMovie: true);
       Future<List<Torrent>> search(QuickPlayRules r) =>
-          IptvQuickPlaySearch.searchIptvForQuickPlay(
+          TorrentPlaybackService.searchIptvForQuickPlay(
             'tt1',
             'Dune',
             '2021',
@@ -397,7 +386,7 @@ void main() {
         'infohash': 'addon-test',
       });
       expect(
-        SourceCandidateRanking.orderCandidatesForRules(
+        TorrentPlaybackService.orderCandidatesForRules(
           [addon, ...sources],
           rules: rules.copyWith(
             sourcePriority: ['iptv:playlist-a', 'stremio:test'],
@@ -406,7 +395,7 @@ void main() {
         'iptv:playlist-a',
       );
       expect(
-        SourceCandidateRanking.orderCandidatesForRules(
+        TorrentPlaybackService.orderCandidatesForRules(
           [addon, ...sources],
           rules: rules.copyWith(
             sourcePriority: ['stremio:test', 'iptv:playlist-a'],
@@ -415,7 +404,7 @@ void main() {
         'stremio:test',
       );
       expect(
-        SourceCandidateRanking.orderCandidatesForRules([
+        TorrentPlaybackService.orderCandidatesForRules([
           ...sources.reversed,
           ...sources,
         ], rules: rules.copyWith(sourcePriority: ['iptv:playlist-a'])),
@@ -430,7 +419,7 @@ void main() {
     expect(iptv.name, 'My TV');
     expect(iptv.key, 'iptv:playlist-a');
     expect(
-      await IptvQuickPlaySearch.searchIptvForQuickPlay(
+      await TorrentPlaybackService.searchIptvForQuickPlay(
         'tt1',
         'Dune',
         '2021',
@@ -458,7 +447,7 @@ void main() {
       () async {
         final rules = QuickPlayRules.debrifyDefault(isMovie: false);
         for (final episode in [1, 2]) {
-          final sources = await IptvQuickPlaySearch.searchIptvForQuickPlay(
+          final sources = await TorrentPlaybackService.searchIptvForQuickPlay(
             'tt2',
             'Show',
             '2011',
@@ -519,7 +508,7 @@ void main() {
         Future<List<Torrent>> search(
           QuickPlayRules value, {
           String? identity,
-        }) => IptvQuickPlaySearch.searchIptvForQuickPlay(
+        }) => TorrentPlaybackService.searchIptvForQuickPlay(
           identity ?? id,
           'Big Brother',
           '2023',
@@ -601,7 +590,7 @@ void main() {
       for (final id in ['tmdb:438631', 'tmdb:movie:438631', 'simkl:100']) {
         final rules = QuickPlayRules.debrifyDefault(isMovie: true);
         Future<List<Torrent>> search(QuickPlayRules value) =>
-            IptvQuickPlaySearch.searchIptvForQuickPlay(
+            TorrentPlaybackService.searchIptvForQuickPlay(
               id,
               'Dune',
               '2021',
@@ -710,7 +699,7 @@ void main() {
     )).single.torrents;
     var attempts = 0;
     final available =
-        await SourceIptvAvailability.confirmDeferredIptvAvailability(
+        await TorrentPlaybackService.confirmDeferredIptvAvailability(
           descriptors,
           season: 1,
           episode: 2,
@@ -725,7 +714,7 @@ void main() {
     expect(attempts, 2);
     expect(available, isEmpty);
     expect(
-      available.any(SourceCandidateRanking.isAutoPlayableCandidate),
+      available.any(TorrentPlaybackService.isAutoPlayableCandidate),
       isFalse,
     );
   });
@@ -752,7 +741,7 @@ void main() {
     )).single.torrents;
     final attempted = <String>[];
     final available =
-        await SourceIptvAvailability.confirmDeferredIptvAvailability(
+        await TorrentPlaybackService.confirmDeferredIptvAvailability(
           descriptors,
           season: 1,
           episode: 2,
@@ -887,7 +876,7 @@ void main() {
     );
 
     expect(
-      await SourceBindingActions.bindIptvSource(
+      await TorrentPlaybackService.bindIptvSource(
         context,
         descriptor,
         imdbId: 'tt2',
@@ -899,10 +888,6 @@ void main() {
     expect(stored.single.isIptvDirect, isTrue);
     expect(stored.single.iptvEntryKey, 'series:901');
     expect(stored.single.toJson().toString(), isNot(contains('secret')));
-    // The search queued a background catalog refresh. Let its queue pause run
-    // out on this test's fake clock, so no timer outlives the test (it used
-    // to pass only when an earlier test had left the refresh queue stuck).
-    await tester.pump(const Duration(seconds: 1));
   });
 
   test(
@@ -1116,7 +1101,7 @@ void main() {
           ),
       ]);
       final sources = (await IptvSourceSearch.search(movie)).single.torrents;
-      final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+      final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
         SeriesSource.iptvDirectService,
         const PlaybackMeta(imdbId: 'tt1', contentType: 'movie', title: 'Dune'),
       );
@@ -1144,9 +1129,9 @@ void main() {
       final iptv = (await IptvSourceSearch.search(
         movie,
       )).single.torrents.single;
-      await RealDebridStorage.saveApiKey('rd-key');
-      await TorrentProviderStorage.setDefaultTorrentProvider('debrid');
-      final commit = SourcePlayerLaunch.validatedSourceCommitterForTesting(
+      await StorageService.saveApiKey('rd-key');
+      await StorageService.setDefaultTorrentProvider('debrid');
+      final commit = TorrentPlaybackService.validatedSourceCommitterForTesting(
         SeriesSource.iptvDirectService,
         const PlaybackMeta(imdbId: 'tt1', contentType: 'movie', title: 'Dune'),
       );
@@ -1331,7 +1316,7 @@ void main() {
       await prefs.setStringList('iptv_playlists', []);
       await expectLater(IptvSourceSearch.authorize(source), throwsStateError);
       expect(
-        await RecoverySourceResolution.resolveRecoverySource(
+        await TorrentPlaybackService.resolveRecoverySource(
           source,
           provider: null,
         ),

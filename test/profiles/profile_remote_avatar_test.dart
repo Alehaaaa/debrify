@@ -540,7 +540,7 @@ void main() {
         );
         return <String, dynamic>{'type': 'ecmd', 'ct': 'sealed'};
       };
-      state.debugRawSender = (_, __, ___) => true;
+      state.debugRawSender = (_, _, _) => true;
 
       expect(
         await state.sendProfileAvatar('tv', await paintPng(size: 32)),

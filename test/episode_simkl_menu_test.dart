@@ -4,8 +4,7 @@ import 'package:debrify/models/advanced_search_selection.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/services/secret_vault.dart';
 import 'package:debrify/services/simkl/simkl_service.dart';
-import 'package:debrify/services/storage/simkl_storage.dart';
-import 'package:debrify/services/storage/tracking_source_storage.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/services/tracking_source_policy.dart';
 import 'package:debrify/theme/app_theme.dart';
@@ -48,8 +47,8 @@ void main() {
           await http.runWithClient(
             () async {
               await tester.runAsync(() async {
-                await SimklStorage.setSimklAccessToken('test-only-token');
-                await TrackingSourceStorage.setTrackingScrobbleTargets({
+                await StorageService.setSimklAccessToken('test-only-token');
+                await StorageService.setTrackingScrobbleTargets({
                   TrackingSource.simkl,
                 });
                 expect(

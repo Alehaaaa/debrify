@@ -1,12 +1,10 @@
-import 'package:debrify/services/storage/launch_ident_storage.dart';
 import '../../theme/app_looks.dart';
 import 'imported_launch_animations.dart';
 import '../../services/launch_animation/launch_animation_library.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../../widgets/launch/launch_ident.dart';
 import 'widgets/settings_widgets.dart';
@@ -27,10 +25,14 @@ class LaunchAnimationPage extends StatefulWidget {
 
 class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
   // Sync-cached (warmed in main), so no loading state.
-  LaunchIdent _choice = launchIdentFor(
-    LaunchIdentStorage.launchAnimationCached,
+  LaunchIdent _choice = launchIdentFor(StorageService.launchAnimationCached);
+  String _palette = StorageService.launchIdentPaletteCached;
+  int _selectionGeneration = 0;
+  Future<void> _selectionWrites = Future<void>.value();
+  late final PageController _mobilePager = PageController(
+    initialPage: kLaunchIdents.indexWhere((ident) => ident.id == _choice.id),
+    viewportFraction: 0.92,
   );
-  String _palette = LaunchIdentStorage.launchIdentPaletteCached;
 
   /// Non-focusable marker around the options card; used on TV to hand entry
   /// focus to its first focusable descendant (the first option row).
@@ -43,7 +45,6 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('launch_animation_settings');
     if (PlatformUtil.isAndroidTvCached) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -58,32 +59,36 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
 
   @override
   void dispose() {
+    _mobilePager.dispose();
     _firstCardMarker.dispose();
     super.dispose();
   }
 
   Future<void> _select(LaunchIdent choice) async {
-    if (choice.id == _choice.id &&
-        LaunchIdentStorage.importedLaunchAnimationCached == null) {
+    if (choice.id == StorageService.launchAnimationCached &&
+        StorageService.importedLaunchAnimationCached == null) {
       return;
     }
+    final generation = ++_selectionGeneration;
     setState(() => _choice = choice);
     // Tell an in-flight Look apply that a human just chose this key, so it
     // does not stamp over the choice. See theme/app_looks.dart.
     LookApplier.noteExternalWrite('launch_animation');
     try {
-      await LaunchIdentStorage.setLaunchAnimation(choice.id);
+      await (_selectionWrites = _selectionWrites.then((_) async {
+        if (generation != _selectionGeneration) return;
+        await StorageService.setLaunchAnimation(choice.id);
+      }));
     } catch (error) {
-      if (mounted) {
+      if (mounted && generation == _selectionGeneration) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
-    if (mounted) {
+    if (mounted && generation == _selectionGeneration) {
       setState(
-        () =>
-            _choice = launchIdentFor(LaunchIdentStorage.launchAnimationCached),
+        () => _choice = launchIdentFor(StorageService.launchAnimationCached),
       );
     }
   }
@@ -95,7 +100,7 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
     // in-flight apply would stamp over a choice made here. Same reason every
     // other Appearance picker announces itself.
     LookApplier.noteExternalWrite('launch_ident_palette');
-    await LaunchIdentStorage.setLaunchIdentPalette(value);
+    await StorageService.setLaunchIdentPalette(value);
   }
 
   @override
@@ -118,34 +123,125 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
               PlatformUtil.isAndroidTvCached ||
               (constraints.maxWidth >= 820 &&
                   constraints.maxWidth > constraints.maxHeight * 1.2);
-          return twoPane ? _buildTwoPane() : _buildStacked();
+          return twoPane ? _buildTwoPane() : _buildSwipeFeed(constraints);
         },
       ),
     );
   }
 
-  Widget _buildStacked() {
+  Widget _buildSwipeFeed(BoxConstraints constraints) {
+    final applied =
+        StorageService.importedLaunchAnimationCached == null &&
+        StorageService.launchAnimationCached == _choice.id;
+    final previewHeight = (constraints.maxHeight * 0.48)
+        .clamp(300.0, 430.0)
+        .toDouble();
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: kSettingsMaxWidth),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _header(),
-              const SizedBox(height: 18),
-              _preview(),
-              const SizedBox(height: 18),
-              _paletteCard(),
-              const SizedBox(height: 14),
-              _optionsCard(),
-              _imports(),
-              const SizedBox(height: 14),
-              _footnote(),
-            ],
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _header(),
           ),
-        ),
+          const SizedBox(height: 18),
+          SizedBox(
+            height: previewHeight,
+            child: PageView.builder(
+              controller: _mobilePager,
+              itemCount: kLaunchIdents.length,
+              onPageChanged: (index) =>
+                  setState(() => _choice = kLaunchIdents[index]),
+              itemBuilder: (context, index) {
+                final ident = kLaunchIdents[index];
+                final selected = ident.id == _choice.id;
+                return AnimatedPadding(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.fromLTRB(
+                    6,
+                    selected ? 0 : 12,
+                    6,
+                    selected ? 0 : 12,
+                  ),
+                  child: TickerMode(
+                    enabled: selected,
+                    child: _LaunchPreview(
+                      key: ValueKey('mobile-preview-${ident.id}'),
+                      ident: ident,
+                      palette: _palette,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _choice.label,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Text(
+                      '${kLaunchIdents.indexWhere((i) => i.id == _choice.id) + 1} / ${kLaunchIdents.length}',
+                      style: TextStyle(
+                        color: AppThemeScope.of(context).settings.dim,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(_choice.subtitle),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: applied ? null : () => _select(_choice),
+                    icon: Icon(
+                      applied
+                          ? Icons.check_rounded
+                          : Icons.rocket_launch_rounded,
+                    ),
+                    label: Text(
+                      applied ? 'Current animation' : 'Use this animation',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Center(
+                  child: Text(
+                    'Swipe to preview another animation',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppThemeScope.of(context).settings.dim,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              children: [
+                _paletteCard(),
+                const SizedBox(height: 14),
+                _imports(),
+                const SizedBox(height: 14),
+                _footnote(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -189,16 +285,14 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
     onSelectionChanged: () {
       if (mounted) {
         setState(
-          () => _choice = launchIdentFor(
-            LaunchIdentStorage.launchAnimationCached,
-          ),
+          () => _choice = launchIdentFor(StorageService.launchAnimationCached),
         );
       }
     },
   );
 
   Widget _preview() {
-    final id = LaunchIdentStorage.importedLaunchAnimationCached;
+    final id = StorageService.importedLaunchAnimationCached;
     return id == null
         ? _LaunchPreview(ident: _choice, palette: _palette)
         : AspectRatio(
@@ -271,7 +365,7 @@ class _LaunchAnimationPageState extends State<LaunchAnimationPage> {
   Widget _optionRow(LaunchIdent ident) {
     final t = AppThemeScope.of(context).settings;
     final bool active =
-        LaunchIdentStorage.importedLaunchAnimationCached == null &&
+        StorageService.importedLaunchAnimationCached == null &&
         _choice.id == ident.id;
     return SettingsTile(
       icon: active
@@ -296,7 +390,7 @@ class _LaunchPreview extends StatefulWidget {
   /// is what makes toggling the switch show its effect immediately.
   final String palette;
 
-  const _LaunchPreview({required this.ident, required this.palette});
+  const _LaunchPreview({super.key, required this.ident, required this.palette});
 
   @override
   State<_LaunchPreview> createState() => _LaunchPreviewState();
@@ -304,14 +398,23 @@ class _LaunchPreview extends StatefulWidget {
 
 class _LaunchPreviewState extends State<_LaunchPreview>
     with SingleTickerProviderStateMixin {
-  AnimationController? _controller;
+  late final AnimationController _controller;
   CustomPainter? _painter;
   Timer? _holdTimer;
 
   @override
   void initState() {
     super.initState();
-    _start();
+    _controller = AnimationController(
+      duration: widget.ident.revealDuration,
+      vsync: this,
+    )..addStatusListener(_handleStatus);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _restart();
   }
 
   @override
@@ -319,7 +422,7 @@ class _LaunchPreviewState extends State<_LaunchPreview>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.ident.id != widget.ident.id ||
         oldWidget.palette != widget.palette) {
-      _start();
+      _restart();
     }
   }
 
@@ -336,34 +439,33 @@ class _LaunchPreviewState extends State<_LaunchPreview>
   IdentPalette? get _painterPalette =>
       widget.palette == 'theme' ? _resolved : null;
 
-  void _start() {
+  void _handleStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
     _holdTimer?.cancel();
-    _controller?.dispose();
-    final c = AnimationController(
-      duration: widget.ident.revealDuration,
-      vsync: this,
-    );
-    _controller = c;
+    _holdTimer = Timer(const Duration(milliseconds: 1400), () {
+      if (mounted) _controller.forward(from: 0);
+    });
+  }
+
+  void _restart() {
+    _holdTimer?.cancel();
+    _controller
+      ..stop()
+      ..duration = widget.ident.revealDuration;
     _painter = widget.ident.createPainter(
-      c,
+      _controller,
       isTelevision: () => PlatformUtil.isAndroidTvCached,
       palette: _painterPalette,
     );
-    c.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        _holdTimer = Timer(const Duration(milliseconds: 1400), () {
-          if (mounted && identical(_controller, c)) c.forward(from: 0);
-        });
-      }
-    });
-    c.forward();
-    setState(() {});
+    _controller.forward(from: 0);
   }
 
   @override
   void dispose() {
     _holdTimer?.cancel();
-    _controller?.dispose();
+    _controller
+      ..removeStatusListener(_handleStatus)
+      ..dispose();
     super.dispose();
   }
 

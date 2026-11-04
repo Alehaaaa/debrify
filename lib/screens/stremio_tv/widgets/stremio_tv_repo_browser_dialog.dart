@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:math';
 
-import 'package:debrify/services/storage/stremio_catalog_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,6 +8,7 @@ import '../../../theme/app_theme_scope.dart';
 import '../../../utils/tv_keys.dart';
 import '../../../widgets/tv_text_field.dart';
 import '../../../services/catalog_repo_service.dart';
+import '../../../services/storage_service.dart';
 
 /// Single-view accordion dialog for browsing catalog repositories.
 /// Repos expand inline to show files for selective import.
@@ -97,7 +97,7 @@ class _StremioTvRepoBrowserDialogState
   // ─── Data loading ───────────────────────────────────────────────────────
 
   Future<void> _loadRepos() async {
-    final urls = await StremioCatalogStorage.getStremioTvCatalogRepoUrls();
+    final urls = await StorageService.getStremioTvCatalogRepoUrls();
     if (!mounted) return;
     _syncRepoFocusNodes(urls.length);
     setState(() {
@@ -289,7 +289,7 @@ class _StremioTvRepoBrowserDialogState
     }
 
     final added =
-        await StremioCatalogStorage.addStremioTvCatalogRepoUrl(canonicalUrl);
+        await StorageService.addStremioTvCatalogRepoUrl(canonicalUrl);
     if (!mounted) return;
     if (!added) {
       setState(() => _error = 'Repository already added');
@@ -408,7 +408,7 @@ class _StremioTvRepoBrowserDialogState
         final type = parsed['type'] as String? ?? 'movie';
 
         // Check for duplicate name
-        final existing = await StremioCatalogStorage.getStremioTvLocalCatalogs();
+        final existing = await StorageService.getStremioTvLocalCatalogs();
         if (existing.any((c) => c['name'] == name)) {
           errors.add('${file.name}: "$name" already exists');
           if (mounted) {
@@ -427,7 +427,7 @@ class _StremioTvRepoBrowserDialogState
           'items': rawItems,
         };
 
-        await StremioCatalogStorage.addStremioTvLocalCatalog(catalog);
+        await StorageService.addStremioTvLocalCatalog(catalog);
         imported++;
         _changed = true;
         if (mounted) setState(() => _fileImportStates[file.path] = 'done');
@@ -485,7 +485,7 @@ class _StremioTvRepoBrowserDialogState
       _expandedIndex = _expandedIndex! - 1;
     }
 
-    await StremioCatalogStorage.removeStremioTvCatalogRepoUrl(url);
+    await StorageService.removeStremioTvCatalogRepoUrl(url);
     if (!mounted) return;
     await _loadRepos();
     if (!mounted) return;

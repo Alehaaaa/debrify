@@ -1,1 +1,0 @@
-enum PremiumizeView { files, transfers }

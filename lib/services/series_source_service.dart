@@ -1,13 +1,208 @@
-import '../models/series_source.dart';
-export '../models/series_source.dart';
 import 'dart:convert';
 import '../models/custom_series_identity.dart';
+import '../models/media_server_source.dart';
+import 'package:crypto/crypto.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'profiles/profile_preferences.dart';
 import 'stremio_service.dart';
 import 'webdav_sync/webdav_sync_hot_merge.dart';
 import 'webdav_sync/webdav_sync_tombstones.dart';
+import '../utils/catalog_source_scope.dart';
+
+/// Represents a bound torrent source for a series.
+/// When set, episode playback skips torrent search and uses this source directly.
+class SeriesSource {
+  static const String localService = 'local';
+  static const String addonDirectService = 'stremio_direct';
+  static const String iptvDirectService = 'iptv_direct';
+  static const String mediaServerService = 'media_server';
+  static const String localKindMovieFile = 'movie_file';
+  static const String localKindSeriesFolder = 'series_folder';
+  static const String cloudKindFile = 'file';
+  static const String cloudKindFolder = 'folder';
+  static const String cloudKindWebDownload = 'web_download';
+
+  final String torrentHash;
+  final String torrentName;
+  final String debridService;
+  final String debridTorrentId;
+  // Provider-native cloud bindings do not expose an infohash. Their stable
+  // file/folder/web-download reference lives in [debridTorrentId], while this
+  // discriminator tells playback how to resolve it without fabricating a
+  // magnet. Hash-backed records leave this null.
+  final String? cloudSourceKind;
+  final int boundAt; // epoch millis
+  final String? localPath;
+  final String? localUri;
+  final String? localKind;
+  final int? localSizeBytes;
+  final int? localModifiedAt;
+  final String? addonId;
+  final String? addonKey;
+  final String? addonCatalogId;
+  final String? addonCatalogKey;
+  final String? streamKey;
+  final String? bingeGroup;
+  final int? streamIndex;
+  final String? iptvPlaylistId;
+  final String? iptvCatalogType;
+  final String? iptvEntryKey;
+
+  const SeriesSource({
+    required this.torrentHash,
+    required this.torrentName,
+    required this.debridService,
+    required this.debridTorrentId,
+    this.cloudSourceKind,
+    required this.boundAt,
+    this.localPath,
+    this.localUri,
+    this.localKind,
+    this.localSizeBytes,
+    this.localModifiedAt,
+    this.addonId,
+    this.addonKey,
+    this.addonCatalogId,
+    this.addonCatalogKey,
+    this.streamKey,
+    this.bingeGroup,
+    this.streamIndex,
+    this.iptvPlaylistId,
+    this.iptvCatalogType,
+    this.iptvEntryKey,
+  });
+
+  bool get isLocal => debridService == localService;
+  bool get isMediaServer => debridService == mediaServerService;
+  bool get isProviderNativeCloud =>
+      !isLocal &&
+      torrentHash.isEmpty &&
+      debridTorrentId.trim().isNotEmpty &&
+      (cloudSourceKind == cloudKindFile ||
+          cloudSourceKind == cloudKindFolder ||
+          cloudSourceKind == cloudKindWebDownload);
+  bool get isAddonDirect =>
+      debridService == addonDirectService &&
+      (addonId?.trim().isNotEmpty ?? false) &&
+      (addonKey?.trim().isNotEmpty ?? false);
+  bool get isIptvDirect =>
+      debridService == iptvDirectService &&
+      (iptvPlaylistId?.trim().isNotEmpty ?? false) &&
+      (iptvCatalogType?.trim().isNotEmpty ?? false) &&
+      (iptvEntryKey?.trim().isNotEmpty ?? false);
+
+  /// Origin configuration and catalog together define the pinned content.
+  bool matchesCatalogScope({String? catalogId, String? catalogKey}) =>
+      addonCatalogId == catalogId && addonCatalogKey == catalogKey;
+
+  /// Stable identity used for dedupe, reorder keys, and removal. Existing
+  /// hash-backed bindings retain their exact behavior; only hashless cloud
+  /// bindings fall back to provider + kind + provider id.
+  String get bindingKey {
+    final catalogScope = catalogSourceScope(addonCatalogId, addonCatalogKey);
+    if (torrentHash.isNotEmpty) return '${catalogScope}hash:$torrentHash';
+    if (isLocal) {
+      final path = (localPath ?? debridTorrentId).trim();
+      return 'local:$path';
+    }
+    if (isAddonDirect) {
+      if (bingeGroup != null && bingeGroup!.isNotEmpty) {
+        return '${catalogScope}direct:${addonKey!.trim()}:group:${sha256.convert(utf8.encode(bingeGroup!))}';
+      }
+      // [streamIndex] is deliberately NOT part of the identity. It is the
+      // stream's position in the addon's response, which moves between searches
+      // as cache state and seeders change — so including it made a replay of the
+      // SAME file compute a new key, miss the dedupe in _autoBindSeriesOnPlay /
+      // _rebindOnSourceSwitch, and append a duplicate pin on every play. It is
+      // still stored, because re-resolution needs it; it just cannot be identity.
+      // [streamKey] is the real identity: a URL-free stream profile (see
+      // StremioStream.streamKey), so it survives signed/expiring links.
+      return '${catalogScope}direct:${addonKey!.trim()}:${streamKey?.trim() ?? ''}';
+    }
+    if (isIptvDirect) {
+      return 'iptv:${iptvPlaylistId!.trim()}:${iptvCatalogType!.trim()}:${iptvEntryKey!.trim()}';
+    }
+    if (isMediaServer) return MediaServerSource.bindingKey(debridTorrentId);
+    return 'cloud:$debridService:${cloudSourceKind ?? ''}:${debridTorrentId.trim()}';
+  }
+
+  /// Group identity wins when available on both sides; older pins can still
+  /// match their original profile during migration. Position is not identity.
+  bool matchesAddonDirect({
+    required String? candidateAddonKey,
+    required String? candidateStreamKey,
+    String? candidateBingeGroup,
+  }) =>
+      isAddonDirect &&
+      addonKey == candidateAddonKey &&
+      (bingeGroup != null && candidateBingeGroup != null
+          ? bingeGroup == candidateBingeGroup
+          : streamKey == candidateStreamKey);
+
+  bool get isLocalMovieFile =>
+      isLocal && (localKind == null || localKind == localKindMovieFile);
+  bool get isLocalSeriesFolder => isLocal && localKind == localKindSeriesFolder;
+
+  static String localSourceHash(String path) {
+    final normalizedPath = path.trim();
+    final digest = sha1.convert(utf8.encode(normalizedPath)).toString();
+    return 'local:$digest';
+  }
+
+  /// Secret-free stable reference for provider-native items whose provider
+  /// exposes only an original URL (for example AllDebrid saved links).
+  static String opaqueCloudReference(String value) =>
+      sha256.convert(utf8.encode(value.trim())).toString();
+
+  Map<String, dynamic> toJson() => {
+    'torrentHash': torrentHash,
+    'torrentName': torrentName,
+    'debridService': debridService,
+    'debridTorrentId': debridTorrentId,
+    if (cloudSourceKind != null) 'cloudSourceKind': cloudSourceKind,
+    'boundAt': boundAt,
+    if (localPath != null) 'localPath': localPath,
+    if (localUri != null) 'localUri': localUri,
+    if (localKind != null) 'localKind': localKind,
+    if (localSizeBytes != null) 'localSizeBytes': localSizeBytes,
+    if (localModifiedAt != null) 'localModifiedAt': localModifiedAt,
+    if (addonId != null) 'addonId': addonId,
+    if (addonKey != null) 'addonKey': addonKey,
+    if (addonCatalogId != null) 'addonCatalogId': addonCatalogId,
+    if (addonCatalogKey != null) 'addonCatalogKey': addonCatalogKey,
+    if (streamKey != null) 'streamKey': streamKey,
+    if (bingeGroup != null) 'bingeGroup': bingeGroup,
+    if (streamIndex != null) 'streamIndex': streamIndex,
+    if (iptvPlaylistId != null) 'iptvPlaylistId': iptvPlaylistId,
+    if (iptvCatalogType != null) 'iptvCatalogType': iptvCatalogType,
+    if (iptvEntryKey != null) 'iptvEntryKey': iptvEntryKey,
+  };
+
+  factory SeriesSource.fromJson(Map<String, dynamic> json) => SeriesSource(
+    torrentHash: json['torrentHash'] as String? ?? '',
+    torrentName: json['torrentName'] as String? ?? '',
+    debridService: json['debridService'] as String? ?? 'rd',
+    debridTorrentId: json['debridTorrentId'] as String? ?? '',
+    cloudSourceKind: json['cloudSourceKind'] as String?,
+    boundAt: json['boundAt'] as int? ?? 0,
+    localPath: json['localPath'] as String?,
+    localUri: json['localUri'] as String?,
+    localKind: json['localKind'] as String?,
+    localSizeBytes: json['localSizeBytes'] as int?,
+    localModifiedAt: json['localModifiedAt'] as int?,
+    addonId: json['addonId'] as String?,
+    addonKey: json['addonKey'] as String?,
+    addonCatalogId: json['addonCatalogId'] as String?,
+    addonCatalogKey: json['addonCatalogKey'] as String?,
+    streamKey: json['streamKey'] as String?,
+    bingeGroup: json['bingeGroup'] as String?,
+    streamIndex: json['streamIndex'] as int?,
+    iptvPlaylistId: json['iptvPlaylistId'] as String?,
+    iptvCatalogType: json['iptvCatalogType'] as String?,
+    iptvEntryKey: json['iptvEntryKey'] as String?,
+  );
+}
 
 /// Manages series-to-torrent source bindings (multiple sources per series).
 /// Stores in SharedPreferences with key prefix 'series_source_'.
@@ -16,61 +211,34 @@ class SeriesSourceService {
   static const String _prefix = 'series_source_';
 
   /// Get all bound sources for a series, ordered by priority (first = highest).
-  static Future<List<SeriesSource>> getSources(
-    String imdbId, {
-    bool Function()? canContinue,
-  }) async {
-    _ensureCurrent(canContinue);
+  static Future<List<SeriesSource>> getSources(String imdbId) async {
     final prefs = await ProfilePreferences.instance();
-    _ensureCurrent(canContinue);
     final raw = prefs.getString('$_prefix$imdbId');
     if (raw == null) {
       final custom = CustomSeriesIdentity.parse(imdbId);
       if (custom == null) return [];
-      final addon = await StremioService.instance.addonForCustomProgress(
-        imdbId,
-      );
-      _ensureCurrent(canContinue);
+      final addon = await StremioService.instance.addonForCustomProgress(imdbId);
       final bindingKey = addon?.sourceBindingKey ?? custom.addonKey;
       // Old releases stored custom pins in the IMDb bucket, but already saved
       // their exact catalog/configuration scope. Move only proven matches.
       final migrated = <SeriesSource>[];
-      for (final key
-          in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
+      for (final key in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
         final oldId = key.substring(_prefix.length);
         if (CustomSeriesIdentity.isCustom(oldId)) continue;
-        final matches = (await getSources(oldId, canContinue: canContinue))
-            .where(
-              (s) => s.matchesCatalogScope(
-                catalogId: custom.catalogId,
-                catalogKey: bindingKey,
-              ),
-            )
-            .toList();
+        final matches = (await getSources(oldId)).where((s) =>
+          s.matchesCatalogScope(catalogId: custom.catalogId, catalogKey: bindingKey)).toList();
         for (final source in matches) {
-          if (!migrated.any((s) => s.bindingKey == source.bindingKey)) {
-            migrated.add(source);
-          }
+          if (!migrated.any((s) => s.bindingKey == source.bindingKey)) migrated.add(source);
         }
       }
       if (migrated.isEmpty) return [];
-      await _saveSources(prefs, imdbId, migrated, canContinue: canContinue);
-      _ensureCurrent(canContinue);
-      for (final key
-          in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
+      await _saveSources(prefs, imdbId, migrated);
+      for (final key in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
         final oldId = key.substring(_prefix.length);
         if (CustomSeriesIdentity.isCustom(oldId)) continue;
-        for (final source
-            in (await getSources(oldId, canContinue: canContinue))
-                .where(
-                  (s) => s.matchesCatalogScope(
-                    catalogId: custom.catalogId,
-                    catalogKey: bindingKey,
-                  ),
-                )
-                .toList()) {
-          await removeSourceEntry(oldId, source, canContinue: canContinue);
-          _ensureCurrent(canContinue);
+        for (final source in (await getSources(oldId)).where((s) =>
+          s.matchesCatalogScope(catalogId: custom.catalogId, catalogKey: bindingKey)).toList()) {
+          await removeSourceEntry(oldId, source);
         }
       }
       return migrated;
@@ -88,8 +256,7 @@ class SeriesSourceService {
       if (decoded is Map<String, dynamic>) {
         final source = SeriesSource.fromJson(decoded);
         // Auto-migrate to list format
-        await _saveSources(prefs, imdbId, [source], canContinue: canContinue);
-        _ensureCurrent(canContinue);
+        await _saveSources(prefs, imdbId, [source]);
         return [source];
       }
       return [];
@@ -107,16 +274,9 @@ class SeriesSourceService {
   /// Add a source to the list (appends at end = lowest priority).
   /// Hash-backed sources dedupe exactly as before. Provider-native cloud
   /// sources dedupe by provider + kind + stable provider id.
-  static Future<void> addSource(
-    String imdbId,
-    SeriesSource source, {
-    bool Function()? canContinue,
-  }) async {
-    _ensureCurrent(canContinue);
+  static Future<void> addSource(String imdbId, SeriesSource source) async {
     final prefs = await ProfilePreferences.instance();
-    _ensureCurrent(canContinue);
-    final sources = await getSources(imdbId, canContinue: canContinue);
-    _ensureCurrent(canContinue);
+    final sources = await getSources(imdbId);
     // Replace if the same stable binding already exists.
     final existingIdx = sources.indexWhere(
       (s) => s.bindingKey == source.bindingKey,
@@ -126,7 +286,7 @@ class SeriesSourceService {
     } else {
       sources.add(source);
     }
-    await _saveSources(prefs, imdbId, sources, canContinue: canContinue);
+    await _saveSources(prefs, imdbId, sources);
   }
 
   /// Remove a specific source by torrentHash.
@@ -157,14 +317,10 @@ class SeriesSourceService {
   /// Remove one exact source, including a provider-native source with no hash.
   static Future<void> removeSourceEntry(
     String imdbId,
-    SeriesSource source, {
-    bool Function()? canContinue,
-  }) async {
-    _ensureCurrent(canContinue);
+    SeriesSource source,
+  ) async {
     final prefs = await ProfilePreferences.instance();
-    _ensureCurrent(canContinue);
-    final sources = await getSources(imdbId, canContinue: canContinue);
-    _ensureCurrent(canContinue);
+    final sources = await getSources(imdbId);
     final removed = sources.where(
       (candidate) => candidate.bindingKey == source.bindingKey,
     );
@@ -176,12 +332,11 @@ class SeriesSourceService {
                 WebDavSyncRecordKey.source(imdbId, candidate.bindingKey),
           ),
     );
-    _ensureCurrent(canContinue);
     sources.removeWhere((s) => s.bindingKey == source.bindingKey);
     if (sources.isEmpty) {
-      await _guardedWrite(canContinue, () => prefs.remove('$_prefix$imdbId'));
+      await prefs.remove('$_prefix$imdbId');
     } else {
-      await _saveSources(prefs, imdbId, sources, canContinue: canContinue);
+      await _saveSources(prefs, imdbId, sources);
     }
   }
 
@@ -202,14 +357,10 @@ class SeriesSourceService {
   /// Replace the entire source list (for reordering).
   static Future<void> setSources(
     String imdbId,
-    List<SeriesSource> sources, {
-    bool Function()? canContinue,
-  }) async {
-    _ensureCurrent(canContinue);
+    List<SeriesSource> sources,
+  ) async {
     final prefs = await ProfilePreferences.instance();
-    _ensureCurrent(canContinue);
-    final existing = await getSources(imdbId, canContinue: canContinue);
-    _ensureCurrent(canContinue);
+    final existing = await getSources(imdbId);
     final retained = sources.map((source) => source.bindingKey).toSet();
     await WebDavSyncTombstoneRecorder.recordForCurrentProfile(
       existing
@@ -221,11 +372,10 @@ class SeriesSourceService {
             (source) => WebDavSyncRecordKey.source(imdbId, source.bindingKey),
           ),
     );
-    _ensureCurrent(canContinue);
     if (sources.isEmpty) {
-      await _guardedWrite(canContinue, () => prefs.remove('$_prefix$imdbId'));
+      await prefs.remove('$_prefix$imdbId');
     } else {
-      await _saveSources(prefs, imdbId, sources, canContinue: canContinue);
+      await _saveSources(prefs, imdbId, sources);
     }
   }
 
@@ -246,35 +396,9 @@ class SeriesSourceService {
   static Future<void> _saveSources(
     SharedPreferences prefs,
     String imdbId,
-    List<SeriesSource> sources, {
-    bool Function()? canContinue,
-  }) async {
-    final jsonList = sources.map((s) => s.toJson()).toList();
-    await _guardedWrite(
-      canContinue,
-      () => prefs.setString('$_prefix$imdbId', jsonEncode(jsonList)),
-    );
-  }
-
-  static void _ensureCurrent(bool Function()? canContinue) {
-    if (canContinue != null && !canContinue()) {
-      throw StateError('Saved-source operation belongs to a retired session');
-    }
-  }
-
-  static Future<void> _guardedWrite(
-    bool Function()? canContinue,
-    Future<bool> Function() write,
+    List<SeriesSource> sources,
   ) async {
-    if (canContinue == null) {
-      await write();
-      return;
-    }
-    await ProfilePreferences.synchronizeExternalMutation(() async {
-      // Recheck after waiting for a snapshot; the nested preference setter
-      // retains its own current-profile checks and mutation accounting.
-      _ensureCurrent(canContinue);
-      await write();
-    }, marksMutation: false);
+    final jsonList = sources.map((s) => s.toJson()).toList();
+    await prefs.setString('$_prefix$imdbId', jsonEncode(jsonList));
   }
 }

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'package:debrify/services/storage/detail_page_storage.dart';
+import '../../services/discover_credits_handoff.dart';
+import '../../services/imdb_credits_service.dart';
 import '../../services/metadata_explore_service.dart';
 import '../../services/profiles/profile_runtime.dart';
 import 'showcase_availability.dart';
 import '../../models/metadata_preferences.dart';
 import '../../models/detail_page_section_visibility.dart';
+import '../../services/storage_service.dart';
 import '../../screens/metadata_explore_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -208,22 +210,33 @@ class _DetailShowcaseState extends State<DetailShowcase> {
   int _exploreGeneration = 0;
   Timer? _exploreRetry;
   bool _exploreFailed = false;
+
+  /// No TMDB in this build: studios come from IMDb (with Wikidata logos) and
+  /// where-to-watch, which only TMDB can supply, is left out.
+  bool _imdbStudios = false;
   final _extraNodes = <String, List<FocusNode>>{};
   final _extraKeys = <String, GlobalKey>{};
 
   DetailPageSectionVisibility get _sectionVisibility =>
       widget.sectionVisibility ??
-      DetailPageStorage.detailPageSectionVisibilityCached;
+      StorageService.detailPageSectionVisibilityCached;
 
   List<ShowcaseAvailabilityRow> get _extraRows => showcaseAvailabilityRows(
-    _explore, widget.model.metadataPreferences,
+    _explore,
+    _imdbStudios
+        ? widget.model.metadataPreferences?.copyWith(
+            features: widget.model.metadataPreferences!.features.difference({
+              MetadataFeature.availability,
+            }),
+          )
+        : widget.model.metadataPreferences,
     failed: _exploreFailed,
     visibility: _sectionVisibility,
   );
 
   DetailPageSectionVisibility _visibilityFor(DetailShowcase showcase) =>
       showcase.sectionVisibility ??
-      DetailPageStorage.detailPageSectionVisibilityCached;
+      StorageService.detailPageSectionVisibilityCached;
 
   Object? _explorePolicy(
     MetadataPreferences? prefs,
@@ -269,7 +282,57 @@ class _DetailShowcaseState extends State<DetailShowcase> {
       features.remove(MetadataFeature.availability);
     }
     if (features.isEmpty) return;
+    // TMDB's token is baked in at build time. Without it, studios come from
+    // IMDb instead; where-to-watch has no token-free source and is skipped
+    // rather than shown as a "Could not load. Retry" no retry can fix.
+    final service = widget.exploreService ?? MetadataExploreService.instance;
+    _imdbStudios = !service.repository.configured;
+    if (_imdbStudios) {
+      if (features.contains(MetadataFeature.companies)) {
+        _fetchImdbStudios(generation, 0);
+      }
+      return;
+    }
     _fetchExplore(generation, prefs.copyWith(features: features), 0);
+  }
+
+  String? get _itemImdbId {
+    final item = widget.model.item;
+    for (final id in [item.imdbId, item.id]) {
+      if (id != null && RegExp(r'^tt\d{7,9}$').hasMatch(id)) return id;
+    }
+    return null;
+  }
+
+  Future<void> _fetchImdbStudios(int generation, int attempt) async {
+    bool current() => mounted && generation == _exploreGeneration &&
+        _exploreScope == ProfileRuntime.scope.value;
+    final imdbId = _itemImdbId;
+    if (imdbId == null) return;
+    try {
+      final studios = await ImdbCreditsService.instance.companies(imdbId);
+      if (!current()) return;
+      setState(() => _explore = MetadataExploreData(
+        companies: [
+          for (final studio in studios)
+            {
+              'id': studio.number,
+              'name': studio.name,
+              'imdb_id': studio.id,
+              if (studio.logoUrl != null) 'logo_url': studio.logoUrl,
+            },
+        ],
+      ));
+    } catch (_) {
+      if (!current()) return;
+      if (attempt < 2) {
+        _exploreRetry = Timer(Duration(seconds: 1 << attempt), () {
+          if (current()) _fetchImdbStudios(generation, attempt + 1);
+        });
+      } else {
+        setState(() => _exploreFailed = true);
+      }
+    }
   }
 
   Future<void> _fetchExplore(int generation, MetadataPreferences prefs, int attempt) async {
@@ -298,10 +361,27 @@ class _DetailShowcaseState extends State<DetailShowcase> {
         !prefs.features.contains(MetadataFeature.companies)) {
       return;
     }
+    final imdbId = entry.imdbId;
+    final type = widget.model.item.type == 'series' ? 'tv' : 'movie';
+    // The studio's titles open as a fixed-source Discover page (filters,
+    // rail, trailer stage); the plain browse page is only the fallback.
+    if (DiscoverCreditsHandoff.open(context, DiscoverCreditsRequest(
+      kind: 'company',
+      title: entry.name,
+      tmdbId: imdbId == null ? entry.id : null,
+      imdbId: imdbId,
+      type: type,
+    ), isTelevision: widget.model.isTelevision)) {
+      return;
+    }
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => MetadataBrowsePage(
       title: entry.name, kind: entry.kind!, id: entry.id,
       type: widget.model.item.type == 'series' ? 'tv' : 'movie',
       preferences: prefs, onOpen: onOpen, isTelevision: widget.model.isTelevision,
+      // Token-free studios browse IMDb's credits for this company.
+      service: ImdbCreditsService.isCompanyId(imdbId)
+          ? ImdbCreditBrowseService.company(imdbId!)
+          : null,
     )));
   }
 
@@ -1006,20 +1086,14 @@ class _DetailShowcaseState extends State<DetailShowcase> {
       ),
     ];
     if (view != null && view.seasons.length > 1) {
-      // Compact renders ONE control — the season pill — so its band carries
-      // exactly one node. Listing a node per season here while the rendering
-      // mounts a single pill would let a desktop arrow key focus a detached
-      // node (dpad:false still receives arrow keys from real keyboards) and
-      // strand the cursor. Topology always matches rendering.
-      final compact = (_m?.compact ?? false);
+      // Every form factor now renders the full horizontal pill row (compact
+      // included — the old single-pill dropdown is gone), so the band carries
+      // one node per season on all of them. Topology always matches rendering:
+      // a node per pill, never a detached one an arrow key could strand on.
       bands.add(
         _Band(
           'seasons',
-          _grow(
-            _seasonNodes,
-            compact ? 1 : view.seasons.length,
-            'showcase-season',
-          ),
+          _grow(_seasonNodes, view.seasons.length, 'showcase-season'),
           _seasonsKey,
           110,
         ),
@@ -1212,6 +1286,15 @@ class _DetailShowcaseState extends State<DetailShowcase> {
     double viewport,
   ) {
     _viewportH = viewport;
+    // The detail route is edge-to-edge on iOS. Keep the scroll content clear
+    // of the system bars without shrinking the backdrop and scrim viewport.
+    final systemInsets = PlatformUtil.isIosMobile
+        ? MediaQuery.viewPaddingOf(context)
+        : EdgeInsets.zero;
+    // The ListView starts below the status inset, so its hero must use the
+    // corresponding safe content height. Using the full edge-to-edge viewport
+    // here pushes the title and action row down by the home-indicator inset.
+    final contentViewport = viewport - systemInsets.vertical;
     final opening = _usesTvOpeningGate && !_openingReady;
     if (opening) _openingView = view;
     return Stack(
@@ -1224,7 +1307,10 @@ class _DetailShowcaseState extends State<DetailShowcase> {
         // disagree with what [_publishDepth] told the parent.
         ShowcaseAmbient(url: m.backdrop, visible: _effectiveDeep),
         ShowcaseBackdropScrim(
-          visible: !_effectiveDeep,
+          // Gone the moment the trailer is promoted: the video should play
+          // clean, not under a shadow that lags the content's fade.
+          visible: !_effectiveDeep && !m.trailerForeground,
+          quick: m.trailerForeground,
           // Rolling trailer → bed pulled in tight, video clear. Off-TV only:
           // the TV scrims are the shipped, panel-tuned ones.
           thinned: !widget.dpad && m.trailerPlaying,
@@ -1247,15 +1333,30 @@ class _DetailShowcaseState extends State<DetailShowcase> {
               opacity: opening ? (1 / 255) : 1,
               duration: const Duration(milliseconds: 180),
               curve: Curves.easeOut,
-              child: ListView(
-                controller: _scroll,
-                padding: EdgeInsets.zero,
-                // DPAD moves focus before it scrolls. Keep the original broad
-                // mount window so the next target has a live node and anchor;
-                // the opaque opening plane hides these bands while they warm.
-                scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
-                children: [
-                  ShowcaseIdentity(
+              child: AnimatedSlide(
+                // The promoted trailer takes the screen: the identity and
+                // bands sink out of its way. Only the scrolling content —
+                // the backdrop scrims above stay put and simply fade with
+                // the page.
+                offset: widget.model.trailerForeground
+                    ? const Offset(0, 0.12)
+                    : Offset.zero,
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.easeInOutCubic,
+                child: ListView(
+                  controller: _scroll,
+                  padding: EdgeInsets.only(
+                    top: systemInsets.top,
+                    // This makes the final cards scroll fully above the home
+                    // indicator rather than ending beneath it.
+                    bottom: systemInsets.bottom,
+                  ),
+                  // DPAD moves focus before it scrolls. Keep the original broad
+                  // mount window so the next target has a live node and anchor;
+                  // the opaque opening plane hides these bands while they warm.
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(1200),
+                  children: [
+                    ShowcaseIdentity(
                     key: _identityKey,
                     model: m,
                     primaryNode: m.focus.primaryEntry,
@@ -1265,9 +1366,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       'showcase-act',
                     ),
                     onFocused: () => _setBand('identity'),
-                    height: _heroHeight(view, viewport),
+                    height: _heroHeight(view, contentViewport),
                   ),
-                  if (view != null && view.seasons.length > 1)
+                    if (view != null && view.seasons.length > 1)
                     _band(
                       'seasons',
                       ShowcaseSeasons(
@@ -1280,7 +1381,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                         ),
                       ),
                     ),
-                  if (view != null && view.episodes.isNotEmpty)
+                    if (view != null && view.episodes.isNotEmpty)
                     _band('episodes', _episodes(view))
                   else if (view != null && view.loading)
                     // The same slot as the rail it stands in for, so the swap from
@@ -1316,14 +1417,47 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                         onPersonOpen: m.metadataPreferences?.features.contains(MetadataFeature.people) == true &&
                                 m.onRecommendationTap != null
                             ? (person) {
-                                final id = person.tmdbPersonId;
-                                if (id == null || id <= 0) return;
+                                // TMDB's person page when this build has
+                                // TMDB; otherwise their IMDb credits.
+                                final tmdbId = person.tmdbPersonId;
+                                final useTmdb = tmdbId != null && tmdbId > 0 &&
+                                    (widget.exploreService ??
+                                            MetadataExploreService.instance)
+                                        .repository.configured;
+                                final imdbId = person.imdbPersonId;
+                                if (!useTmdb &&
+                                    !ImdbCreditsService.isNameId(imdbId)) {
+                                  return;
+                                }
+                                // Their titles open as a fixed-source Discover
+                                // page; the plain browse page is the fallback.
+                                if (DiscoverCreditsHandoff.open(
+                                  context,
+                                  DiscoverCreditsRequest(
+                                    kind: 'person',
+                                    title: person.name,
+                                    tmdbId: useTmdb ? tmdbId : null,
+                                    imdbId: imdbId,
+                                    type: m.item.type == 'series'
+                                        ? 'tv'
+                                        : 'movie',
+                                  ),
+                                  isTelevision: m.isTelevision,
+                                )) {
+                                  return;
+                                }
                                 Navigator.of(context).push(MaterialPageRoute<void>(
                                   builder: (_) => MetadataBrowsePage(
-                                    title: person.name, kind: 'person', id: id,
+                                    title: person.name, kind: 'person',
+                                    id: useTmdb
+                                        ? tmdbId
+                                        : int.parse(imdbId!.substring(2)),
                                     preferences: m.metadataPreferences!,
                                     onOpen: m.onRecommendationTap!,
                                     isTelevision: m.isTelevision,
+                                    service: useTmdb
+                                        ? null
+                                        : ImdbCreditBrowseService.person(imdbId!),
                                   ),
                                 ));
                               }
@@ -1378,6 +1512,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                           'showcase-rec',
                         ),
                         onTap: m.onRecommendationTap,
+                        onHold: m.onRecommendationOptions,
                       ),
                     ),
                   for (final row in _extraRows)
@@ -1423,8 +1558,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                     'details',
                     ShowcaseDetails(rows: m.detailRows, awards: m.awards),
                   ),
-                  const SizedBox(height: 40),
-                ],
+                    const SizedBox(height: 40),
+                  ],
+              ),
               ),
             ),
           ),
@@ -1470,7 +1606,7 @@ class _DetailShowcaseState extends State<DetailShowcase> {
           scrollDirection: Axis.horizontal,
           padding: EdgeInsets.symmetric(horizontal: m.gutter),
           itemCount: view.episodes.length,
-          separatorBuilder: (_, __) => SizedBox(width: m.epGap),
+          separatorBuilder: (_, _) => SizedBox(width: m.epGap),
           itemBuilder: (context, i) {
             final ep = view.episodes[i];
             final node = _cells.of(view.generation, ep.season, ep.number);
@@ -1501,6 +1637,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       isNext: view.isNext(ep),
                       fallbackImage: view.showImageUrl,
                       onOptions: () => view.options(ep),
+                      onDeleteDownload: view.deleteDownload == null
+                          ? null
+                          : () => view.deleteDownload!(ep),
                     )
                   : ShowcaseEpisodeCell(
                       episode: ep,
@@ -1512,6 +1651,9 @@ class _DetailShowcaseState extends State<DetailShowcase> {
                       // visible way into the options that hold-OK provides on
                       // TV — the kebab. TV passes null and renders untouched.
                       onOptions: widget.dpad ? null : () => view.options(ep),
+                      onDeleteDownload: view.deleteDownload == null
+                          ? null
+                          : () => view.deleteDownload!(ep),
                     ),
             );
           },

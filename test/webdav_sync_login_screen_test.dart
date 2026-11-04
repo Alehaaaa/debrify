@@ -36,9 +36,23 @@ void main() {
   );
 
   Future<void> chooseCustom(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey('webdav-sync-provider')));
+    await tester.tap(find.byKey(const ValueKey('webdav-sync-server')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Custom').last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> chooseProvider(WidgetTester tester, String name) async {
+    await tester.tap(find.byKey(const ValueKey('webdav-sync-server')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(name).last);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> choosePCloudSite(WidgetTester tester, String name) async {
+    await tester.tap(find.byKey(const ValueKey('pcloud-server-site')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(name).last);
     await tester.pumpAndSettle();
   }
 
@@ -94,6 +108,56 @@ void main() {
     );
     expect(find.textContaining('provider body'), findsNothing);
     expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+  });
+
+  testWidgets('pCloud EU asks to connect and pins the official endpoint', (
+    tester,
+  ) async {
+    WebDavSyncLoginCredentials? inspected;
+    await pumpLogin(tester, (credentials) async => inspected = credentials);
+    await chooseProvider(tester, 'pCloud');
+
+    expect(find.text('Server'), findsOneWidget);
+    expect(find.text('Server site'), findsOneWidget);
+    expect(find.text('Europe'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('webdav-sync-server'))).dy,
+      lessThan(tester.getTopLeft(field('webdav-sync-username')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('pcloud-server-site'))).dy,
+      lessThan(tester.getTopLeft(field('webdav-sync-username')).dy),
+    );
+    expect(find.byKey(const ValueKey('webdav-sync-url')), findsNothing);
+    expect(find.text('pCloud email'), findsOneWidget);
+    expect(find.text('pCloud password'), findsOneWidget);
+    expect(find.byKey(const ValueKey('pcloud-official-help')), findsOneWidget);
+    expect(
+      find.textContaining('approve the connection by email'),
+      findsOneWidget,
+    );
+
+    await tester.enterText(field('webdav-sync-username'), 'alice@example.test');
+    await tester.enterText(field('webdav-sync-password'), 'pcloud-password');
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+
+    expect(inspected?.endpoint, WebDavSyncLoginScreen.pCloudEuEndpoint);
+    expect(inspected?.serverName, 'pCloud');
+  });
+
+  testWidgets('pCloud US pins the official US endpoint', (tester) async {
+    WebDavSyncLoginCredentials? inspected;
+    await pumpLogin(tester, (credentials) async => inspected = credentials);
+    await chooseProvider(tester, 'pCloud');
+    await choosePCloudSite(tester, 'United States');
+    await tester.enterText(field('webdav-sync-username'), 'alice@example.test');
+    await tester.enterText(field('webdav-sync-password'), 'pcloud-password');
+    await tester.tap(find.text('Connect'));
+    await tester.pumpAndSettle();
+
+    expect(inspected?.endpoint, WebDavSyncLoginScreen.pCloudUsEndpoint);
+    expect(inspected?.serverName, 'pCloud');
   });
 
   testWidgets('non-linearizable provider failure stays clear and inline', (
@@ -169,7 +233,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('webdav-sync-provider')), findsNothing);
+    expect(find.byKey(const ValueKey('webdav-sync-server')), findsNothing);
     expect(find.byKey(const ValueKey('webdav-sync-url')), findsNothing);
     expect(find.text('https://stored.example.test/dav/'), findsOneWidget);
     expect(find.text('Sync folder: Legacy/Sync'), findsOneWidget);

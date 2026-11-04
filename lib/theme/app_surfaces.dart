@@ -40,7 +40,8 @@ abstract final class AppSurfaces {
     20: SurfaceKind.themed, // Reels
   };
 
-  static SurfaceKind kindForTab(int index) => tabs[index] ?? SurfaceKind.frozen;
+  static SurfaceKind kindForTab(int index) =>
+      tabs[index] ?? SurfaceKind.frozen;
 
   /// The tab-boundary factory: `_buildPage` routes every destination through
   /// here. Frozen tabs get the freeze plus a boundary-local snackbar host;

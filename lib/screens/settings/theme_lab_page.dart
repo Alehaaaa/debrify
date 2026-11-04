@@ -1,6 +1,6 @@
-import 'package:debrify/services/storage/ui_feedback_storage.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/storage_service.dart';
 import '../../theme/app_surface.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_theme_scope.dart';
@@ -98,9 +98,9 @@ class _ThemeLabPageState extends State<ThemeLabPage> {
           icon: Icons.volume_up_rounded,
           title: 'Interface sounds',
           subtitle: 'Only Console ticks today; every other look is silent',
-          value: UiFeedbackStorage.uiSoundsCached,
+          value: StorageService.uiSoundsCached,
           onChanged: (v) async {
-            await UiFeedbackStorage.setUiSounds(v);
+            await StorageService.setUiSounds(v);
             if (mounted) setState(() {});
           },
         ),
@@ -108,9 +108,9 @@ class _ThemeLabPageState extends State<ThemeLabPage> {
           icon: Icons.vibration_rounded,
           title: 'Haptics',
           subtitle: 'Phones and tablets only — a remote has no actuator',
-          value: UiFeedbackStorage.uiHapticsCached,
+          value: StorageService.uiHapticsCached,
           onChanged: (v) async {
-            await UiFeedbackStorage.setUiHaptics(v);
+            await StorageService.setUiHaptics(v);
             if (mounted) setState(() {});
           },
           subtitleMaxLines: 2,

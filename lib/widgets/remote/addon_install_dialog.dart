@@ -397,7 +397,7 @@ class _AddonInstallDialogState extends State<AddonInstallDialog> {
                   ],
                 ),
               ),
-              if (trailing != null) trailing,
+              ?trailing,
             ],
           ),
         ),

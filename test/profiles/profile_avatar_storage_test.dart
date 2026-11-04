@@ -103,7 +103,7 @@ void main() {
     }
 
     test('replacing an avatar leaves exactly one file behind', () async {
-      AppStorage.debugOverride(documents: root);
+      AppStorage.debugOverride(documents: root, support: root);
       addTearDown(AppStorage.debugReset);
 
       final old = await write('old.png');

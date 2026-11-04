@@ -30,13 +30,11 @@ class MediaServerLibraryPlayback {
       resumePolicy: PlaybackResumePolicy.catalogCanonical,
       stremioSources: sources,
       stremioCurrentSourceIndex: index,
-      resolveSourceToPlaylist: (candidate, {canContinue}) async {
-        if (canContinue?.call() == false) return null;
+      resolveSourceToPlaylist: (candidate) async {
         if (!sources.contains(candidate)) {
           throw StateError('Unknown server source');
         }
         await MediaServerService.authorize(candidate);
-        if (canContinue?.call() == false) return null;
         return [
           PlaylistEntry(
             url: candidate.directUrl!,

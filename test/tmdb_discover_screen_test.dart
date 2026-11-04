@@ -1,16 +1,10 @@
-import 'package:debrify/features/discover/application/discover_providers.dart';
-import 'package:debrify/features/discover/data/discover_source_repository.dart';
-import 'package:debrify/models/stremio_addon.dart';
-import 'dart:async';
-import 'package:debrify/features/discover/models/metadata_feature_policy.dart';
-import 'package:debrify/services/storage/discover_storage.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:debrify/models/metadata_preferences.dart';
 import 'package:debrify/screens/metadata_explore_page.dart';
 import 'package:debrify/screens/search_screen.dart';
 import 'package:debrify/screens/see_all/trakt_see_all_screen.dart';
 import 'package:debrify/services/metadata_preferences_service.dart';
 import 'package:debrify/services/profiles/profile_runtime.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/stremio_service.dart';
 import 'package:debrify/widgets/see_all/stremio_dropdown.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +14,7 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  MetadataFeatureReader? policyReader;
-  DiscoverSourceRepository? sourceRepository;
   setUp(() {
-    policyReader = null;
-    sourceRepository = null;
     SharedPreferences.setMockInitialValues({});
     ProfileRuntime.debugReset();
     ProfileRuntime.initializeLegacy();
@@ -58,21 +48,9 @@ void main() {
   ) => drive(
     tester,
     () => tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          if (sourceRepository != null)
-            discoverSourceRepositoryProvider.overrideWith(
-              (ref, session) => sourceRepository!,
-            ),
-          if (policyReader != null)
-            metadataFeatureReaderProvider.overrideWith(
-              (ref, session) => policyReader!,
-            ),
-        ],
-        child: MaterialApp(
-          navigatorKey: navigator,
-          home: const SearchScreen(discoverMode: true),
-        ),
+      MaterialApp(
+        navigatorKey: navigator,
+        home: const SearchScreen(discoverMode: true),
       ),
     ),
   );
@@ -112,7 +90,7 @@ void main() {
       );
       expect(navigator.currentState!.canPop(), isFalse);
       expect(find.byType(Scaffold), findsOneWidget);
-      expect(await DiscoverStorage.getDiscoverLastSource(), 'tmdb');
+      expect(await StorageService.getDiscoverLastSource(), 'tmdb');
 
       await drive(tester, () async => source(tester).onSelected('trakt'));
       expect(find.byType(TraktSeeAllScreen), findsOneWidget);
@@ -132,8 +110,8 @@ void main() {
   testWidgets(
     'TMDB default is respected and disabling it leaves a usable source',
     (tester) async {
-      await DiscoverStorage.setDiscoverDefaultSource('tmdb');
-      await DiscoverStorage.setDiscoverLastSource('trakt');
+      await StorageService.setDiscoverDefaultSource('tmdb');
+      await StorageService.setDiscoverLastSource('trakt');
       final navigator = GlobalKey<NavigatorState>();
       await mount(tester, navigator);
       expect(source(tester).value, 'tmdb');
@@ -152,96 +130,6 @@ void main() {
       await mount(tester, navigator);
       expect(source(tester).value, 'cw');
       expect(find.byType(MetadataBrowsePage), findsNothing);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 5));
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'older enabled policy cannot restore TMDB after a newer disable',
-    (tester) async {
-      final older = Completer<MetadataPreferences>();
-      var reads = 0;
-      policyReader = () {
-        reads++;
-        return reads == 1
-            ? Future.value(MetadataPreferences())
-            : reads == 2
-            ? older.future
-            : Future.value(MetadataPreferences(features: {}));
-      };
-      final navigator = GlobalKey<NavigatorState>();
-      await mount(tester, navigator);
-      await drive(tester, () async => source(tester).onSelected('tmdb'));
-      expect(source(tester).value, 'tmdb');
-      await drive(
-        tester,
-        () async => MetadataPreferencesService.revision.value++,
-      );
-      expect(reads, 2);
-      await drive(
-        tester,
-        () async => MetadataPreferencesService.revision.value++,
-      );
-      expect(reads, 3);
-      expect(source(tester).value, 'cw');
-      await drive(tester, () async => older.complete(MetadataPreferences()));
-      expect(source(tester).value, 'cw');
-      expect(
-        source(tester).options.map((o) => o.value),
-        isNot(contains('tmdb')),
-      );
-      expect(find.byType(MetadataBrowsePage), findsNothing);
-      expect(navigator.currentState!.canPop(), isFalse);
-      await tester.pumpWidget(const SizedBox());
-      await tester.pump(const Duration(seconds: 5));
-      expect(tester.takeException(), isNull);
-    },
-  );
-  testWidgets(
-    'fixed Discover source paints before hydration and user choice wins afterwards',
-    (tester) async {
-      final inventory = Completer<List<StremioAddon>>();
-      final writes = <String>[];
-      sourceRepository = DiscoverSourceRepository(
-        readDefault: () async => 'trakt',
-        readLast: () async => 'cw',
-        readAddons: () => inventory.future,
-        writeLast: (value, current) async {
-          if (current()) writes.add(value);
-        },
-      );
-      final navigator = GlobalKey<NavigatorState>();
-      await mount(tester, navigator);
-      expect(source(tester).value, 'trakt');
-      expect(find.byType(TraktSeeAllScreen), findsOneWidget);
-      expect(writes, ['trakt']);
-      await drive(tester, () async => source(tester).onSelected('simkl'));
-      await drive(
-        tester,
-        () async => inventory.complete([
-          StremioAddon(
-            id: 'fixture',
-            name: 'Fixture addon',
-            baseUrl: 'https://fixture.invalid',
-            manifestUrl: 'https://fixture.invalid/manifest.json',
-            catalogs: [
-              const StremioAddonCatalog(
-                id: 'catalog',
-                type: 'movie',
-                name: 'Catalog',
-              ),
-            ],
-          ),
-        ]),
-      );
-      expect(source(tester).value, 'simkl');
-      expect(
-        source(tester).options.map((option) => option.value),
-        contains('a:fixture'),
-      );
-      expect(writes, ['trakt', 'simkl']);
-      expect(navigator.currentState!.canPop(), isFalse);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 5));
       expect(tester.takeException(), isNull);

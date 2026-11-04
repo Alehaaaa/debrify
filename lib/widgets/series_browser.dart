@@ -1,15 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:debrify/services/storage/detail_navigation_storage.dart';
-import 'package:debrify/services/storage/episode_resume_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/playlist_artwork_storage.dart';
-import 'package:debrify/services/storage/playlist_metadata_storage.dart';
-import 'package:debrify/services/storage/playlist_poster_storage.dart';
-import 'package:debrify/services/storage/playlist_storage.dart';
-import 'package:debrify/services/storage/tracker_episode_progress_storage.dart';
-import 'package:debrify/services/storage/tvmaze_mapping_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/series_playlist.dart';
@@ -17,6 +8,7 @@ import '../models/custom_series_identity.dart';
 import '../models/media_identity.dart';
 import '../services/episode_info_service.dart';
 import '../services/episode_tracker_snapshot_service.dart';
+import '../services/storage_service.dart';
 import '../services/tracking_source_policy.dart';
 import '../services/tvmaze_service.dart';
 import '../utils/episode_progress_merge.dart';
@@ -262,7 +254,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
   }
 
   Future<void> _loadViewMode() async {
-    final dense = await DetailNavigationStorage.getSeriesBrowserDenseView();
+    final dense = await StorageService.getSeriesBrowserDenseView();
     if (mounted && dense != _denseView) {
       setState(() {
         _denseView = dense;
@@ -301,7 +293,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
   Future<int?> _getOverrideShowId() async {
     // Check if there's a saved mapping for this playlist item
     if (widget.playlistItem != null) {
-      final mapping = await TvMazeMappingStorage.getTVMazeSeriesMapping(
+      final mapping = await StorageService.getTVMazeSeriesMapping(
         widget.playlistItem!,
       );
       if (mapping != null && mapping['tvmazeShowId'] != null) {
@@ -442,8 +434,8 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
   Future<void> _loadLastPlayedEpisode() async {
     try {
       final lastEpisode = CustomSeriesIdentity.isCustom(_effectiveImdbId)
-          ? await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(_effectiveImdbId!)
-          : await EpisodeResumeStorage.getLastPlayedEpisode(
+          ? await StorageService.getLastPlayedEpisodeByImdbId(_effectiveImdbId!)
+          : await StorageService.getLastPlayedEpisode(
         seriesTitle: widget.seriesPlaylist.seriesTitle ?? 'Unknown Series',
       );
       if (lastEpisode != null && mounted) {
@@ -461,7 +453,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
     try {
       if (widget.seriesPlaylist.isSeries) {
         final allFinishedEpisodes =
-            await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+            await StorageService.getMergedFinishedEpisodes(
               seriesTitle: widget.seriesPlaylist.seriesTitle ?? '',
               imdbId: _effectiveImdbId,
             );
@@ -482,18 +474,18 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
       if (widget.seriesPlaylist.isSeries) {
         final imdbId = _effectiveImdbId;
         final results = await Future.wait([
-          MergedEpisodeProgressStorage.getMergedEpisodeProgress(
+          StorageService.getMergedEpisodeProgress(
             seriesTitle: widget.seriesPlaylist.seriesTitle ?? '',
             imdbId: imdbId,
           ),
           (imdbId != null && imdbId.isNotEmpty)
-              ? TrackerEpisodeProgressStorage.getEpisodeTraktProgress(imdbId: imdbId)
+              ? StorageService.getEpisodeTraktProgress(imdbId: imdbId)
               : Future.value(const <String, double>{}),
           (imdbId != null && imdbId.isNotEmpty)
-              ? TrackerEpisodeProgressStorage.getEpisodeSimklProgress(imdbId: imdbId)
+              ? StorageService.getEpisodeSimklProgress(imdbId: imdbId)
               : Future.value(const <String, double>{}),
           (imdbId != null && imdbId.isNotEmpty)
-              ? TrackerEpisodeProgressStorage.getConnectedEpisodeMdblistProgress(imdbId: imdbId)
+              ? StorageService.getConnectedEpisodeMdblistProgress(imdbId: imdbId)
               : Future.value(const <String, double>{}),
           TrackingSourcePolicy.load(),
         ]);
@@ -585,7 +577,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
 
     if (selectedShow != null && mounted) {
       // 1. Get OLD mapping (before it's overwritten)
-      final oldMapping = await TvMazeMappingStorage.getTVMazeSeriesMapping(
+      final oldMapping = await StorageService.getTVMazeSeriesMapping(
         widget.playlistItem!,
       );
       final oldShowId = oldMapping?['tvmazeShowId'] as int?;
@@ -606,7 +598,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
       );
 
       // 4. Save new mapping
-      await TvMazeMappingStorage.saveTVMazeSeriesMapping(
+      await StorageService.saveTVMazeSeriesMapping(
         playlistItem: widget.playlistItem!,
         tvmazeShowId: selectedShow['id'] as int,
         showName: selectedShow['name'] as String,
@@ -636,7 +628,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
           final allDebridHash = isAllDebrid
               ? (widget.playlistItem?['torrent_hash'] as String?)
               : null;
-          await PlaylistMetadataStorage.updatePlaylistItemImdbId(
+          await StorageService.updatePlaylistItemImdbId(
             imdbId,
             rdTorrentId: rdId,
             torboxTorrentId: torboxId,
@@ -707,7 +699,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
 
       // CRITICAL: Save poster override to persistent storage
       // This ensures the poster persists across app restarts
-      await PlaylistPosterStorage.savePlaylistPosterOverride(
+      await StorageService.savePlaylistPosterOverride(
         playlistItem: widget.playlistItem!,
         posterUrl: posterUrl,
       );
@@ -720,7 +712,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
       if (provider.toLowerCase() == 'realdebrid') {
         final rdTorrentId = widget.playlistItem!['rdTorrentId'] as String?;
         if (rdTorrentId != null) {
-          updated = await PlaylistArtworkStorage.updatePlaylistItemPoster(
+          updated = await StorageService.updatePlaylistItemPoster(
             posterUrl,
             rdTorrentId: rdTorrentId,
           );
@@ -730,14 +722,14 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
         if (torboxTorrentId != null) {
           // Torbox uses integer IDs, but updatePlaylistItemPoster expects String
           // We need to update the playlist manually
-          final items = await PlaylistStorage.getPlaylistItemsRaw();
+          final items = await StorageService.getPlaylistItemsRaw();
           final itemIndex = items.indexWhere(
             (item) => item['torboxTorrentId'] == torboxTorrentId,
           );
 
           if (itemIndex >= 0) {
             items[itemIndex]['posterUrl'] = posterUrl;
-            await PlaylistStorage.savePlaylistItemsRaw(items);
+            await StorageService.savePlaylistItemsRaw(items);
             updated = true;
           }
         }
@@ -745,7 +737,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
         final pikpakCollectionId =
             widget.playlistItem!['pikpakFileId'] as String?;
         if (pikpakCollectionId != null) {
-          updated = await PlaylistArtworkStorage.updatePlaylistItemPoster(
+          updated = await StorageService.updatePlaylistItemPoster(
             posterUrl,
             pikpakCollectionId: pikpakCollectionId,
           );
@@ -755,12 +747,12 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
         final premiumizeItemId = widget.playlistItem!['premiumizeItemId']
             ?.toString();
         if (premiumizeHash != null && premiumizeHash.isNotEmpty) {
-          updated = await PlaylistArtworkStorage.updatePlaylistItemPoster(
+          updated = await StorageService.updatePlaylistItemPoster(
             posterUrl,
             premiumizeHash: premiumizeHash,
           );
         } else if (premiumizeItemId != null && premiumizeItemId.isNotEmpty) {
-          updated = await PlaylistArtworkStorage.updatePlaylistItemPoster(
+          updated = await StorageService.updatePlaylistItemPoster(
             posterUrl,
             premiumizeItemId: premiumizeItemId,
           );
@@ -768,7 +760,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
       } else if (provider.toLowerCase() == 'alldebrid') {
         final allDebridHash = widget.playlistItem!['torrent_hash'] as String?;
         if (allDebridHash != null && allDebridHash.isNotEmpty) {
-          updated = await PlaylistArtworkStorage.updatePlaylistItemPoster(
+          updated = await StorageService.updatePlaylistItemPoster(
             posterUrl,
             allDebridHash: allDebridHash,
           );
@@ -861,7 +853,7 @@ class _SeriesBrowserState extends State<SeriesBrowser> {
       // re-center below lands correctly.
       _expandedDense.clear();
     });
-    DetailNavigationStorage.setSeriesBrowserDenseView(dense);
+    StorageService.setSeriesBrowserDenseView(dense);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _recenterCurrentEpisode();
     });

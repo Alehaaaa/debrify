@@ -1,10 +1,10 @@
 import 'dart:convert';
-import 'package:debrify/services/storage/real_debrid_storage.dart';
 import 'package:http/http.dart' as http;
 import '../models/debrid_download.dart';
 import '../models/rd_torrent.dart';
 import '../models/rd_user.dart';
 import '../models/rd_file_node.dart';
+import '../services/storage_service.dart';
 import '../utils/concurrency.dart';
 import '../utils/file_utils.dart';
 import '../utils/json_isolate.dart';
@@ -21,19 +21,13 @@ class TorrentNotCachedException implements Exception {
 }
 
 class DebridService {
-  static void _checkAcquisition(bool Function()? canContinue) {
-    if (canContinue?.call() == false) {
-      throw StateError('Source acquisition belongs to a retired action');
-    }
-  }
-
   static const String _primaryEndpoint = 'https://api.real-debrid.com/rest/1.0';
   static const String _backupEndpoint =
       'https://api-2.real-debrid.com/rest/1.0';
 
   // Get the saved endpoint preference (defaults to primary)
   static Future<String> _getBaseUrl() async {
-    return await RealDebridStorage.getRdEndpoint();
+    return await StorageService.getRdEndpoint();
   }
 
   // Validate API key with automatic fallback to backup endpoint
@@ -55,7 +49,7 @@ class DebridService {
 
       if (response.statusCode == 200) {
         // Primary endpoint works - save it
-        await RealDebridStorage.saveRdEndpoint(_primaryEndpoint);
+        await StorageService.saveRdEndpoint(_primaryEndpoint);
         final data = await decodeJsonAsync(response.body);
         return {
           'success': true,
@@ -95,7 +89,7 @@ class DebridService {
 
         if (response.statusCode == 200) {
           // Backup endpoint works - save it
-          await RealDebridStorage.saveRdEndpoint(_backupEndpoint);
+          await StorageService.saveRdEndpoint(_backupEndpoint);
           final data = await decodeJsonAsync(response.body);
           return {
             'success': true,
@@ -169,16 +163,9 @@ class DebridService {
     String apiKey, {
     int page = 1,
     int limit = 100,
-    bool Function()? canContinue,
   }) async {
     try {
-      if (canContinue?.call() == false) {
-        throw StateError('Source request retired');
-      }
       final baseUrl = await _getBaseUrl();
-      if (canContinue?.call() == false) {
-        throw StateError('Source request retired');
-      }
       final queryParams = <String, String>{
         'page': page.toString(),
         'limit': limit.toString(),
@@ -241,18 +228,10 @@ class DebridService {
     String apiKey,
     String downloadId, {
     int maxPages = 100,
-    bool Function()? canContinue,
   }) async {
     const pageSize = 100;
     for (var page = 1; page <= maxPages; page++) {
-      if (canContinue?.call() == false) return null;
-      final result = await getDownloads(
-        apiKey,
-        page: page,
-        limit: pageSize,
-        canContinue: canContinue,
-      );
-      if (canContinue?.call() == false) return null;
+      final result = await getDownloads(apiKey, page: page, limit: pageSize);
       final downloads = (result['downloads'] as List).cast<DebridDownload>();
       for (final download in downloads) {
         if (download.id == downloadId) return download;
@@ -329,13 +308,10 @@ class DebridService {
   // Add magnet to Real Debrid
   static Future<Map<String, dynamic>> addMagnet(
     String apiKey,
-    String magnetLink, {
-    bool Function()? canContinue,
-  }) async {
+    String magnetLink,
+  ) async {
     try {
-      _checkAcquisition(canContinue);
       final baseUrl = await _getBaseUrl();
-      _checkAcquisition(canContinue);
       final response = await http.post(
         Uri.parse('$baseUrl/torrents/addMagnet'),
         headers: {
@@ -359,13 +335,10 @@ class DebridService {
 
   static Future<Map<String, dynamic>> addTorrentFile(
     String apiKey,
-    List<int> torrentBytes, {
-    bool Function()? canContinue,
-  }) async {
+    List<int> torrentBytes,
+  ) async {
     try {
-      _checkAcquisition(canContinue);
       final baseUrl = await _getBaseUrl();
-      _checkAcquisition(canContinue);
       final response = await http.put(
         Uri.parse('$baseUrl/torrents/addTorrent'),
         headers: {
@@ -400,13 +373,10 @@ class DebridService {
   // Get torrent info
   static Future<Map<String, dynamic>> getTorrentInfo(
     String apiKey,
-    String torrentId, {
-    bool Function()? canContinue,
-  }) async {
+    String torrentId,
+  ) async {
     try {
-      _checkAcquisition(canContinue);
       final baseUrl = await _getBaseUrl();
-      _checkAcquisition(canContinue);
       final response = await http.get(
         Uri.parse('$baseUrl/torrents/info/$torrentId'),
         headers: {'Authorization': 'Bearer $apiKey'},
@@ -428,13 +398,10 @@ class DebridService {
   static Future<void> selectFiles(
     String apiKey,
     String torrentId,
-    List<int> fileIds, {
-    bool Function()? canContinue,
-  }) async {
+    List<int> fileIds,
+  ) async {
     try {
-      _checkAcquisition(canContinue);
       final baseUrl = await _getBaseUrl();
-      _checkAcquisition(canContinue);
       String fileIdsString;
       if (fileIds.isEmpty) {
         fileIdsString = 'all';
@@ -466,13 +433,10 @@ class DebridService {
   // Unrestrict link
   static Future<Map<String, dynamic>> unrestrictLink(
     String apiKey,
-    String link, {
-    bool Function()? canContinue,
-  }) async {
+    String link,
+  ) async {
     try {
-      _checkAcquisition(canContinue);
       final baseUrl = await _getBaseUrl();
-      _checkAcquisition(canContinue);
       final response = await http.post(
         Uri.parse('$baseUrl/unrestrict/link'),
         headers: {
@@ -583,42 +547,26 @@ class DebridService {
     String apiKey,
     String magnetLink, {
     String? tempFileSelection,
-    bool Function()? canContinue,
   }) async {
-    String? createdTorrentId;
     try {
-      _checkAcquisition(canContinue);
       // Step 1: Add magnet or protected .torrent file URL
       final addResponse = magnetLink.trim().toLowerCase().startsWith('http')
-          ? await addTorrentFile(
-              apiKey,
-              await _downloadTorrentFile(magnetLink),
-              canContinue: canContinue,
-            )
-          : await addMagnet(apiKey, magnetLink, canContinue: canContinue);
+          ? await addTorrentFile(apiKey, await _downloadTorrentFile(magnetLink))
+          : await addMagnet(apiKey, magnetLink);
       final torrentId = addResponse['id'];
-      createdTorrentId = torrentId?.toString();
 
       // Step 2: Get torrent info
-      final torrentInfo = await getTorrentInfo(
-        apiKey,
-        torrentId,
-        canContinue: canContinue,
-      );
+      final torrentInfo = await getTorrentInfo(apiKey, torrentId);
       final files = (torrentInfo['files'] as List<dynamic>? ?? const []);
 
       if (files.isEmpty) {
-        createdTorrentId = null;
         await deleteTorrent(apiKey, torrentId);
         throw Exception('No files found in torrent');
       }
 
-      _checkAcquisition(canContinue);
-
       // Step 3: Get file selection preference (use temp selection if provided, otherwise use saved preference)
       final fileSelection =
-          tempFileSelection ?? await RealDebridStorage.getFileSelection();
-      _checkAcquisition(canContinue);
+          tempFileSelection ?? await StorageService.getFileSelection();
       List<int> fileIdsToSelect = [];
 
       if (fileSelection == 'all') {
@@ -723,32 +671,18 @@ class DebridService {
       }
 
       // Step 4: Select files based on preference
-      await selectFiles(
-        apiKey,
-        torrentId,
-        fileIdsToSelect,
-        canContinue: canContinue,
-      );
+      await selectFiles(apiKey, torrentId, fileIdsToSelect);
 
       // Step 5: Wait a bit and get updated torrent info
-      _checkAcquisition(canContinue);
       await Future.delayed(const Duration(seconds: 2));
-      _checkAcquisition(canContinue);
-      final updatedInfo = await getTorrentInfo(
-        apiKey,
-        torrentId,
-        canContinue: canContinue,
-      );
+      final updatedInfo = await getTorrentInfo(apiKey, torrentId);
       // 'links' is absent while RD still reports downloading/queued statuses —
       // treat as empty (the fallback chain below handles it) like the retries.
       List<dynamic> links = updatedInfo['links'] as List<dynamic>? ?? const [];
 
       // Smart media fallback chain if initial 'smart' video selection yielded no links
-      _checkAcquisition(canContinue);
-      final fallbackSelection =
-          tempFileSelection ?? await RealDebridStorage.getFileSelection();
-      _checkAcquisition(canContinue);
-      if (fallbackSelection == 'smart') {
+      if ((tempFileSelection ?? await StorageService.getFileSelection()) ==
+          'smart') {
         // If we selected videos in smart mode and there are no links, try largest video then all files
         // Determine whether we selected videos by checking if fileIdsToSelect is not 'all' and all are videos
         final selectedIdsSet = fileIdsToSelect.toSet();
@@ -777,36 +711,17 @@ class DebridService {
                 largestVideoId = f['id'] as int;
               }
             }
-            await selectFiles(apiKey, torrentId, [
-              largestVideoId,
-            ], canContinue: canContinue);
-            _checkAcquisition(canContinue);
+            await selectFiles(apiKey, torrentId, [largestVideoId]);
             await Future.delayed(const Duration(seconds: 2));
-            _checkAcquisition(canContinue);
-            final updatedInfo2 = await getTorrentInfo(
-              apiKey,
-              torrentId,
-              canContinue: canContinue,
-            );
+            final updatedInfo2 = await getTorrentInfo(apiKey, torrentId);
             links = (updatedInfo2['links'] as List<dynamic>? ?? const []);
           }
 
           // If still empty, try all files
           if (links.isEmpty) {
-            await selectFiles(
-              apiKey,
-              torrentId,
-              [],
-              canContinue: canContinue,
-            ); // 'all'
-            _checkAcquisition(canContinue);
+            await selectFiles(apiKey, torrentId, []); // 'all'
             await Future.delayed(const Duration(seconds: 2));
-            _checkAcquisition(canContinue);
-            final updatedInfo3 = await getTorrentInfo(
-              apiKey,
-              torrentId,
-              canContinue: canContinue,
-            );
+            final updatedInfo3 = await getTorrentInfo(apiKey, torrentId);
             links = (updatedInfo3['links'] as List<dynamic>? ?? const []);
           }
         }
@@ -817,15 +732,10 @@ class DebridService {
       }
 
       // Step 6: Unrestrict the link
-      final unrestrictResponse = await unrestrictLink(
-        apiKey,
-        links[0],
-        canContinue: canContinue,
-      );
+      final unrestrictResponse = await unrestrictLink(apiKey, links[0]);
       final downloadLink = unrestrictResponse['download'] as String?;
 
       if (downloadLink == null) {
-        createdTorrentId = null;
         await deleteTorrent(apiKey, torrentId);
         throw Exception('Failed to get download link from Real Debrid');
       }
@@ -844,14 +754,6 @@ class DebridService {
     } on TorrentNotCachedException {
       rethrow;
     } catch (e) {
-      // A retired action abandons the torrent it just added (often before its
-      // files are selected), so remove it like the other failure paths do.
-      // Each add creates a new RD entry, so this never touches an older one.
-      if (createdTorrentId != null && canContinue?.call() == false) {
-        try {
-          await deleteTorrent(apiKey, createdTorrentId);
-        } catch (_) {}
-      }
       throw Exception('Failed to add torrent to Real Debrid: $e');
     }
   }

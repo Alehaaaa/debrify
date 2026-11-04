@@ -10,9 +10,7 @@ class TvVignettePainter extends CustomPainter {
       radius: 0.6, // Match Android gradientRadius="60%"
       colors: const [
         Color(0x00000000), // Transparent center
-        Color(
-          0x66000000,
-        ), // Lighter black edges (102/255 alpha) so static is visible
+        Color(0x66000000), // Lighter black edges (102/255 alpha) so static is visible
       ],
       stops: const [0.0, 1.0],
     );

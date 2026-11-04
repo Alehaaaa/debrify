@@ -1,5 +1,6 @@
-import 'package:debrify/services/storage/player_appearance_storage.dart';
 import 'package:flutter/foundation.dart';
+
+import 'storage_service.dart';
 
 /// Which look the play → resolve loader wears (Settings → Appearance → Play
 /// Loader).
@@ -46,7 +47,7 @@ abstract final class PlayLoaderStyleController {
   /// the safe default.
   static Future<void> warm() async {
     try {
-      cached = await PlayerAppearanceStorage.getPlayLoaderStyle();
+      cached = await StorageService.getPlayLoaderStyle();
     } catch (e) {
       debugPrint('PlayLoaderStyle: warm failed, staying $cached: $e');
     }
@@ -59,7 +60,7 @@ abstract final class PlayLoaderStyleController {
     final normalized = valid.contains(style) ? style : defaultStyle;
     cached = normalized;
     try {
-      await PlayerAppearanceStorage.setPlayLoaderStyle(normalized);
+      await StorageService.setPlayLoaderStyle(normalized);
     } catch (e) {
       debugPrint('PlayLoaderStyle: write failed for $normalized: $e');
     }

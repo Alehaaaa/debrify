@@ -1,11 +1,8 @@
-import 'package:debrify/services/storage/tv_display_storage.dart';
 import 'package:flutter/material.dart';
-
-import '../../services/analytics_service.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import 'widgets/settings_widgets.dart';
 import '../../theme/app_theme_scope.dart';
-import 'package:debrify/models/tv_render_quality.dart';
 
 /// Android TV "Rendering" picker — whether the UI is drawn at the panel's own
 /// resolution or at a ~720p buffer the TV's scaler blows back up.
@@ -52,7 +49,6 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('tv_render_quality_settings');
     _load();
   }
 
@@ -63,8 +59,8 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   }
 
   Future<void> _load() async {
-    final quality = await TvDisplayStorage.getTvRenderQuality();
-    final active = await TvDisplayStorage.getTvLowResRenderActive();
+    final quality = await StorageService.getTvRenderQuality();
+    final active = await StorageService.getTvLowResRenderActive();
     if (!mounted) return;
     setState(() {
       _quality = quality;
@@ -86,7 +82,7 @@ class _TvRenderQualityPageState extends State<TvRenderQualityPage> {
   Future<void> _select(TvRenderQuality quality) async {
     if (quality == _quality) return;
     setState(() => _quality = quality);
-    await TvDisplayStorage.setTvRenderQuality(quality);
+    await StorageService.setTvRenderQuality(quality);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

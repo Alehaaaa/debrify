@@ -1,2800 +1,2501 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:convert';
-
-import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import '../utils/app_storage.dart';
-import 'package:flutter/services.dart';
-
-import '../services/analytics_service.dart';
+import 'package:background_downloader/background_downloader.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../models/stremio_addon.dart';
+import '../services/debrify_image_cache.dart';
+import '../services/discover_prefs.dart';
 import '../services/download_service.dart';
-import '../theme/app_theme_scope.dart';
-import '../services/android_native_downloader.dart';
+import '../services/downloaded_media_service.dart';
+import '../services/downloads/title_download_summary.dart';
+import '../services/offline_title_store.dart';
+import '../services/storage_service.dart';
 import '../services/main_page_bridge.dart';
-import '../widgets/shimmer.dart';
-import '../widgets/tv_text_field.dart';
-import 'package:debrify/services/storage/device_storage.dart';
+import '../models/profiles/profile_policy.dart';
+import '../services/profiles/profile_policy_guard.dart';
+import '../services/stremio_service.dart';
+import '../services/trakt/trakt_episode_model.dart';
+import '../services/watched_action_coordinator.dart';
+import '../services/watched_status_service.dart';
+import '../theme/app_theme_controller.dart';
+import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
+import '../services/downloads/pending_title_downloads.dart';
+import '../theme/shipped_themes.dart' show effectiveDetailTheme;
+import '../theme/theme_core_resolver.dart';
+import '../theme/theme_overrides.dart';
+import '../utils/artwork_url.dart';
+import '../widgets/card_action_menu.dart';
+import '../models/downloaded_media.dart';
+import '../widgets/detail/detail_identity.dart';
+import '../widgets/detail/detail_resume_choice.dart';
+import '../widgets/detail/detail_style.dart';
+import '../widgets/detail/theme/detail_theme.dart';
+import '../widgets/home/home_theme.dart';
+import '../widgets/see_all/discover_card_settings_scope.dart';
+import '../widgets/see_all/see_all_filter_bar.dart';
+import '../widgets/see_all/see_all_poster_grid.dart';
+import '../widgets/see_all/stremio_dropdown.dart';
+import 'download_manager_screen.dart';
+import 'merged_series_detail_screen.dart';
+export 'download_manager_screen.dart' hide DownloadManagerScreen;
 
+enum _DownloadCardAction {
+  play,
+  open,
+  files,
+  markWatched,
+  markUnwatched,
+  fixMatch,
+  resetMatch,
+  pause,
+  resume,
+  retry,
+  delete,
+}
+
+/// Downloads library: Home's page wash, header typography and white glass
+/// controls around Discover's own filter bar, poster grid and card settings.
 class DownloadsScreen extends StatefulWidget {
-  const DownloadsScreen({super.key});
-
+  @visibleForTesting
+  final Future<List<LocalDownload>> Function()? loadDownloads;
+  const DownloadsScreen({super.key, this.loadDownloads});
   @override
   State<DownloadsScreen> createState() => _DownloadsScreenState();
 }
 
-class _DownloadsScreenState extends State<DownloadsScreen>
-    with SingleTickerProviderStateMixin {
-  late final TabController _tabController;
+class _DownloadsScreenState extends State<DownloadsScreen> {
+  List<LocalDownload> _items = [];
+  final Map<String, double> _progress = {};
 
-  late final StreamSubscription<TaskProgressUpdate> _progressSub;
-  late final StreamSubscription<TaskStatusUpdate> _statusSub;
-  StreamSubscription? _bytesSub;
-
-  List<TaskRecord> _records = [];
-  Map<String, DownloadRecordDetails> _recordDetails = {};
-  bool _loading = true;
-
-  // Live progress snapshots keyed by taskId to show speed/ETA/sizes
-  final Map<String, TaskProgressUpdate> _progressByTaskId = {};
-  // Raw bytes and totals from Android native
-  final Map<String, (int bytes, int? total)> _bytesByTaskId = {};
-  // Move progress after completion (0..1, or failed)
-  final Map<String, double> _moveProgressByTaskId = {};
-  final Set<String> _moveFailed = {};
-  final Set<String> _busyGroupIds = {};
-
-  // Focus state for Add button
-  final FocusNode _addButtonFocusNode = FocusNode(debugLabel: 'downloads-add-button');
-  bool _addButtonFocused = false;
-
-  // TV content focus handler
-  VoidCallback? _tvContentFocusHandler;
-
+  /// How far into each title the user is (0..1), by library group key — the
+  /// same thin white bar Home's tiles carry. Read from this device only.
+  Map<String, double> _watched = const {};
+  int _watchedGeneration = 0;
+  String _watchedSignature = '';
+  StreamSubscription? _status, _moves, _progressSub;
+  Timer? _folderPoll;
+  // The empty local library is immediately useful; a scan can populate it
+  // without pretending a network request is in progress.
+  bool _loading = false;
+  String? _error;
+  String _filter = 'All', _availability = 'All';
+  int _generation = 0;
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('downloads');
-    _tabController = TabController(length: 2, vsync: this);
-    _init();
-
-    // Register TV content focus handler (tab index 2 = Downloads)
-    _tvContentFocusHandler = () {
-      _addButtonFocusNode.requestFocus();
-    };
-    MainPageBridge.registerTvContentFocusHandler(2, _tvContentFocusHandler!);
+    _status = DownloadService.instance.statusStream.listen((_) => _refresh());
+    _moves = DownloadService.instance.moveProgressStream.listen((e) {
+      if (e.done || e.failed) _refresh();
+    });
+    _progressSub = DownloadService.instance.progressStream.listen((e) {
+      if (!mounted || e.progress < 0) return;
+      if (((_progress[e.task.taskId] ?? -1) * 100).floor() ==
+          (e.progress * 100).floor()) {
+        return;
+      }
+      setState(() => _progress[e.task.taskId] = e.progress);
+    });
+    // Desktop and iOS do not provide a portable directory-watch API. A small
+    // polling interval keeps files copied in or removed externally reflected
+    // in the library without waiting for a download queue event.
+    _folderPoll = Timer.periodic(const Duration(seconds: 4), (_) => _refresh());
+    _pendingSeen = PendingTitleDownloads.entries.value.keys.toSet();
+    PendingTitleDownloads.entries.addListener(_onPendingChanged);
+    _refresh();
   }
 
-  Future<void> _init() async {
-    await DownloadService.instance.initialize();
+  /// Automatic downloads still finding their source show as posters too.
+  /// When one leaves the list its real task usually just appeared — reload
+  /// so the tile hands over to the progress sweep without a gap.
+  Set<String> _pendingSeen = const {};
+  void _onPendingChanged() {
+    if (!mounted) return;
+    final now = PendingTitleDownloads.entries.value.keys.toSet();
+    final ended = _pendingSeen.difference(now).isNotEmpty;
+    _pendingSeen = now;
+    setState(() {});
+    if (ended) _refresh();
+  }
 
-    _progressSub = DownloadService.instance.progressStream.listen((update) {
-      setState(() {
-        _progressByTaskId[update.task.taskId] = update;
-      });
-    });
-
-    _statusSub = DownloadService.instance.statusStream.listen((_) {
-      _refresh();
-    });
-
-    _bytesSub = DownloadService.instance.bytesProgressStream.listen((evt) {
-      setState(() {
-        _bytesByTaskId[evt.taskId] = (evt.bytes, evt.total >= 0 ? evt.total : null);
-      });
-    }, onError: (_) {});
-
-    DownloadService.instance.moveProgressStream.listen((move) {
-      setState(() {
-        if (move.failed) {
-          _moveFailed.add(move.taskId);
-          _moveProgressByTaskId.remove(move.taskId);
-        } else if (move.done) {
-          _moveProgressByTaskId[move.taskId] = 1.0;
-        } else {
-          _moveProgressByTaskId[move.taskId] = move.progress;
-        }
-      });
-    });
-
-    await _refresh();
+  Future<void> _showPendingOptions(PendingTitleDownload pending) async {
+    final cancel = pending.onCancel;
+    if (cancel == null) return;
+    final app = AppThemeScope.of(context);
+    final stop = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : null,
+      shape: GlassChrome.enabled(app)
+          ? GlassChrome.shape(app, radius: 20)
+          : null,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(pending.title),
+              subtitle: Text(pending.phase.label),
+            ),
+            ListTile(
+              leading: const Icon(Icons.close_rounded),
+              title: const Text('Stop download'),
+              onTap: () => Navigator.of(sheetContext).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (stop == true) cancel();
   }
 
   Future<void> _refresh() async {
-    final list = await DownloadService.instance.allRecords();
-    final details = DownloadService.instance.allRecordDetailsSnapshot();
-    if (!mounted) return;
-    setState(() {
-      _records = list;
-      _recordDetails = details;
-      _loading = false;
-    });
-  }
-
-  Future<void> _runGroupAction(String groupId, Future<void> Function() action) async {
-    if (!mounted) return;
-    setState(() {
-      _busyGroupIds.add(groupId);
-    });
+    final generation = ++_generation;
     try {
-      await action();
-      await _refresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Action failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
+      final items =
+          await (widget.loadDownloads?.call() ??
+              DownloadedMediaService.load(includeTransfers: true));
+      if (mounted && generation == _generation) {
         setState(() {
-          _busyGroupIds.remove(groupId);
+          _items = items;
+          _loading = false;
+          _error = null;
+        });
+        // The folder poll lands here every few seconds; only re-read watch
+        // progress when the set of finished files actually changed.
+        final signature =
+            (items
+                    .where((e) => e.isReady)
+                    .map((e) => '${e.groupKey}|${e.location}')
+                    .toList()
+                  ..sort())
+                .join(',');
+        if (signature != _watchedSignature) {
+          _watchedSignature = signature;
+          unawaited(_loadWatched());
+        }
+      }
+    } catch (_) {
+      if (mounted && generation == _generation) {
+        setState(() {
+          _loading = false;
+          _error = 'Could not load downloads. Try refreshing.';
         });
       }
     }
   }
 
-  Future<void> _pauseGroup(TorrentDownloadGroup group) async {
-    final queuedIds = <String>[];
-    final runningTasks = <Task>[];
-
-    for (final item in group.items) {
-      switch (item.record.status) {
-        case TaskStatus.running:
-          runningTasks.add(item.record.task);
-          break;
-        case TaskStatus.enqueued:
-        case TaskStatus.waitingToRetry:
-          queuedIds.add(item.record.task.taskId);
-          break;
-        default:
-          break;
+  Future<void> _loadWatched() async {
+    final generation = ++_watchedGeneration;
+    final groups = <String, List<LocalDownload>>{};
+    for (final item in _items) {
+      if (!item.isReady || item.media?.isCatalogLinked != true) continue;
+      groups.putIfAbsent(item.groupKey, () => []).add(item);
+    }
+    final next = <String, double>{};
+    for (final entry in groups.entries) {
+      try {
+        final fraction = await downloadedWatchFraction(
+          entry.value.first.media!,
+          sortDownloads(entry.value),
+        );
+        if (fraction != null) next[entry.key] = fraction;
+      } catch (_) {
+        // One unreadable record must not hide every other title's bar.
       }
     }
-
-    if (queuedIds.isNotEmpty) {
-      await DownloadService.instance.pauseQueuedTasksByIds(queuedIds);
-    }
-
-    for (final task in runningTasks) {
-      await DownloadService.instance.pause(task);
-    }
-  }
-
-  Future<void> _resumeGroup(TorrentDownloadGroup group) async {
-    final queuedIds = <String>[];
-    final tasksToResume = <Task>[];
-
-    for (final item in group.items) {
-      final status = item.record.status;
-      final taskId = item.record.task.taskId;
-      switch (status) {
-        case TaskStatus.paused:
-          if (DownloadService.instance.isPausedQueuedTask(taskId)) {
-            queuedIds.add(taskId);
-          } else {
-            tasksToResume.add(item.record.task);
-          }
-          break;
-        case TaskStatus.enqueued:
-        case TaskStatus.waitingToRetry:
-          if (DownloadService.instance.isPausedQueuedTask(taskId)) {
-            queuedIds.add(taskId);
-          } else {
-            tasksToResume.add(item.record.task);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-
-    for (final task in tasksToResume) {
-      await DownloadService.instance.resume(task);
-    }
-
-    if (queuedIds.isNotEmpty) {
-      await DownloadService.instance.resumeQueuedTasksByIds(queuedIds);
-    }
-  }
-
-  Future<void> _cancelGroup(TorrentDownloadGroup group) async {
-    for (final item in group.items) {
-      final status = item.record.status;
-      if (status != TaskStatus.complete && status != TaskStatus.canceled) {
-        await DownloadService.instance.cancel(item.record.task);
-      }
-    }
-  }
-
-  Future<void> _handleClearFinished(List<TorrentDownloadGroup> groups) async {
-    final confirm = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Clear all finished?'),
-            content: const Text('This removes completed entries from the list.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text('Clear All'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-    if (!confirm) return;
-
-    for (final group in groups) {
-      for (final item in group.items) {
-        await DownloadService.instance.deleteRecord(item.record);
-      }
-    }
-    await _refresh();
-  }
-
-  Future<void> _openGroupDetail(TorrentDownloadGroup group) async {
-    await Navigator.of(context).push(
-      // Downloads is themed as of phase two, so its detail screen is themed
-      // too. The freeze here was correct only while the tab was frozen.
-      MaterialPageRoute(
-        builder: (_) => TorrentDownloadDetailScreen(
-          groupId: group.id,
-          groupTitle: group.title,
-          initialGroup: group,
-        ),
-      ),
-    );
-    await _refresh();
-  }
-
-  Widget _buildFinishedTab(List<TorrentDownloadGroup> groups) {
-    if (groups.isEmpty) {
-      return const Center(child: Text('No downloads'));
-    }
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Row(
-            children: [
-              const Text('Finished', style: TextStyle(fontWeight: FontWeight.w600)),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: _busyGroupIds.isEmpty
-                    ? () => _handleClearFinished(groups)
-                    : null,
-                icon: const Icon(Icons.delete_sweep_rounded),
-                label: const Text('Clear All'),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: _TorrentGroupList(
-            groups: groups,
-            busyGroupIds: _busyGroupIds,
-            isFinishedTab: true,
-            onOpenGroup: _openGroupDetail,
-          ),
-        ),
-      ],
-    );
+    if (!mounted || generation != _watchedGeneration) return;
+    setState(() => _watched = next);
   }
 
   @override
   void dispose() {
-    if (_tvContentFocusHandler != null) {
-      MainPageBridge.unregisterTvContentFocusHandler(2, _tvContentFocusHandler!);
-    }
-    _addButtonFocusNode.dispose();
-    _tabController.dispose();
-    _progressSub.cancel();
-    _statusSub.cancel();
-    _bytesSub?.cancel();
+    _status?.cancel();
+    _moves?.cancel();
+    _progressSub?.cancel();
+    _folderPoll?.cancel();
+    PendingTitleDownloads.entries.removeListener(_onPendingChanged);
     super.dispose();
   }
 
-  Future<void> _ensureDefaultLocationOrRedirect() async {
-    // No longer requiring a default location; always allow
-    return;
-
-    // Legacy callers expect an exception to stop flow; we now proceed
+  Future<void> _manage() async {
+    await openDownloadManager(context);
+    _refresh();
   }
 
-  // Check if a URL is a download link by looking for file extensions
-  bool _isDownloadLink(String url) {
-    if (url.isEmpty) return false;
-    
-    // Common file extensions that indicate downloadable content
-    final downloadExtensions = [
-      '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v',
-      '.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma',
-      '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-      '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-      '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg',
-      '.exe', '.dmg', '.pkg', '.deb', '.rpm', '.apk',
-      '.iso', '.img', '.bin',
-      '.txt', '.csv', '.json', '.xml', '.html', '.css', '.js',
-      '.torrent', '.magnet'
+  TitleDownloadSummary _summary(List<LocalDownload> items) =>
+      TitleDownloadSummary.of(items, live: _progress);
+
+  bool _menuOpen = false;
+
+  /// Hold / right-click on a library poster: play the download, open it, look
+  /// at its files, steer the transfers still running, or delete it.
+  Future<void> _showOptions(
+    StremioMeta poster,
+    List<LocalDownload> group,
+  ) async {
+    if (_menuOpen) return;
+    _menuOpen = true;
+    final ready = sortDownloads(group.where((e) => e.isReady));
+    final pending = group.where((e) => !e.isReady).toList();
+    final running = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.running ||
+            e.record.status == TaskStatus.enqueued ||
+            e.record.status == TaskStatus.waitingToRetry)
+          e,
     ];
-    
-    final uri = Uri.tryParse(url);
-    if (uri == null) return false;
-    
-    final path = uri.path.toLowerCase();
-    return downloadExtensions.any((ext) => path.endsWith(ext));
-  }
-
-  Future<void> _showAddDialog({String? initialUrl}) async {
-    // Read before the awaits below: the sheet is themed from the surface that
-    // opened it (a modal captures this subtree's InheritedThemes, the freeze
-    // included), and reading here keeps the BuildContext use out of an async
-    // gap.
-    final app = AppThemeScope.of(context);
+    final paused = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.paused) e,
+    ];
+    final failed = [
+      for (final e in pending)
+        if (e.record.status == TaskStatus.failed) e,
+    ];
+    final series = group.first.media?.type == 'series';
+    final homeDetail = opensHomeDetail(group);
+    final first = ready.isEmpty ? null : ready.first.media;
+    final firstEpisode =
+        series && first?.season != null && first?.episode != null
+        ? 'S${first!.season.toString().padLeft(2, '0')}'
+              'E${first.episode.toString().padLeft(2, '0')}'
+        : null;
+    final summary = _summary(group);
+    // Watched state for catalog-linked titles (same identity the poster ticks
+    // read), so the menu offers the mark that applies.
+    final media = group.first.media;
+    final watchedId = media != null && media.isCatalogLinked ? media.id : null;
+    WatchedStatusService.instance.ensureStarted();
+    final watched =
+        watchedId != null &&
+        WatchedStatusService.instance.isWatchedForTicks(
+          watchedId,
+          series ? 'series' : 'movie',
+        );
+    _DownloadCardAction? action;
     try {
-      await _ensureDefaultLocationOrRedirect();
-    } catch (_) {
-      return;
-    }
-
-    final urlCtrl = TextEditingController();
-    final nameCtrl = TextEditingController();
-    if (initialUrl != null && initialUrl.isNotEmpty) {
-      urlCtrl.text = initialUrl;
-    }
-
-    String? destPath;
-    int? expectedSize;
-
-    bool nameTouched = false;
-
-    Future<void> recompute(StateSetter setLocal) async {
-      final url = urlCtrl.text.trim();
-      final manualName = nameCtrl.text.trim();
-
-      if (url.isEmpty) {
-        setLocal(() {
-          destPath = null;
-          expectedSize = null;
-        });
-        return;
-      }
-
-      String filename = manualName;
-      if (!nameTouched) {
-        try {
-          final suggested = await DownloadTask(url: url)
-              .withSuggestedFilename(unique: false);
-          filename = suggested.filename;
-          nameCtrl.text = filename;
-        } catch (_) {
-          final uri = Uri.tryParse(url);
-          filename = (uri?.pathSegments.isNotEmpty ?? false)
-              ? uri!.pathSegments.last
-              : 'file';
-          nameCtrl.text = filename;
-        }
-      } else if (filename.isEmpty) {
-        final uri = Uri.tryParse(url);
-        filename = (uri?.pathSegments.isNotEmpty ?? false)
-            ? uri!.pathSegments.last
-            : 'file';
-      }
-
-      // Destination preview: if Android SAF folder set, show a human-readable path
-      String sanitize(String s) => s
-          .replaceAll(RegExp(r'[\\/:*?"<>|]'), ' ')
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
-      final dot = filename.lastIndexOf('.');
-      final folder = sanitize(dot > 0 ? filename.substring(0, dot) : filename);
-      // Preview only — the authoritative path is resolved by
-      // DownloadService at start (same custom-folder pref + fallback).
-      String? customDir;
-      if (Platform.isWindows || Platform.isLinux) {
-        try {
-          customDir = await DeviceStorage.getDownloadDirPath();
-        } catch (_) {}
-      }
-      if (customDir != null && customDir.isNotEmpty) {
-        final sep = Platform.pathSeparator;
-        destPath = '$customDir$sep$folder$sep$filename';
-      } else if (Platform.isAndroid) {
-        String? treeName;
-        try {
-          treeName = await DeviceStorage.getDownloadTreeDisplayName();
-        } catch (_) {}
-        destPath = treeName != null
-            ? '$treeName/$filename'
-            : 'Download/Debrify/$filename';
-      } else if (Platform.isMacOS || Platform.isWindows) {
-        // Same default the service resolves: <user Downloads>/Debrify/<folder>.
-        try {
-          final Directory? downloadsDir = await getDownloadsDirectory();
-          if (downloadsDir != null) {
-            final sep = Platform.pathSeparator;
-            destPath = 'Downloads${sep}Nextup$sep$folder$sep$filename';
-          } else {
-            final docs = await AppStorage.documents();
-            destPath = '${docs.path}/downloads/$folder/$filename';
-          }
-        } catch (e) {
-          final docs = await AppStorage.documents();
-          destPath = '${docs.path}/downloads/$folder/$filename';
-        }
-      } else {
-        final docs = await AppStorage.documents();
-        destPath = '${docs.path}/downloads/$folder/$filename';
-      }
-
+      var manualMatch = false;
       try {
-        expectedSize = await DownloadTask(url: url, filename: filename)
-            .expectedFileSize();
-      } catch (_) {
-        expectedSize = null;
-      }
-
-      setLocal(() {});
-    }
-
-    String humanSize(int bytes) {
-      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-      double size = bytes.toDouble();
-      int unit = 0;
-      while (size >= 1024 && unit < units.length - 1) {
-        size /= 1024;
-        unit++;
-      }
-      return '${size.toStringAsFixed(2)} ${units[unit]}';
-    }
-
-    final res = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      barrierColor: Colors.black.withValues(alpha: 0.4),
-      backgroundColor: app.settings.sheetBg,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (context) {
-        return StatefulBuilder(builder: (context, setLocal) {
-          final kb = MediaQuery.of(context).viewInsets.bottom;
-          // If we arrived with a prefilled URL, compute destination, filename and size once
-          if ((initialUrl?.isNotEmpty ?? false) && destPath == null && urlCtrl.text.trim().isNotEmpty) {
-            // schedule to avoid calling setState during build
-            Future.microtask(() => recompute(setLocal));
-          }
-          return AnimatedPadding(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            padding: EdgeInsets.only(bottom: kb),
-            child: SafeArea(
-              top: false,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 44,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: app.home.controlBg,
-                          borderRadius: app.shape.brPill,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [app.downloads.accent, app.downloads.accent2],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: app.shape.br(16),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.download_for_offline_rounded, color: app.downloads.onAccent),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text('Add Download',
-                                style: TextStyle(
-                                    color: app.downloads.onAccent,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          IconButton(
-                            onPressed: () async {
-                              final data = await Clipboard.getData('text/plain');
-                              if (data?.text != null && data!.text!.isNotEmpty) {
-                                urlCtrl.text = data.text!;
-                                await recompute(setLocal);
-                              }
-                            },
-                            icon: Icon(Icons.paste, color: app.downloads.onAccent),
-                            tooltip: 'Paste',
-                          )
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    // Modern preview card
-                    if (urlCtrl.text.trim().isNotEmpty || nameCtrl.text.trim().isNotEmpty)
-                      _PreviewCard(
-                        filename: nameCtrl.text.trim(),
-                        host: Uri.tryParse(urlCtrl.text.trim())?.host ?? '',
-                      ),
-                    const SizedBox(height: 16),
-                    _StyledField(
-                      controller: urlCtrl,
-                      label: 'Download URL',
-                      hint: 'https://example.com/file',
-                      icon: Icons.link,
-                      onChanged: (_) => recompute(setLocal),
-                    ),
-                    const SizedBox(height: 12),
-                    _StyledField(
-                      controller: nameCtrl,
-                      label: 'File name',
-                      hint: 'movie.mp4',
-                      icon: Icons.insert_drive_file,
-                      onChanged: (_) {
-                        nameTouched = true;
-                        recompute(setLocal);
-                      },
-                    ),
-                    if (destPath != null) ...[
-                      const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _chip(Icons.folder, destPath!),
-                          _chip(Icons.storage_rounded,
-                              expectedSize != null ? humanSize(expectedSize!) : 'Unknown size'),
-                          if (nameCtrl.text.contains('.'))
-                            _chip(Icons.badge_rounded, nameCtrl.text.split('.').last.toUpperCase()),
-                        ],
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(false),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: app.downloads.line),
-                              shape: RoundedRectangleBorder(borderRadius: app.shape.br(14)),
-                            ),
-                            child: const Text('Cancel'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: (urlCtrl.text.trim().isEmpty)
-                                ? null
-                                : () => Navigator.of(context).pop(true),
-                            icon: const Icon(Icons.download_rounded),
-                            label: const Text('Download'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              backgroundColor: app.downloads.accent,
-                              foregroundColor: app.downloads.onAccent,
-                              shape: RoundedRectangleBorder(borderRadius: app.shape.br(14)),
-                              elevation: 2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  ],
-                ),
-              ),
+        manualMatch = await DownloadedMediaService.hasManualMatch(group);
+      } catch (_) {}
+      if (!mounted) return;
+      action = await showCardActionMenu<_DownloadCardAction>(
+        context,
+        title: poster.name,
+        isTelevision: false,
+        posterUrl: poster.poster,
+        subtitle: [
+          if (group.length > 1) '${group.length} files',
+          summary.inFlight
+              ? (summary.status ?? 'Downloading')
+              : 'On this device',
+        ].join('  ·  '),
+        actions: [
+          if (ready.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.play,
+              icon: Icons.play_arrow_rounded,
+              label: firstEpisode == null ? 'Play' : 'Play $firstEpisode',
+              description: series
+                  ? 'Start the first downloaded episode, offline.'
+                  : 'Play the downloaded file, offline.',
             ),
-          );
-        });
-      },
-    );
-
-    if (res == true) {
-      final url = urlCtrl.text.trim();
-      final fileName = nameCtrl.text.trim().isEmpty ? null : nameCtrl.text.trim();
-      await DownloadService.instance.enqueueDownload(
-        url: url,
-        fileName: fileName,
+          CardMenuAction(
+            value: _DownloadCardAction.open,
+            icon: homeDetail
+                ? Icons.info_outline_rounded
+                : Icons.folder_open_rounded,
+            label: homeDetail ? 'Details' : 'Open download',
+            description: homeDetail
+                ? 'The title page, with Play wired to the files on this device.'
+                : 'Every file of this download and its progress.',
+          ),
+          if (homeDetail)
+            CardMenuAction(
+              value: _DownloadCardAction.files,
+              icon: Icons.folder_open_rounded,
+              label: 'Downloaded files',
+              description: series
+                  ? 'Each downloaded episode, with its size and progress.'
+                  : 'The file on this device, with its size.',
+            ),
+          if (watchedId != null)
+            watched
+                ? CardMenuAction(
+                    value: _DownloadCardAction.markUnwatched,
+                    icon: Icons.remove_done_rounded,
+                    label: 'Mark as unwatched',
+                    description:
+                        'Clears the watched mark here and on your synced '
+                        'trackers.',
+                  )
+                : CardMenuAction(
+                    value: _DownloadCardAction.markWatched,
+                    icon: Icons.done_all_rounded,
+                    label: series
+                        ? 'Mark series as watched'
+                        : 'Mark as watched',
+                    description:
+                        'Marks it watched and clears any resume position, here '
+                        'and on your synced trackers.',
+                  ),
+          CardMenuAction(
+            value: _DownloadCardAction.fixMatch,
+            icon: Icons.manage_search_rounded,
+            label: 'Fix match',
+            description: group.first.media?.isCatalogLinked == true
+                ? 'Wrong title? Search for the right one and refile it.'
+                : 'Find the title this is, for its art, details and '
+                      'episodes.',
+          ),
+          if (manualMatch)
+            const CardMenuAction(
+              value: _DownloadCardAction.resetMatch,
+              icon: Icons.undo_rounded,
+              label: 'Reset match',
+              description:
+                  'Forget the title you picked and use what the download '
+                  'says.',
+            ),
+          if (running.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.pause,
+              icon: Icons.pause_rounded,
+              label: 'Pause',
+              description: running.length == 1
+                  ? 'Pause this download. Resume it any time.'
+                  : 'Pause the ${running.length} downloads still running.',
+            ),
+          if (paused.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.resume,
+              icon: Icons.play_circle_outline_rounded,
+              label: 'Resume',
+              description: paused.length == 1
+                  ? 'Carry on from where this download stopped.'
+                  : 'Carry on with the ${paused.length} paused downloads.',
+            ),
+          if (failed.isNotEmpty)
+            CardMenuAction(
+              value: _DownloadCardAction.retry,
+              icon: Icons.refresh_rounded,
+              label: 'Retry',
+              description: failed.length == 1
+                  ? 'Restart the download that failed.'
+                  : 'Restart the ${failed.length} downloads that failed.',
+            ),
+          CardMenuAction(
+            value: _DownloadCardAction.delete,
+            icon: Icons.delete_outline_rounded,
+            label: group.length == 1
+                ? 'Delete download'
+                : 'Delete ${group.length} downloads',
+            description:
+                'Removes it from this device. You can download it '
+                'again later.',
+            destructive: true,
+          ),
+        ],
       );
-      await _refresh();
+    } finally {
+      _menuOpen = false;
     }
+    if (!mounted || action == null) return;
+    switch (action) {
+      case _DownloadCardAction.play:
+        try {
+          await DownloadedMediaService.play(context, ready.first);
+        } catch (_) {
+          _snack('Could not open this download.');
+        }
+      case _DownloadCardAction.open:
+        await openDownloadedItem(context, group);
+      case _DownloadCardAction.files:
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => DownloadedTitleScreen(items: group),
+          ),
+        );
+      case _DownloadCardAction.markWatched:
+      case _DownloadCardAction.markUnwatched:
+        if (watchedId == null) break;
+        final mark = action == _DownloadCardAction.markWatched;
+        final result = await WatchedActionCoordinator.setTitleWatched(
+          imdbId: watchedId,
+          contentType: series ? 'series' : 'movie',
+          watched: mark,
+        );
+        WatchedStatusService.instance.refresh();
+        if (!mounted) break;
+        _snack(
+          result.success
+              ? (mark ? 'Marked as watched' : 'Marked as unwatched')
+              : 'Saved on this device, but ${result.failedTargets.join(', ')} '
+                    'didn\'t update',
+        );
+      case _DownloadCardAction.fixMatch:
+        final picked = await showFixMatchDialog(
+          context,
+          initialQuery: group.first.media?.isCatalogLinked == true
+              ? poster.name
+              : _searchableName(group.first),
+        );
+        if (picked == null || !mounted) break;
+        final id = picked.effectiveImdbId ?? picked.id;
+        try {
+          await DownloadedMediaService.rematch(
+            group,
+            id: id,
+            title: picked.name,
+            type: picked.type == 'series' ? 'series' : 'movie',
+            poster: picked.poster,
+            year: picked.year,
+          );
+          _snack('Filed under ${picked.name}');
+        } catch (_) {
+          _snack('Couldn\'t save the match. Try again.');
+        }
+      case _DownloadCardAction.resetMatch:
+        try {
+          await DownloadedMediaService.resetMatch(group);
+          _snack('Match reset');
+        } catch (_) {
+          _snack('Couldn\'t reset the match. Try again.');
+        }
+      case _DownloadCardAction.pause:
+        for (final e in running) {
+          try {
+            await DownloadService.instance.pause(e.record.task);
+          } catch (_) {}
+        }
+      case _DownloadCardAction.resume:
+      case _DownloadCardAction.retry:
+        var ok = true;
+        for (final e
+            in action == _DownloadCardAction.resume ? paused : failed) {
+          try {
+            ok = await DownloadService.instance.resume(e.record.task) && ok;
+          } catch (_) {
+            ok = false;
+          }
+        }
+        if (!ok) _snack('Could not restart every download. Try again later.');
+      case _DownloadCardAction.delete:
+        await _deleteGroup(poster.name, group);
+    }
+    if (mounted) _refresh();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final app = AppThemeScope.of(context);
-    final groups = buildTorrentGroups(
-      records: _records,
-      detailsByRecordId: _recordDetails,
-      progressByTaskId: _progressByTaskId,
-      rawBytes: _bytesByTaskId,
-      moveProgressByTaskId: _moveProgressByTaskId,
-      moveFailed: _moveFailed,
-    );
-    final inProgressGroups = groups.where((g) => !g.isFinished).toList();
-    final finishedGroups = groups.where((g) => g.isFinished).toList();
-
-    return Stack(
-      children: [
-        Column(
-          children: [
-            Container(
-              margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: app.shape.br(12),
-              ),
-              child: TabBar(
-            controller: _tabController,
-            isScrollable: false,
-            dividerColor: Colors.transparent,
-            indicatorSize: TabBarIndicatorSize.tab,
-            indicatorPadding: const EdgeInsets.all(6),
-            labelPadding: const EdgeInsets.symmetric(vertical: 10),
-            overlayColor: MaterialStateProperty.all(Colors.transparent),
-            indicator: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary,
-              borderRadius: app.shape.br(10),
-            ),
-            labelColor: Theme.of(context).colorScheme.onPrimaryContainer,
-            unselectedLabelColor:
-                Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-            tabs: const [
-              Tab(text: 'In Progress'),
-              Tab(text: 'Finished'),
-            ],
+  Future<void> _deleteGroup(String title, List<LocalDownload> group) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.shape(AppThemeScope.of(context))
+            : null,
+        title: Text(
+          group.length == 1
+              ? 'Delete download?'
+              : 'Delete ${group.length} downloads?',
+        ),
+        content: Text(
+          group.length == 1
+              ? 'Delete “$title” from this device? You can download it again later.'
+              : 'Delete every downloaded file of “$title” from this device? '
+                    'You can download them again later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
           ),
-        ),
-        Expanded(
-          child: _loading
-              ? ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: 6,
-                  itemBuilder: (context, index) => Container(
-                    key: ValueKey('download-shimmer-$index'),
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: app.shape.br(12),
-                      border: Border.all(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .outline
-                            .withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      // The skeleton's own tokens. Omitting them left
-                      // `Shimmer` on its shipped slate literals — correct for
-                      // the frozen player, which also renders this widget, but
-                      // a stranded blue-grey plate on every other theme and an
-                      // invisible one on a light ground. `app` is captured
-                      // from the enclosing build, not read inside the
-                      // itemBuilder.
-                      children: [
-                        Shimmer(
-                          width: double.infinity,
-                          height: 16,
-                          base: app.downloads.shimmerBase,
-                          highlight: app.downloads.shimmerHighlight,
-                        ),
-                        const SizedBox(height: 8),
-                        Shimmer(
-                          width: 160,
-                          height: 14,
-                          base: app.downloads.shimmerBase,
-                          highlight: app.downloads.shimmerHighlight,
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : TabBarView(
-                  controller: _tabController,
-                  children: [
-                    _TorrentGroupList(
-                      groups: inProgressGroups,
-                      busyGroupIds: _busyGroupIds,
-                      isFinishedTab: false,
-                      onOpenGroup: _openGroupDetail,
-                      onPauseAll: (group) =>
-                          _runGroupAction(group.id, () => _pauseGroup(group)),
-                      onResumeAll: (group) =>
-                          _runGroupAction(group.id, () => _resumeGroup(group)),
-                      onCancelAll: (group) =>
-                          _runGroupAction(group.id, () => _cancelGroup(group)),
-                    ),
-                    _buildFinishedTab(finishedGroups),
-                  ],
-                ),
-        ),
-          ],
-        ),
-        Positioned(
-          left: 16,
-          bottom: 16 + MediaQuery.of(context).padding.bottom,
-          child: FocusableActionDetector(
-            focusNode: _addButtonFocusNode,
-            shortcuts: const <ShortcutActivator, Intent>{
-              SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-              SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-              SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-            },
-            actions: <Type, Action<Intent>>{
-              ActivateIntent: CallbackAction<ActivateIntent>(
-                onInvoke: (intent) async {
-                  final data = await Clipboard.getData('text/plain');
-                  String? clipboardUrl;
-                  if (data?.text != null && data!.text!.isNotEmpty) {
-                    final url = data.text!.trim();
-                    if (_isDownloadLink(url)) {
-                      clipboardUrl = url;
-                    }
-                  }
-                  await _showAddDialog(initialUrl: clipboardUrl);
-                  return null;
-                },
-              ),
-            },
-            onShowFocusHighlight: (focused) {
-              setState(() => _addButtonFocused = focused);
-            },
-            child: GestureDetector(
-              onTap: () async {
-                final data = await Clipboard.getData('text/plain');
-                String? clipboardUrl;
-
-                if (data?.text != null && data!.text!.isNotEmpty) {
-                  final url = data.text!.trim();
-                  if (_isDownloadLink(url)) {
-                    clipboardUrl = url;
-                    if (mounted) {
-                      final uri = Uri.tryParse(url);
-                      final fileName = uri?.path.split('/').last ?? 'file';
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Found download link in clipboard: $fileName'),
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  }
-                }
-
-                await _showAddDialog(initialUrl: clipboardUrl);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: app.cloud.dialogSurface,
-                  borderRadius: app.shape.br(20),
-                  border: Border.all(
-                    color: _addButtonFocused
-                        ? app.downloads.addAccent
-                        : app.downloads.addAccent.withValues(alpha: 0.5),
-                    width: _addButtonFocused ? 2 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _addButtonFocused
-                          ? app.downloads.addAccent.withValues(alpha: 0.4)
-                          : Colors.black.withValues(alpha: 0.3),
-                      blurRadius: _addButtonFocused ? 12 : 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.add_rounded,
-                      color: app.downloads.addAccent,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Add',
-                      style: TextStyle(
-                        color: app.downloads.addAccent,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _chip(IconData icon, String text) {
-    final app = AppThemeScope.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: app.cloud.dialogSurface,
-        borderRadius: app.shape.brPill,
-        border: Border.all(color: app.downloads.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: app.downloads.metaIcon),
-          const SizedBox(width: 6),
-          ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 12),
-              overflow: TextOverflow.ellipsis,
-            ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    var failed = false;
+    try {
+      // Same profile recheck as the download page: only touch queue records
+      // the active profile owns. (Scanned files were already filtered.)
+      final owned = {
+        for (final record in await DownloadService.instance.allRecords())
+          record.taskId,
+      };
+      for (final item in group) {
+        if (!item.isScanned && !owned.contains(item.record.taskId)) continue;
+        try {
+          await DownloadedMediaService.remove(item);
+        } catch (_) {
+          failed = true;
+        }
+      }
+    } catch (_) {
+      failed = true;
+    }
+    if (failed) _snack('Could not remove every file. Try again.');
   }
-}
 
-// Styled input field widget for modern look
-class _StyledField extends StatelessWidget {
-  final TextEditingController controller;
-  final String label;
-  final String hint;
-  final IconData icon;
-  final ValueChanged<String>? onChanged;
-  const _StyledField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.icon,
-    this.onChanged,
-  });
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    return TvTextField(
-      controller: controller,
-      onChanged: onChanged,
-      // The shared TV shell/keyboard chrome follows settings.accent — the rule
-      // DownloadsTokens' own doc states ("the keyboard highlight is
-      // settings.accent"). NOT downloads.accent: legacy paints that indigo
-      // while the keyboard's highlight has always been the violet
-      // settings.accent pins. The panel ground and its ink stay with the
-      // keyboard's own roles, which is why they come from youtube/core rather
-      // than from this surface.
-      accent: app.settings.accent,
-      keyboardGround: app.youtube.keyboardPanel,
-      keyboardInk: app.core.tx,
-      keyboardInkOnAccent: app.inkOn(app.settings.accent),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon),
-        filled: true,
-        fillColor: app.downloads.fieldFill,
-        enabledBorder: OutlineInputBorder(
-          borderRadius: app.shape.br(14),
-          borderSide: BorderSide(color: app.downloads.line),
+    final groups = <String, List<LocalDownload>>{};
+    for (final item in _items) {
+      final category = item.media == null
+          ? 'Files'
+          : item.media!.type == 'series'
+          ? 'Shows'
+          : 'Movies';
+      if (_filter != 'All' && _filter != category) continue;
+      if (_availability == 'Downloaded' && !item.isReady) continue;
+      if (_availability == 'Downloading' && item.isReady) continue;
+      groups.putIfAbsent(item.groupKey, () => []).add(item);
+    }
+    // Keyed like a title's files ('type:id'), so a series already holding
+    // episodes shows the next one's search on its existing poster.
+    final pendingByKey = <String, PendingTitleDownload>{
+      for (final p in PendingTitleDownloads.entries.value.values)
+        if ((_filter == 'All' ||
+                _filter == (p.type == 'series' ? 'Shows' : 'Movies')) &&
+            _availability != 'Downloaded')
+          '${p.type}:${p.id}': p,
+    };
+    final posters = [
+      for (final entry in pendingByKey.entries)
+        if (!groups.containsKey(entry.key))
+          StremioMeta(
+            id: entry.key,
+            type: entry.value.type,
+            name: entry.value.title,
+            poster: entry.value.poster,
+            year: entry.value.year,
+          ),
+      for (final entry in groups.entries)
+        StremioMeta(
+          id: entry.key,
+          type: entry.value.first.media?.type ?? 'movie',
+          name: entry.value.first.title,
+          poster: entry.value.first.media?.poster,
+          year: entry.value.first.media?.year,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: app.shape.br(14),
-          borderSide: BorderSide(color: app.downloads.accent),
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      ),
-    );
-  }
-}
-
-class _PreviewCard extends StatelessWidget {
-  final String filename;
-  final String host;
-  const _PreviewCard({required this.filename, required this.host});
-
-  @override
-  Widget build(BuildContext context) {
-    if (filename.isEmpty && host.isEmpty) return const SizedBox.shrink();
-    final app = AppThemeScope.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: app.downloads.previewCard,
-        borderRadius: app.shape.br(16),
-        border: Border.all(color: app.downloads.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (filename.isNotEmpty)
-            Text(
-              filename,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          if (host.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.public, size: 14, color: app.downloads.metaIcon),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    host,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: app.core.tx.withValues(alpha: 0.7), fontSize: 12),
+    ];
+    final metrics = HomeTheme.metricsOf(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(color: app.home.bg, gradient: app.home.wash),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // Home's section-header typography, laid out so the title keeps
+            // its full width beside the controls.
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                metrics.sectionHPadding,
+                metrics.sectionVPadding + 14,
+                metrics.sectionHPadding,
+                metrics.sectionVPadding + 4,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'Downloads',
+                        children: [
+                          if (posters.isNotEmpty)
+                            TextSpan(
+                              text: '   ${posters.length}',
+                              style: TextStyle(
+                                color: GlassChrome.enabled(app)
+                                    ? app.fade(app.core.tx, 0.45)
+                                    : Colors.white.withValues(alpha: 0.32),
+                                fontSize: metrics.headerFontSize - 2,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: GlassChrome.enabled(app)
+                            ? app.core.tx
+                            : Colors.white,
+                        fontSize: metrics.headerFontSize + 4,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                        height: 1.1,
+                      ),
+                    ),
                   ),
+                  _GlassIconButton(
+                    tooltip: 'Refresh library',
+                    icon: Icons.refresh_rounded,
+                    onTap: _refresh,
+                  ),
+                  if (ProfilePolicyGuard.allowsSync(ProfileFeature.cloudFiles)) ...[
+                    const SizedBox(width: 10),
+                    _GlassIconButton(
+                      tooltip: 'Browse cloud files',
+                      icon: Icons.cloud_outlined,
+                      onTap: () =>
+                          MainPageBridge.switchTab?.call(MainTab.cloud),
+                    ),
+                  ],
+                  const SizedBox(width: 10),
+                  _GlassIconButton(
+                    tooltip: 'Manage downloads',
+                    icon: Icons.tune_rounded,
+                    onTap: _manage,
+                  ),
+                ],
+              ),
+            ),
+            SeeAllFilterBar(
+              isTelevision: false,
+              activeCount:
+                  (_filter == 'All' ? 0 : 1) + (_availability == 'All' ? 0 : 1),
+              buildChips: () => [
+                StremioDropdown<String>(
+                  label: 'Type',
+                  value: _filter,
+                  options: [
+                    for (final value in ['All', 'Movies', 'Shows', 'Files'])
+                      StremioDropdownOption(value, value),
+                  ],
+                  onSelected: (value) => setState(() => _filter = value),
+                ),
+                StremioDropdown<String>(
+                  label: 'Status',
+                  value: _availability,
+                  options: [
+                    for (final value in ['All', 'Downloaded', 'Downloading'])
+                      StremioDropdownOption(value, value),
+                  ],
+                  onSelected: (value) => setState(() => _availability = value),
                 ),
               ],
             ),
+            Expanded(
+              // The page runs under the tab bar on iOS; keep the grid's last
+              // row clear of it.
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.paddingOf(context).bottom,
+                ),
+                child: _loading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: app.core.accent,
+                        ),
+                      )
+                    : _error != null || posters.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.download_rounded,
+                              size: 44,
+                              color: GlassChrome.enabled(app)
+                                  ? app.fade(app.core.tx, 0.45)
+                                  : Colors.white.withValues(alpha: 0.32),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              _error ?? 'No downloads yet',
+                              style: TextStyle(
+                                color: GlassChrome.enabled(app)
+                                    ? app.core.tx
+                                    : Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Use Download on a title to keep it on this device.',
+                              style: TextStyle(
+                                color: GlassChrome.enabled(app)
+                                    ? app.fade(app.core.tx, 0.65)
+                                    : Colors.white.withValues(alpha: 0.55),
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            _GlassPillButton(
+                              icon: Icons.tune_rounded,
+                              label: 'Open download manager',
+                              onTap: _manage,
+                            ),
+                          ],
+                        ),
+                      )
+                    : DiscoverCardSettingsScope(
+                        showTypeTags: DiscoverPrefs.showTypeTags,
+                        showRatings: DiscoverPrefs.showRatings,
+                        showTitles: DiscoverPrefs.showTitles,
+                        child: SeeAllPosterGrid(
+                          localOnly: true,
+                          items: posters,
+                          isTelevision: false,
+                          loadingMore: false,
+                          exhausted: true,
+                          onLoadMore: () {},
+                          progressOf: (item) => _watched[item.id],
+                          downloadOf: (item) {
+                            final pending = pendingByKey[item.id];
+                            if (pending != null) {
+                              // Negative: preparing, no percentage yet.
+                              return (value: -1, status: pending.phase.label);
+                            }
+                            final summary = _summary(groups[item.id]!);
+                            return summary.inFlight
+                                ? (
+                                    value: summary.progress!,
+                                    status: summary.status,
+                                  )
+                                : null;
+                          },
+                          onOpen: (item) async {
+                            final group = groups[item.id];
+                            if (group == null) {
+                              final pending = pendingByKey[item.id];
+                              if (pending != null) {
+                                await _showPendingOptions(pending);
+                              }
+                              return;
+                            }
+                            await openDownloadedItem(context, group);
+                            _refresh();
+                            // Back from the detail page, likely from playing:
+                            // the bar must show where they stopped.
+                            unawaited(_loadWatched());
+                          },
+                          onOptions: (item) {
+                            final group = groups[item.id];
+                            final pending = pendingByKey[item.id];
+                            if (group != null) {
+                              unawaited(_showOptions(item, group));
+                            } else if (pending != null) {
+                              unawaited(_showPendingOptions(pending));
+                            }
+                          },
+                        ),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> openDownloadManager(BuildContext context) =>
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Download manager')),
+          body: const DownloadManagerScreen(),
+        ),
+      ),
+    );
+
+/// Whether a library entry opens the full Home detail page. Catalog-linked
+/// titles use it immediately, including while every file is still queued.
+@visibleForTesting
+bool opensHomeDetail(List<LocalDownload> group) =>
+    group.first.media?.isCatalogLinked == true;
+
+/// Opens a library entry. A catalog title with a finished download gets the
+/// same detail page Home opens, with Play wired to the local files; its
+/// Download button leads on to the download page. Anything else (unlinked
+/// files, transfers that haven't finished) opens the download page directly.
+Future<void> openDownloadedItem(
+  BuildContext context,
+  List<LocalDownload> group,
+) async {
+  if (!opensHomeDetail(group)) {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DownloadedTitleScreen(items: group),
+      ),
+    );
+    return;
+  }
+  final media = group.first.media!;
+  final ready = sortDownloads(group.where((e) => e.isReady));
+  final all = sortDownloads(group);
+  final addon = await _metadataAddon();
+  // The library only knows the small shelf poster the download was started
+  // with. The page's hero wants the title's full art, which is kept with the
+  // download — use it from the first frame (and offline).
+  final store = OfflineTitleStore.instance;
+  final savedMeta = await store.read(
+    media.id,
+    '${OfflineTitleStore.meta}:${media.type}',
+  );
+  final saved =
+      PageSnapshot.fromJson(
+        await store.read(media.id, OfflineTitleStore.page),
+      )?.meta ??
+      (savedMeta is Map
+          ? StremioMeta.fromJson(Map<String, dynamic>.from(savedMeta))
+          : null);
+  if (!context.mounted) return;
+
+  Future<void> playFallback(
+    BuildContext ctx, {
+    int? season,
+    int? episode,
+  }) async {
+    // The detail page tries the matching local file first; this runs when
+    // there isn't one. A specific episode that isn't on the device says so;
+    // a general Play starts the first downloaded file.
+    if (season != null && episode != null && media.type == 'series') {
+      final local = ready
+          .where(
+            (item) =>
+                item.media?.season == season && item.media?.episode == episode,
+          )
+          .firstOrNull;
+      if (local != null) {
+        await DownloadedMediaService.play(ctx, local);
+        return;
+      }
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(
+          content: Text(
+            'S${season.toString().padLeft(2, '0')} · '
+            'E${episode.toString().padLeft(2, '0')} isn’t downloaded.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (ready.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('This download is not ready to play yet.'),
+        ),
+      );
+      return;
+    }
+    await DownloadedMediaService.play(ctx, ready.first);
+  }
+
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (routeContext) => MergedDetailScreen(
+        // Keep the Downloads entry on the exact same details surface as Home.
+        // The episode filter below is the offline constraint; a separate
+        // local-only page made downloaded shows look unlike downloaded movies
+        // and hid Home's metadata, trailer and related-title treatment.
+        item:
+            saved ??
+            StremioMeta(
+              id: media.id,
+              imdbId: media.id.startsWith('tt') ? media.id : null,
+              type: media.type,
+              name: media.title,
+              poster: media.poster,
+              year: media.year,
+            ),
+        addon: addon,
+        // A downloaded series supplies its episodes from the device, but it
+        // still belongs on the same detail surface Home uses — opt its
+        // direct-source list into the user's configured style instead of the
+        // Classic pin that made downloaded shows look like a separate page.
+        directSourceUsesConfiguredStyle: true,
+        // Offline-first: skip the network metadata prefetch and the ambient
+        // trailer. The trailer's player would otherwise fight the tapped
+        // episode for media_kit's single video-output slot (a native mpv
+        // crash on hand-off), and a downloaded title should open the same
+        // with or without a connection.
+        localOnly: true,
+        seasonsLoader: media.type == 'series'
+            ? () => downloadedSeasons(all)
+            : null,
+        watchProgressLoader: () =>
+            StorageService.getEpisodeWatchProgressByImdbId(media.id),
+        onPlayEpisode: (episode) => playFallback(
+          routeContext,
+          season: episode.season,
+          episode: episode.number,
+        ),
+        // Details and artwork come from the saved snapshot. Online refresh
+        // belongs to the background offline-store warm, not this local page.
+        // Only the episodes on the device, not the whole series.
+        episodeFilter: media.type == 'series'
+            ? (season, episode) => ready.any(
+                (e) => e.media?.season == season && e.media?.episode == episode,
+              )
+            : null,
+        // Inline per-episode delete: the trash control on the episode row
+        // removes that episode's downloaded file(s) right here, no separate
+        // manager. Keeps the captured lists in step so a re-read sees the
+        // deletion too.
+        onDeleteEpisodeDownload: media.type == 'series'
+            ? (episode) async {
+                final matches = all
+                    .where(
+                      (e) =>
+                          e.media?.season == episode.season &&
+                          e.media?.episode == episode.number,
+                    )
+                    .toList();
+                if (matches.isEmpty || !routeContext.mounted) return false;
+                final ok = await _confirmDeleteEpisodeDownload(
+                  routeContext,
+                  matches,
+                );
+                if (ok) {
+                  all.removeWhere(matches.contains);
+                  ready.removeWhere(matches.contains);
+                }
+                return ok;
+              }
+            : null,
+        // The under-title "Downloaded" button opens the download manager
+        // (queue + transfers), the real manage-downloads surface — not a
+        // second per-title detail page.
+        onManageDownloads: () => openDownloadManager(routeContext),
+        initialSeason: all.first.media?.season,
+        initialEpisode: all.first.media?.episode,
+        // Read from this device only, so the button says "Continue 21:44"
+        // in airplane mode exactly as it does online.
+        resumeInfoLoader: () => downloadedResumeInfo(media, ready),
+        onResume: (promised) => playFallback(
+          routeContext,
+          season: promised?.season,
+          episode: promised?.episode,
+        ),
+        onQuickPlay: (selection) => playFallback(
+          routeContext,
+          season: selection.season,
+          episode: selection.episode,
+        ),
+        // A downloaded title still has a full metadata graph. Keep its
+        // people, studios and universe links alive, and let the user inspect
+        // a related title even when that related title is not on the device.
+        recommendationsLoader: media.id.startsWith('tt')
+            ? () => StremioService.instance.getRecommendations(
+                imdbId: media.id,
+                type: media.type,
+              )
+            : null,
+        metaEnricher: (id, type) =>
+            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+        onRecommendationTap: (item) {
+          unawaited(_openDownloadedCatalogPreview(routeContext, item));
+        },
+      ),
+    ),
+  );
+}
+
+/// Confirms and deletes one episode's downloaded file(s) from the inline trash
+/// control on a downloaded show's detail page. Returns true when the files were
+/// removed, so the caller can drop the row from the list.
+Future<bool> _confirmDeleteEpisodeDownload(
+  BuildContext context,
+  List<LocalDownload> items,
+) async {
+  if (items.isEmpty) return false;
+  final label = items.first.media?.episodeLabel ?? items.first.title;
+  final app = AppThemeScope.of(context);
+  final glass = GlassChrome.enabled(app);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: glass ? GlassChrome.fill(app, raised: true) : null,
+      shape: glass ? GlassChrome.shape(app) : null,
+      title: const Text('Delete download?'),
+      content: Text(
+        'Delete $label from this device? You can download it again later.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Keep'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true) return false;
+  try {
+    for (final item in items) {
+      await DownloadedMediaService.remove(item);
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Couldn’t delete this download.')),
+      );
+    }
+    return false;
+  }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Deleted $label')),
+    );
+  }
+  return true;
+}
+
+/// Where a downloaded title's Continue button lands, from progress saved on
+/// this device: a movie with a saved position, or the most recently watched
+/// downloaded episode that is still in progress. Falls back to the first
+/// downloaded episode, not started.
+@visibleForTesting
+Future<({bool started, int? season, int? episode})> downloadedResumeInfo(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  final latest = await _latestDownloadedProgress(media, ready);
+  if (latest != null) {
+    return (started: true, season: latest.season, episode: latest.episode);
+  }
+  if (media.type != 'series') {
+    return (started: false, season: null, episode: null);
+  }
+  final first = ready.isEmpty ? null : ready.first.media;
+  return (started: false, season: first?.season, episode: first?.episode);
+}
+
+/// How far into a downloaded title the user is (0..1) for its library tile:
+/// the movie, or the most recently watched downloaded episode still in
+/// progress. Null when nothing is in progress.
+@visibleForTesting
+Future<double?> downloadedWatchFraction(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  final latest = await _latestDownloadedProgress(media, ready);
+  if (latest == null) return null;
+  final position = (latest.state['positionMs'] as num?)?.toInt() ?? 0;
+  final duration = (latest.state['durationMs'] as num?)?.toInt() ?? 0;
+  if (duration <= 0) return null;
+  return (position / duration).clamp(0.0, 1.0);
+}
+
+/// The in-progress saved position for a downloaded title: the movie's, or
+/// the most recently updated one among its downloaded episodes.
+Future<({int? season, int? episode, Map<String, dynamic> state})?>
+_latestDownloadedProgress(
+  DownloadedMedia media,
+  List<LocalDownload> ready,
+) async {
+  if (media.type != 'series') {
+    final state = await StorageService.getVideoPlaybackStateByImdbId(media.id);
+    if (resumeTimestampFrom(state) == null) return null;
+    return (season: null, episode: null, state: state!);
+  }
+  final progress = await StorageService.getMergedEpisodeProgress(
+    seriesTitle: media.title,
+    imdbId: media.id,
+  );
+  ({int? season, int? episode, Map<String, dynamic> state})? latest;
+  var latestAt = -1;
+  for (final item in ready) {
+    final season = item.media?.season;
+    final episode = item.media?.episode;
+    if (season == null || episode == null) continue;
+    final state = progress['${season}_$episode'];
+    if (resumeTimestampFrom(state) == null) continue;
+    final at = (state!['updatedAt'] as num?)?.toInt() ?? 0;
+    if (at > latestAt) {
+      latestAt = at;
+      latest = (season: season, episode: episode, state: state);
+    }
+  }
+  return latest;
+}
+
+/// The user's Cinemeta install when present, else the stock one — the
+/// detail page only needs it for metadata.
+/// Every available file remains reachable even without a cached episode list.
+@visibleForTesting
+Future<List<TraktSeason>> downloadedSeasons(List<LocalDownload> items) async {
+  if (items.isEmpty) return const [];
+  final id = items.first.media?.id;
+  final saved = await OfflineTitleStore.instance.read(
+    id,
+    OfflineTitleStore.videos,
+  );
+  final videos = saved is List
+      ? saved.whereType<Map>().toList()
+      : const <Map>[];
+  final seasons = <int, Map<int, TraktEpisode>>{};
+  for (final item in items.where((item) => item.isReady)) {
+    final media = item.media;
+    final season = media?.season;
+    final number = media?.episode;
+    if (season == null || number == null) continue;
+    final info = videos
+        .where(
+          (video) =>
+              video['season'] == season &&
+              (video['episode'] ?? video['number']) == number,
+        )
+        .firstOrNull;
+    seasons.putIfAbsent(season, () => {})[number] = TraktEpisode(
+      season: season,
+      number: number,
+      title: info?['title'] as String? ?? 'Episode $number',
+      overview: info?['overview'] as String?,
+      thumbnailUrl: info?['thumbnail'] as String?,
+    );
+  }
+  return [
+    for (final entry in seasons.entries)
+      TraktSeason(
+        number: entry.key,
+        episodeCount: entry.value.length,
+        episodes: entry.value.values.toList()
+          ..sort((a, b) => a.number.compareTo(b.number)),
+      ),
+  ]..sort(seasonsSpecialsLast);
+}
+
+Future<StremioAddon> _metadataAddon() => OfflineTitleStore.cinemetaAddon();
+
+/// Opens metadata reached from a downloaded title (a similar title or a
+/// franchise entry). It deliberately stays in the Downloads flow: playback is
+/// offered when the title is available locally, while metadata browsing and
+/// the person/studio Discover links remain useful for every catalog title.
+Future<void> _openDownloadedCatalogPreview(
+  BuildContext context,
+  StremioMeta item,
+) async {
+  final addon = item.sourceAddon ?? await _metadataAddon();
+  if (!context.mounted) return;
+
+  Future<void> unavailable(
+    BuildContext routeContext, {
+    int? season,
+    int? episode,
+  }) async {
+    if (await DownloadedMediaService.playMatching(
+      routeContext,
+      item.imdbId ?? item.id,
+      season: season,
+      episode: episode,
+    )) {
+      return;
+    }
+    if (!routeContext.mounted) return;
+    ScaffoldMessenger.of(routeContext).showSnackBar(
+      SnackBar(
+        content: Text('“${item.name}” is not downloaded on this device.'),
+      ),
+    );
+  }
+
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (routeContext) => MergedDetailScreen(
+        item: item,
+        addon: addon,
+        onResume: (promised) => unavailable(
+          routeContext,
+          season: promised?.season,
+          episode: promised?.episode,
+        ),
+        onQuickPlay: (selection) => unavailable(
+          routeContext,
+          season: selection.season,
+          episode: selection.episode,
+        ),
+        recommendationsLoader: (item.imdbId ?? item.id).startsWith('tt')
+            ? () => StremioService.instance.getRecommendations(
+                imdbId: item.imdbId ?? item.id,
+                type: item.type,
+              )
+            : null,
+        onRecommendationTap: (next) {
+          unawaited(_openDownloadedCatalogPreview(routeContext, next));
+        },
+        metaEnricher: (id, type) =>
+            StremioService.instance.fetchMetaDetails(imdbId: id, type: type),
+      ),
+    ),
+  );
+}
+
+List<LocalDownload> sortDownloads(Iterable<LocalDownload> items) =>
+    [...items]..sort((a, b) {
+      final season = (a.media?.season ?? 0).compareTo(b.media?.season ?? 0);
+      return season != 0
+          ? season
+          : (a.media?.episode ?? 0).compareTo(b.media?.episode ?? 0);
+    });
+
+/// The look of the Home detail page, resolved the same way it resolves it.
+DetailTheme _detailTheme() => ThemeCoreResolver.resolve(
+  effectiveDetailTheme(StorageService.detailThemeCached),
+  AppThemeController.instance.isLegacy
+      ? ThemeOverrides.none
+      : AppThemeController.instance.overrides,
+  structureId: AppThemeController.instance.formCoreId,
+);
+
+/// A title's download page: what's on the device, what's still coming, and
+/// the controls to play or remove it — drawn in the Home detail page's theme
+/// with its own buttons.
+/// Catalog details for a download page: the title's meta and, for a series,
+/// its episode list (Stremio `videos`: season, number, title, overview,
+/// thumbnail).
+typedef DownloadedTitleDetails = ({
+  StremioMeta? meta,
+  List<Map<String, dynamic>> videos,
+});
+
+Future<DownloadedTitleDetails> _loadTitleDetails(LocalDownload first) async {
+  final media = first.media;
+  if (media == null || !media.isCatalogLinked) {
+    return (meta: null, videos: const <Map<String, dynamic>>[]);
+  }
+  final store = OfflineTitleStore.instance;
+  final saved = await store.read(
+    media.id,
+    '${OfflineTitleStore.meta}:${media.type}',
+  );
+  final snapshot = PageSnapshot.fromJson(
+    await store.read(media.id, OfflineTitleStore.page),
+  );
+  final savedVideos = await store.read(media.id, OfflineTitleStore.videos);
+  return (
+    meta:
+        snapshot?.meta ??
+        (saved is Map
+            ? StremioMeta.fromJson(Map<String, dynamic>.from(saved))
+            : null),
+    videos: savedVideos is List
+        ? [
+            for (final video in savedVideos)
+              if (video is Map) Map<String, dynamic>.from(video),
           ]
+        : const <Map<String, dynamic>>[],
+  );
+}
+
+class DownloadedTitleScreen extends StatefulWidget {
+  final List<LocalDownload> items;
+
+  /// Loads the title's details and episode stills. Offline or unlinked
+  /// files simply keep the plain file rows.
+  @visibleForTesting
+  final Future<DownloadedTitleDetails> Function(LocalDownload first)?
+  detailsLoader;
+  const DownloadedTitleScreen({
+    super.key,
+    required this.items,
+    this.detailsLoader,
+  });
+  @override
+  State<DownloadedTitleScreen> createState() => _DownloadedTitleScreenState();
+}
+
+class _DownloadedTitleScreenState extends State<DownloadedTitleScreen> {
+  bool _playing = false;
+  late List<LocalDownload> _items;
+  final Map<String, double> _progress = {};
+  StreamSubscription? _statusSub, _moveSub, _progressSub;
+  int _revision = 0;
+  Future<void> _reload() async {
+    final revision = ++_revision;
+    try {
+      final items = await DownloadedMediaService.load(includeTransfers: true);
+      if (!mounted || revision != _revision) return;
+      setState(
+        () => _items = items.where((e) => e.groupKey == _groupKey).toList(),
+      );
+      if (_items.isEmpty) Navigator.of(context).pop();
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    _moveSub?.cancel();
+    _progressSub?.cancel();
+    super.dispose();
+  }
+
+  StremioMeta? _meta;
+  final Map<String, Map<String, dynamic>> _episodes = {};
+
+  Future<void> _loadDetails() async {
+    try {
+      final details = await (widget.detailsLoader ?? _loadTitleDetails)(
+        _items.first,
+      );
+      if (!mounted) return;
+      setState(() {
+        _meta = details.meta;
+        for (final video in details.videos) {
+          final season = int.tryParse('${video['season']}');
+          final number = int.tryParse('${video['number'] ?? video['episode']}');
+          if (season != null && number != null) {
+            _episodes['$season:$number'] = video;
+          }
+        }
+      });
+    } catch (_) {
+      /* Details are a bonus; the page works from the files alone. */
+    }
+  }
+
+  Map<String, dynamic>? _episodeOf(LocalDownload item) {
+    final media = item.media;
+    if (media?.season == null || media?.episode == null) return null;
+    return _episodes['${media!.season}:${media.episode}'];
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _items = [...widget.items];
+    _groupKey = widget.items.first.groupKey;
+    unawaited(_loadDetails());
+    _statusSub = DownloadService.instance.statusStream.listen((_) => _reload());
+    _moveSub = DownloadService.instance.moveProgressStream.listen((e) {
+      if (e.done || e.failed) _reload();
+    });
+    _progressSub = DownloadService.instance.progressStream.listen((e) {
+      if (!mounted || e.progress < 0) return;
+      if (!_items.any((i) => i.record.taskId == e.task.taskId)) return;
+      setState(() => _progress[e.task.taskId] = e.progress);
+    });
+  }
+
+  final Set<String> _retrying = {};
+
+  /// Which library entry this page shows — follows a Fix match to the title
+  /// the files were refiled under.
+  late String _groupKey;
+
+  /// Fix match from the download page itself: refile every file here under
+  /// the title the user picks, then show it as that title.
+  Future<void> _fixMatch() async {
+    final first = _items.first;
+    final picked = await showFixMatchDialog(
+      context,
+      initialQuery: first.media?.isCatalogLinked == true
+          ? first.media!.title
+          : _searchableName(first),
+    );
+    if (picked == null || !mounted) return;
+    final type = picked.type == 'series' ? 'series' : 'movie';
+    final id = picked.effectiveImdbId ?? picked.id;
+    try {
+      await DownloadedMediaService.rematch(
+        _items,
+        id: id,
+        title: picked.name,
+        type: type,
+        poster: picked.poster,
+        year: picked.year,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Couldn\'t save the match. Try again.')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    _groupKey = '$type:$id';
+    _episodes.clear();
+    _meta = null;
+    await _reload();
+    if (!mounted || _items.isEmpty) return;
+    unawaited(_loadDetails());
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Filed under ${picked.name}')));
+  }
+
+  /// Restarts a failed download — from where it stopped when the platform
+  /// kept resume data, otherwise from its saved record.
+  Future<void> _retry(LocalDownload item) async {
+    final id = item.record.taskId;
+    if (!_retrying.add(id)) return;
+    setState(() {});
+    var ok = false;
+    try {
+      ok = await DownloadService.instance.resume(item.record.task);
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _retrying.remove(id));
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not retry this download. Try again later.'),
+        ),
+      );
+    }
+    await _reload();
+  }
+
+  Future<void> _remove(LocalDownload item) async {
+    final deleteFile = item.isReady && !item.location.startsWith('content://');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.fill(AppThemeScope.of(context), raised: true)
+            : null,
+        shape: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.shape(AppThemeScope.of(context))
+            : null,
+        title: Text(
+          deleteFile || !item.isReady
+              ? 'Delete download?'
+              : 'Remove from library?',
+        ),
+        content: Text(
+          deleteFile
+              ? 'Delete “${item.record.task.filename}” from this device? You can download it again later.'
+              : !item.isReady
+              ? 'Remove “${item.record.task.filename}” from your downloads? You can download it again later.'
+              : 'Remove this entry from the library? The file will remain on your device.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(deleteFile ? 'Delete' : 'Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      // Recheck the active profile before touching a file from an open
+      // detail route. (A file found in the download folder has no queue
+      // record to check; the library already hid other profiles' files.)
+      if (!item.isScanned) {
+        final owned = await DownloadService.instance.allRecords();
+        if (!owned.any((record) => record.taskId == item.record.taskId)) {
+          return;
+        }
+      }
+      await DownloadedMediaService.remove(item);
+      if (!mounted) return;
+      setState(
+        () => _items.removeWhere(
+          (entry) => entry.record.taskId == item.record.taskId,
+        ),
+      );
+      if (_items.isEmpty) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not remove this download. Try again.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _play(LocalDownload item) async {
+    if (_playing) return;
+    setState(() => _playing = true);
+    try {
+      await DownloadedMediaService.play(context, item);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open this download.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _playing = false);
+    }
+  }
+
+  double _progressOf(LocalDownload item) =>
+      (_progress[item.record.taskId] ?? item.record.progress)
+          .clamp(0, 1)
+          .toDouble();
+
+  String _transferStatus(LocalDownload item) => switch (item.record.status) {
+    TaskStatus.running => 'Downloading ${(_progressOf(item) * 100).round()}%',
+    TaskStatus.paused => 'Paused',
+    TaskStatus.failed => 'Download failed',
+    TaskStatus.waitingToRetry => 'Retrying',
+    _ => 'Queued',
+  };
+
+  String? _thumbnailOf(LocalDownload item, bool series, String? fallback) {
+    final episode = series ? _episodeOf(item) : null;
+    final still = episode?['thumbnail']?.toString();
+    return (still != null && still.isNotEmpty) ? still : fallback;
+  }
+
+  String _episodeTitle(LocalDownload item) {
+    final name = (_episodeOf(item)?['title'] ?? _episodeOf(item)?['name'])
+        ?.toString()
+        .trim();
+    final label = item.media!.episodeLabel;
+    return name == null || name.isEmpty ? label : '$label  ·  $name';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = sortDownloads(_items);
+    if (items.isEmpty) return const Scaffold(body: SizedBox.shrink());
+    final t = _detailTheme();
+    return DetailThemeScope(
+      theme: t,
+      child: DetailAtmosphere(
+        child: LayoutBuilder(
+          builder: (context, c) => _body(context, t, items, c.maxWidth),
+        ),
+      ),
+    );
+  }
+
+  Widget _body(
+    BuildContext context,
+    DetailTheme t,
+    List<LocalDownload> items,
+    double width,
+  ) {
+    final app = AppThemeScope.of(context);
+    final first = items.first;
+    final ready = items.where((item) => item.isReady).toList();
+    final transfers = items.where((item) => !item.isReady).toList();
+    final series = first.media?.type == 'series';
+    final gutter = width >= 900 ? 48.0 : 20.0;
+    final poster = highQualityArtworkUrl(_meta?.poster ?? first.media?.poster);
+    final backdrop = highQualityArtworkUrl(_meta?.background) ?? poster;
+    final description = _meta?.description?.trim();
+    final facts = [
+      ?(_meta?.year ?? first.media?.year),
+      if (_meta?.runtime case final runtime? when runtime.isNotEmpty) runtime,
+      ...?_meta?.genres?.take(3),
+      if (_meta?.imdbRating case final rating?)
+        '★ ${rating.toStringAsFixed(1)}',
+    ].join('  ·  ');
+    final failed = transfers
+        .where((e) => e.record.status == TaskStatus.failed)
+        .length;
+    final eyebrow = ready.isNotEmpty
+        ? 'AVAILABLE OFFLINE'
+        : failed == transfers.length
+        ? 'DOWNLOAD FAILED'
+        : 'DOWNLOAD IN PROGRESS';
+    final meta = [
+      if (series)
+        '${ready.length} downloaded ${ready.length == 1 ? 'episode' : 'episodes'}'
+      else
+        first.media?.year ?? 'Downloaded file',
+      if (transfers.length > failed) '${transfers.length - failed} in progress',
+      if (failed > 0) '$failed failed',
+    ].join('  ·  ');
+
+    return Scaffold(
+      backgroundColor: t.ground,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Backdrop: the title's art, faded into the page ground the way the
+          // Home detail hero fades into its body.
+          if (backdrop != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: width < 600 ? 360 : 520,
+              child: ShaderMask(
+                shaderCallback: (rect) => const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.white, Colors.transparent],
+                ).createShader(rect),
+                blendMode: BlendMode.dstIn,
+                child: Opacity(
+                  opacity: 0.45,
+                  child: CachedNetworkImage(
+                    imageUrl: backdrop,
+                    cacheManager: DebrifyImageCache.manager,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.topCenter,
+                    errorWidget: (_, _, _) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+            ),
+          SafeArea(
+            child: ListView(
+              padding: EdgeInsets.fromLTRB(gutter, 8, gutter, 40),
+              children: [
+                Row(
+                  children: [
+                    Tooltip(
+                      message: 'Back',
+                      child: DetailRoundButton(
+                        icon: Icons.arrow_back_rounded,
+                        onTap: () => Navigator.of(context).maybePop(),
+                      ),
+                    ),
+                    const Spacer(),
+                    Tooltip(
+                      message: 'Fix match',
+                      child: DetailRoundButton(
+                        icon: Icons.manage_search_rounded,
+                        onTap: _fixMatch,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Wrap(
+                  spacing: 28,
+                  runSpacing: 24,
+                  crossAxisAlignment: WrapCrossAlignment.end,
+                  children: [
+                    SizedBox(
+                      width: width < 600 ? 120 : 168,
+                      child: AspectRatio(
+                        aspectRatio: 2 / 3,
+                        child: ClipRRect(
+                          borderRadius: app.shape.br(14),
+                          child: _Artwork(url: poster, theme: t),
+                        ),
+                      ),
+                    ),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: (width - gutter * 2).clamp(100, 640),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                ready.isEmpty
+                                    ? Icons.downloading_rounded
+                                    : Icons.offline_pin_rounded,
+                                size: 15,
+                                color: t.accent,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                eyebrow,
+                                style: TextStyle(
+                                  color: t.accent,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.4,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            first.title,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: t.tx,
+                              fontSize: width < 600 ? 28 : 40,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.8,
+                              height: 1.08,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          if (facts.isNotEmpty) ...[
+                            Text(
+                              facts,
+                              style: TextStyle(
+                                color: t.tx2,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
+                          Text(
+                            meta,
+                            style: TextStyle(
+                              color: t.tx3,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (description != null &&
+                              description.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              description,
+                              maxLines: 4,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: t.tx2,
+                                fontSize: 14,
+                                height: 1.45,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              if (ready.isNotEmpty)
+                                DetailPrimaryButton(
+                                  label: series
+                                      ? 'Play ${ready.first.media!.episodeLabel}'
+                                      : 'Play',
+                                  busy: _playing,
+                                  glow: t.accent,
+                                  onTap: () => _play(ready.first),
+                                ),
+                              DetailGhostButton(
+                                label: 'Manage downloads',
+                                icon: Icons.tune_rounded,
+                                onTap: () async {
+                                  await openDownloadManager(context);
+                                  await _reload();
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (ready.isNotEmpty) ...[
+                  const SizedBox(height: 36),
+                  _SectionTitle(series ? 'Episodes' : 'Files', theme: t),
+                  for (final item in ready)
+                    _DownloadRow(
+                      theme: t,
+                      icon: Icons.play_arrow_rounded,
+                      title: series ? _episodeTitle(item) : item.title,
+                      overview: _episodeOf(item)?['overview']?.toString(),
+                      thumbnail: _thumbnailOf(item, series, backdrop),
+                      subtitle: item.record.task.filename,
+                      onTap: _playing ? null : () => _play(item),
+                      trailing: Tooltip(
+                        message: 'Remove download',
+                        child: DetailRoundButton(
+                          icon: Icons.delete_outline_rounded,
+                          size: 36,
+                          onTap: () {
+                            if (!_playing) _remove(item);
+                          },
+                        ),
+                      ),
+                    ),
+                ],
+                if (transfers.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  _SectionTitle(
+                    failed == transfers.length ? 'Failed' : 'Downloading',
+                    theme: t,
+                  ),
+                  for (final item in transfers)
+                    _DownloadRow(
+                      theme: t,
+                      icon: item.record.status == TaskStatus.failed
+                          ? Icons.error_outline_rounded
+                          : Icons.downloading_rounded,
+                      title:
+                          series && item.media?.episodeLabel.isNotEmpty == true
+                          ? _episodeTitle(item)
+                          : item.title,
+                      thumbnail: _thumbnailOf(item, series, backdrop),
+                      subtitle:
+                          '${_transferStatus(item)}  ·  ${item.record.task.filename}',
+                      progress: item.record.status == TaskStatus.failed
+                          ? null
+                          : _progressOf(item),
+                      warning: item.record.status == TaskStatus.failed,
+                      // Failed: Retry, plus the usual Delete.
+                      trailing: item.record.status == TaskStatus.failed
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Tooltip(
+                                  message: 'Retry download',
+                                  child: DetailRoundButton(
+                                    icon: _retrying.contains(item.record.taskId)
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.refresh_rounded,
+                                    size: 36,
+                                    onTap: () => _retry(item),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Tooltip(
+                                  message: 'Remove download',
+                                  child: DetailRoundButton(
+                                    icon: Icons.delete_outline_rounded,
+                                    size: 36,
+                                    onTap: () => _remove(item),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-enum TorrentGroupState { moving, downloading, queued, paused, waiting, failed, canceled, completed }
-
-extension TorrentGroupStateExt on TorrentGroupState {
-  String get label {
-    switch (this) {
-      case TorrentGroupState.moving:
-        return 'Moving';
-      case TorrentGroupState.downloading:
-        return 'Downloading';
-      case TorrentGroupState.queued:
-        return 'Queued';
-      case TorrentGroupState.paused:
-        return 'Paused';
-      case TorrentGroupState.waiting:
-        return 'Waiting';
-      case TorrentGroupState.failed:
-        return 'Needs attention';
-      case TorrentGroupState.canceled:
-        return 'Canceled';
-      case TorrentGroupState.completed:
-        return 'Completed';
-    }
-  }
-
-  IconData get icon {
-    switch (this) {
-      case TorrentGroupState.moving:
-        return Icons.folder_copy_rounded;
-      case TorrentGroupState.downloading:
-        return Icons.download_rounded;
-      case TorrentGroupState.queued:
-        return Icons.queue_rounded;
-      case TorrentGroupState.paused:
-        return Icons.pause_circle_rounded;
-      case TorrentGroupState.waiting:
-        return Icons.schedule_rounded;
-      case TorrentGroupState.failed:
-        return Icons.error_outline_rounded;
-      case TorrentGroupState.canceled:
-        return Icons.cancel_rounded;
-      case TorrentGroupState.completed:
-        return Icons.check_circle_rounded;
-    }
-  }
-
-  int get sortPriority {
-    switch (this) {
-      case TorrentGroupState.moving:
-        return 0;
-      case TorrentGroupState.downloading:
-        return 1;
-      case TorrentGroupState.queued:
-        return 2;
-      case TorrentGroupState.paused:
-        return 3;
-      case TorrentGroupState.waiting:
-        return 4;
-      case TorrentGroupState.failed:
-        return 5;
-      case TorrentGroupState.canceled:
-        return 6;
-      case TorrentGroupState.completed:
-        return 7;
-    }
-  }
+class _SectionTitle extends StatelessWidget {
+  final String text;
+  final DetailTheme theme;
+  const _SectionTitle(this.text, {required this.theme});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Text(
+      text,
+      style: TextStyle(
+        color: theme.tx,
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
+      ),
+    ),
+  );
 }
 
-class TorrentMeta {
-  final String? torrentHash;
-  final int? fileIndex;
-  final String? restrictedLink;
-  final String? apiKey;
-  final bool isTorbox;
-  final bool isTorboxZip;
+/// One file on the download page — the detail page's panel and hairline, with
+/// a white progress bar (Home's) while the file is still arriving.
+class _DownloadRow extends StatelessWidget {
+  final DetailTheme theme;
+  final IconData icon;
+  final String title, subtitle;
+  final VoidCallback? onTap;
+  final Widget? trailing;
+  final double? progress;
 
-  const TorrentMeta({
-    this.torrentHash,
-    this.fileIndex,
-    this.restrictedLink,
-    this.apiKey,
-    this.isTorbox = false,
-    this.isTorboxZip = false,
-  });
+  /// Episode still (or the title's art); the row falls back to an icon disc.
+  final String? thumbnail;
+  final String? overview;
 
-  bool get hasHash => torrentHash != null && torrentHash!.isNotEmpty;
-
-  /// TorBox CDN doesn't support HTTP Range for individual files, but ZIP downloads do.
-  bool get isTorboxNonResumable => isTorbox && !isTorboxZip;
-}
-
-TorrentMeta parseTorrentMeta(String? meta) {
-  if (meta == null || meta.isEmpty) return const TorrentMeta();
-  try {
-    final decoded = jsonDecode(meta);
-    if (decoded is Map) {
-      String? hash;
-      int? fileIndex;
-      String? restrictedLink;
-      String? apiKey;
-      bool isTorbox = false;
-      bool isTorboxZip = false;
-
-      final dynamic rawHash = decoded['torrentHash'];
-      if (rawHash != null && rawHash.toString().isNotEmpty) {
-        hash = rawHash.toString();
-      }
-
-      final dynamic rawIndex = decoded['fileIndex'];
-      if (rawIndex is num) {
-        fileIndex = rawIndex.toInt();
-      } else if (rawIndex is String) {
-        fileIndex = int.tryParse(rawIndex);
-      }
-
-      final dynamic rawRestricted = decoded['restrictedLink'];
-      if (rawRestricted != null && rawRestricted.toString().isNotEmpty) {
-        restrictedLink = rawRestricted.toString();
-      }
-
-      final dynamic rawApiKey = decoded['apiKey'];
-      if (rawApiKey != null && rawApiKey.toString().isNotEmpty) {
-        apiKey = rawApiKey.toString();
-      }
-
-      // Check if this is a TorBox download (regular or web download)
-      if (decoded['torboxDownload'] == true || decoded['torboxWebDownload'] == true) {
-        isTorbox = true;
-        // ZIP downloads support HTTP Range requests
-        if (decoded['torboxZip'] == true) {
-          isTorboxZip = true;
-        }
-      }
-
-      return TorrentMeta(
-        torrentHash: hash,
-        fileIndex: fileIndex,
-        restrictedLink: restrictedLink,
-        apiKey: apiKey,
-        isTorbox: isTorbox,
-        isTorboxZip: isTorboxZip,
-      );
-    }
-  } catch (_) {}
-  return const TorrentMeta();
-}
-
-class TorrentDownloadItem {
-  final TaskRecord record;
-  final DownloadRecordDetails? details;
-  final TorrentMeta meta;
-
-  const TorrentDownloadItem({
-    required this.record,
-    required this.details,
-    required this.meta,
-  });
-}
-
-class ActiveDownloadInfo {
-  final String fileName;
-  final String? eta;
-  final String? speed;
-  final bool hasQueued;
-
-  const ActiveDownloadInfo({
-    required this.fileName,
-    this.eta,
-    this.speed,
-    this.hasQueued = false,
-  });
-}
-
-class TorrentDownloadGroup {
-  final String id;
-  final String title;
-  final String? torrentHash;
-  final DateTime latestCreatedAt;
-  final List<TorrentDownloadItem> items;
-  final int totalFiles;
-  final int completedFiles;
-  final int runningFiles;
-  final int queuedFiles;
-  final int pausedFiles;
-  final int waitingFiles;
-  final int failedFiles;
-  final int canceledFiles;
-  final int notFoundFiles;
-  final double progress;
-  final int? totalBytes;
-  final int? downloadedBytes;
-  final double speedBytesPerSecond;
-  final Duration? eta;
-  final bool hasMoveInProgress;
-  final bool hasMoveFailure;
-  final TorrentGroupState state;
-  final String statusLabel;
-  final ActiveDownloadInfo? activeDownload;
-
-  const TorrentDownloadGroup({
-    required this.id,
+  /// A failed transfer — its status line reads in the error colour.
+  final bool warning;
+  const _DownloadRow({
+    this.warning = false,
+    required this.theme,
+    required this.icon,
     required this.title,
-    required this.torrentHash,
-    required this.latestCreatedAt,
-    required this.items,
-    required this.totalFiles,
-    required this.completedFiles,
-    required this.runningFiles,
-    required this.queuedFiles,
-    required this.pausedFiles,
-    required this.waitingFiles,
-    required this.failedFiles,
-    required this.canceledFiles,
-    required this.notFoundFiles,
-    required this.progress,
-    required this.totalBytes,
-    required this.downloadedBytes,
-    required this.speedBytesPerSecond,
-    required this.eta,
-    required this.hasMoveInProgress,
-    required this.hasMoveFailure,
-    required this.state,
-    required this.statusLabel,
-    required this.activeDownload,
-  });
-
-  bool get isFinished =>
-      state == TorrentGroupState.completed || state == TorrentGroupState.canceled;
-
-  bool get hasIssues => failedFiles > 0 || hasMoveFailure || notFoundFiles > 0;
-
-  bool get hasActive =>
-      runningFiles > 0 || queuedFiles > 0 || pausedFiles > 0 || waitingFiles > 0 || hasMoveInProgress;
-
-  /// TorBox CDN doesn't support HTTP Range for individual files, but ZIP downloads do.
-  /// Returns true if ANY item in this group is a non-resumable TorBox download.
-  bool get hasTorboxNonResumable => items.any((item) => item.meta.isTorboxNonResumable);
-}
-
-class _TorrentGroupBuilder {
-  final String id;
-  String title;
-  bool titleIsFallback;
-  String? torrentHash;
-  DateTime latestCreatedAt;
-  final List<TorrentDownloadItem> items = [];
-  int totalFiles = 0;
-  int completedFiles = 0;
-  int runningFiles = 0;
-  int queuedFiles = 0;
-  int pausedFiles = 0;
-  int waitingFiles = 0;
-  int failedFiles = 0;
-  int canceledFiles = 0;
-  int notFoundFiles = 0;
-  double totalBytes = 0;
-  double downloadedBytes = 0;
-  double fallbackProgressSum = 0;
-  int fallbackProgressCount = 0;
-  double speedBytesPerSecond = 0;
-  bool hasMoveInProgress = false;
-  bool hasMoveFailure = false;
-  String? _firstRunningName;
-  String? _firstRunningEta;
-  String? _firstRunningSpeed;
-
-  _TorrentGroupBuilder({
-    required this.id,
-    required this.title,
-    required this.titleIsFallback,
-    required this.torrentHash,
-    required this.latestCreatedAt,
-  });
-
-  void add({
-    required TaskRecord record,
-    required DownloadRecordDetails? details,
-    required TorrentMeta meta,
-    required TaskProgressUpdate? progress,
-    required (int bytes, int? total)? raw,
-    required double? moveProgress,
-    required bool moveFailed,
-  }) {
-    items.add(TorrentDownloadItem(record: record, details: details, meta: meta));
-    totalFiles += 1;
-
-    final created = record.task.creationTime;
-    if (created.isAfter(latestCreatedAt)) {
-      latestCreatedAt = created;
-    }
-
-    switch (record.status) {
-      case TaskStatus.running:
-        runningFiles += 1;
-        if (_firstRunningName == null) {
-          _firstRunningName = (details?.displayName?.trim().isNotEmpty ?? false)
-              ? details!.displayName!.trim()
-              : record.task.filename;
-          if (progress != null && progress.hasTimeRemaining) {
-            _firstRunningEta = formatEta(progress.timeRemaining);
-          }
-          if (progress != null && progress.hasNetworkSpeed) {
-            _firstRunningSpeed = progress.networkSpeedAsString;
-          }
-        }
-        break;
-      case TaskStatus.enqueued:
-        queuedFiles += 1;
-        break;
-      case TaskStatus.waitingToRetry:
-        waitingFiles += 1;
-        break;
-      case TaskStatus.paused:
-        pausedFiles += 1;
-        break;
-      case TaskStatus.complete:
-        completedFiles += 1;
-        break;
-      case TaskStatus.canceled:
-        canceledFiles += 1;
-        break;
-      case TaskStatus.failed:
-        failedFiles += 1;
-        break;
-      case TaskStatus.notFound:
-        notFoundFiles += 1;
-        failedFiles += 1;
-        break;
-    }
-
-    if (meta.hasHash && (torrentHash == null || torrentHash!.isEmpty)) {
-      torrentHash = meta.torrentHash;
-    }
-
-    if (titleIsFallback) {
-      final choice = _deriveTitle(record, details, meta);
-      if (!choice.fallback) {
-        title = choice.title;
-        titleIsFallback = false;
-      } else if (title.isEmpty && choice.title.isNotEmpty) {
-        title = choice.title;
-      }
-    }
-
-    if (moveProgress != null && moveProgress > 0 && moveProgress < 1) {
-      hasMoveInProgress = true;
-    }
-    if (moveFailed) {
-      hasMoveFailure = true;
-    }
-
-    final progressValue = _progressValue(record, progress);
-    final int? total = raw?.$2 ?? _expectedTotalBytes(record, progress);
-    int? downloaded = raw?.$1;
-    if (downloaded == null && total != null && total > 0) {
-      downloaded = (progressValue * total).clamp(0, total).round();
-    } else if (downloaded == null && record.status == TaskStatus.complete && total != null && total > 0) {
-      downloaded = total;
-    }
-
-    if (total != null && total > 0) {
-      totalBytes += total;
-      downloadedBytes += (downloaded ?? (record.status == TaskStatus.complete ? total : 0));
-    } else {
-      fallbackProgressSum += progressValue;
-      fallbackProgressCount += 1;
-    }
-
-    if (progress != null && progress.hasNetworkSpeed && record.status == TaskStatus.running) {
-      speedBytesPerSecond += progress.networkSpeed * 1024 * 1024;
-    }
-  }
-
-  TorrentDownloadGroup build() {
-    final int? totalBytesInt = totalBytes > 0 ? totalBytes.round() : null;
-    final int? downloadedBytesInt = totalBytesInt != null
-        ? downloadedBytes.clamp(0, totalBytes).round()
-        : null;
-
-    double effectiveProgress;
-    if (totalBytesInt != null && totalBytesInt > 0) {
-      effectiveProgress = (downloadedBytesInt ?? 0) / totalBytesInt;
-    } else if (fallbackProgressCount > 0) {
-      effectiveProgress = fallbackProgressSum / fallbackProgressCount;
-    } else {
-      effectiveProgress = 0.0;
-    }
-    effectiveProgress = effectiveProgress.clamp(0.0, 1.0);
-
-    Duration? eta;
-    if (speedBytesPerSecond > 0 && totalBytesInt != null && downloadedBytesInt != null) {
-      final remaining = totalBytesInt - downloadedBytesInt;
-      if (remaining > 0) {
-        eta = Duration(seconds: (remaining / speedBytesPerSecond).round());
-      }
-    }
-
-    final state = _deriveGroupState(
-      hasMoveInProgress: hasMoveInProgress,
-      running: runningFiles,
-      queued: queuedFiles,
-      paused: pausedFiles,
-      waiting: waitingFiles,
-      failed: failedFiles,
-      canceled: canceledFiles,
-      completed: completedFiles,
-      total: totalFiles,
-    );
-
-    final label = _deriveStatusLabel(
-      state,
-      hasMoveFailure,
-      failedFiles,
-      pausedFiles,
-      queuedFiles,
-      waitingFiles,
-    );
-
-    final aggregatedEta = eta != null ? formatEta(eta) : null;
-    final aggregatedSpeed = speedBytesPerSecond > 0 ? formatSpeed(speedBytesPerSecond) : null;
-    ActiveDownloadInfo? activeDownload;
-    if (_firstRunningName != null) {
-      activeDownload = ActiveDownloadInfo(
-        fileName: _firstRunningName!,
-        eta: _firstRunningEta ?? aggregatedEta,
-        speed: _firstRunningSpeed ?? aggregatedSpeed,
-        hasQueued: (queuedFiles + waitingFiles) > 0,
-      );
-    }
-
-    return TorrentDownloadGroup(
-      id: id,
-      title: title.isNotEmpty ? title : 'Download ${id.hashCode & 0xFFFF}',
-      torrentHash: torrentHash,
-      latestCreatedAt: latestCreatedAt,
-      items: List.unmodifiable(items),
-      totalFiles: totalFiles,
-      completedFiles: completedFiles,
-      runningFiles: runningFiles,
-      queuedFiles: queuedFiles,
-      pausedFiles: pausedFiles,
-      waitingFiles: waitingFiles,
-      failedFiles: failedFiles,
-      canceledFiles: canceledFiles,
-      notFoundFiles: notFoundFiles,
-      progress: effectiveProgress,
-      totalBytes: totalBytesInt,
-      downloadedBytes: downloadedBytesInt,
-      speedBytesPerSecond: speedBytesPerSecond,
-      eta: eta,
-      hasMoveInProgress: hasMoveInProgress,
-      hasMoveFailure: hasMoveFailure,
-      state: state,
-      statusLabel: label,
-      activeDownload: activeDownload,
-    );
-  }
-}
-
-class _TitleChoice {
-  final String title;
-  final bool fallback;
-  const _TitleChoice(this.title, this.fallback);
-}
-
-_TitleChoice _deriveTitle(TaskRecord record, DownloadRecordDetails? details, TorrentMeta meta) {
-  final torrentName = details?.torrentName?.trim();
-  if (torrentName != null && torrentName.isNotEmpty) {
-    return _TitleChoice(torrentName, false);
-  }
-  if (meta.torrentHash != null && meta.torrentHash!.isNotEmpty) {
-    final hash = meta.torrentHash!;
-    final shortHash = hash.length > 7 ? hash.substring(0, 7) : hash;
-    return _TitleChoice('Torrent $shortHash', true);
-  }
-  final display = details?.displayName?.trim();
-  if (display != null && display.isNotEmpty) {
-    return _TitleChoice(display, true);
-  }
-  final filename = record.task.filename.trim();
-  if (filename.isNotEmpty) {
-    return _TitleChoice(filename, true);
-  }
-  return _TitleChoice('Download', true);
-}
-
-double _progressValue(TaskRecord record, TaskProgressUpdate? progress) {
-  if (record.status == TaskStatus.complete) return 1.0;
-  final double? live = progress?.progress;
-  if (live != null && !live.isNaN && live >= 0) {
-    return live.clamp(0.0, 1.0);
-  }
-  final double fallback = record.progress;
-  if (!fallback.isNaN && fallback >= 0) {
-    return fallback.clamp(0.0, 1.0);
-  }
-  return 0.0;
-}
-
-int? _expectedTotalBytes(TaskRecord record, TaskProgressUpdate? progress) {
-  if (progress != null && progress.hasExpectedFileSize && progress.expectedFileSize > 0) {
-    return progress.expectedFileSize;
-  }
-  if (record.expectedFileSize > 0) {
-    return record.expectedFileSize;
-  }
-  return null;
-}
-
-TorrentGroupState _deriveGroupState({
-  required bool hasMoveInProgress,
-  required int running,
-  required int queued,
-  required int paused,
-  required int waiting,
-  required int failed,
-  required int canceled,
-  required int completed,
-  required int total,
-}) {
-  if (hasMoveInProgress) return TorrentGroupState.moving;
-  if (running > 0) return TorrentGroupState.downloading;
-  if (queued > 0) return TorrentGroupState.queued;
-  if (paused > 0) return TorrentGroupState.paused;
-  if (waiting > 0) return TorrentGroupState.waiting;
-  if (failed > 0) return TorrentGroupState.failed;
-  if (canceled >= total && total > 0) return TorrentGroupState.canceled;
-  if (completed >= total && total > 0) return TorrentGroupState.completed;
-  return TorrentGroupState.waiting;
-}
-
-String _deriveStatusLabel(
-  TorrentGroupState state,
-  bool hasMoveFailure,
-  int failed,
-  int paused,
-  int queued,
-  int waiting,
-) {
-  if (hasMoveFailure) return 'Move failed';
-  switch (state) {
-    case TorrentGroupState.moving:
-      return 'Moving to destination';
-    case TorrentGroupState.downloading:
-      return 'Downloading';
-    case TorrentGroupState.queued:
-      return queued > 1 ? '$queued in queue' : 'Queued';
-    case TorrentGroupState.paused:
-      return paused > 1 ? '$paused paused' : 'Paused';
-    case TorrentGroupState.waiting:
-      return waiting > 1 ? '$waiting waiting' : 'Waiting';
-    case TorrentGroupState.failed:
-      return failed > 1 ? '$failed failed' : 'Needs attention';
-    case TorrentGroupState.canceled:
-      return 'Canceled';
-    case TorrentGroupState.completed:
-      return 'Completed';
-  }
-}
-
-List<TorrentDownloadGroup> buildTorrentGroups({
-  required List<TaskRecord> records,
-  required Map<String, DownloadRecordDetails> detailsByRecordId,
-  required Map<String, TaskProgressUpdate> progressByTaskId,
-  required Map<String, (int bytes, int? total)> rawBytes,
-  required Map<String, double> moveProgressByTaskId,
-  required Set<String> moveFailed,
-}) {
-  if (records.isEmpty) return const [];
-
-  final Map<String, DownloadRecordDetails> detailsByTaskId = {};
-  for (final entry in detailsByRecordId.entries) {
-    detailsByTaskId[entry.key] = entry.value;
-    final pluginId = entry.value.pluginTaskId;
-    if (pluginId != null && pluginId.isNotEmpty) {
-      detailsByTaskId[pluginId] = entry.value;
-    }
-  }
-
-  final Map<String, _TorrentGroupBuilder> builders = {};
-
-  for (final record in records) {
-    final details = detailsByTaskId[record.task.taskId];
-    final meta = parseTorrentMeta(details?.meta);
-    final groupId = _deriveGroupId(record, details, meta);
-    final builder = builders.putIfAbsent(groupId, () {
-      final choice = _deriveTitle(record, details, meta);
-      final created = details?.createdAt != null && details!.createdAt! > 0
-          ? DateTime.fromMillisecondsSinceEpoch(details.createdAt!)
-          : record.task.creationTime;
-      return _TorrentGroupBuilder(
-        id: groupId,
-        title: choice.title,
-        titleIsFallback: choice.fallback,
-        torrentHash: meta.torrentHash,
-        latestCreatedAt: created,
-      );
-    });
-
-    builder.add(
-      record: record,
-      details: details,
-      meta: meta,
-      progress: progressByTaskId[record.task.taskId],
-      raw: rawBytes[record.task.taskId],
-      moveProgress: moveProgressByTaskId[record.task.taskId],
-      moveFailed: moveFailed.contains(record.task.taskId),
-    );
-  }
-
-  final groups = builders.values.map((b) => b.build()).toList();
-  groups.sort((a, b) {
-    final cmp = a.state.sortPriority.compareTo(b.state.sortPriority);
-    if (cmp != 0) return cmp;
-    return b.latestCreatedAt.compareTo(a.latestCreatedAt);
-  });
-  return groups;
-}
-
-String _deriveGroupId(TaskRecord record, DownloadRecordDetails? details, TorrentMeta meta) {
-  if (meta.torrentHash != null && meta.torrentHash!.isNotEmpty) {
-    return 'hash:${meta.torrentHash!.toLowerCase()}';
-  }
-  final torrentName = details?.torrentName;
-  if (torrentName != null && torrentName.trim().isNotEmpty) {
-    return 'name:${torrentName.trim().toLowerCase()}';
-  }
-  return 'task:${record.task.taskId}';
-}
-
-String formatBytes(int bytes) {
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  double size = bytes.toDouble();
-  int unit = 0;
-  while (size >= 1024 && unit < units.length - 1) {
-    size /= 1024;
-    unit++;
-  }
-  final String value;
-  if (unit == 0) {
-    value = size.round().toString();
-  } else if (size >= 10) {
-    value = size.toStringAsFixed(1);
-  } else {
-    value = size.toStringAsFixed(2);
-  }
-  return '$value ${units[unit]}';
-}
-
-String formatSpeed(double bytesPerSecond) {
-  if (bytesPerSecond <= 0) return '-- MB/s';
-  final megabytes = bytesPerSecond / (1024 * 1024);
-  if (megabytes >= 1) {
-    return '${megabytes.toStringAsFixed(megabytes >= 10 ? 1 : 2)} MB/s';
-  }
-  final kilobytes = bytesPerSecond / 1024;
-  return '${kilobytes.toStringAsFixed(kilobytes >= 10 ? 1 : 2)} kB/s';
-}
-
-String formatEta(Duration? eta) {
-  if (eta == null || eta.isNegative) return '--';
-  if (eta.inHours >= 1) {
-    final hours = eta.inHours;
-    final minutes = eta.inMinutes.remainder(60);
-    return '${hours}h ${minutes}m';
-  }
-  if (eta.inMinutes >= 1) {
-    final minutes = eta.inMinutes;
-    final seconds = eta.inSeconds.remainder(60);
-    return '${minutes}m ${seconds}s';
-  }
-  return '${eta.inSeconds}s';
-}
-
-class _TorrentGroupList extends StatefulWidget {
-  final List<TorrentDownloadGroup> groups;
-  final Set<String> busyGroupIds;
-  final bool isFinishedTab;
-  final void Function(TorrentDownloadGroup) onOpenGroup;
-  final Future<void> Function(TorrentDownloadGroup)? onPauseAll;
-  final Future<void> Function(TorrentDownloadGroup)? onResumeAll;
-  final Future<void> Function(TorrentDownloadGroup)? onCancelAll;
-
-  const _TorrentGroupList({
-    required this.groups,
-    required this.busyGroupIds,
-    required this.isFinishedTab,
-    required this.onOpenGroup,
-    this.onPauseAll,
-    this.onResumeAll,
-    this.onCancelAll,
+    required this.subtitle,
+    this.onTap,
+    this.trailing,
+    this.progress,
+    this.thumbnail,
+    this.overview,
   });
 
   @override
-  State<_TorrentGroupList> createState() => _TorrentGroupListState();
-}
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, c) => _build(context, c.maxWidth));
 
-class _TorrentGroupListState extends State<_TorrentGroupList> {
-  // Track which item index is currently focused
-  int? _focusedIndex;
-
-  static const _shortcuts = <ShortcutActivator, Intent>{
-    SingleActivator(LogicalKeyboardKey.select): ActivateIntent(),
-    SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
-    SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.groups.isEmpty) {
-      return const Center(child: Text('No downloads'));
-    }
-
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: widget.groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final group = widget.groups[index];
-        final bool isBusy = widget.busyGroupIds.contains(group.id);
-        final bool isIOS = Platform.isIOS;
-
-        // TorBox CDN doesn't support HTTP Range for individual files (but ZIP downloads do)
-        final bool canPause = !isIOS && !widget.isFinishedTab && !isBusy && !group.hasTorboxNonResumable && widget.onPauseAll != null &&
-            (group.runningFiles > 0 || group.queuedFiles > 0 || group.waitingFiles > 0);
-        final bool canResume = !isIOS && !widget.isFinishedTab && !isBusy && !group.hasTorboxNonResumable && widget.onResumeAll != null &&
-            group.pausedFiles > 0;
-        final bool canCancel = !isBusy && widget.onCancelAll != null &&
-            (group.hasActive || group.failedFiles > 0 || group.notFoundFiles > 0);
-
-        VoidCallback? pause = canPause ? () => widget.onPauseAll!(group) : null;
-        VoidCallback? resume = canResume ? () => widget.onResumeAll!(group) : null;
-        VoidCallback? cancel = canCancel ? () => widget.onCancelAll!(group) : null;
-
-        // Show info when TorBox group is active but pause is unavailable
-        final bool showTorboxInfo = group.hasTorboxNonResumable &&
-            !widget.isFinishedTab &&
-            !Platform.isIOS &&
-            (group.runningFiles > 0 || group.queuedFiles > 0 || group.waitingFiles > 0);
-
-        final bool isFocused = _focusedIndex == index;
-
-        return FocusableActionDetector(
-          shortcuts: _shortcuts,
-          actions: <Type, Action<Intent>>{
-            ActivateIntent: CallbackAction<ActivateIntent>(
-              onInvoke: (intent) {
-                widget.onOpenGroup(group);
-                return null;
-              },
-            ),
-          },
-          onShowFocusHighlight: (focused) {
-            setState(() {
-              _focusedIndex = focused ? index : (_focusedIndex == index ? null : _focusedIndex);
-            });
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: isFocused
-                  ? Border.all(color: Theme.of(context).colorScheme.primary, width: 2)
-                  : null,
-            ),
-            child: PressableScale(
-              onTap: () => widget.onOpenGroup(group),
-              child: _TorrentGroupCard(
-                group: group,
-                isBusy: isBusy,
-                isFinished: widget.isFinishedTab,
-                onPauseAll: pause,
-                onResumeAll: resume,
-                onCancelAll: cancel,
-                showTorboxPauseInfo: showTorboxInfo,
-              ),
+  Widget _build(BuildContext context, double width) {
+    final t = theme;
+    final app = AppThemeScope.of(context);
+    final radius = app.shape.br(14);
+    // Narrow rows put the still on top, full width, like Home's episode cards.
+    final stacked = thumbnail != null && width < 520;
+    final Widget details = Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: t.tx,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
             ),
           ),
-        );
-      },
-    );
-  }
-}
-
-String _primaryStatusText(TorrentDownloadGroup group) {
-  String base;
-  switch (group.state) {
-    case TorrentGroupState.moving:
-      base = 'Finishing up';
-      break;
-    case TorrentGroupState.downloading:
-      base = group.runningFiles > 1
-          ? 'Downloading ${_countLabel(group.runningFiles, 'file')}'
-          : 'Downloading';
-      break;
-    case TorrentGroupState.queued:
-      base = 'In queue';
-      break;
-    case TorrentGroupState.paused:
-      base = group.pausedFiles > 1
-          ? 'Paused ${_countLabel(group.pausedFiles, 'file')}'
-          : 'Paused';
-      break;
-    case TorrentGroupState.waiting:
-      base = 'Waiting to retry';
-      break;
-    case TorrentGroupState.failed:
-      base = 'Needs attention';
-      break;
-    case TorrentGroupState.canceled:
-      base = 'Canceled';
-      break;
-    case TorrentGroupState.completed:
-      base = 'Completed';
-      break;
-  }
-
-  final suffix = <String>[];
-  if (group.state != TorrentGroupState.downloading && group.runningFiles > 0) {
-    suffix.add(_countLabel(group.runningFiles, 'downloading'));
-  }
-  if (group.state != TorrentGroupState.paused && group.pausedFiles > 0) {
-    suffix.add(_countLabel(group.pausedFiles, 'paused'));
-  }
-  if (group.state != TorrentGroupState.queued && group.queuedFiles > 0) {
-    suffix.add(_countLabel(group.queuedFiles, 'queued'));
-  }
-  if (group.state != TorrentGroupState.waiting && group.waitingFiles > 0) {
-    suffix.add(_countLabel(group.waitingFiles, 'waiting'));
-  }
-  if (group.state != TorrentGroupState.failed && (group.failedFiles > 0 || group.notFoundFiles > 0 || group.hasMoveFailure)) {
-    final issues = group.failedFiles + group.notFoundFiles;
-    if (group.hasMoveFailure) {
-      suffix.add('move retry');
-    }
-    if (issues > 0) {
-      suffix.add(_countLabel(issues, 'issue'));
-    }
-  }
-  if (group.hasMoveInProgress && group.state != TorrentGroupState.moving) {
-    suffix.add('moving');
-  }
-
-  if (suffix.isNotEmpty) {
-    base = '$base (${suffix.join(' • ')})';
-  }
-  return base;
-}
-
-String _bucketLine(TorrentDownloadGroup group) {
-  final buckets = <String>[];
-  buckets.add('${group.completedFiles}/${group.totalFiles} done');
-  if (group.runningFiles > 0) {
-    buckets.add(_countLabel(group.runningFiles, 'downloading'));
-  }
-  if (group.queuedFiles > 0) {
-    buckets.add(_countLabel(group.queuedFiles, 'queued'));
-  }
-  if (group.pausedFiles > 0) {
-    buckets.add(_countLabel(group.pausedFiles, 'paused'));
-  }
-  if (group.waitingFiles > 0) {
-    buckets.add(_countLabel(group.waitingFiles, 'waiting'));
-  }
-  if (group.failedFiles > 0 || group.notFoundFiles > 0) {
-    buckets.add(_countLabel(group.failedFiles + group.notFoundFiles, 'failed'));
-  }
-  return buckets.join(' • ');
-}
-
-String _countLabel(int count, String word) {
-  final normalized = word.endsWith('s') ? word.substring(0, word.length - 1) : word;
-  final plural = '${normalized}s';
-  switch (normalized) {
-    case 'issue':
-      return count == 1 ? '1 issue' : '$count issues';
-    case 'queued':
-      return count == 1 ? '1 queued' : '$count queued';
-    case 'paused':
-      return count == 1 ? '1 paused' : '$count paused';
-    case 'waiting':
-      return count == 1 ? '1 waiting' : '$count waiting';
-    case 'downloading':
-      return count == 1 ? '1 downloading' : '$count downloading';
-    default:
-      return count == 1 ? '1 $normalized' : '$count $plural';
-  }
-}
-
-String _activeMetrics(ActiveDownloadInfo info) {
-  final parts = <String>[];
-  if (info.eta != null && info.eta!.isNotEmpty && info.eta! != '--') {
-    parts.add('≈ ${info.eta} left');
-  }
-  if (info.speed != null && info.speed!.isNotEmpty && info.speed! != '-- MB/s') {
-    parts.add(info.speed!);
-  }
-  if (info.hasQueued) {
-    parts.add('Next file starts afterward');
-  }
-  return parts.join(' • ');
-}
-
-class _TorrentGroupCard extends StatelessWidget {
-  final TorrentDownloadGroup group;
-  final bool isBusy;
-  final bool isFinished;
-  final VoidCallback? onPauseAll;
-  final VoidCallback? onResumeAll;
-  final VoidCallback? onCancelAll;
-  final bool showTorboxPauseInfo;
-
-  const _TorrentGroupCard({
-    required this.group,
-    required this.isBusy,
-    required this.isFinished,
-    this.onPauseAll,
-    this.onResumeAll,
-    this.onCancelAll,
-    this.showTorboxPauseInfo = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final app = AppThemeScope.of(context);
-    final Color stateColor = _groupStateColor(theme, group.state);
-    final textTheme = theme.textTheme;
-
-    final String primaryStatusText = _primaryStatusText(group);
-    final String bucketLine = _bucketLine(group);
-    final ActiveDownloadInfo? active = group.activeDownload;
-
-    final chips = <Widget>[
-      _InfoChip(
-        icon: Icons.layers_rounded,
-        label: '${group.totalFiles} files',
-      ),
-    ];
-
-    if (group.downloadedBytes != null && group.totalBytes != null) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.data_usage_rounded,
-          label: '${formatBytes(group.downloadedBytes!)} / ${formatBytes(group.totalBytes!)}',
-        ),
-      );
-    } else if (group.totalBytes != null) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.data_usage_rounded,
-          label: formatBytes(group.totalBytes!),
-        ),
-      );
-    }
-
-    if (group.speedBytesPerSecond > 0) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.speed_rounded,
-          label: formatSpeed(group.speedBytesPerSecond),
-        ),
-      );
-    }
-    if (group.eta != null && !group.eta!.isNegative) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.timer_rounded,
-          label: formatEta(group.eta),
-        ),
-      );
-    }
-    if (group.failedFiles > 0 || group.notFoundFiles > 0) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.error_outline_rounded,
-          label: '${group.failedFiles + group.notFoundFiles} issues',
-          foreground: theme.colorScheme.error,
-          background: theme.colorScheme.error.withValues(alpha: 0.12),
-        ),
-      );
-    }
-    if (group.hasMoveFailure) {
-      chips.add(
-        _InfoChip(
-          icon: Icons.folder_off_rounded,
-          label: 'Move failed',
-          foreground: theme.colorScheme.error,
-          background: theme.colorScheme.error.withValues(alpha: 0.12),
-        ),
-      );
-    }
-    if (group.torrentHash != null && group.torrentHash!.isNotEmpty) {
-      final hash = group.torrentHash!;
-      final shortHash = hash.length > 12 ? '${hash.substring(0, 12)}…' : hash;
-      chips.add(
-        _InfoChip(
-          icon: Icons.tag_rounded,
-          label: shortHash.toUpperCase(),
-        ),
-      );
-    }
-
-    final actions = <Widget>[];
-    if (onPauseAll != null) {
-      actions.add(
-        TextButton.icon(
-          onPressed: onPauseAll,
-          icon: const Icon(Icons.pause_rounded),
-          label: const Text('Pause'),
-        ),
-      );
-    }
-    if (onResumeAll != null) {
-      actions.add(
-        TextButton.icon(
-          onPressed: onResumeAll,
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Resume'),
-        ),
-      );
-    }
-    if (onCancelAll != null) {
-      actions.add(
-        TextButton.icon(
-          onPressed: onCancelAll,
-          icon: const Icon(Icons.delete_rounded),
-          label: const Text('Cancel'),
-        ),
-      );
-    }
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: app.shape.br(18)),
-      margin: EdgeInsets.zero,
-      elevation: 0,
-      color: theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: stateColor.withValues(alpha: 0.12),
-                    borderRadius: app.shape.br(14),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  child: Icon(group.state.icon, color: stateColor, size: 24),
+          if (overview != null && overview!.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              overview!.trim(),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: t.tx2, fontSize: 13, height: 1.35),
+            ),
+          ],
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            maxLines: overview == null ? 2 : 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: warning ? HomeTheme.danger : t.tx3,
+              fontSize: 12,
+              fontWeight: warning ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          if (progress != null) ...[
+            const SizedBox(height: 9),
+            ClipRRect(
+              borderRadius: app.shape.br(2),
+              child: SizedBox(
+                height: 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: HomeTheme.progressTrack),
+                    FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: progress!,
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: HomeTheme.progressGradient,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: GlassChrome.enabled(app) ? GlassChrome.fill(app) : t.panel,
+        borderRadius: radius,
+        child: InkWell(
+          borderRadius: radius,
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: Border.all(
+                color: GlassChrome.enabled(app)
+                    ? GlassChrome.edge(app)
+                    : t.hair,
+              ),
+            ),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      _Still(
+                        url: thumbnail!,
+                        icon: icon,
+                        theme: t,
+                        width: double.infinity,
+                      ),
+                      const SizedBox(height: 12),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  group.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  primaryStatusText,
-                                  style: textTheme.bodyMedium?.copyWith(
-                                    color: stateColor,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                if (bucketLine.isNotEmpty) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    bucketLine,
-                                    style: textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                                if (active != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Current: ${active.fileName}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                                  ),
-                                  if (_activeMetrics(active).isNotEmpty)
-                                    Text(
-                                      _activeMetrics(active),
-                                      style: textTheme.bodySmall?.copyWith(
-                                        color: theme.colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          if (isBusy) ...[
-                            const SizedBox(width: 12),
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
+                          details,
+                          if (trailing != null) ...[
+                            const SizedBox(width: 8),
+                            trailing!,
                           ],
                         ],
                       ),
                     ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: app.shape.brPill,
-              child: LinearProgressIndicator(
-                value: group.progress.isNaN ? 0 : group.progress.clamp(0.0, 1.0),
-                minHeight: 8,
-                backgroundColor: theme.colorScheme.surfaceVariant.withValues(alpha: 0.3),
-                valueColor: AlwaysStoppedAnimation(stateColor),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: chips,
-            ),
-            if (actions.isNotEmpty || showTorboxPauseInfo) ...[
-              const SizedBox(height: 16),
-              if (showTorboxPauseInfo)
-                Padding(
-                  padding: EdgeInsets.only(bottom: actions.isNotEmpty ? 8 : 0),
-                  child: Row(
+                  )
+                : Row(
                     children: [
-                      Icon(Icons.info_outline_rounded, size: 14, color: app.core.tx.withValues(alpha: 0.5)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Pause unavailable for TorBox',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: app.core.tx.withValues(alpha: 0.5),
+                      if (thumbnail != null)
+                        _Still(
+                          url: thumbnail!,
+                          icon: icon,
+                          theme: t,
+                          width: width < 900 ? 150 : 176,
+                        )
+                      else
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: t.ghostFill,
+                            border: Border.all(color: t.ghostBorder),
+                          ),
+                          child: Icon(icon, color: t.ghostText, size: 20),
                         ),
-                      ),
+                      const SizedBox(width: 14),
+                      details,
+                      if (trailing != null) ...[
+                        const SizedBox(width: 8),
+                        trailing!,
+                      ],
                     ],
                   ),
-                ),
-              if (actions.isNotEmpty)
-                OverflowBar(
-                  spacing: 12,
-                  overflowSpacing: 12,
-                  alignment: MainAxisAlignment.start,
-                  children: actions,
-                ),
-            ],
-          ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _InfoChip extends StatelessWidget {
+/// A 16:9 episode still with the row's action icon over it.
+class _Still extends StatelessWidget {
+  final String url;
+  final IconData icon;
+  final DetailTheme theme;
+  final double width;
+  const _Still({
+    required this.url,
+    required this.icon,
+    required this.theme,
+    required this.width,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final app = AppThemeScope.of(context);
+    return SizedBox(
+      width: width,
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: ClipRRect(
+          borderRadius: app.shape.br(10),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(color: theme.ground),
+              CachedNetworkImage(
+                imageUrl: url,
+                cacheManager: DebrifyImageCache.manager,
+                fit: BoxFit.cover,
+                errorWidget: (_, _, _) => const SizedBox.shrink(),
+              ),
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Color(0x99000000)],
+                  ),
+                ),
+              ),
+              Center(
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.black.withValues(alpha: 0.45),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.6),
+                    ),
+                  ),
+                  child: Icon(icon, color: Colors.white, size: 20),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Artwork extends StatelessWidget {
+  final String? url;
+  final DetailTheme theme;
+  const _Artwork({this.url, required this.theme});
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = ColoredBox(
+      color: theme.panel,
+      child: Center(
+        child: Icon(Icons.movie_outlined, size: 44, color: theme.tx3),
+      ),
+    );
+    return url == null
+        ? placeholder
+        : CachedNetworkImage(
+            imageUrl: url!,
+            cacheManager: DebrifyImageCache.manager,
+            fit: BoxFit.cover,
+            placeholder: (_, _) => placeholder,
+            errorWidget: (_, _, _) => placeholder,
+          );
+  }
+}
+
+/// Home's white-on-glass control, as the merged detail page draws it.
+class _GlassPillButton extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Color? foreground;
-  final Color? background;
-
-  const _InfoChip({
+  final VoidCallback onTap;
+  const _GlassPillButton({
     required this.icon,
     required this.label,
-    this.foreground,
-    this.background,
+    required this.onTap,
   });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final Color fg = foreground ?? theme.colorScheme.onSurfaceVariant;
-    final Color bg = background ?? theme.colorScheme.surfaceVariant.withValues(alpha: 0.4);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(color: fg, fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Color _groupStateColor(ThemeData theme, TorrentGroupState state) {
-  switch (state) {
-    case TorrentGroupState.moving:
-      return theme.colorScheme.tertiary;
-    case TorrentGroupState.downloading:
-      return theme.colorScheme.primary;
-    case TorrentGroupState.queued:
-      return const Color(0xFFF59E0B);
-    case TorrentGroupState.paused:
-      return const Color(0xFF38BDF8);
-    case TorrentGroupState.waiting:
-      return const Color(0xFF22D3EE);
-    case TorrentGroupState.failed:
-      return theme.colorScheme.error;
-    case TorrentGroupState.canceled:
-      return theme.colorScheme.outline;
-    case TorrentGroupState.completed:
-      return const Color(0xFF22C55E);
-  }
-}
-
-
-class _DownloadTile extends StatelessWidget {
-  final TaskRecord record;
-  final TaskProgressUpdate? progress;
-  final double? moveProgress; // 0..1 when moving to SAF
-  final bool moveFailed;
-  final Future<void> Function() onChanged;
-  final int? rawBytes;
-  final int? rawTotal;
-  final bool isTorboxNonResumable;
-
-  const _DownloadTile({
-    required this.record,
-    required this.onChanged,
-    required this.progress,
-    required this.moveProgress,
-    required this.moveFailed,
-    this.rawBytes,
-    this.rawTotal,
-    this.isTorboxNonResumable = false,
-  });
-
-  String _statusText(TaskStatus status) {
-    switch (status) {
-      case TaskStatus.enqueued:
-        return 'Queued';
-      case TaskStatus.running:
-        return 'Downloading';
-      case TaskStatus.paused:
-        return 'Paused';
-      case TaskStatus.waitingToRetry:
-        return 'Retrying';
-      case TaskStatus.complete:
-        return 'Completed';
-      case TaskStatus.canceled:
-        return 'Canceled';
-      case TaskStatus.failed:
-        return 'Failed';
-      case TaskStatus.notFound:
-        return 'Not found';
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    // Prefer live progress if available
-    final double rawProgress = progress?.progress ?? record.progress;
-    final name = record.task.filename;
-
-    final int? totalBytes = rawTotal ?? (() {
-      if (progress?.hasExpectedFileSize == true) {
-        return progress!.expectedFileSize;
-      } else if (record.expectedFileSize > 0) {
-        return record.expectedFileSize;
-      } else {
-        return null;
-      }
-    })();
-    final bool isActive = record.status == TaskStatus.running ||
-        record.status == TaskStatus.paused ||
-        record.status == TaskStatus.enqueued ||
-        record.status == TaskStatus.waitingToRetry;
-
-    final double shownProgress = record.status == TaskStatus.complete
-        ? 1.0
-        : isActive
-            ? (rawProgress.isNaN || rawProgress < 0.0)
-                ? 0.0
-                : rawProgress.clamp(0.0, 1.0)
-            : 0.0;
-
-    final int? downloadedBytes = rawBytes ?? (totalBytes != null
-        ? (shownProgress * totalBytes).round()
-        : null);
-    final String? speedStr =
-        progress?.hasNetworkSpeed == true ? progress!.networkSpeedAsString : null;
-    final String? etaStr =
-        progress?.hasTimeRemaining == true ? progress!.timeRemainingAsString : null;
-
-    return Stack(
-      children: [
-        Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: app.downloads.accent.withValues(alpha: 0.2),
-                    borderRadius: app.shape.br(10),
-                  ),
-                  child: Icon(
-                    record.status == TaskStatus.complete && (moveProgress == null || moveProgress == 1.0)
-                        ? Icons.check_circle
-                        : Icons.download_rounded,
-                    color: app.downloads.accent,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                          record.status == TaskStatus.complete
-                              ? (moveFailed
-                                  ? 'Move failed — kept in app storage'
-                                  : (moveProgress != null && moveProgress! < 1.0
-                                      ? 'Moving to selected folder…'
-                                      : 'Completed'))
-                              : _statusText(record.status),
-                          style: TextStyle(
-                              color: app.core.tx.withValues(alpha: 0.8),
-                              fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
+    final radius = app.shape.brPill;
+    return Material(
+      color: GlassChrome.enabled(app)
+          ? GlassChrome.fill(app, raised: true)
+          : Colors.white.withValues(alpha: 0.08),
+      borderRadius: radius,
+      child: InkWell(
+        borderRadius: radius,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
+          decoration: BoxDecoration(
+            borderRadius: radius,
+            border: Border.all(
+              color: GlassChrome.enabled(app)
+                  ? GlassChrome.edge(app)
+                  : Colors.white.withValues(alpha: 0.16),
             ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: shownProgress,
-              minHeight: 8,
-              borderRadius: app.shape.br(8),
-            ),
-            if (record.status == TaskStatus.complete && !moveFailed && moveProgress != null && moveProgress! < 1.0) ...[
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: moveProgress!.clamp(0.0, 1.0),
-                minHeight: 6,
-                borderRadius: app.shape.br(8),
-              ),
-              const SizedBox(height: 4),
-              Text('Moving ${(moveProgress! * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(color: app.core.tx.withValues(alpha: 0.7), fontSize: 12)),
-            ],
-            const SizedBox(height: 10),
-            // Rich stats row
-            if (isActive)
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  if (speedStr != null)
-                    _StatChip(icon: Icons.speed, label: speedStr),
-                  _StatChip(
-                    icon: Icons.storage_rounded,
-                    label:
-                        '${downloadedBytes != null ? formatBytes(downloadedBytes) : '—'} / ${totalBytes != null ? formatBytes(totalBytes) : '—'}',
-                  ),
-                  if (etaStr != null)
-                    _StatChip(icon: Icons.timer, label: 'ETA $etaStr'),
-                  if (speedStr == null &&
-                      (downloadedBytes == null || totalBytes == null))
-                    _StatChip(
-                        icon: Icons.info_outline,
-                        label: '${(shownProgress * 100).toStringAsFixed(0)}%'),
-                ],
-              ),
-            if (!isActive && record.status == TaskStatus.complete && totalBytes != null) ...[
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _StatChip(
-                    icon: Icons.storage_rounded,
-                    label: formatBytes(totalBytes),
-                  ),
-                ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
-            if (record.status == TaskStatus.complete)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    final fileInfo = DownloadService.instance.getLastFileForTask(record.task.taskId);
-                    if (fileInfo == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('File not available to open yet')),
-                      );
-                      return;
-                    }
-                    final ok = await AndroidNativeDownloader.openContentUri(fileInfo.$1, fileInfo.$2);
-                    if (!ok) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Opened Downloads instead')),
-                      );
-                    }
-                  },
-                  icon: const Icon(Icons.open_in_new),
-                  label: const Text('Open'),
-                ),
-              ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                // TorBox CDN doesn't support HTTP Range for individual files (but ZIP downloads do)
-                if (record.task is DownloadTask && record.status == TaskStatus.running && !Platform.isIOS && !isTorboxNonResumable)
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await DownloadService.instance.pause(record.task);
-                      await onChanged();
-                    },
-                    icon: const Icon(Icons.pause),
-                    label: const Text('Pause'),
-                  ),
-                if (record.task is DownloadTask && record.status == TaskStatus.paused && !Platform.isIOS && !isTorboxNonResumable)
-                  FilledButton.tonalIcon(
-                    onPressed: () async {
-                      await DownloadService.instance.resume(record.task);
-                      await onChanged();
-                    },
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Resume'),
-                  ),
-                if ((record.status == TaskStatus.enqueued ||
-                    record.status == TaskStatus.running ||
-                    record.status == TaskStatus.paused) &&
-                    !(Platform.isIOS && record.status == TaskStatus.running))
-                  TextButton.icon(
-                    onPressed: () async {
-                      await DownloadService.instance.cancel(record.task);
-                      await onChanged();
-                    },
-                    icon: const Icon(Icons.stop_circle, color: Colors.red),
-                    label: const Text('Cancel',
-                        style: TextStyle(color: Colors.red)),
-                  ),
-                const Spacer(),
-                // Removed inline Clear button; handled by top-right X overlay
-                if (isActive)
-                  Text('${(shownProgress * 100).toStringAsFixed(0)}%',
-                      style:
-                          TextStyle(color: app.core.tx.withValues(alpha: 0.7))),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-        if (!isActive)
-          Positioned(
-            right: 8,
-            top: 8,
-            child: InkResponse(
-              onTap: () async {
-                await DownloadService.instance.deleteRecord(record);
-                await onChanged();
-              },
-              radius: 18,
-              child: const Icon(
-                Icons.close_rounded,
-                color: Colors.red,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
 
-class _StatChip extends StatelessWidget {
+class _GlassIconButton extends StatelessWidget {
   final IconData icon;
-  final String label;
-  const _StatChip({required this.icon, required this.label});
-
+  final String tooltip;
+  final VoidCallback onTap;
+  const _GlassIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: app.home.controlBg,
-        borderRadius: app.shape.brPill,
-        border: Border.all(color: app.downloads.chipBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: app.downloads.metaIcon),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12),
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: GlassChrome.enabled(app)
+            ? GlassChrome.fill(app, raised: true)
+            : Colors.white.withValues(alpha: 0.08),
+        shape: CircleBorder(
+          side: BorderSide(
+            color: GlassChrome.enabled(app)
+                ? GlassChrome.edge(app)
+                : Colors.white.withValues(alpha: 0.16),
           ),
-        ],
+        ),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 40,
+            child: Icon(icon, color: Colors.white, size: 20),
+          ),
+        ),
       ),
     );
   }
 }
 
-class TorrentDownloadDetailScreen extends StatefulWidget {
-  final String groupId;
-  final String groupTitle;
-  final TorrentDownloadGroup initialGroup;
-
-  const TorrentDownloadDetailScreen({
-    super.key,
-    required this.groupId,
-    required this.groupTitle,
-    required this.initialGroup,
-  });
-
-  @override
-  State<TorrentDownloadDetailScreen> createState() => _TorrentDownloadDetailScreenState();
+/// A file name cut down to something a catalog search can match: no
+/// extension, no dots/underscores, and nothing from the first season/episode
+/// tag, year or quality marker on.
+String _searchableName(LocalDownload item) {
+  final media = item.media;
+  if (media != null && !media.title.contains('.')) return media.title;
+  var name = item.record.task.filename;
+  final dot = name.lastIndexOf('.');
+  if (dot > 0) name = name.substring(0, dot);
+  name = name.replaceAll(RegExp(r'[._]+'), ' ');
+  final cut = RegExp(
+    r'\b(s\d{1,2}e\d{1,3}|s\d{1,2}|\d{1,2}x\d{1,3}|(19|20)\d{2}|\d{3,4}p|'
+    r'web[ -]?dl|webrip|bluray|hdtv|x26[45]|hevc)\b',
+    caseSensitive: false,
+  ).firstMatch(name);
+  if (cut != null && cut.start > 0) name = name.substring(0, cut.start);
+  return name.replaceAll(RegExp(r'[\[\(\-]+\s*$'), '').trim();
 }
 
-class _TorrentDownloadDetailScreenState extends State<TorrentDownloadDetailScreen> {
-  final Map<String, TaskProgressUpdate> _progressByTaskId = {};
-  final Map<String, (int bytes, int? total)> _bytesByTaskId = {};
-  final Map<String, double> _moveProgressByTaskId = {};
-  final Set<String> _moveFailed = {};
+/// Fix match: search the catalogs for the title a download really is.
+/// Returns the picked movie or series, or null when dismissed.
+@visibleForTesting
+Future<StremioMeta?> showFixMatchDialog(
+  BuildContext context, {
+  required String initialQuery,
+  Future<List<StremioMeta>> Function(String query)? search,
+}) {
+  return showDialog<StremioMeta>(
+    context: context,
+    builder: (_) => _FixMatchDialog(
+      initialQuery: initialQuery,
+      search: search ?? StremioService.instance.searchCatalogs,
+    ),
+  );
+}
 
-  Map<String, DownloadRecordDetails> _recordDetails = {};
-  List<TaskRecord> _records = [];
-  TorrentDownloadGroup? _group;
-  bool _loading = true;
-  bool _busy = false;
+class _FixMatchDialog extends StatefulWidget {
+  final String initialQuery;
+  final Future<List<StremioMeta>> Function(String query) search;
 
-  StreamSubscription<TaskProgressUpdate>? _progressSub;
-  StreamSubscription<TaskStatusUpdate>? _statusSub;
-  StreamSubscription? _bytesSub;
-  StreamSubscription<MoveProgressUpdate>? _moveSub;
+  const _FixMatchDialog({required this.initialQuery, required this.search});
+
+  @override
+  State<_FixMatchDialog> createState() => _FixMatchDialogState();
+}
+
+class _FixMatchDialogState extends State<_FixMatchDialog> {
+  late final TextEditingController _query = TextEditingController(
+    text: widget.initialQuery,
+  );
+  List<StremioMeta>? _results;
+  bool _searching = false;
+  String? _error;
+  int _generation = 0;
 
   @override
   void initState() {
     super.initState();
-    _group = widget.initialGroup;
-    _init();
-  }
-
-  Future<void> _init() async {
-    await DownloadService.instance.initialize();
-    _progressSub = DownloadService.instance.progressStream.listen((update) {
-      if (!mounted) return;
-      setState(() {
-        _progressByTaskId[update.task.taskId] = update;
-      });
-      _recomputeGroup();
-    });
-    _statusSub = DownloadService.instance.statusStream.listen((_) => _refresh());
-    _bytesSub = DownloadService.instance.bytesProgressStream.listen((evt) {
-      if (!mounted) return;
-      setState(() {
-        _bytesByTaskId[evt.taskId] = (evt.bytes, evt.total >= 0 ? evt.total : null);
-      });
-      _recomputeGroup();
-    }, onError: (_) {});
-    _moveSub = DownloadService.instance.moveProgressStream.listen((move) {
-      if (!mounted) return;
-      setState(() {
-        if (move.failed) {
-          _moveFailed.add(move.taskId);
-          _moveProgressByTaskId.remove(move.taskId);
-        } else if (move.done) {
-          _moveProgressByTaskId[move.taskId] = 1.0;
-        } else {
-          _moveProgressByTaskId[move.taskId] = move.progress;
-        }
-      });
-      _recomputeGroup();
-    });
-    await _refresh();
+    if (widget.initialQuery.trim().isNotEmpty) _run();
   }
 
   @override
   void dispose() {
-    _progressSub?.cancel();
-    _statusSub?.cancel();
-    _bytesSub?.cancel();
-    _moveSub?.cancel();
+    _query.dispose();
     super.dispose();
   }
 
-  Future<void> _refresh() async {
-    final list = await DownloadService.instance.allRecords();
-    final details = DownloadService.instance.allRecordDetailsSnapshot();
-    if (!mounted) return;
+  Future<void> _run() async {
+    final query = _query.text.trim();
+    if (query.isEmpty) return;
+    final generation = ++_generation;
     setState(() {
-      _records = list;
-      _recordDetails = details;
-      _loading = false;
-    });
-    _recomputeGroup();
-  }
-
-  void _recomputeGroup() {
-    if (!mounted) return;
-    final groups = buildTorrentGroups(
-      records: _records,
-      detailsByRecordId: _recordDetails,
-      progressByTaskId: _progressByTaskId,
-      rawBytes: _bytesByTaskId,
-      moveProgressByTaskId: _moveProgressByTaskId,
-      moveFailed: _moveFailed,
-    );
-    TorrentDownloadGroup? match;
-    for (final group in groups) {
-      if (group.id == widget.groupId) {
-        match = group;
-        break;
-      }
-    }
-    setState(() {
-      _group = match ?? _group;
-    });
-  }
-
-  Future<void> _runAction(Future<void> Function() action) async {
-    if (!mounted) return;
-    setState(() {
-      _busy = true;
+      _searching = true;
+      _error = null;
     });
     try {
-      await action();
-      await _refresh();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Action failed: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _busy = false;
-        });
-      }
+      final found = await widget.search(query);
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _results = [
+          for (final m in found)
+            if (m.type == 'movie' || m.type == 'series') m,
+        ];
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _searching = false;
+        _error = 'Search failed. Check your connection and try again.';
+      });
     }
-  }
-
-  Future<void> _pauseAll() async {
-    final group = _group;
-    if (group == null) return;
-    final queuedIds = <String>[];
-    final runningTasks = <Task>[];
-
-    for (final item in group.items) {
-      switch (item.record.status) {
-        case TaskStatus.running:
-          runningTasks.add(item.record.task);
-          break;
-        case TaskStatus.enqueued:
-        case TaskStatus.waitingToRetry:
-          queuedIds.add(item.record.task.taskId);
-          break;
-        default:
-          break;
-      }
-    }
-
-    if (queuedIds.isNotEmpty) {
-      await DownloadService.instance.pauseQueuedTasksByIds(queuedIds);
-    }
-
-    for (final task in runningTasks) {
-      await DownloadService.instance.pause(task);
-    }
-  }
-
-  Future<void> _resumeAll() async {
-    final group = _group;
-    if (group == null) return;
-    final queuedIds = <String>[];
-    final tasksToResume = <Task>[];
-
-    for (final item in group.items) {
-      final status = item.record.status;
-      final taskId = item.record.task.taskId;
-      switch (status) {
-        case TaskStatus.paused:
-          if (DownloadService.instance.isPausedQueuedTask(taskId)) {
-            queuedIds.add(taskId);
-          } else {
-            tasksToResume.add(item.record.task);
-          }
-          break;
-        case TaskStatus.enqueued:
-        case TaskStatus.waitingToRetry:
-          if (DownloadService.instance.isPausedQueuedTask(taskId)) {
-            queuedIds.add(taskId);
-          } else {
-            tasksToResume.add(item.record.task);
-          }
-          break;
-        default:
-          break;
-      }
-    }
-
-    for (final task in tasksToResume) {
-      await DownloadService.instance.resume(task);
-    }
-
-    if (queuedIds.isNotEmpty) {
-      await DownloadService.instance.resumeQueuedTasksByIds(queuedIds);
-    }
-  }
-
-  Future<void> _cancelAll() async {
-    final group = _group;
-    if (group == null) return;
-    for (final item in group.items) {
-      final status = item.record.status;
-      if (status != TaskStatus.complete && status != TaskStatus.canceled) {
-        await DownloadService.instance.cancel(item.record.task);
-      }
-    }
-  }
-
-  Widget _buildBody() {
-    if (_loading && _group == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    final group = _group;
-    if (group == null) {
-      return const Center(child: Text('Download group not found'));
-    }
-
-    final items = group.items;
-    return RefreshIndicator(
-      onRefresh: _refresh,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        itemCount: items.length + 1,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          if (index == 0) {
-            final isIOS = Platform.isIOS;
-            return _TorrentGroupCard(
-              group: group,
-              isBusy: _busy,
-              isFinished: group.isFinished,
-              onPauseAll: (!isIOS && !group.isFinished &&
-                      (group.runningFiles > 0 ||
-                          group.queuedFiles > 0 ||
-                          group.waitingFiles > 0))
-                  ? () => _runAction(_pauseAll)
-                  : null,
-              onResumeAll: (!isIOS && !group.isFinished && group.pausedFiles > 0)
-                  ? () => _runAction(_resumeAll)
-                  : null,
-              onCancelAll: (!group.isFinished &&
-                      (group.hasActive || group.failedFiles > 0 || group.notFoundFiles > 0))
-                  ? () => _runAction(_cancelAll)
-                  : null,
-            );
-          }
-
-          final item = items[index - 1];
-          final taskId = item.record.task.taskId;
-          return PressableScale(
-            child: _DownloadTile(
-              record: item.record,
-              onChanged: _refresh,
-              progress: _progressByTaskId[taskId],
-              moveProgress: _moveProgressByTaskId[taskId],
-              moveFailed: _moveFailed.contains(taskId),
-              rawBytes: _bytesByTaskId[taskId]?.$1,
-              rawTotal: _bytesByTaskId[taskId]?.$2,
-              isTorboxNonResumable: item.meta.isTorboxNonResumable,
-            ),
-          );
-        },
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final title = _group?.title ?? widget.groupTitle;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh',
+    final app = AppThemeScope.of(context);
+    final size = MediaQuery.sizeOf(context);
+    final results = _results;
+    final frosted = GlassChrome.enabled(app);
+    return Dialog(
+      backgroundColor: frosted
+          ? GlassChrome.fill(app, raised: true)
+          : app.sheetSurface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
+      shape: frosted
+          ? GlassChrome.shape(app, radius: 20)
+          : RoundedRectangleBorder(borderRadius: app.shape.br(20)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 480,
+          maxHeight: size.height * 0.8,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Fix match',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Pick the movie or show these files are.',
+                style: TextStyle(
+                  color: app.fade(app.core.tx, 0.55),
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _query,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                onSubmitted: (_) => _run(),
+                decoration: InputDecoration(
+                  hintText: 'Title',
+                  filled: frosted ? true : null,
+                  fillColor: frosted ? GlassChrome.field(app) : null,
+                  enabledBorder: frosted
+                      ? OutlineInputBorder(
+                          borderRadius: app.shape.br(12),
+                          borderSide: BorderSide(color: GlassChrome.edge(app)),
+                        )
+                      : null,
+                  focusedBorder: frosted
+                      ? OutlineInputBorder(
+                          borderRadius: app.shape.br(12),
+                          borderSide: BorderSide(
+                            color: GlassChrome.edge(app, active: true),
+                          ),
+                        )
+                      : null,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: IconButton(
+                    tooltip: 'Search',
+                    icon: const Icon(Icons.arrow_forward_rounded),
+                    onPressed: _run,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Flexible(
+                child: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : _error != null || (results != null && results.isEmpty)
+                    ? Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          _error ?? 'No movies or shows found.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: app.fade(app.core.tx, 0.6)),
+                        ),
+                      )
+                    : ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: results?.length ?? 0,
+                        itemBuilder: (context, i) {
+                          final m = results![i];
+                          final poster = m.poster;
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 4,
+                            ),
+                            leading: ClipRRect(
+                              borderRadius: app.shape.br(6),
+                              child: SizedBox(
+                                width: 36,
+                                height: 54,
+                                child: poster == null || poster.isEmpty
+                                    ? ColoredBox(
+                                        color: app.fade(app.core.tx, 0.08),
+                                        child: const Icon(
+                                          Icons.movie_rounded,
+                                          size: 18,
+                                        ),
+                                      )
+                                    : CachedNetworkImage(
+                                        imageUrl: poster,
+                                        fit: BoxFit.cover,
+                                        memCacheWidth: 108,
+                                        errorWidget: (_, _, _) =>
+                                            const SizedBox.shrink(),
+                                      ),
+                              ),
+                            ),
+                            title: Text(
+                              m.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text(
+                              [
+                                m.type == 'series' ? 'Series' : 'Movie',
+                                if (m.year != null && m.year!.isNotEmpty)
+                                  m.year!,
+                              ].join('  ·  '),
+                            ),
+                            onTap: () => Navigator.of(context).pop(m),
+                          );
+                        },
+                      ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-      body: _buildBody(),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../../../theme/app_theme_scope.dart';
 import '../../../utils/formatters.dart';
 import 'debrify_tv_view.dart';
 import 'spotlight_rail.dart' show SpotlightKick;
+import '../../../theme/app_motion.dart' show kMenuSheetAnimation;
 
 /// The Spotlight touch arm: a phone gets a phone — a list, not a TV grid.
 ///
@@ -82,6 +83,7 @@ class _SpotlightPhoneArmState extends State<SpotlightPhoneArm> {
     // Kick the stats pass before the sheet draws.
     widget.view.onChannelFocused(channel);
     showModalBottomSheet<void>(
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,

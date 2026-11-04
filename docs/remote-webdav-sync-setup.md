@@ -59,15 +59,17 @@ remote-transfer test proving the receipt completes before the optional offer.
 Existing connection-controller and first-join tests cover registration/activation.
 No real WebDAV account was modified during automated tests.
 
-## Appearance stays local
+## Appearance and display preferences
 
-WebDAV Sync leaves appearance and display preferences local to each profile on
-each device. This includes themes and Looks, layouts, navigation, card labels,
-player and subtitle styling, ambient trailers, and TV display tuning. Existing
-local choices are preserved; a newly joined profile starts with local defaults.
-Legacy remote appearance values and saved pending sync targets are ignored.
-Explicit profile backups/restores and copying profile defaults still include
-appearance. No preference keys are renamed or deleted locally.
+WebDAV Sync carries themes and Looks, layouts, navigation, card labels, player
+and subtitle styling, and ambient trailer preferences across devices for the
+same profile. Explicit backups and profile-default copies include them too.
+Only device-specific display/performance tuning and one-time migration
+checkpoints remain local (for example, TV UI scaling, low-resolution rendering,
+artwork quality, and `defaults_generation`). Existing installation paths and
+preference keys are unchanged.
 
-The exclusion list is `ProfileAppearancePreferences.keys`; add new appearance
-preferences there so hot sync, bootstrap export/import, and pending replay agree.
+The local-only exclusion list is `ProfileAppearancePreferences.keys`; add new
+device-specific settings there so hot sync, bootstrap export/import, and pending
+replay agree. Appearance choices intended to match across devices are excluded
+from that list.

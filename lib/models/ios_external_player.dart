@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Supported external video players for iOS
 /// Each player uses URL schemes to launch with a video URL
-enum iOSExternalPlayer {
+enum IosExternalPlayer {
   vlc,
   infuse,
   outplayer,
@@ -12,23 +12,23 @@ enum iOSExternalPlayer {
   customScheme,
 }
 
-extension iOSExternalPlayerExtension on iOSExternalPlayer {
+extension IosExternalPlayerExtension on IosExternalPlayer {
   /// Human-readable display name
   String get displayName {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         return 'VLC';
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         return 'Infuse';
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         return 'Outplayer';
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         return 'nPlayer';
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         return 'PlayerXtreme';
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         return 'Vimu';
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         return 'Custom URL Scheme';
     }
   }
@@ -36,19 +36,19 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// Description of the player
   String get description {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         return 'Free, open-source media player';
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         return 'Premium player with streaming support';
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         return 'Feature-rich video player';
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         return 'Powerful media player with codec support';
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         return 'All-format video player';
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         return 'Simple and clean video player';
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         return 'Define your own URL scheme';
     }
   }
@@ -58,14 +58,14 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// be a row that can never launch anything.
   bool get availableOnTvos {
     switch (this) {
-      case iOSExternalPlayer.vlc:
-      case iOSExternalPlayer.infuse:
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.vlc:
+      case IosExternalPlayer.infuse:
+      case IosExternalPlayer.customScheme:
         return true;
-      case iOSExternalPlayer.outplayer:
-      case iOSExternalPlayer.nplayer:
-      case iOSExternalPlayer.playerXtreme:
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.outplayer:
+      case IosExternalPlayer.nplayer:
+      case IosExternalPlayer.playerXtreme:
+      case IosExternalPlayer.vimu:
         return false;
     }
   }
@@ -74,19 +74,19 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// This is the base scheme without parameters
   String get urlScheme {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         return 'vlc://';
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         return 'infuse://';
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         return 'outplayer://';
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         return 'nplayer://';
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         return 'playerxtreme://';
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         return 'vimu://';
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         return ''; // User-defined
     }
   }
@@ -102,20 +102,20 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// - Vimu: vimu://http://video.url
   String buildLaunchUrl(String videoUrl) {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         // VLC format: vlc://http://example.com/video.mp4
         return 'vlc://$videoUrl';
 
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         // Infuse format: infuse://x-callback-url/play?url=<encoded_url>
         final encodedUrl = Uri.encodeComponent(videoUrl);
         return 'infuse://x-callback-url/play?url=$encodedUrl';
 
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         // Outplayer format: outplayer://http://example.com/video.mp4
         return 'outplayer://$videoUrl';
 
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         // nPlayer format: nplayer-http://example.com/video.mp4
         // Prefix the URL with nplayer-
         if (videoUrl.startsWith('https://') || videoUrl.startsWith('http://')) {
@@ -123,15 +123,15 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
         }
         return 'nplayer-http://$videoUrl';
 
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         // PlayerXtreme format: playerxtreme://http://example.com/video.mp4
         return 'playerxtreme://$videoUrl';
 
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         // Vimu format: vimu://http://example.com/video.mp4
         return 'vimu://$videoUrl';
 
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         // Custom scheme - should not be called directly
         // Use buildCustomLaunchUrl instead
         return videoUrl;
@@ -141,19 +141,19 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// Icon representing the player
   IconData get icon {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         return Icons.play_circle_filled_rounded;
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         return Icons.smart_display_rounded;
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         return Icons.ondemand_video_rounded;
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         return Icons.video_library_rounded;
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         return Icons.videocam_rounded;
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         return Icons.play_arrow_rounded;
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         return Icons.code_rounded;
     }
   }
@@ -161,42 +161,42 @@ extension iOSExternalPlayerExtension on iOSExternalPlayer {
   /// Storage key value for persistence
   String get storageKey {
     switch (this) {
-      case iOSExternalPlayer.vlc:
+      case IosExternalPlayer.vlc:
         return 'vlc';
-      case iOSExternalPlayer.infuse:
+      case IosExternalPlayer.infuse:
         return 'infuse';
-      case iOSExternalPlayer.outplayer:
+      case IosExternalPlayer.outplayer:
         return 'outplayer';
-      case iOSExternalPlayer.nplayer:
+      case IosExternalPlayer.nplayer:
         return 'nplayer';
-      case iOSExternalPlayer.playerXtreme:
+      case IosExternalPlayer.playerXtreme:
         return 'playerxtreme';
-      case iOSExternalPlayer.vimu:
+      case IosExternalPlayer.vimu:
         return 'vimu';
-      case iOSExternalPlayer.customScheme:
+      case IosExternalPlayer.customScheme:
         return 'custom_scheme';
     }
   }
 
-  /// Create iOSExternalPlayer from storage key
-  static iOSExternalPlayer fromStorageKey(String key) {
+  /// Create IosExternalPlayer from storage key
+  static IosExternalPlayer fromStorageKey(String key) {
     switch (key) {
       case 'vlc':
-        return iOSExternalPlayer.vlc;
+        return IosExternalPlayer.vlc;
       case 'infuse':
-        return iOSExternalPlayer.infuse;
+        return IosExternalPlayer.infuse;
       case 'outplayer':
-        return iOSExternalPlayer.outplayer;
+        return IosExternalPlayer.outplayer;
       case 'nplayer':
-        return iOSExternalPlayer.nplayer;
+        return IosExternalPlayer.nplayer;
       case 'playerxtreme':
-        return iOSExternalPlayer.playerXtreme;
+        return IosExternalPlayer.playerXtreme;
       case 'vimu':
-        return iOSExternalPlayer.vimu;
+        return IosExternalPlayer.vimu;
       case 'custom_scheme':
-        return iOSExternalPlayer.customScheme;
+        return IosExternalPlayer.customScheme;
       default:
-        return iOSExternalPlayer.vlc; // Default to VLC
+        return IosExternalPlayer.vlc; // Default to VLC
     }
   }
 }
@@ -211,9 +211,10 @@ String buildCustomSchemeLaunchUrl(String template, String videoUrl) {
   }
 
   // Check if URL should be encoded (if template contains url= or similar)
-  final needsEncoding = template.contains('url=') ||
-                         template.contains('={url}') ||
-                         template.contains('?{url}');
+  final needsEncoding =
+      template.contains('url=') ||
+      template.contains('={url}') ||
+      template.contains('?{url}');
 
   final urlToInsert = needsEncoding ? Uri.encodeComponent(videoUrl) : videoUrl;
   return template.replaceAll('{url}', urlToInsert);
@@ -224,10 +225,7 @@ class CustomSchemeValidation {
   final bool isValid;
   final String? errorMessage;
 
-  const CustomSchemeValidation({
-    required this.isValid,
-    this.errorMessage,
-  });
+  const CustomSchemeValidation({required this.isValid, this.errorMessage});
 
   factory CustomSchemeValidation.valid() {
     return const CustomSchemeValidation(isValid: true);

@@ -151,6 +151,8 @@ bool FlutterWindow::OnCreate() {
         }
         result->Success(flutter::EncodableValue(true));
       });
+  media_session_ = std::make_unique<MediaSessionWin>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -167,6 +169,7 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
+    media_session_.reset();
     profile_privacy_channel_.reset();
     device_secret_channel_.reset();
     flutter_controller_ = nullptr;
@@ -190,6 +193,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
+    case MediaSessionWin::kCommandMessage:
+      if (media_session_) media_session_->FlushCommands();
+      return 0;
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;

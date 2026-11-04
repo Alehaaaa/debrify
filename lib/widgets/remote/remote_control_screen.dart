@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import '../../utils/file_pick.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,10 +19,10 @@ import 'remote_transfer_all.dart';
 import 'remote_transfer_progress.dart';
 import 'remote_send_workspace.dart';
 import 'remote_receive_screen.dart';
+import '../../services/storage_service.dart';
 import '../../utils/platform_util.dart';
 import '../../theme/app_theme_scope.dart';
 import '../../services/profiles/profile_runtime.dart';
-import 'package:debrify/services/storage/remote_control_storage.dart';
 
 /// Full remote control UI modal
 class RemoteControlScreen extends StatefulWidget {
@@ -60,7 +61,7 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
     final state = RemoteControlState();
     try {
       final name =
-          await RemoteControlStorage.getRemoteTvDeviceName() ??
+          await StorageService.getRemoteTvDeviceName() ??
           await PlatformUtil.getDeviceName() ??
           'This device';
       if (!mounted) return;
@@ -699,7 +700,7 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
     final device = state.connectedDevice;
     if (device == null) return;
     try {
-      final pick = await FilePicker.platform.pickFiles(
+      final pick = await FilePick.pickFiles(
         dialogTitle: 'Choose a profile avatar',
         type: FileType.any,
         withData: false,
@@ -747,7 +748,7 @@ class _RemoteControlScreenState extends State<RemoteControlScreen> {
     }
   }
 
-  Future<Uint8List> _readAvatarBytes(PlatformFile picked) async {
+  Future<Uint8List> _readAvatarBytes(PickedFile picked) async {
     final inline = picked.bytes;
     if (inline != null) return inline;
     final path = picked.path;

@@ -1,10 +1,11 @@
-import 'package:debrify/services/storage/subtitle_settings_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../models/subtitle_source_priority.dart';
+import '../../services/storage_service.dart';
 import '../../services/stremio_subtitle_service.dart';
 import '../../theme/app_theme_scope.dart';
+import '../../theme/glass_chrome.dart';
 import '../../utils/platform_util.dart';
 import '../../utils/tv_keys.dart';
 import 'widgets/settings_widgets.dart';
@@ -34,7 +35,7 @@ class _SubtitlePriorityPageState extends State<SubtitlePriorityPage> {
 
   Future<void> _load() async {
     try {
-      final order = await SubtitleSettingsStorage.getSubtitleSourcePriority();
+      final order = await StorageService.getSubtitleSourcePriority();
       final addons = await StremioSubtitleService.instance.getSubtitleAddons();
       if (!mounted) return;
       for (final a in addons) {
@@ -76,7 +77,7 @@ class _SubtitlePriorityPageState extends State<SubtitlePriorityPage> {
     try {
       // Keep dormant addon IDs so temporary disablement does not erase them.
       final saved = [..._order, ..._saved.where((s) => !_order.contains(s))];
-      await SubtitleSettingsStorage.setSubtitleSourcePriority(saved);
+      await StorageService.setSubtitleSourcePriority(saved);
       if (!mounted) return;
       setState(() {
         _saved = saved;
@@ -136,7 +137,8 @@ class _SubtitlePriorityPageState extends State<SubtitlePriorityPage> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppThemeScope.of(context).settings;
+    final app = AppThemeScope.of(context);
+    final t = app.settings;
     return PopScope(
       canPop: _moving == null && !_saving,
       onPopInvokedWithResult: (didPop, _) {
@@ -218,13 +220,22 @@ class _SubtitlePriorityPageState extends State<SubtitlePriorityPage> {
                                   child: Container(
                                     padding: const EdgeInsets.all(16),
                                     decoration: BoxDecoration(
-                                      color: t.panel,
+                                      color: GlassChrome.enabled(app)
+                                          ? GlassChrome.fill(
+                                              app,
+                                              raised:
+                                                  _nodes[id]!.hasFocus ||
+                                                  _moving == id,
+                                            )
+                                          : t.panel,
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color:
                                             _nodes[id]!.hasFocus ||
                                                 _moving == id
                                             ? t.accent
+                                            : GlassChrome.enabled(app)
+                                            ? GlassChrome.edge(app)
                                             : t.line,
                                         width: 2,
                                       ),

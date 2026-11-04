@@ -69,6 +69,18 @@ class DeviceJobStore {
     terminalAtMs: terminal ? DateTime.now().millisecondsSinceEpoch : null,
   );
 
+  /// Settles every profile's open [backend] jobs that the device-wide
+  /// backend no longer runs. Without this, a job left open while another
+  /// profile was active blocks that profile's deletion forever.
+  static Future<void> reconcileBackendForAllOwners({
+    required String backend,
+    required Iterable<String> liveExternalJobIds,
+  }) => ProfileBootstrap.registry.markMissingJobsTerminal(
+    backend: backend,
+    ownerProfileId: null,
+    presentExternalJobIds: liveExternalJobIds.toSet(),
+  );
+
   static Future<void> reconcileBackend({
     required String backend,
     required String ownerProfileId,

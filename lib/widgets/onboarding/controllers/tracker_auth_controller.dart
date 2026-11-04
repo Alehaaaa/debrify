@@ -1,12 +1,9 @@
 import 'dart:async';
 
-import 'package:debrify/services/storage/simkl_storage.dart';
-import 'package:debrify/services/storage/trakt_storage.dart';
 import 'package:flutter/foundation.dart';
-
-import '../../../services/analytics_service.dart';
 import '../../../services/main_page_bridge.dart';
 import '../../../services/simkl/simkl_service.dart';
+import '../../../services/storage_service.dart';
 import '../../../services/trakt/trakt_service.dart';
 
 enum TrackerKind { trakt, simkl }
@@ -259,14 +256,10 @@ class TrackerAuthController extends ChangeNotifier {
       return;
     }
     if (kind == TrackerKind.trakt) {
-      await TraktStorage.setTraktSyncCatalogItems(true);
+      await StorageService.setTraktSyncCatalogItems(true);
     } else {
-      await SimklStorage.setSimklSyncCatalogItems(true);
+      await StorageService.setSimklSyncCatalogItems(true);
     }
-    AnalyticsService.integrationConnected(kind.name, {
-      'surface': 'onboarding',
-      'method': kind == TrackerKind.trakt ? 'device_code' : 'pin',
-    });
     MainPageBridge.notifyIntegrationChanged();
   }
 

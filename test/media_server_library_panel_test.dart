@@ -9,6 +9,9 @@ import 'package:debrify/services/profiles/profile_runtime.dart';
 import 'package:debrify/services/profiles/profile_scope.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
+import 'package:debrify/widgets/tv_text_field.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -129,6 +132,7 @@ void main() {
     WidgetTester tester,
     Library library, {
     bool tv = false,
+    AppTheme? appearance,
     Future<List<ConnectionResource>> Function()? loader,
   }) async {
     tester.view.resetPhysicalSize();
@@ -141,7 +145,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: AppThemeScope(
-          theme: AppThemes.legacy,
+          theme: appearance ?? AppThemes.legacy,
           child: Scaffold(
             body: MediaServerLibraryPanel(
               kind: MediaServerKind.jellyfin,
@@ -156,6 +160,69 @@ void main() {
     );
     await tester.pumpAndSettle();
   }
+
+  testWidgets('library cards use the selected frosted material', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass);
+    final decorations = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((container) => container.decoration);
+    expect(
+      decorations,
+      contains(
+        GlassChrome.decoration(glass, radius: BorderRadius.circular(12)),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('library empty notice follows glass and classic appearances', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass, loader: () async => []);
+    expect(find.textContaining('Connect a Jellyfin server'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Container>(find.byType(Container))
+          .map((c) => c.decoration),
+      contains(GlassChrome.decoration(glass, raised: true)),
+    );
+    await pump(
+      tester,
+      Library(),
+      appearance: AppThemes.legacy,
+      loader: () async => [],
+    );
+    expect(find.textContaining('Connect a Jellyfin server'), findsOneWidget);
+    expect(
+      tester
+          .widgetList<Container>(find.byType(Container))
+          .map((c) => c.decoration),
+      isNot(contains(GlassChrome.decoration(glass, raised: true))),
+    );
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('library search retains frosted chrome after refresh', (
+    tester,
+  ) async {
+    final glass = PremiumLooks.glass.build();
+    await pump(tester, Library(), appearance: glass);
+    Container searchFrame() => tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.byType(TvTextField),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(searchFrame().decoration, GlassChrome.decoration(glass));
+    await tester.tap(find.byTooltip('Refresh servers'));
+    await tester.pumpAndSettle();
+    expect(searchFrame().decoration, GlassChrome.decoration(glass));
+    expect(tester.takeException(), isNull);
+  });
 
   for (final tv in [false, true]) {
     testWidgets('${tv ? 'TV' : 'phone'} folders, back and pagination', (

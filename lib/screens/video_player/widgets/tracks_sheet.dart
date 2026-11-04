@@ -51,8 +51,7 @@ class TracksSheet {
     mk.Player player, {
     required Future<void> Function(String audioId, String subtitleId)
     onTrackChanged,
-    Future<void> Function(String audioId, String subtitleId)?
-    onAudioTrackChanged,
+    Future<void> Function(String audioId, String subtitleId)? onAudioTrackChanged,
     void Function(SubtitleSettingsData settings)? onSubtitleStyleChanged,
     VoidCallback? onSyncOverlayRequested,
     String? contentImdbId,
@@ -167,7 +166,7 @@ class TracksSheet {
 
     subtitleSelectionCorrection?.addListener(reconcileSubtitleSelection);
     await showModalBottomSheet(
-      sheetAnimationStyle: kMenuSheetAnimation,
+sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -762,7 +761,7 @@ class _AudioTab extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       itemCount: audios.length + extra,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         if (toggle != null && index == 0) return toggle;
         final audio = audios[index - extra];

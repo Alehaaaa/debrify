@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:debrify/features/sources/data/source_series_fetcher.dart';
 import 'package:debrify/models/stremio_addon.dart';
 import 'package:debrify/models/torrent.dart';
-import 'package:debrify/services/series_source_fetcher.dart';
 import 'package:debrify/services/stremio_service.dart';
+import 'package:debrify/services/series_source_fetcher.dart';
 import 'package:debrify/services/torrent_playback_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -108,7 +107,7 @@ void main() {
       StremioService.isCanonicalEpisodeId('custom', exact!, 1, 1),
       isFalse,
     );
-    final fetcher = SourceSeriesFetcher.seriesFetcherFor(
+    final fetcher = TorrentPlaybackService.seriesFetcherFor(
       meta: PlaybackMeta(
         imdbId: 'custom',
         contentType: 'series',
@@ -241,7 +240,7 @@ void main() {
   });
   test('custom startup recovery never searches canonical packs', () async {
     SharedPreferences.setMockInitialValues({});
-    final fetcher = SourceSeriesFetcher.seriesFetcherFor(
+    final fetcher = TorrentPlaybackService.seriesFetcherFor(
       provider: 'debrid',
       meta: const PlaybackMeta(
         imdbId: 'tt0388629',
@@ -299,7 +298,7 @@ void main() {
       });
       StremioService.instance.invalidateCache();
       try {
-        final fetcher = SourceSeriesFetcher.seriesFetcherFor(
+        final fetcher = TorrentPlaybackService.seriesFetcherFor(
           meta: PlaybackMeta(
             imdbId: 'tt0388629',
             contentType: 'series',
@@ -456,7 +455,7 @@ void main() {
 
     try {
       for (final imdbId in <String?>['tt0388629', null]) {
-        final fetcher = SourceSeriesFetcher.seriesFetcherFor(
+        final fetcher = TorrentPlaybackService.seriesFetcherFor(
           meta: PlaybackMeta(
             imdbId: imdbId,
             contentType: 'series',

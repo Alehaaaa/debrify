@@ -1,9 +1,13 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../theme/app_theme_scope.dart';
+import '../theme/glass_chrome.dart';
 import '../models/profiles/user_profile.dart';
 import 'profiles/profile_avatar_view.dart';
+import '../theme/app_motion.dart' show AppMotion, kMenuSheetAnimation;
 
 /// The "classic" phone navigation — Concept 2 ("Your Five") from
 /// dev/design/mockups/phone_nav_mockup/: a persistent Material-style bottom bar of
@@ -47,6 +51,9 @@ class MobileClassicNav extends StatelessWidget {
   final UserProfile? profile;
   final VoidCallback? onProfileTap;
 
+  /// Frosted, see-through bar for pages that run underneath it (iOS).
+  final bool translucent;
+
   const MobileClassicNav({
     super.key,
     required this.currentIndex,
@@ -59,6 +66,7 @@ class MobileClassicNav extends StatelessWidget {
     this.onRemoteControlTap,
     this.profile,
     this.onProfileTap,
+    this.translucent = false,
   });
 
   List<int> get _barSlots => [
@@ -77,43 +85,73 @@ class MobileClassicNav extends StatelessWidget {
     final slots = _barSlots;
     final sheet = _sheetIndices;
     final activeInSheet = sheet.contains(currentIndex);
+    final frosted = app.formId == 'glass';
 
-    return Container(
+    // Keep the original flat rail for other looks. Glass uses the desktop
+    // rail's directional tint and a brighter top rim over the same blur.
+    // Scaffold still owns the bar geometry and safe-area inset.
+    final bar = Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
-        color: app.shell.barBg,
-        border: Border(top: BorderSide(color: app.fade(app.core.tx, 0.08))),
+        color: frosted
+            ? null
+            : app.shell.railBg.withValues(alpha: translucent ? 0.72 : 0.80),
+        gradient: frosted
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  app.shell.railBg.withValues(alpha: 0.58),
+                  app.core.pane.withValues(alpha: 0.43),
+                ],
+              )
+            : null,
+        border: Border(
+          top: BorderSide(
+            color: frosted
+                ? GlassChrome.edge(app)
+                : app.fade(app.core.tx, 0.14),
+          ),
+        ),
       ),
       child: SizedBox(
         height: barHeight,
-        child: Row(
-          children: [
-            for (final index in slots)
-              _NavSlot(
-                icon: icons[index],
-                label: titles[index],
-                active: currentIndex == index,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onTap(index);
-                },
-              ),
-            if (sheet.isNotEmpty ||
-                (profile != null && onProfileTap != null))
-              _NavSlot(
-                icon: activeInSheet
-                    ? icons[currentIndex]
-                    : Icons.grid_view_rounded,
-                label: activeInSheet ? titles[currentIndex] : 'More',
-                active: activeInSheet,
-                showCaret: activeInSheet,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  _openMoreSheet(context);
-                },
-              ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+          child: Row(
+            children: [
+              for (final index in slots)
+                _NavSlot(
+                  icon: icons[index],
+                  label: titles[index],
+                  active: currentIndex == index,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    onTap(index);
+                  },
+                ),
+              if (sheet.isNotEmpty || (profile != null && onProfileTap != null))
+                _NavSlot(
+                  icon: activeInSheet
+                      ? icons[currentIndex]
+                      : Icons.grid_view_rounded,
+                  label: activeInSheet ? titles[currentIndex] : 'More',
+                  active: activeInSheet,
+                  showCaret: activeInSheet,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    _openMoreSheet(context);
+                  },
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: bar,
       ),
     );
   }
@@ -124,6 +162,7 @@ class MobileClassicNav extends StatelessWidget {
     final app = AppThemeScope.of(context);
     final sheet = _sheetIndices;
     showModalBottomSheet<void>(
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.shell.navSheetBg,
       shape: const RoundedRectangleBorder(
@@ -267,6 +306,7 @@ class MobileClassicNav extends StatelessWidget {
         if (index != homeIndex) index,
     ];
     showModalBottomSheet<void>(
+      sheetAnimationStyle: kMenuSheetAnimation,
       context: context,
       backgroundColor: app.shell.navSheetBg,
       isScrollControlled: true,
@@ -454,62 +494,77 @@ class _NavSlot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = AppThemeScope.of(context);
+    final motion = AppMotion.of(context);
+    final accent = app.shell.navAccent;
+    // Matches the desktop sidebar's _SidebarItem: the whole slot becomes an
+    // accent-tinted glass tile with a hairline accent border.
+    final fg = active ? accent : app.fade(app.core.tx, 0.6);
+    final radius = app.shape.br(16);
     return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (active)
-              Container(
-                width: 48,
-                height: 28,
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  borderRadius: app.shape.br(14),
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF6366F1).withValues(alpha: 0.32),
-                      const Color(0xFF8B5CF6).withValues(alpha: 0.32),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: AnimatedContainer(
+              duration: motion.scaled(const Duration(milliseconds: 130)),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                gradient: active
+                    ? LinearGradient(
+                        colors: [
+                          accent.withValues(alpha: 0.24),
+                          accent.withValues(alpha: 0.10),
+                        ],
+                      )
+                    : null,
+                borderRadius: radius,
+                border: Border.all(
+                  color: active
+                      ? accent.withValues(alpha: 0.22)
+                      : Colors.transparent,
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(icon, size: 22, color: fg),
+                      const SizedBox(height: 4),
+                      AnimatedDefaultTextStyle(
+                        duration: const Duration(milliseconds: 130),
+                        style: TextStyle(
+                          color: fg,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          height: 1.1,
+                          letterSpacing: 0.1,
+                        ),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
                     ],
                   ),
-                ),
+                  if (showCaret)
+                    Positioned(
+                      top: 1,
+                      child: Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        size: 11,
+                        color: accent.withValues(alpha: 0.6),
+                      ),
+                    ),
+                ],
               ),
-            Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 21,
-                  color: active
-                      ? app.shell.navLabel
-                      : app.fade(app.core.tx, 0.5),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: active
-                        ? app.shell.navLabel
-                        : app.fade(app.core.tx, 0.4),
-                  ),
-                ),
-              ],
             ),
-            if (showCaret)
-              Positioned(
-                top: 5,
-                child: Icon(
-                  Icons.keyboard_arrow_up_rounded,
-                  size: 11,
-                  color: app.fade(app.core.tx, 0.35),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );

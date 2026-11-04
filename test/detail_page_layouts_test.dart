@@ -1,4 +1,3 @@
-import 'package:debrify/services/storage/detail_page_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:debrify/screens/settings/detail_page_style_page.dart';
 import 'package:debrify/models/detail_page_section_visibility.dart';
 import 'package:debrify/services/profiles/sanitized_profile_preferences.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/widgets/detail/detail_style.dart';
 
 void main() {
@@ -79,27 +79,27 @@ void main() {
       // Classic is that Classic is the one layout that ignores the app theme,
       // which made picking an App Theme look like it did nothing.
       expect(
-        await DetailPageStorage.getDetailPageStyle(),
-        DetailPageStorage.kDetailPageStyleDefault,
+        await StorageService.getDetailPageStyle(),
+        StorageService.kDetailPageStyleDefault,
       );
       expect(
-        DetailPageStorage.detailPageStyleCached,
-        DetailPageStorage.kDetailPageStyleDefault,
+        StorageService.detailPageStyleCached,
+        StorageService.kDetailPageStyleDefault,
       );
-      expect(DetailPageStorage.kDetailPageStyleDefault, isNot('classic'));
+      expect(StorageService.kDetailPageStyleDefault, isNot('classic'));
     });
 
     test('a known value round-trips and updates the sync cache', () async {
-      await DetailPageStorage.setDetailPageStyle('marquee');
-      expect(DetailPageStorage.detailPageStyleCached, 'marquee');
-      expect(await DetailPageStorage.getDetailPageStyle(), 'marquee');
+      await StorageService.setDetailPageStyle('marquee');
+      expect(StorageService.detailPageStyleCached, 'marquee');
+      expect(await StorageService.getDetailPageStyle(), 'marquee');
     });
 
     test('an unknown value is coerced on WRITE', () async {
-      await DetailPageStorage.setDetailPageStyle('nonsense');
+      await StorageService.setDetailPageStyle('nonsense');
       expect(
-        await DetailPageStorage.getDetailPageStyle(),
-        DetailPageStorage.kDetailPageStyleDefault,
+        await StorageService.getDetailPageStyle(),
+        StorageService.kDetailPageStyleDefault,
       );
     });
 
@@ -108,8 +108,8 @@ void main() {
         'detail_page_style': 'nonsense',
       });
       expect(
-        await DetailPageStorage.getDetailPageStyle(),
-        DetailPageStorage.kDetailPageStyleDefault,
+        await StorageService.getDetailPageStyle(),
+        StorageService.kDetailPageStyleDefault,
       );
     });
 
@@ -118,7 +118,7 @@ void main() {
       // through effectiveDetailPageStyle's fallback on the first frame.
       expect(
         kDetailPageStylesShipped,
-        contains(DetailPageStorage.kDetailPageStyleDefault),
+        contains(StorageService.kDetailPageStyleDefault),
       );
     });
 
@@ -139,7 +139,7 @@ void main() {
         'halo',
         'premiere',
       ]) {
-        expect(DetailPageStorage.kDetailPageStyles.contains(s), isTrue);
+        expect(StorageService.kDetailPageStyles.contains(s), isTrue);
       }
     });
   });
@@ -149,7 +149,7 @@ void main() {
 
     test('all optional sections remain visible by default', () async {
       final visibility =
-          await DetailPageStorage.getDetailPageSectionVisibility();
+          await StorageService.getDetailPageSectionVisibility();
       expect(visibility, DetailPageSectionVisibility.defaults);
       expect(visibility.showsAnyAvailability, isTrue);
     });
@@ -162,10 +162,10 @@ void main() {
         availabilityLink: false,
         didYouKnow: false,
       );
-      await DetailPageStorage.setDetailPageSectionVisibility(visibility);
+      await StorageService.setDetailPageSectionVisibility(visibility);
 
-      expect(DetailPageStorage.detailPageSectionVisibilityCached, visibility);
-      expect(await DetailPageStorage.getDetailPageSectionVisibility(), visibility);
+      expect(StorageService.detailPageSectionVisibilityCached, visibility);
+      expect(await StorageService.getDetailPageSectionVisibility(), visibility);
     });
 
     test('rapid changes cannot let an older write win', () async {
@@ -176,15 +176,15 @@ void main() {
       );
 
       await Future.wait([
-        DetailPageStorage.setDetailPageSectionVisibility(older),
-        DetailPageStorage.setDetailPageSectionVisibility(latest),
+        StorageService.setDetailPageSectionVisibility(older),
+        StorageService.setDetailPageSectionVisibility(latest),
       ]);
 
-      expect(await DetailPageStorage.getDetailPageSectionVisibility(), latest);
+      expect(await StorageService.getDetailPageSectionVisibility(), latest);
     });
 
     test('portable profile validation accepts only booleans', () {
-      for (final key in DetailPageStorage.detailPageSectionPreferenceKeys) {
+      for (final key in StorageService.detailPageSectionPreferenceKeys) {
         expect(SanitizedProfilePreferences.allowsEntry(key, true), isTrue);
         expect(SanitizedProfilePreferences.allowsEntry(key, 'true'), isFalse);
       }
@@ -199,12 +199,12 @@ void main() {
     });
 
     test('narrows a stored style this build cannot draw', () {
-      final unshipped = DetailPageStorage.kDetailPageStyles
+      final unshipped = StorageService.kDetailPageStyles
           .difference(kDetailPageStylesShipped);
       for (final s in unshipped) {
         expect(
           effectiveDetailPageStyle(s),
-          DetailPageStorage.kDetailPageStyleDefault,
+          StorageService.kDetailPageStyleDefault,
           reason: '$s is not shipped, so dispatch and the label must say '
               'the default',
         );
@@ -214,9 +214,9 @@ void main() {
     test('the row label follows the effective style, never the raw one', () {
       expect(detailPageStyleLabel('classic'), 'Classic');
       final defaultLabel = detailPageStyleLabel(
-        DetailPageStorage.kDetailPageStyleDefault,
+        StorageService.kDetailPageStyleDefault,
       );
-      for (final s in DetailPageStorage.kDetailPageStyles
+      for (final s in StorageService.kDetailPageStyles
           .difference(kDetailPageStylesShipped)) {
         expect(detailPageStyleLabel(s), defaultLabel);
       }
@@ -234,7 +234,7 @@ void main() {
 
     test('every picker entry is a value storage will persist', () {
       for (final c in kDetailPageStyleChoices) {
-        expect(DetailPageStorage.kDetailPageStyles.contains(c.value), isTrue);
+        expect(StorageService.kDetailPageStyles.contains(c.value), isTrue);
       }
     });
   });

@@ -9,14 +9,9 @@ import 'package:debrify/services/local_series_completion_service.dart';
 import 'package:debrify/services/next_episode_service.dart';
 import 'package:debrify/services/series_source_service.dart';
 import 'package:debrify/services/series_progress_reset_service.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/services/profiles/profile_preference_portability.dart';
 import 'package:debrify/services/hide_watched_prefs.dart';
-import 'package:debrify/services/storage/continue_watching_storage.dart';
-import 'package:debrify/services/storage/episode_completion_storage.dart';
-import 'package:debrify/services/storage/episode_resume_storage.dart';
-import 'package:debrify/services/storage/merged_episode_progress_storage.dart';
-import 'package:debrify/services/storage/movie_progress_storage.dart';
-import 'package:debrify/services/storage/series_progress_storage.dart';
 import 'package:debrify/services/watched_filter.dart';
 import 'package:debrify/services/watched_status_service.dart';
 import 'package:debrify/services/stremio_service.dart';
@@ -34,7 +29,7 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   Future<void> save(String id, int position, {int episode = 1}) =>
-      SeriesProgressStorage.saveSeriesPlaybackState(
+      StorageService.saveSeriesPlaybackState(
         seriesTitle: 'Same title',
         season: 1,
         episode: episode,
@@ -112,32 +107,32 @@ void main() {
         forceTargets: {TrackingSource.trakt, TrackingSource.simkl},
       );
       expect(
-        await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+        await StorageService.getMergedFinishedEpisodes(
           seriesTitle: 'Same title',
           imdbId: canonical,
         ),
         isEmpty,
       );
       expect(
-        await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+        await StorageService.getMergedFinishedEpisodes(
           seriesTitle: 'Same title',
           imdbId: other,
         ),
         isEmpty,
       );
       expect(
-        (await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+        (await StorageService.getMergedFinishedEpisodes(
           seriesTitle: 'Same title',
           imdbId: custom,
         ))['1'],
         {1},
       );
-      await EpisodeCompletionStorage.unmarkSeriesAsFinished(
+      await StorageService.unmarkSeriesAsFinished(
         canonical,
         seriesTitle: 'Same title',
       );
       expect(
-        (await MergedEpisodeProgressStorage.getMergedFinishedEpisodes(
+        (await StorageService.getMergedFinishedEpisodes(
           seriesTitle: 'Same title',
           imdbId: custom,
         ))['1'],
@@ -166,16 +161,16 @@ void main() {
       await save(canonical, 1000);
       await save(custom, 2000);
       await save(other, 3000);
-      await SeriesProgressStorage.clearSeriesWatchProgress(custom, 'Same title');
-      expect(await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(custom), isNull);
+      await StorageService.clearSeriesWatchProgress(custom, 'Same title');
+      expect(await StorageService.getLastPlayedEpisodeByImdbId(custom), isNull);
       expect(
-        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+        (await StorageService.getLastPlayedEpisodeByImdbId(
           canonical,
         ))?['positionMs'],
         1000,
       );
       expect(
-        (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+        (await StorageService.getLastPlayedEpisodeByImdbId(
           other,
         ))?['positionMs'],
         3000,
@@ -187,22 +182,22 @@ void main() {
     'CW stores independently and carries reversible origin identity',
     () async {
       for (final id in [canonical, custom, other]) {
-        await ContinueWatchingStorage.saveContinueWatchingItem(
+        await StorageService.saveContinueWatchingItem(
           imdbId: id,
           title: 'Same title',
           contentType: 'series',
         );
       }
-      final rows = await ContinueWatchingStorage.getContinueWatchingItems();
+      final rows = await StorageService.getContinueWatchingItems();
       expect(rows.length, 3);
       final restored = CustomSeriesIdentity.parse(
         rows.first['imdbId'] as String,
       )!;
       expect(restored.addonKey, 'config-b');
       expect(restored.catalogId, 'OnePace');
-      await ContinueWatchingStorage.removeContinueWatchingItem(custom);
+      await StorageService.removeContinueWatchingItem(custom);
       expect(
-        (await ContinueWatchingStorage.getContinueWatchingItems())
+        (await StorageService.getContinueWatchingItems())
             .map((m) => m['imdbId'])
             .toSet(),
         {canonical, other},
@@ -273,7 +268,7 @@ void main() {
   test('full reset of custom show only clears its own local history', () async {
     await save(canonical, 1000);
     await save(custom, 2000);
-    await ContinueWatchingStorage.saveContinueWatchingItem(
+    await StorageService.saveContinueWatchingItem(
       imdbId: custom,
       title: 'Same title',
       contentType: 'series',
@@ -282,9 +277,9 @@ void main() {
       await SeriesProgressResetService.clear(custom, 'Same title'),
       isEmpty,
     );
-    expect(await ContinueWatchingStorage.getContinueWatchingItems(), isEmpty);
+    expect(await StorageService.getContinueWatchingItems(), isEmpty);
     expect(
-      (await EpisodeResumeStorage.getLastPlayedEpisodeByImdbId(
+      (await StorageService.getLastPlayedEpisodeByImdbId(
         canonical,
       ))?['positionMs'],
       1000,
@@ -324,7 +319,7 @@ void main() {
   });
 
   test('long custom pin keys survive portable backup and restore', () async {
-    final id = CustomSeriesIdentity('a' * 64, 'catalog-' + 'b' * 200).id;
+    final id = CustomSeriesIdentity('a' * 64, 'catalog-${'b' * 200}').id;
     final key = 'series_source_$id';
     expect(key.length, greaterThan(256));
     const pin = SeriesSource(torrentHash: 'abc', torrentName: 'Edit',
@@ -336,7 +331,7 @@ void main() {
     SharedPreferences.setMockInitialValues({key: portable.value!});
     expect((await SeriesSourceService.getSources(id)).single.bindingKey, pin.bindingKey);
     expect(ProfilePreferencePortability.allowsKey('x' * 300), isFalse);
-    expect(ProfilePreferencePortability.allowsKey('series_source_custom-series:' + 'z' * 300), isFalse);
+    expect(ProfilePreferencePortability.allowsKey('series_source_custom-series:${'z' * 300}'), isFalse);
   });
 
   test('catalog identity, next and completion use custom inventory', () async {
@@ -477,7 +472,7 @@ void main() {
     expect(await service.restoredCatalogProgressIdentity(rawCard), sameParent.imdbId);
     // A cold catalog filter must use the same identity as the badge, not the
     // original show's completed state.
-    await MovieProgressStorage.setSeriesExplicitlyWatched(canonical, watched: true);
+    await StorageService.setSeriesExplicitlyWatched(canonical, watched: true);
     await HideWatchedPrefs.setEnabled(true);
     service.invalidateCache();
     final watchedStatus = WatchedStatusService.instance..resetProfileScope();
@@ -485,8 +480,8 @@ void main() {
     await watchedStatus.firstSnapshot;
     expect(WatchedFilter.hides(rawCard), isFalse);
     expect(WatchedFilter.hides(unmappedCard), isFalse);
-    await MovieProgressStorage.setSeriesExplicitlyWatched(sameParent.imdbId!, watched: true);
-    await MovieProgressStorage.setSeriesExplicitlyWatched(unmapped.imdbId!, watched: true);
+    await StorageService.setSeriesExplicitlyWatched(sameParent.imdbId!, watched: true);
+    await StorageService.setSeriesExplicitlyWatched(unmapped.imdbId!, watched: true);
     service.invalidateCache();
     watchedStatus.resetProfileScope();
     watchedStatus.ensureStarted();
@@ -504,7 +499,7 @@ void main() {
       ],
     );
     for (final episode in [7, 9]) {
-      await EpisodeCompletionStorage.markEpisodeAsFinished(
+      await StorageService.markEpisodeAsFinished(
         seriesTitle: 'Edit',
         season: 3,
         episode: episode,

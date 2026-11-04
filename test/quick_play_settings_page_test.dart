@@ -1,22 +1,23 @@
-import 'package:debrify/services/storage/quick_play_storage.dart';
-import 'package:debrify/services/storage/torrent_search_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:debrify/models/quick_play_rules.dart';
 import 'package:debrify/screens/settings/quick_play_settings_page.dart';
+import 'package:debrify/services/storage_service.dart';
 import 'package:debrify/theme/app_theme.dart';
 import 'package:debrify/theme/app_theme_scope.dart';
+import 'package:debrify/theme/glass_chrome.dart';
+import 'package:debrify/theme/premium_looks.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(WidgetTester tester, {AppTheme? appearance}) async {
     await tester.pumpWidget(
       MaterialApp(
         home: AppThemeScope(
-          theme: AppThemes.legacy,
+          theme: appearance ?? AppThemes.legacy,
           child: const QuickPlaySettingsPage(),
         ),
       ),
@@ -29,14 +30,16 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('add-on formatting defaults on and saves its toggle', (tester) async {
+  testWidgets('add-on formatting defaults on and saves its toggle', (
+    tester,
+  ) async {
     SharedPreferences.setMockInitialValues({});
     await pumpPage(tester);
-    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isTrue);
+    expect(await StorageService.getUseAddonTextFormatting(), isTrue);
     await tester.ensureVisible(find.text('Use add-on text formatting'));
     await tester.tap(find.text('Use add-on text formatting'));
     await tester.pumpAndSettle();
-    expect(await TorrentSearchStorage.getUseAddonTextFormatting(), isFalse);
+    expect(await StorageService.getUseAddonTextFormatting(), isFalse);
   });
 
   testWidgets('shows tabs, the torrent switch, and the priority section', (
@@ -66,7 +69,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Prefer season packs'), findsOneWidget);
 
-    final rules = await QuickPlayStorage.getQuickPlayRules(isMovie: false);
+    final rules = await StorageService.getQuickPlayRules(isMovie: false);
     expect(rules.preferSeriesPacks, isTrue);
   });
 
@@ -80,17 +83,17 @@ void main() {
     await tester.tap(find.text('Prefer torrents'));
     await tester.pumpAndSettle();
 
-    final movie = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final movie = await StorageService.getQuickPlayRules(isMovie: true);
     expect(movie.sourceMode, QuickPlaySourceMode.addonsThenTorrents);
     // Series tab untouched.
-    final show = await QuickPlayStorage.getQuickPlayRules(isMovie: false);
+    final show = await StorageService.getQuickPlayRules(isMovie: false);
     expect(show.sourceMode, QuickPlaySourceMode.torrentsThenAddons);
 
     // Toggling back restores the exact shipped default (not a custom copy).
     await tester.ensureVisible(find.text('Prefer torrents'));
     await tester.tap(find.text('Prefer torrents'));
     await tester.pumpAndSettle();
-    final restored = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final restored = await StorageService.getQuickPlayRules(isMovie: true);
     expect(restored.matchesDebrifyDefault(isMovie: true), isTrue);
   });
 
@@ -99,7 +102,7 @@ void main() {
   ) async {
     SharedPreferences.setMockInitialValues({});
     // A legacy profile stuck on exactEpisodeOnly must not defeat the switch.
-    await QuickPlayStorage.setQuickPlayRules(
+    await StorageService.setQuickPlayRules(
       QuickPlayRules.debrifyDefault(isMovie: false).copyWith(
         preset: QuickPlayPreset.custom,
         preferSeriesPacks: false,
@@ -115,7 +118,7 @@ void main() {
     await tester.tap(find.text('Prefer season packs'));
     await tester.pumpAndSettle();
 
-    final rules = await QuickPlayStorage.getQuickPlayRules(isMovie: false);
+    final rules = await StorageService.getQuickPlayRules(isMovie: false);
     expect(rules.preferSeriesPacks, isTrue);
     expect(
       rules.packPreference,
@@ -127,7 +130,7 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
-    await QuickPlayStorage.setQuickPlayRules(
+    await StorageService.setQuickPlayRules(
       QuickPlayRules.debrifyDefault(isMovie: true).copyWith(
         preset: QuickPlayPreset.custom,
         maxAttempts: 2,
@@ -146,7 +149,7 @@ void main() {
     await tester.ensureVisible(find.text('Prefer torrents'));
     await tester.tap(find.text('Prefer torrents'));
     await tester.pumpAndSettle();
-    final rules = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final rules = await StorageService.getQuickPlayRules(isMovie: true);
     expect(rules.maxAttempts, 2);
     expect(rules.ranking, QuickPlayRanking.smallest);
     expect(rules.sourceMode, QuickPlaySourceMode.addonsThenTorrents);
@@ -158,7 +161,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     // A device carrying the OLD slider's pref: the page must show 10, not the
     // 5 default — this is the desktop-vs-Apple-TV mismatch users reported.
-    await QuickPlayStorage.setQuickPlayMaxRetries(10);
+    await StorageService.setQuickPlayMaxRetries(10);
     await pumpPage(tester);
 
     expect(find.text('Streams to try'), findsOneWidget);
@@ -171,11 +174,11 @@ void main() {
     await tester.tap(find.text('3 streams').last);
     await tester.pumpAndSettle();
 
-    final movie = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final movie = await StorageService.getQuickPlayRules(isMovie: true);
     expect(movie.maxAttempts, 3);
     expect(movie.tryNextOnFailure, isTrue);
     // Per-content: the Series tab keeps its own count.
-    final show = await QuickPlayStorage.getQuickPlayRules(isMovie: false);
+    final show = await StorageService.getQuickPlayRules(isMovie: false);
     expect(show.maxAttempts, 10);
   });
 
@@ -189,7 +192,7 @@ void main() {
     await tester.tap(find.text('1 stream').last);
     await tester.pumpAndSettle();
 
-    final movie = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final movie = await StorageService.getQuickPlayRules(isMovie: true);
     expect(movie.maxAttempts, 1);
     // The players compute `tryNext ? maxAttempts : 1` — both fields must agree
     // or a later "back to 5" would silently stay at one attempt.
@@ -198,7 +201,7 @@ void main() {
 
   testWidgets('restore defaults resets both tabs', (tester) async {
     SharedPreferences.setMockInitialValues({});
-    await QuickPlayStorage.setQuickPlayRules(
+    await StorageService.setQuickPlayRules(
       QuickPlayRules.debrifyDefault(isMovie: true).copyWith(
         preset: QuickPlayPreset.custom,
         sourceMode: QuickPlaySourceMode.addonsThenTorrents,
@@ -215,8 +218,55 @@ void main() {
     await tester.tap(find.text('Restore defaults'));
     await tester.pumpAndSettle();
 
-    final movie = await QuickPlayStorage.getQuickPlayRules(isMovie: true);
+    final movie = await StorageService.getQuickPlayRules(isMovie: true);
     expect(movie.matchesDebrifyDefault(isMovie: true), isTrue);
     expect(movie.sourcePriority, isEmpty);
+  });
+
+  testWidgets('Quick Play panels adopt the frosted surface only for glass', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final glass = PremiumLooks.glass.build();
+    await pumpPage(tester, appearance: glass);
+    List<Color?> panelColors() => tester
+        .widgetList<Container>(find.byType(Container))
+        .map((w) => w.decoration)
+        .whereType<BoxDecoration>()
+        .map((d) => d.color)
+        .toList();
+    expect(panelColors(), contains(GlassChrome.fill(glass)));
+    await pumpPage(tester);
+    expect(panelColors(), isNot(contains(GlassChrome.fill(glass))));
+  });
+
+  testWidgets('Quick Play action row follows appearance changes', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final glass = PremiumLooks.glass.build();
+    Container actionRow() => tester
+        .widgetList<Container>(
+          find.ancestor(
+            of: find.text('Restore defaults'),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere((w) => w.constraints?.minHeight == 62);
+
+    await pumpPage(tester, appearance: glass);
+    await tester.ensureVisible(find.text('Restore defaults'));
+    await tester.pump();
+    expect(
+      (actionRow().decoration! as BoxDecoration).color,
+      GlassChrome.fill(glass),
+    );
+    await pumpPage(tester);
+    await tester.ensureVisible(find.text('Restore defaults'));
+    await tester.pump();
+    expect(
+      (actionRow().decoration! as BoxDecoration).color,
+      AppThemes.legacy.settings.panel,
+    );
   });
 }

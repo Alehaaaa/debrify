@@ -1,6 +1,8 @@
 import 'dart:async';
 import '../../../services/webdav_sync/webdav_sync_graph_tier.dart';
 import 'package:flutter/material.dart';
+import '../../../theme/app_theme_scope.dart';
+import '../../../theme/glass_chrome.dart';
 import '../../../services/webdav_sync/webdav_sync_device_names.dart';
 import '../../../widgets/tv_text_field.dart';
 
@@ -89,10 +91,14 @@ class SyncDeviceTile extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      color: GlassChrome.enabled(AppThemeScope.of(context))
+          ? GlassChrome.fill(AppThemeScope.of(context))
+          : Theme.of(context).colorScheme.surfaceContainerLow,
       borderRadius: BorderRadius.circular(16),
       border: Border.all(
-        color: isThisDevice
+        color: GlassChrome.enabled(AppThemeScope.of(context))
+            ? GlassChrome.edge(AppThemeScope.of(context), active: isThisDevice)
+            : isThisDevice
             ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)
             : Theme.of(context).colorScheme.outlineVariant,
       ),

@@ -176,7 +176,7 @@ void main() {
   );
 
   test(
-    'person pages deduplicate before slicing and preserve movie versus TV identity',
+    'person movie pages filter out TV credits before sorting and slicing',
     () async {
       var reads = 0;
       final rows = List.generate(
@@ -229,9 +229,11 @@ void main() {
         page: 2,
       );
       expect(first.items, hasLength(20));
-      expect(second.items, hasLength(6));
-      expect(first.items.first.type, 'series');
-      expect(first.items[1].type, 'movie');
+      expect(second.items, hasLength(5));
+      expect(first.items.first.type, 'movie');
+      expect(first.items.every((item) => item.type == 'movie'), isTrue);
+      expect(second.items.every((item) => item.type == 'movie'), isTrue);
+      expect(first.items.first.name, 'Title 24');
       expect(first.hasMore, isTrue);
       expect(second.hasMore, isFalse);
       expect(reads, 1);

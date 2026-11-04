@@ -23,7 +23,7 @@ void main() {
     final source = addon('source');
     final cache = SpotlightCatalogCardCache(
       wideArtwork: (m) => m.effectiveImdbId,
-      onOpen: (_, __) {},
+      onOpen: (_, _) {},
     );
     final unresolved = cache.resolve(item, source, landscape: true);
     expect(unresolved.watchedImdbId, 'tmdb:42');
@@ -98,7 +98,7 @@ void main() {
           reads++;
           return m.background;
         },
-        onOpen: (_, __) {},
+        onOpen: (_, _) {},
       );
       final source = addon('source');
       final items = [

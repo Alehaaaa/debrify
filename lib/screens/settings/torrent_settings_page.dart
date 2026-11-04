@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../services/analytics_service.dart';
 import '../../utils/platform_util.dart';
 import 'indexer_managers_settings_page.dart';
-import 'source_search_settings_route.dart';
 import 'widgets/dynamic_settings_builder.dart';
 import 'widgets/settings_widgets.dart';
 
@@ -21,7 +19,6 @@ class _TorrentSettingsPageState extends State<TorrentSettingsPage> {
   @override
   void initState() {
     super.initState();
-    AnalyticsService.screenView('torrent_settings');
     // On TV, land DPAD focus on the first row so users aren't stranded.
     if (PlatformUtil.isTelevision) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -71,12 +68,6 @@ class _TorrentSettingsPageState extends State<TorrentSettingsPage> {
                           const IndexerManagersSettingsPage(),
                         );
                       },
-                    ),
-                    SettingsTile(
-                      icon: Icons.travel_explore_rounded,
-                      title: 'Search sources',
-                      subtitle: 'Leave IPTV playlists or media servers out',
-                      onTap: () => openSourceSearchSettings(context),
                     ),
                   ],
                 ),
