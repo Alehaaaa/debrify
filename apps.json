@@ -3,7 +3,7 @@
   "identifier": "io.github.alehaaaa.debrify.commits",
   "subtitle": "Nextup for iPhone and iPad, built from every commit.",
   "description": "Nextup is an independent, unofficial fork of Debrify with a Reels feed, Continue Watching synced across Trakt, Simkl and MDBList, offline-first downloads and a reworked glass interface.\n\nEvery commit to nextup in Alehaaaa/debrify is built automatically and published here with a changelog of what changed since the previous build, so updates show up right in SideStore or AltStore. The source keeps the last few builds, so you can always roll back.\n\nNot affiliated with or endorsed by the official Debrify project.",
-  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4624c137958033a1f9c0e69b5c3147726f6db4b6/assets/icon/app_icon_flat.png",
+  "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/a8a24752feeb695336f1cb60621dddf3e9b6aaf6/assets/icon/app_icon_flat.png",
   "website": "https://github.com/Alehaaaa/debrify",
   "tintColor": "#7C4DFF",
   "featuredApps": [
@@ -16,11 +16,20 @@
       "developerName": "Alehaaaa",
       "subtitle": "Your movies and shows, one swipe away.",
       "localizedDescription": "Nextup brings your cloud accounts, WebDAV servers, Stremio catalogs, IPTV and YouTube into one library, with a player built for movies and TV.\n\n• Reels: swipe through official scenes and trailers, then jump straight into the title\n• Continue Watching that follows you across Trakt, Simkl and MDBList\n• Up Next links: open any episode straight from Up Next for Trakt\n• Downloads that work fully offline, with auto-download filters\n• A glass interface with your own looks and colour palettes\n• Lock-screen controls, touch lock, pinch to fill, double-tap to pause\n• WebDAV sync with snapshots, and backups that restore cleanly\n\nNextup doesn't host or provide any content; you connect the services you already use.\n\nThese are untested builds of every commit, made by GitHub Actions. SideStore or AltStore re-signs them with your own certificate on install. Nextup is an independent fork of Debrify and isn't affiliated with the official project.",
-      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/4624c137958033a1f9c0e69b5c3147726f6db4b6/assets/icon/app_icon_flat.png",
+      "iconURL": "https://raw.githubusercontent.com/Alehaaaa/debrify/a8a24752feeb695336f1cb60621dddf3e9b6aaf6/assets/icon/app_icon_flat.png",
       "tintColor": "#7C4DFF",
       "category": "entertainment",
       "screenshots": {},
       "versions": [
+        {
+          "version": "0.10.0.1",
+          "buildVersion": "202611041209",
+          "date": "2026-11-04T12:15:10Z",
+          "localizedDescription": "What's new:\n• Restore Nextup to its exact pre-upstream-merge snapshot (a8a24752)\n\nBuild 202611041209 from nextup@a8a2475\nhttps://github.com/Alehaaaa/debrify/compare/4624c13...a8a2475",
+          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-74-a8a2475/nextup-ios-74-a8a2475.ipa",
+          "size": 40271024,
+          "minOSVersion": "14.0"
+        },
         {
           "version": "0.10.1.1",
           "buildVersion": "202611011604",
@@ -99,15 +108,6 @@
           "date": "2026-10-10T21:52:16Z",
           "localizedDescription": "What's new:\n• Pause automatic Android builds until release signing is configured (53efc5d5)\n\nBuild 202610102147 from nextup@53efc5d\nhttps://github.com/Alehaaaa/debrify/compare/83be28a...53efc5d",
           "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-64-53efc5d/nextup-ios-64-53efc5d.ipa",
-          "size": 40319712,
-          "minOSVersion": "14.0"
-        },
-        {
-          "version": "0.10.0.1",
-          "buildVersion": "202610102135",
-          "date": "2026-10-10T21:41:44Z",
-          "localizedDescription": "What's new:\n• Restore pending Reel playback and align nested glass menus (f430ca82)\n• Unify frosted popup surfaces and retire orphaned Reel resolutions (dad9792f)\n• Unify frosted downloads search and discovery chrome (95137a27)\n• Guard Reel handoffs and theme Home row settings (23890c4a)\n• Publish per-commit iOS and Android releases with safe legacy migration (ae2ed631)\n• Coordinate native trailer disposal and glass settings interactions (1f98cafb)\n• Recover stalled Reel preloads and unify frosted engine settings (46b3ccd6)\n• Cancel obsolete YouTube resolutions and align glass focus surfaces (6261c2a3)\n• Fix pending trailer handoff and align glass focus and branding tests (15fc8aed)\n• Improve Reels resolution ownership and frosted settings focus surfaces (49ce8cee)\n• Recover stalled Reels buffering and theme remaining settings menus (cd975792)\n• Prioritize visible Reels extraction and unify more frosted settings surfaces (d5c5df89)\n• Improve Reels HD fallback and stall recovery with frosted settings controls (fe6f538e)\n• Bound Reels playback history and unify frosted controls (64e4edda)\n• Unify frosted search and trailer controls and refine Reels feed (30d2dca0)\n• Share Reel titles via IMDb and keep the feed continuous (eb17ea50)\n• Keep settings outside swipe navigation and refine reels gestures (6444e6d4)\n\nBuild 202610102135 from nextup@83be28a\nhttps://github.com/Alehaaaa/debrify/compare/d2401f8...83be28a",
-          "downloadURL": "https://github.com/Alehaaaa/debrify/releases/download/build-63-83be28a/nextup-ios-63-83be28a.ipa",
           "size": 40319712,
           "minOSVersion": "14.0"
         }
